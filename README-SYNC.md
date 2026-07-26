@@ -1,4 +1,4 @@
-# GymOS v2.1 — Smart Sync — Sincronización opcional con Supabase
+# GymOS v2.2 — Editor de rutinas
 
 GymOS sigue funcionando completamente en modo local.
 
@@ -57,3 +57,14 @@ Configura:
 - Funcionamiento normal sin conexión.
 
 La resolución de conflictos conserva la copia con la fecha `updatedAt` más reciente. Antes de sustituir datos locales por una copia remota, GymOS guarda una copia local de seguridad.
+
+
+## Novedades de la versión 2.2
+
+- Editor de la rutina desde el móvil.
+- Añadir, modificar y eliminar ejercicios.
+- Editar series, objetivo, tipo e incremento.
+- Reordenar ejercicios.
+- Copiar una sesión completa a otra.
+- Vaciar una sesión.
+- Importación y exportación mediante Excel conservadas.

@@ -84,7 +84,8 @@ let state = {
   syncStatus: navigator.onLine ? "local" : "offline",
   syncTimer: null,
   syncInProgress: false,
-  applyingRemote: false
+  applyingRemote: false,
+  editingSession: "A"
 };
 
 function getHistory(){ return JSON.parse(localStorage.getItem("gymos:history") || "[]"); }
@@ -865,6 +866,7 @@ function render(){
   else if(state.screen==="body") renderBody();
   else if(state.screen==="editWorkout") renderEditWorkout();
   else if(state.screen==="plan") renderPlan();
+  else if(state.screen==="routineEditor") renderRoutineEditor();
   else renderSettings();
 }
 
@@ -1487,9 +1489,171 @@ function renderPlan(){
   bindNav();
 }
 
+
+function esc(value){
+  return String(value??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[c]));
+}
+function editExerciseModal(session,index=null){
+  const routine=JSON.parse(JSON.stringify(getRoutine()));
+  const current=index===null
+    ? {name:"",target:"8–10 reps",sets:3,increment:2.5,type:"peso"}
+    : routine[session][index];
+
+  const layer=document.createElement("div");
+  layer.className="routine-modal-layer";
+  layer.innerHTML=`<div class="routine-modal">
+    <div class="modal-handle"></div>
+    <div class="card-heading-row">
+      <h2>${index===null?"Añadir ejercicio":"Editar ejercicio"}</h2>
+      <button id="closeRoutineModal" class="icon-button">×</button>
+    </div>
+    <label><span>Nombre</span><input id="reName" value="${esc(current.name)}" placeholder="Press banca"></label>
+    <div class="routine-editor-grid">
+      <label><span>Series</span><input id="reSets" type="number" min="1" max="10" value="${current.sets||3}"></label>
+      <label><span>Tipo</span><select id="reType">
+        <option value="peso" ${current.type==="peso"?"selected":""}>Peso</option>
+        <option value="corporal" ${current.type==="corporal"?"selected":""}>Peso corporal</option>
+        <option value="tiempo" ${current.type==="tiempo"?"selected":""}>Tiempo</option>
+      </select></label>
+    </div>
+    <label><span>Objetivo</span><input id="reTarget" value="${esc(current.target)}" placeholder="8–10 reps"></label>
+    <label><span>Incremento recomendado (kg)</span><input id="reIncrement" type="number" min="0" step="0.25" value="${current.increment||0}"></label>
+    <div class="modal-actions">
+      ${index!==null?'<button id="removeExercise" class="danger-soft">Eliminar</button>':""}
+      <button id="saveExercise" class="primary">Guardar</button>
+    </div>
+  </div>`;
+  document.body.appendChild(layer);
+
+  const close=()=>layer.remove();
+  document.getElementById("closeRoutineModal").onclick=close;
+  layer.onclick=e=>{if(e.target===layer) close();};
+
+  document.getElementById("saveExercise").onclick=()=>{
+    const name=document.getElementById("reName").value.trim();
+    if(!name){alert("Escribe el nombre del ejercicio.");return;}
+    const value={
+      name,
+      target:document.getElementById("reTarget").value.trim()||"8–10 reps",
+      sets:Math.max(1,Math.min(10,Number(document.getElementById("reSets").value)||3)),
+      increment:Math.max(0,Number(document.getElementById("reIncrement").value)||0),
+      type:document.getElementById("reType").value
+    };
+    if(index===null) routine[session].push(value);
+    else routine[session][index]=value;
+    saveRoutine(routine);
+    sessions=getRoutine();
+    close();
+    toast(index===null?"Ejercicio añadido":"Ejercicio actualizado");
+    renderRoutineEditor();
+  };
+
+  const remove=document.getElementById("removeExercise");
+  if(remove) remove.onclick=()=>{
+    if(!confirm(`¿Eliminar "${current.name}"?`)) return;
+    routine[session].splice(index,1);
+    saveRoutine(routine);
+    sessions=getRoutine();
+    close();
+    toast("Ejercicio eliminado");
+    renderRoutineEditor();
+  };
+}
+function moveRoutineExercise(session,index,direction){
+  const routine=JSON.parse(JSON.stringify(getRoutine()));
+  const target=index+direction;
+  if(target<0||target>=routine[session].length) return;
+  [routine[session][index],routine[session][target]]=[routine[session][target],routine[session][index]];
+  saveRoutine(routine);
+  sessions=getRoutine();
+  renderRoutineEditor();
+}
+function renderRoutineEditor(){
+  const session=state.editingSession||"A";
+  const routine=getRoutine();
+  const exercises=routine[session]||[];
+
+  app.innerHTML=`<div class="app-shell">
+    <header class="topbar">
+      <button id="backRoutineEditor" class="back-button">←</button>
+      <div><div class="brand">Editor de rutina</div><div class="subtle">Sesiones A, B y C</div></div>
+      <button id="addRoutineExerciseTop" class="header-action">＋</button>
+    </header>
+    <main class="screen">
+      <div class="session-picker routine-tabs">
+        ${["A","B","C"].map(s=>`<button data-edit-session="${s}" class="${s===session?"active":""}">Sesión ${s}</button>`).join("")}
+      </div>
+      <section class="card">
+        <div class="card-heading-row">
+          <div><h2>Sesión ${session}</h2><p class="subtle">${exercises.length} ejercicios</p></div>
+          <button id="addRoutineExercise" class="primary small-button">＋ Añadir</button>
+        </div>
+        <div class="routine-edit-list">
+          ${exercises.length ? exercises.map((item,index)=>`<article class="routine-edit-item">
+            <div class="routine-order-buttons">
+              <button data-up="${index}" ${index===0?"disabled":""}>↑</button>
+              <button data-down="${index}" ${index===exercises.length-1?"disabled":""}>↓</button>
+            </div>
+            <button class="routine-edit-main" data-edit="${index}">
+              <strong>${esc(item.name)}</strong>
+              <span>${item.sets} series · ${esc(item.target)} · +${Number(item.increment||0).toLocaleString("es-ES")} kg</span>
+            </button>
+            <button class="icon-button" data-edit="${index}">✎</button>
+          </article>`).join("") : `<div class="routine-empty"><strong>Sesión vacía</strong><p>Añade el primer ejercicio.</p></div>`}
+        </div>
+      </section>
+      <section class="card">
+        <h2>Acciones</h2>
+        <div class="settings-actions">
+          <button id="copyRoutineSession" class="secondary">Copiar esta sesión</button>
+          <button id="clearRoutineSession" class="danger-soft">Vaciar sesión</button>
+        </div>
+      </section>
+    </main>
+  </div>`;
+
+  document.getElementById("backRoutineEditor").onclick=()=>{state.screen="settings";renderSettings();};
+  document.querySelectorAll("[data-edit-session]").forEach(b=>b.onclick=()=>{
+    state.editingSession=b.dataset.editSession;
+    renderRoutineEditor();
+  });
+  const add=()=>editExerciseModal(session);
+  document.getElementById("addRoutineExercise").onclick=add;
+  document.getElementById("addRoutineExerciseTop").onclick=add;
+  document.querySelectorAll("[data-edit]").forEach(b=>b.onclick=()=>editExerciseModal(session,Number(b.dataset.edit)));
+  document.querySelectorAll("[data-up]").forEach(b=>b.onclick=()=>moveRoutineExercise(session,Number(b.dataset.up),-1));
+  document.querySelectorAll("[data-down]").forEach(b=>b.onclick=()=>moveRoutineExercise(session,Number(b.dataset.down),1));
+
+  document.getElementById("copyRoutineSession").onclick=()=>{
+    const target=prompt(`¿A qué sesión quieres copiar la sesión ${session}? Escribe A, B o C.`);
+    if(target===null) return;
+    const dest=target.trim().toUpperCase();
+    if(!["A","B","C"].includes(dest)){alert("Escribe A, B o C.");return;}
+    if(dest===session){alert("Selecciona una sesión diferente.");return;}
+    if(routine[dest].length&&!confirm(`La sesión ${dest} ya contiene ejercicios. ¿Sustituirlos?`)) return;
+    const next=JSON.parse(JSON.stringify(routine));
+    next[dest]=next[session].map(x=>({...x}));
+    saveRoutine(next);
+    sessions=getRoutine();
+    state.editingSession=dest;
+    toast(`Sesión ${session} copiada a ${dest}`);
+    renderRoutineEditor();
+  };
+  document.getElementById("clearRoutineSession").onclick=()=>{
+    if(!exercises.length) return;
+    if(!confirm(`¿Vaciar toda la sesión ${session}?`)) return;
+    const next=JSON.parse(JSON.stringify(routine));
+    next[session]=[];
+    saveRoutine(next);
+    sessions=getRoutine();
+    toast("Sesión vaciada");
+    renderRoutineEditor();
+  };
+}
+
 function renderSettings(){
   app.innerHTML=`<div class="app-shell">
-    <header class="topbar"><div><div class="brand">Ajustes</div><div class="subtle">GymOS v2.1 · Smart Sync</div></div></header>
+    <header class="topbar"><div><div class="brand">Ajustes</div><div class="subtle">GymOS v2.2 · Editor de rutinas</div></div></header>
     <main class="screen">
       <section class="card sync-card">
         <div class="card-heading-row">
@@ -1535,6 +1699,11 @@ function renderSettings(){
         <h2>Seguimiento corporal</h2>
         <p class="subtle">Registra peso y cintura para comprobar la tendencia junto con tu rendimiento.</p>
         <button id="openBodySettings" class="secondary full">Abrir seguimiento corporal</button>
+      </section>
+      <section class="card">
+        <h2>Editar rutina</h2>
+        <p class="subtle">Modifica sesiones y ejercicios directamente desde el móvil.</p>
+        <button id="openRoutineEditor" class="primary full">Abrir editor de rutina</button>
       </section>
       <section class="card">
         <h2>Rutina desde Excel</h2>
@@ -1616,6 +1785,7 @@ function renderSettings(){
     renderSettings();
   });
   document.getElementById("openBodySettings").onclick=()=>{state.screen="body";renderBody();};
+  document.getElementById("openRoutineEditor").onclick=()=>{state.screen="routineEditor";renderRoutineEditor();};
   document.getElementById("importRoutine").onclick=()=>{
     if(typeof XLSX==="undefined"){
       alert("No se ha podido cargar el lector de Excel. Abre GymOS con conexión a Internet y vuelve a intentarlo.");

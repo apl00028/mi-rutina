@@ -548,3 +548,29 @@ select{
   .sync-badge span:last-child{display:none}
   .sync-badge{padding:9px}
 }
+
+.back-button,.header-action,.icon-button{border:0;background:transparent;color:#111827;font-weight:900}
+.back-button,.header-action{font-size:1.25rem;padding:8px}
+.icon-button{font-size:1.05rem;padding:7px;min-width:36px}
+.small-button{width:auto;padding:9px 12px}
+.routine-tabs{margin-bottom:12px}
+.routine-edit-list{display:flex;flex-direction:column;gap:9px;margin-top:14px}
+.routine-edit-item{display:grid;grid-template-columns:auto 1fr auto;gap:8px;align-items:center;border:1px solid #e5e7eb;border-radius:12px;padding:8px}
+.routine-order-buttons{display:flex;flex-direction:column;gap:3px}
+.routine-order-buttons button{width:30px;height:27px;border:0;border-radius:7px;background:#f3f4f6;font-weight:900}
+.routine-order-buttons button:disabled{opacity:.25}
+.routine-edit-main{border:0;background:transparent;text-align:left;display:flex;flex-direction:column;gap:4px;min-width:0}
+.routine-edit-main strong{font-size:.9rem}
+.routine-edit-main span{font-size:.7rem;color:#6b7280}
+.routine-empty{text-align:center;padding:28px 10px;color:#6b7280}
+.routine-empty strong{color:#111827}
+.danger-soft{border:0;border-radius:10px;padding:11px 14px;background:#fee2e2;color:#991b1b;font-weight:850}
+.routine-modal-layer{position:fixed;inset:0;z-index:1000;background:rgba(17,24,39,.5);display:flex;align-items:flex-end;justify-content:center}
+.routine-modal{width:min(100%,560px);max-height:92vh;overflow:auto;background:#fff;border-radius:22px 22px 0 0;padding:18px}
+.modal-handle{width:42px;height:5px;border-radius:999px;background:#d1d5db;margin:0 auto 14px}
+.routine-modal label{display:flex;flex-direction:column;gap:6px;margin:12px 0}
+.routine-modal label span{font-size:.72rem;font-weight:850;color:#4b5563}
+.routine-modal input,.routine-modal select{width:100%;padding:12px;border:1px solid #d1d5db;border-radius:11px;background:#fff}
+.routine-editor-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.modal-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:18px}
+@media(min-width:700px){.routine-modal-layer{align-items:center}.routine-modal{border-radius:22px}}

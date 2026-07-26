@@ -75,7 +75,8 @@ let state = {
   timerSeconds: 0,
   timerInterval: null,
   expandedHistoryId: null,
-  selectedStatsExercise: null
+  selectedStatsExercise: null,
+  selectedRecordExercise: null
 };
 
 function getHistory(){ return JSON.parse(localStorage.getItem("gymos:history") || "[]"); }
@@ -255,6 +256,142 @@ function totalCurrentWeekVolume(){
 function compactNumber(value){
   return new Intl.NumberFormat("es-ES",{maximumFractionDigits:0}).format(value);
 }
+function estimatedOneRepMax(weight,reps){
+  if(!weight||!reps) return 0;
+  return weight*(1+reps/30);
+}
+function allExercisePerformances(name,excludeWorkoutId=null){
+  const performances=[];
+  getHistory().forEach(workout=>{
+    if(excludeWorkoutId!==null&&workout.id===excludeWorkoutId) return;
+    const exercise=workout.exercises.find(e=>e.name===name);
+    if(!exercise) return;
+    exercise.series.forEach((series,index)=>{
+      const weight=numericValue(series.weight);
+      const reps=numericValue(series.reps);
+      if(weight===null||reps===null||weight<=0||reps<=0) return;
+      performances.push({
+        workoutId:workout.id,
+        date:workout.date,
+        session:workout.session,
+        set:index+1,
+        weight,
+        reps,
+        volume:weight*reps,
+        e1rm:estimatedOneRepMax(weight,reps)
+      });
+    });
+  });
+  return performances;
+}
+function recordStats(name){
+  const performances=allExercisePerformances(name);
+  if(!performances.length) return null;
+  const maxWeight=performances.reduce((best,p)=>p.weight>best.weight?p:best,performances[0]);
+  const bestVolumeSet=performances.reduce((best,p)=>p.volume>best.volume?p:best,performances[0]);
+  const bestE1rm=performances.reduce((best,p)=>p.e1rm>best.e1rm?p:best,performances[0]);
+  const maxReps=performances.reduce((best,p)=>p.reps>best.reps?p:best,performances[0]);
+  return {performances,maxWeight,bestVolumeSet,bestE1rm,maxReps};
+}
+function recordsForWorkout(workout){
+  const records=[];
+  workout.exercises.forEach(exercise=>{
+    const previous=allExercisePerformances(exercise.name,workout.id);
+    const previousMaxWeight=previous.length?Math.max(...previous.map(p=>p.weight)):0;
+    const previousBestE1rm=previous.length?Math.max(...previous.map(p=>p.e1rm)):0;
+    const previousBestVolume=previous.length?Math.max(...previous.map(p=>p.volume)):0;
+
+    const current=exercise.series.map((series,index)=>{
+      const weight=numericValue(series.weight);
+      const reps=numericValue(series.reps);
+      if(weight===null||reps===null||weight<=0||reps<=0) return null;
+      return {
+        set:index+1,
+        weight,
+        reps,
+        volume:weight*reps,
+        e1rm:estimatedOneRepMax(weight,reps)
+      };
+    }).filter(Boolean);
+
+    if(!current.length) return;
+    const currentMaxWeight=current.reduce((best,p)=>p.weight>best.weight?p:best,current[0]);
+    const currentBestE1rm=current.reduce((best,p)=>p.e1rm>best.e1rm?p:best,current[0]);
+    const currentBestVolume=current.reduce((best,p)=>p.volume>best.volume?p:best,current[0]);
+
+    if(currentMaxWeight.weight>previousMaxWeight){
+      records.push({
+        exercise:exercise.name,
+        type:"Peso máximo",
+        value:`${formatWeight(currentMaxWeight.weight)} kg`
+      });
+    }
+    if(currentBestE1rm.e1rm>previousBestE1rm+0.05){
+      records.push({
+        exercise:exercise.name,
+        type:"Fuerza estimada",
+        value:`${formatWeight(Math.round(currentBestE1rm.e1rm*10)/10)} kg e1RM`
+      });
+    }
+    if(currentBestVolume.volume>previousBestVolume){
+      records.push({
+        exercise:exercise.name,
+        type:"Mejor serie por volumen",
+        value:`${formatWeight(currentBestVolume.weight)} × ${currentBestVolume.reps}`
+      });
+    }
+  });
+  return records;
+}
+function progressionStatus(name){
+  const routineItem=Object.values(sessions).flat().find(x=>x.name===name);
+  const history=getExerciseHistory(name);
+  if(!history.length) return {
+    level:"neutral",
+    title:"Sin referencia",
+    text:"Completa una sesión para empezar a calcular la progresión."
+  };
+  const last=history.at(-1);
+  const previous=history.at(-2);
+  const range=parseRepRange(routineItem?.target||"");
+  if(!range) return {
+    level:"neutral",
+    title:"Seguimiento disponible",
+    text:"GymOS seguirá mostrando tus récords y evolución de volumen."
+  };
+  const valid=last.series.filter(s=>s.weight!==null&&s.reps!==null);
+  const sameWeight=valid.length&&valid.every(s=>s.weight===valid[0].weight);
+  const increment=Math.max(0,Number(routineItem?.increment)||0);
+  if(valid.length&&sameWeight&&valid.every(s=>s.reps>=range.max)){
+    return {
+      level:"up",
+      title:"Listo para subir",
+      text:increment>0
+        ?`Próxima referencia: ${formatWeight(valid[0].weight+increment)} kg.`
+        :"Has completado el rango alto; ajusta la progresión según el ejercicio."
+    };
+  }
+  if(previous&&last.volume>previous.volume){
+    const pct=((last.volume-previous.volume)/previous.volume)*100;
+    return {
+      level:"positive",
+      title:"Progresando",
+      text:`El volumen aumentó un ${pct.toFixed(1).replace(".",",")}% respecto a la sesión anterior.`
+    };
+  }
+  if(previous&&last.volume<previous.volume*0.9){
+    return {
+      level:"caution",
+      title:"Sesión por debajo de la referencia",
+      text:"Repite la carga y valora sueño, fatiga, técnica y RIR antes de modificarla."
+    };
+  }
+  return {
+    level:"hold",
+    title:"Consolidando",
+    text:"Mantén la carga e intenta mejorar alguna repetición sin perder técnica."
+  };
+}
 function miniBars(rows){
   const recent=rows.slice(-6);
   const max=Math.max(...recent.map(r=>r.volume),1);
@@ -271,6 +408,7 @@ function nav(active){
     <button data-nav="home" class="${active==="home"?"active":""}">Inicio</button>
     <button data-nav="history" class="${active==="history"?"active":""}">Historial</button>
     <button data-nav="stats" class="${active==="stats"?"active":""}">Estadísticas</button>
+    <button data-nav="records" class="${active==="records"?"active":""}">Récords</button>
     <button data-nav="settings" class="${active==="settings"?"active":""}">Ajustes</button>
   </nav>`;
 }
@@ -289,6 +427,7 @@ function render(){
   else if(state.screen==="workout") renderWorkout();
   else if(state.screen==="history") renderHistory();
   else if(state.screen==="stats") renderStats();
+  else if(state.screen==="records") renderRecords();
   else renderSettings();
 }
 
@@ -348,10 +487,12 @@ function renderWorkout(){
           ${last?`<div class="last-session"><strong>Última vez:</strong> ${last.exercises[i].series.map(x=>x.weight||x.reps?`${x.weight||"—"} × ${x.reps||"—"}`:"—").join(" · ")}</div>`:""}
           ${(()=>{
             const rec=exerciseRecommendation(last?.exercises?.[i],ex.target,ex.increment,ex.type);
+            const record=recordStats(ex.name);
             return `<div class="recommendation ${rec.status}">
               <div class="recommendation-label">Recomendación</div>
               <strong>${rec.title}</strong>
               <span>${rec.text}</span>
+              ${record?`<small class="recommendation-record">Récord: ${formatWeight(record.maxWeight.weight)} kg · e1RM ${formatWeight(Math.round(record.bestE1rm.e1rm*10)/10)} kg</small>`:""}
             </div>`;
           })()}
           <div class="series-header"><span></span><span>Peso</span><span>Reps</span><span>Hecha</span></div>
@@ -423,10 +564,30 @@ function finishWorkout(){
   const workout={id:Date.now(),date:new Date().toISOString(),session:s,
     durationMs:Date.now()-(d.startedAt||Date.now()),completedSeries:completed,exercises:d.exercises};
   const h=getHistory();h.unshift(workout);saveHistory(h);clearDraft(s);
+  const newRecords=recordsForWorkout(workout);
   state.selectedSession=s==="A"?"B":s==="B"?"C":"A";
   localStorage.setItem("gymos:selectedSession",state.selectedSession);
   clearInterval(state.timerInterval);state.timerSeconds=0;state.screen="home";renderHome();
-  toast(`Sesión ${s} guardada`);
+  if(newRecords.length){
+    showRecordsCelebration(newRecords);
+  }else{
+    toast(`Sesión ${s} guardada`);
+  }
+}
+function showRecordsCelebration(records){
+  const modal=document.createElement("div");
+  modal.className="record-modal-backdrop";
+  modal.innerHTML=`<div class="record-modal">
+    <div class="record-trophy">★</div>
+    <h2>${records.length===1?"Nuevo récord":"Nuevos récords"}</h2>
+    <p>La sesión se ha guardado correctamente.</p>
+    <div class="record-modal-list">
+      ${records.slice(0,6).map(r=>`<div><strong>${r.exercise}</strong><span>${r.type}: ${r.value}</span></div>`).join("")}
+    </div>
+    <button class="primary full" id="closeRecordModal">Continuar</button>
+  </div>`;
+  document.body.appendChild(modal);
+  document.getElementById("closeRecordModal").onclick=()=>modal.remove();
 }
 
 function renderHistory(){
@@ -513,9 +674,83 @@ function renderStats(){
   bindNav();
 }
 
+function renderRecords(){
+  const names=allExerciseNames();
+  const available=names.filter(name=>recordStats(name));
+  if(!state.selectedRecordExercise||!names.includes(state.selectedRecordExercise)){
+    state.selectedRecordExercise=available[0]||names[0];
+  }
+  const selected=state.selectedRecordExercise;
+  const records=recordStats(selected);
+  const progression=progressionStatus(selected);
+
+  app.innerHTML=`<div class="app-shell">
+    <header class="topbar"><div><div class="brand">Récords</div><div class="subtle">Marcas personales y siguiente objetivo</div></div></header>
+    <main class="screen">
+      <section class="card">
+        <label class="select-label" for="recordExerciseSelect">Ejercicio</label>
+        <select id="recordExerciseSelect">
+          ${names.map(name=>`<option value="${name}" ${name===selected?"selected":""}>${name}</option>`).join("")}
+        </select>
+      </section>
+
+      <section class="progression-card ${progression.level}">
+        <div class="record-kicker">Progresión</div>
+        <h2>${progression.title}</h2>
+        <p>${progression.text}</p>
+      </section>
+
+      ${records?`
+        <section class="records-grid">
+          <div class="record-card">
+            <span>Peso máximo</span>
+            <strong>${formatWeight(records.maxWeight.weight)} kg</strong>
+            <small>${records.maxWeight.reps} reps · ${formatDate(records.maxWeight.date)}</small>
+          </div>
+          <div class="record-card">
+            <span>Fuerza estimada</span>
+            <strong>${formatWeight(Math.round(records.bestE1rm.e1rm*10)/10)} kg</strong>
+            <small>e1RM · ${formatWeight(records.bestE1rm.weight)} × ${records.bestE1rm.reps}</small>
+          </div>
+          <div class="record-card">
+            <span>Mejor serie</span>
+            <strong>${formatWeight(records.bestVolumeSet.weight)} × ${records.bestVolumeSet.reps}</strong>
+            <small>${compactNumber(records.bestVolumeSet.volume)} kg de volumen</small>
+          </div>
+          <div class="record-card">
+            <span>Máximo de reps</span>
+            <strong>${records.maxReps.reps}</strong>
+            <small>con ${formatWeight(records.maxReps.weight)} kg</small>
+          </div>
+        </section>
+
+        <section class="card">
+          <h2>Mejores marcas recientes</h2>
+          ${records.performances
+            .slice()
+            .sort((a,b)=>new Date(b.date)-new Date(a.date))
+            .slice(0,8)
+            .map(p=>`
+              <div class="record-history-row">
+                <div><strong>${formatWeight(p.weight)} × ${p.reps}</strong><small>${formatDate(p.date)} · Sesión ${p.session}</small></div>
+                <div><strong>${formatWeight(Math.round(p.e1rm*10)/10)} kg</strong><small>e1RM</small></div>
+              </div>
+            `).join("")}
+        </section>
+      `:`<div class="empty">Todavía no hay marcas para este ejercicio.</div>`}
+    </main>${nav("records")}
+  </div>`;
+
+  document.getElementById("recordExerciseSelect").onchange=e=>{
+    state.selectedRecordExercise=e.target.value;
+    renderRecords();
+  };
+  bindNav();
+}
+
 function renderSettings(){
   app.innerHTML=`<div class="app-shell">
-    <header class="topbar"><div><div class="brand">Ajustes</div><div class="subtle">GymOS v1.5 · Datos y copias</div></div></header>
+    <header class="topbar"><div><div class="brand">Ajustes</div><div class="subtle">GymOS v1.6 · Datos y copias</div></div></header>
     <main class="screen">
       <section class="card">
         <h2>Rutina desde Excel</h2>

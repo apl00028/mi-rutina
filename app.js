@@ -116,6 +116,52 @@ function blockWeekWorkouts(block,weekNumber){
     return d>=from&&d<to;
   }).length;
 }
+
+function defaultSessionPlan(count){
+  const sequence=["A","B","C","A","B","C","A"];
+  return sequence.slice(0,Math.max(1,Math.min(7,Number(count)||3)));
+}
+function blockSessionPlan(block){
+  const plan=Array.isArray(block.sessionPlan)?block.sessionPlan.filter(x=>["A","B","C"].includes(x)):[];
+  return plan.length===Number(block.sessionsPerWeek)?plan:defaultSessionPlan(block.sessionsPerWeek);
+}
+function blockWeekWorkoutRows(block,weekNumber){
+  const start=dateOnly(block.startDate);
+  if(!start) return [];
+  const from=addDays(start,(weekNumber-1)*7);
+  const to=addDays(from,7);
+  return getHistory()
+    .filter(workout=>{
+      const d=new Date(workout.date||workout.finishedAt||workout.startedAt);
+      return d>=from&&d<to;
+    })
+    .sort((a,b)=>new Date(a.date)-new Date(b.date));
+}
+function blockWeekSessionSummary(block,weekNumber){
+  const plan=blockSessionPlan(block);
+  const workouts=blockWeekWorkoutRows(block,weekNumber);
+  const remaining=[...plan];
+  const matched=[];
+  workouts.forEach(workout=>{
+    const index=remaining.indexOf(workout.session);
+    if(index>=0){
+      matched.push(workout.session);
+      remaining.splice(index,1);
+    }
+  });
+  return {
+    plan,
+    workouts,
+    matched,
+    remaining,
+    completed:matched.length,
+    adherence:Math.min(100,Math.round((matched.length/Math.max(1,plan.length))*100))
+  };
+}
+function nextPlannedSession(block,weekNumber){
+  const summary=blockWeekSessionSummary(block,weekNumber);
+  return summary.remaining[0]||null;
+}
 function formatBlockDate(value){
   const d=dateOnly(value);
   return d?d.toLocaleDateString("es-ES",{day:"2-digit",month:"short",year:"numeric"}):"—";
@@ -278,7 +324,7 @@ function formatSyncDate(value){
 }
 function buildSyncPayload(){
   return {
-    version:"2.3.0",
+    version:"2.3.1",
     updatedAt:getLocalUpdatedAt(),
     deviceId:getDeviceId(),
     deviceName:getDeviceName(),
@@ -960,17 +1006,25 @@ function renderHome(){
           <p class="subtle">Planifica tu rutina durante 4, 6 u 8 semanas.</p>
         </section>`;
         const status=blockStatus(block);
-        const done=blockWeekWorkouts(block,status.week);
+        const summary=blockWeekSessionSummary(block,status.week);
+        const next=nextPlannedSession(block,status.week);
         return `<section class="card block-home-card">
           <div class="card-heading-row">
             <div><h2>${esc(block.name)}</h2><p class="subtle">Semana ${status.week} de ${status.total}</p></div>
             <button id="openBlocksHome" class="text-button">Abrir</button>
           </div>
-          <div class="block-progress-track"><div style="width:${status.progress}%"></div></div>
-          <div class="weekly-home-footer">
-            <strong>${done} de ${block.sessionsPerWeek} sesiones esta semana</strong>
-            <span>${status.status==="completed"?"Finalizado":status.status==="planned"?"Pendiente":"En curso"}</span>
+          <div class="block-session-strip">
+            ${summary.plan.map((session,index)=>{
+              const completed=index<summary.matched.length;
+              return `<span class="${completed?"done":session===next?"next":""}">${completed?"✓ ":""}${session}</span>`;
+            }).join("")}
           </div>
+          <div class="block-progress-track"><div style="width:${summary.adherence}%"></div></div>
+          <div class="weekly-home-footer">
+            <strong>${summary.completed} de ${summary.plan.length} sesiones · ${summary.adherence}%</strong>
+            <span>${next?`Siguiente: ${next}`:status.status==="planned"?"Pendiente":"Semana completada"}</span>
+          </div>
+          ${next?`<button id="startNextPlannedSession" class="secondary full block-next-button">Preparar sesión ${next}</button>`:""}
         </section>`;
       })()}
       ${(()=>{
@@ -1010,6 +1064,18 @@ function renderHome(){
   document.getElementById("openPlan").onclick=()=>{state.screen="plan";renderPlan();};
   const openBlocksHome=document.getElementById("openBlocksHome");
   if(openBlocksHome) openBlocksHome.onclick=()=>{state.screen="blocks";renderBlocks();};
+  const startNextPlannedSession=document.getElementById("startNextPlannedSession");
+  if(startNextPlannedSession) startNextPlannedSession.onclick=()=>{
+    const block=getActiveBlock();
+    if(!block) return;
+    const status=blockStatus(block);
+    const next=nextPlannedSession(block,status.week);
+    if(!next) return;
+    state.selectedSession=next;
+    localStorage.setItem("gymos:selectedSession",next);
+    toast(`Sesión ${next} preparada`);
+    renderHome();
+  };
   document.getElementById("openBody").onclick=()=>{state.screen="body";renderBody();};
   bindNav();
 }
@@ -1750,7 +1816,8 @@ function renderBlocks(){
       ${blocks.length?blocks.map(block=>{
         const status=blockStatus(block);
         const isActive=active&&active.id===block.id;
-        const completedWeeks=Array.from({length:status.total},(_,i)=>blockWeekWorkouts(block,i+1)>=block.sessionsPerWeek).filter(Boolean).length;
+        const completedWeeks=Array.from({length:status.total},(_,i)=>blockWeekSessionSummary(block,i+1).adherence>=100).filter(Boolean).length;
+        const currentSummary=blockWeekSessionSummary(block,status.week);
         return `<section class="card training-block-card ${isActive?"active-block":""}">
           <div class="card-heading-row">
             <div>
@@ -1764,7 +1831,11 @@ function renderBlocks(){
             <div><span>Objetivo</span><strong>${block.sessionsPerWeek}/sem</strong></div>
             <div><span>Cumplidas</span><strong>${completedWeeks}</strong></div>
           </div>
-          <div class="block-progress-track"><div style="width:${status.progress}%"></div></div>
+          <div class="block-session-strip compact">
+            ${currentSummary.plan.map((s,i)=>`<span class="${i<currentSummary.matched.length?"done":""}">${i<currentSummary.matched.length?"✓ ":""}${s}</span>`).join("")}
+          </div>
+          <div class="block-progress-track"><div style="width:${currentSummary.adherence}%"></div></div>
+          <p class="subtle block-adherence-label">Adherencia de la semana actual: ${currentSummary.adherence}%</p>
           <div class="settings-actions compact-actions">
             ${!isActive?`<button class="primary" data-activate-block="${block.id}">Activar</button>`:""}
             <button class="secondary" data-duplicate-block="${block.id}">Duplicar</button>
@@ -1844,6 +1915,15 @@ function renderBlockEditor(){
           <option value="0" ${!block.deloadWeek?"selected":""}>Sin descarga</option>
           ${[4,6,8].map(n=>`<option value="${n}" ${Number(block.deloadWeek)===n?"selected":""}>Semana ${n}</option>`).join("")}
         </select></label>
+        <div class="session-plan-editor">
+          <span class="field-label">Orden semanal de sesiones</span>
+          <div id="sessionPlanSlots" class="session-plan-slots">
+            ${blockSessionPlan(block).map((session,index)=>`<label><span>Día ${index+1}</span><select data-plan-slot="${index}">
+              ${["A","B","C"].map(s=>`<option value="${s}" ${s===session?"selected":""}>Sesión ${s}</option>`).join("")}
+            </select></label>`).join("")}
+          </div>
+          <p class="subtle">Define el orden previsto. Las sesiones se marcan como completadas al registrarlas.</p>
+        </div>
         <label><span>Notas</span><textarea id="blockNotes" rows="4" placeholder="Objetivo, indicaciones o recordatorios">${esc(block.notes||"")}</textarea></label>
         <button id="saveBlockBottom" class="primary full">Guardar bloque</button>
       </section>
@@ -1852,11 +1932,16 @@ function renderBlockEditor(){
         <div class="block-week-list">
           ${Array.from({length:Number(block.weeks)},(_,i)=>{
             const week=i+1;
-            const done=blockWeekWorkouts(block,week);
-            const met=done>=block.sessionsPerWeek;
-            return `<div class="block-week-row ${met?"met":""}">
-              <span>Semana ${week}${Number(block.deloadWeek)===week?" · descarga":""}</span>
-              <strong>${done}/${block.sessionsPerWeek}</strong>
+            const summary=blockWeekSessionSummary(block,week);
+            const met=summary.adherence>=100;
+            return `<div class="block-week-detail ${met?"met":""}">
+              <div class="block-week-row">
+                <span>Semana ${week}${Number(block.deloadWeek)===week?" · descarga":""}</span>
+                <strong>${summary.completed}/${summary.plan.length} · ${summary.adherence}%</strong>
+              </div>
+              <div class="block-session-strip compact">
+                ${summary.plan.map((s,index)=>`<span class="${index<summary.matched.length?"done":""}">${index<summary.matched.length?"✓ ":""}${s}</span>`).join("")}
+              </div>
             </div>`;
           }).join("")}
         </div>
@@ -1865,6 +1950,13 @@ function renderBlockEditor(){
   </div>`;
 
   document.getElementById("backBlockEditor").onclick=()=>{state.screen="blocks";renderBlocks();};
+  document.getElementById("blockSessions").onchange=()=>{
+    const count=Number(document.getElementById("blockSessions").value);
+    const container=document.getElementById("sessionPlanSlots");
+    container.innerHTML=defaultSessionPlan(count).map((session,index)=>`<label><span>Día ${index+1}</span><select data-plan-slot="${index}">
+      ${["A","B","C"].map(s=>`<option value="${s}" ${s===session?"selected":""}>Sesión ${s}</option>`).join("")}
+    </select></label>`).join("");
+  };
   const save=()=>{
     const name=document.getElementById("blockName").value.trim();
     const startDate=document.getElementById("blockStart").value;
@@ -1879,6 +1971,7 @@ function renderBlockEditor(){
       startDate,
       weeks,
       sessionsPerWeek:Number(document.getElementById("blockSessions").value),
+      sessionPlan:[...document.querySelectorAll("[data-plan-slot]")].map(select=>select.value),
       deloadWeek,
       notes:document.getElementById("blockNotes").value.trim(),
       createdAt:existing?.createdAt||new Date().toISOString(),
@@ -1897,7 +1990,7 @@ function renderBlockEditor(){
 
 function renderSettings(){
   app.innerHTML=`<div class="app-shell">
-    <header class="topbar"><div><div class="brand">Ajustes</div><div class="subtle">GymOS v2.3.0 · Bloques de entrenamiento</div></div></header>
+    <header class="topbar"><div><div class="brand">Ajustes</div><div class="subtle">GymOS v2.3.1 · Plan semanal</div></div></header>
     <main class="screen">
       <section class="card sync-card">
         <div class="card-heading-row">

@@ -1,4 +1,4 @@
-# GymOS v2.3.0 — Bloques de entrenamiento
+# GymOS v2.3.1 — Plan semanal y adherencia
 
 GymOS sigue funcionando completamente en modo local.
 
@@ -81,3 +81,14 @@ La resolución de conflictos conserva la copia con la fecha `updatedAt` más rec
 - Semana de descarga configurable.
 - Duplicar, editar, activar y eliminar bloques.
 - Sincronización y copia de seguridad de los bloques.
+
+
+## Novedades de la versión 2.3.1
+
+- Orden semanal configurable de sesiones A, B y C.
+- Próxima sesión prevista visible en la pantalla principal.
+- Botón para preparar la siguiente sesión del bloque.
+- Adherencia semanal calculada según las sesiones planificadas.
+- Estado visual de cada sesión prevista.
+- Desglose semanal completo dentro del bloque.
+- Ajuste automático del plan al cambiar el número de sesiones por semana.

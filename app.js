@@ -61,6 +61,7 @@ function getRoutine(){
 }
 function saveRoutine(routine){
   localStorage.setItem("gymos:routine",JSON.stringify(normalizeRoutine(routine)));
+  markLocalUpdated();
 }
 let sessions=getRoutine();
 
@@ -78,7 +79,9 @@ let state = {
   selectedStatsExercise: null,
   selectedRecordExercise: null,
   editWorkoutId: null,
-  planMonth: new Date().toISOString().slice(0,7)
+  planMonth: new Date().toISOString().slice(0,7),
+  syncUser: null,
+  syncStatus: "local"
 };
 
 function getHistory(){ return JSON.parse(localStorage.getItem("gymos:history") || "[]"); }
@@ -88,6 +91,7 @@ function getBodyHistory(){
 }
 function saveBodyHistory(rows){
   localStorage.setItem("gymos:body",JSON.stringify(rows));
+  markLocalUpdated();
 }
 function bodyChange(field){
   const rows=getBodyHistory().filter(r=>numericValue(r[field])!==null);
@@ -120,7 +124,7 @@ function bodyTrendSvg(rows,field,label){
     <div class="body-chart-range"><span>${formatWeight(values[0])}</span><span>${formatWeight(values.at(-1))}</span></div>
   </div>`;
 }
-function saveHistory(h){ localStorage.setItem("gymos:history", JSON.stringify(h)); }
+function saveHistory(h){ localStorage.setItem("gymos:history", JSON.stringify(h)); markLocalUpdated(); }
 function normalizeSeries(series){
   return {
     weight:series?.weight??"",
@@ -139,6 +143,7 @@ function getRestSeconds(){
 }
 function saveRestSeconds(value){
   localStorage.setItem("gymos:restSeconds",String(value));
+  markLocalUpdated();
 }
 function getWeeklyGoal(){
   const value=Number(localStorage.getItem("gymos:weeklyGoal")||3);
@@ -146,6 +151,131 @@ function getWeeklyGoal(){
 }
 function saveWeeklyGoal(value){
   localStorage.setItem("gymos:weeklyGoal",String(Math.max(1,Math.min(7,Number(value)||3))));
+  markLocalUpdated();
+}
+function getSyncConfig(){
+  return {
+    url:localStorage.getItem("gymos:supabaseUrl")||"",
+    key:localStorage.getItem("gymos:supabaseAnonKey")||"",
+    email:localStorage.getItem("gymos:syncEmail")||""
+  };
+}
+function saveSyncConfig(config){
+  localStorage.setItem("gymos:supabaseUrl",config.url.trim());
+  localStorage.setItem("gymos:supabaseAnonKey",config.key.trim());
+  localStorage.setItem("gymos:syncEmail",config.email.trim());
+}
+function getLocalUpdatedAt(){
+  return localStorage.getItem("gymos:updatedAt")||new Date(0).toISOString();
+}
+function markLocalUpdated(){
+  localStorage.setItem("gymos:updatedAt",new Date().toISOString());
+}
+function buildSyncPayload(){
+  return {
+    version:"2.0",
+    updatedAt:getLocalUpdatedAt(),
+    history:getHistory(),
+    routine:getRoutine(),
+    body:getBodyHistory(),
+    selectedSession:localStorage.getItem("gymos:selectedSession")||"A",
+    restSeconds:getRestSeconds(),
+    weeklyGoal:getWeeklyGoal(),
+    updatedAt:getLocalUpdatedAt()
+  };
+}
+function applySyncPayload(payload){
+  if(!payload||typeof payload!=="object") throw new Error("Copia remota no válida.");
+  if(Array.isArray(payload.history)) saveHistory(payload.history);
+  if(payload.routine){saveRoutine(payload.routine);sessions=getRoutine();}
+  if(Array.isArray(payload.body)) saveBodyHistory(payload.body);
+  if(["A","B","C"].includes(payload.selectedSession)){
+    localStorage.setItem("gymos:selectedSession",payload.selectedSession);
+    state.selectedSession=payload.selectedSession;
+  }
+  if([60,90,120,180].includes(Number(payload.restSeconds))) saveRestSeconds(Number(payload.restSeconds));
+  if(Number(payload.weeklyGoal)>=1&&Number(payload.weeklyGoal)<=7) saveWeeklyGoal(Number(payload.weeklyGoal));
+  localStorage.setItem("gymos:updatedAt",payload.updatedAt||new Date().toISOString());
+}
+function getSupabaseClient(){
+  const config=getSyncConfig();
+  if(!config.url||!config.key) return null;
+  if(typeof supabase==="undefined") return null;
+  try{
+    return supabase.createClient(config.url,config.key,{
+      auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}
+    });
+  }catch(error){
+    return null;
+  }
+}
+async function refreshSyncSession(){
+  const client=getSupabaseClient();
+  if(!client){state.syncUser=null;state.syncStatus="local";return null;}
+  const {data,error}=await client.auth.getSession();
+  if(error){state.syncUser=null;state.syncStatus="error";return null;}
+  state.syncUser=data.session?.user||null;
+  state.syncStatus=state.syncUser?"connected":"configured";
+  return state.syncUser;
+}
+async function sendMagicLink(email){
+  const client=getSupabaseClient();
+  if(!client) throw new Error("Configura primero Supabase.");
+  const redirectTo=location.origin+location.pathname;
+  const {error}=await client.auth.signInWithOtp({
+    email,
+    options:{emailRedirectTo:redirectTo}
+  });
+  if(error) throw error;
+}
+async function signOutSync(){
+  const client=getSupabaseClient();
+  if(client) await client.auth.signOut();
+  state.syncUser=null;
+  state.syncStatus="configured";
+}
+async function syncNow(){
+  const client=getSupabaseClient();
+  if(!client) throw new Error("Supabase no está configurado.");
+  const {data:{session},error:sessionError}=await client.auth.getSession();
+  if(sessionError||!session?.user) throw new Error("Inicia sesión antes de sincronizar.");
+  const user=session.user;
+  const {data:remote,error:readError}=await client
+    .from("gymos_sync")
+    .select("payload,updated_at")
+    .eq("user_id",user.id)
+    .maybeSingle();
+  if(readError) throw readError;
+
+  const localPayload=buildSyncPayload();
+  const localTime=new Date(localPayload.updatedAt||0).getTime();
+  const remotePayload=remote?.payload||null;
+  const remoteTime=new Date(remotePayload?.updatedAt||remote?.updated_at||0).getTime();
+
+  if(remotePayload&&remoteTime>localTime){
+    localStorage.setItem("gymos:preSyncBackup",JSON.stringify(localPayload));
+    applySyncPayload(remotePayload);
+    state.syncStatus="synced";
+    return "downloaded";
+  }
+
+  const uploadPayload={...localPayload,updatedAt:new Date().toISOString()};
+  const {error:writeError}=await client.from("gymos_sync").upsert({
+    user_id:user.id,
+    payload:uploadPayload,
+    updated_at:uploadPayload.updatedAt
+  },{onConflict:"user_id"});
+  if(writeError) throw writeError;
+  localStorage.setItem("gymos:updatedAt",uploadPayload.updatedAt);
+  state.syncStatus="synced";
+  return remotePayload?"uploaded":"created";
+}
+function syncStatusLabel(){
+  if(state.syncStatus==="synced") return "Sincronizado";
+  if(state.syncStatus==="connected") return "Cuenta conectada";
+  if(state.syncStatus==="configured") return "Configurado, sin sesión";
+  if(state.syncStatus==="error") return "Error de conexión";
+  return "Solo en este dispositivo";
 }
 function dateKey(value){
   const d=new Date(value);
@@ -1240,8 +1370,31 @@ function renderPlan(){
 
 function renderSettings(){
   app.innerHTML=`<div class="app-shell">
-    <header class="topbar"><div><div class="brand">Ajustes</div><div class="subtle">GymOS v1.9 · Datos y copias</div></div></header>
+    <header class="topbar"><div><div class="brand">Ajustes</div><div class="subtle">GymOS v2.0 · Local-first y sincronización</div></div></header>
     <main class="screen">
+      <section class="card sync-card">
+        <div class="card-heading-row">
+          <div><h2>Sincronización</h2><p class="subtle">${syncStatusLabel()}</p></div>
+          <span class="sync-dot ${state.syncStatus}"></span>
+        </div>
+        <p class="subtle">Opcional. GymOS seguirá funcionando sin cuenta y sin conexión.</p>
+        <div class="sync-fields">
+          <label><span>Supabase Project URL</span><input id="syncUrl" type="url" value="${getSyncConfig().url}" placeholder="https://xxxxx.supabase.co"></label>
+          <label><span>Anon public key</span><input id="syncKey" type="password" value="${getSyncConfig().key}" placeholder="eyJ..."></label>
+          <label><span>Correo</span><input id="syncEmail" type="email" value="${getSyncConfig().email}" placeholder="tu@email.com"></label>
+        </div>
+        <div class="settings-actions">
+          <button id="saveSyncConfig" class="secondary">Guardar configuración</button>
+          ${state.syncUser
+            ?`<button id="syncNow" class="primary">Sincronizar ahora</button><button id="signOutSync" class="secondary">Cerrar sesión</button>`
+            :`<button id="sendMagicLink" class="primary">Enviar enlace de acceso</button>`}
+        </div>
+        ${state.syncUser?`<div class="sync-user">Conectado como <strong>${state.syncUser.email||"usuario"}</strong></div>`:""}
+        <details class="sync-help">
+          <summary>Cómo configurarlo</summary>
+          <p>Ejecuta el archivo <strong>supabase-schema.sql</strong> en tu proyecto de Supabase. Usa únicamente la clave <strong>anon public</strong>, nunca la service role.</p>
+        </details>
+      </section>
       <section class="card">
         <h2>Objetivo y calendario</h2>
         <p class="subtle">Consulta la adherencia semanal, la racha y el calendario de actividad.</p>
@@ -1284,6 +1437,52 @@ function renderSettings(){
       </section>
     </main>${nav("settings")}
   </div>`;
+  document.getElementById("saveSyncConfig").onclick=async()=>{
+    saveSyncConfig({
+      url:document.getElementById("syncUrl").value,
+      key:document.getElementById("syncKey").value,
+      email:document.getElementById("syncEmail").value
+    });
+    await refreshSyncSession();
+    toast("Configuración guardada");
+    renderSettings();
+  };
+  const magicButton=document.getElementById("sendMagicLink");
+  if(magicButton) magicButton.onclick=async()=>{
+    try{
+      const email=document.getElementById("syncEmail").value.trim();
+      if(!email){alert("Introduce tu correo.");return;}
+      saveSyncConfig({
+        url:document.getElementById("syncUrl").value,
+        key:document.getElementById("syncKey").value,
+        email
+      });
+      await sendMagicLink(email);
+      alert("Te hemos enviado un enlace de acceso. Ábrelo desde este dispositivo y vuelve a GymOS.");
+    }catch(error){
+      alert("No se pudo enviar el enlace: "+error.message);
+    }
+  };
+  const syncButton=document.getElementById("syncNow");
+  if(syncButton) syncButton.onclick=async()=>{
+    syncButton.disabled=true;
+    syncButton.textContent="Sincronizando…";
+    try{
+      const result=await syncNow();
+      toast(result==="downloaded"?"Datos remotos descargados":"Datos sincronizados");
+      renderSettings();
+    }catch(error){
+      alert("No se pudo sincronizar: "+error.message);
+      syncButton.disabled=false;
+      syncButton.textContent="Sincronizar ahora";
+    }
+  };
+  const signOutButton=document.getElementById("signOutSync");
+  if(signOutButton) signOutButton.onclick=async()=>{
+    await signOutSync();
+    toast("Sesión cerrada");
+    renderSettings();
+  };
   document.getElementById("openPlanSettings").onclick=()=>{state.screen="plan";renderPlan();};
   document.querySelectorAll("[data-rest-setting]").forEach(button=>button.onclick=()=>{
     saveRestSeconds(Number(button.dataset.restSetting));
@@ -1441,7 +1640,8 @@ function exportData(){
     routine:getRoutine(),
     body:getBodyHistory(),
     restSeconds:getRestSeconds(),
-    weeklyGoal:getWeeklyGoal()
+    weeklyGoal:getWeeklyGoal(),
+    updatedAt:getLocalUpdatedAt()
   };
   const blob=new Blob([JSON.stringify(payload,null,2)],{type:"application/json"});
   const a=document.createElement("a");a.href=URL.createObjectURL(blob);
@@ -1470,4 +1670,4 @@ importFile.onchange=async()=>{
 };
 
 if("serviceWorker" in navigator){navigator.serviceWorker.register("service-worker.js");}
-render();
+refreshSyncSession().finally(()=>render());

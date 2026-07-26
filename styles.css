@@ -498,3 +498,35 @@ select{
   .weekly-goal-options{gap:4px}
   .calendar-day{min-height:34px;padding:4px}
 }
+
+.sync-card{position:relative}
+.sync-dot{
+  width:12px;height:12px;border-radius:50%;background:#9ca3af;
+  box-shadow:0 0 0 4px rgba(156,163,175,.15)
+}
+.sync-dot.synced,.sync-dot.connected{background:#059669;box-shadow:0 0 0 4px rgba(5,150,105,.15)}
+.sync-dot.configured{background:#d97706;box-shadow:0 0 0 4px rgba(217,119,6,.15)}
+.sync-dot.error{background:#dc2626;box-shadow:0 0 0 4px rgba(220,38,38,.15)}
+.sync-fields{
+  display:grid;gap:10px;margin:14px 0
+}
+.sync-fields label span{
+  display:block;font-size:.75rem;color:#6b7280;font-weight:800;margin-bottom:6px
+}
+.sync-fields input{
+  width:100%;box-sizing:border-box;border:1px solid #d1d5db;
+  border-radius:11px;padding:12px;font-size:16px
+}
+.sync-user{
+  margin-top:12px;padding:10px 12px;background:#ecfdf5;color:#065f46;
+  border-radius:11px;font-size:.82rem
+}
+.sync-help{
+  margin-top:12px;border-top:1px solid #e5e7eb;padding-top:10px
+}
+.sync-help summary{
+  cursor:pointer;font-weight:800;font-size:.83rem
+}
+.sync-help p{
+  color:#6b7280;font-size:.8rem;line-height:1.45;margin-bottom:0
+}

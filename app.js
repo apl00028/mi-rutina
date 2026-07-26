@@ -80,6 +80,44 @@ let state = {
 };
 
 function getHistory(){ return JSON.parse(localStorage.getItem("gymos:history") || "[]"); }
+function getBodyHistory(){
+  return JSON.parse(localStorage.getItem("gymos:body")||"[]")
+    .sort((a,b)=>new Date(a.date)-new Date(b.date));
+}
+function saveBodyHistory(rows){
+  localStorage.setItem("gymos:body",JSON.stringify(rows));
+}
+function bodyChange(field){
+  const rows=getBodyHistory().filter(r=>numericValue(r[field])!==null);
+  if(rows.length<2) return null;
+  return numericValue(rows.at(-1)[field])-numericValue(rows[0][field]);
+}
+function latestBodyEntry(){
+  return getBodyHistory().at(-1)||null;
+}
+function bodyTrendSvg(rows,field,label){
+  const valid=rows.filter(r=>numericValue(r[field])!==null).slice(-12);
+  if(valid.length<2) return `<div class="body-empty-chart">Añade al menos dos registros para ver la tendencia.</div>`;
+  const values=valid.map(r=>numericValue(r[field]));
+  const min=Math.min(...values),max=Math.max(...values);
+  const range=Math.max(max-min,0.5);
+  const width=320,height=150,pad=18;
+  const points=values.map((value,index)=>{
+    const x=pad+(index/(values.length-1))*(width-pad*2);
+    const y=height-pad-((value-min)/range)*(height-pad*2);
+    return `${x.toFixed(1)},${y.toFixed(1)}`;
+  }).join(" ");
+  return `<div class="body-chart">
+    <svg viewBox="0 0 ${width} ${height}" role="img" aria-label="${label}">
+      <polyline points="${points}" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"></polyline>
+      ${points.split(" ").map(point=>{
+        const [x,y]=point.split(",");
+        return `<circle cx="${x}" cy="${y}" r="4.5" fill="currentColor"></circle>`;
+      }).join("")}
+    </svg>
+    <div class="body-chart-range"><span>${formatWeight(values[0])}</span><span>${formatWeight(values.at(-1))}</span></div>
+  </div>`;
+}
 function saveHistory(h){ localStorage.setItem("gymos:history", JSON.stringify(h)); }
 function nextSuggestedSession(){
   const h = JSON.parse(localStorage.getItem("gymos:history") || "[]");
@@ -428,6 +466,7 @@ function render(){
   else if(state.screen==="history") renderHistory();
   else if(state.screen==="stats") renderStats();
   else if(state.screen==="records") renderRecords();
+  else if(state.screen==="body") renderBody();
   else renderSettings();
 }
 
@@ -451,6 +490,16 @@ function renderHome(){
         <div class="info-row"><span>Duración</span><strong>${last?formatDuration(last.durationMs):"—"}</strong></div>
         <div class="info-row"><span>Entrenamientos guardados</span><strong>${h.length}</strong></div>
       </section>
+      ${(()=>{
+        const body=latestBodyEntry();
+        return `<section class="card body-home-card">
+          <div class="card-heading-row"><div><h2>Seguimiento corporal</h2><p class="subtle">Peso y cintura</p></div><button id="openBody" class="text-button">Abrir</button></div>
+          <div class="body-home-values">
+            <div><span>Peso</span><strong>${body&&numericValue(body.weight)!==null?`${formatWeight(body.weight)} kg`:"—"}</strong></div>
+            <div><span>Cintura</span><strong>${body&&numericValue(body.waist)!==null?`${formatWeight(body.waist)} cm`:"—"}</strong></div>
+          </div>
+        </section>`;
+      })()}
     </main>${nav("home")}
   </div>`;
   document.querySelectorAll("[data-session]").forEach(b=>b.onclick=()=>{
@@ -459,6 +508,7 @@ function renderHome(){
     renderHome();
   });
   document.getElementById("startWorkout").onclick=()=>{state.screen="workout";renderWorkout();};
+  document.getElementById("openBody").onclick=()=>{state.screen="body";renderBody();};
   bindNav();
 }
 
@@ -748,10 +798,90 @@ function renderRecords(){
   bindNav();
 }
 
+function renderBody(){
+  const rows=getBodyHistory();
+  const latest=rows.at(-1);
+  const weightChange=bodyChange("weight");
+  const waistChange=bodyChange("waist");
+  const today=new Date().toISOString().slice(0,10);
+
+  app.innerHTML=`<div class="app-shell">
+    <header class="topbar"><div><div class="brand">Seguimiento corporal</div><div class="subtle">Peso, cintura y tendencia</div></div></header>
+    <main class="screen">
+      <section class="card">
+        <h2>Nuevo registro</h2>
+        <div class="body-form-grid">
+          <label><span>Fecha</span><input id="bodyDate" type="date" value="${today}"></label>
+          <label><span>Peso (kg)</span><input id="bodyWeight" inputmode="decimal" placeholder="79,5"></label>
+          <label><span>Cintura (cm)</span><input id="bodyWaist" inputmode="decimal" placeholder="88"></label>
+          <label class="body-note"><span>Nota opcional</span><input id="bodyNote" type="text" placeholder="En ayunas, después de entrenar…"></label>
+        </div>
+        <button id="saveBody" class="primary full">Guardar registro</button>
+      </section>
+
+      <section class="body-summary-grid">
+        <div class="metric-card"><span>Último peso</span><strong>${latest&&numericValue(latest.weight)!==null?`${formatWeight(latest.weight)} kg`:"—"}</strong><small>${weightChange===null?"Sin tendencia":`${weightChange>0?"+":""}${formatWeight(weightChange)} kg desde el inicio`}</small></div>
+        <div class="metric-card"><span>Última cintura</span><strong>${latest&&numericValue(latest.waist)!==null?`${formatWeight(latest.waist)} cm`:"—"}</strong><small>${waistChange===null?"Sin tendencia":`${waistChange>0?"+":""}${formatWeight(waistChange)} cm desde el inicio`}</small></div>
+      </section>
+
+      <section class="card">
+        <div class="stats-card-title"><div><h2>Evolución del peso</h2><p class="subtle">Últimos 12 registros</p></div></div>
+        ${bodyTrendSvg(rows,"weight","Evolución del peso")}
+      </section>
+
+      <section class="card">
+        <div class="stats-card-title"><div><h2>Evolución de cintura</h2><p class="subtle">Últimos 12 registros</p></div></div>
+        ${bodyTrendSvg(rows,"waist","Evolución de cintura")}
+      </section>
+
+      <section class="card">
+        <h2>Historial corporal</h2>
+        ${rows.length?rows.slice().reverse().map(row=>`
+          <div class="body-history-row">
+            <div><strong>${formatDate(row.date)}</strong><small>${row.note||"Sin nota"}</small></div>
+            <div class="body-history-values">
+              <span>${numericValue(row.weight)!==null?`${formatWeight(row.weight)} kg`:"—"}</span>
+              <span>${numericValue(row.waist)!==null?`${formatWeight(row.waist)} cm`:"—"}</span>
+              <button data-delete-body="${row.id}" class="body-delete" aria-label="Eliminar registro">×</button>
+            </div>
+          </div>
+        `).join(""):`<div class="empty">Todavía no hay registros corporales.</div>`}
+      </section>
+    </main>${nav("")}
+  </div>`;
+
+  document.getElementById("saveBody").onclick=()=>{
+    const date=document.getElementById("bodyDate").value;
+    const weight=numericValue(document.getElementById("bodyWeight").value.replace(",","."));
+    const waist=numericValue(document.getElementById("bodyWaist").value.replace(",","."));
+    const note=document.getElementById("bodyNote").value.trim();
+    if(!date){alert("Selecciona una fecha.");return;}
+    if(weight===null&&waist===null){alert("Introduce el peso, la cintura o ambos.");return;}
+    if(weight!==null&&(weight<30||weight>300)){alert("Revisa el peso introducido.");return;}
+    if(waist!==null&&(waist<40||waist>250)){alert("Revisa la cintura introducida.");return;}
+    const current=getBodyHistory().filter(row=>row.date!==date);
+    current.push({id:Date.now(),date,weight,waist,note});
+    saveBodyHistory(current);
+    toast("Registro corporal guardado");
+    renderBody();
+  };
+  document.querySelectorAll("[data-delete-body]").forEach(button=>button.onclick=()=>{
+    if(!confirm("¿Eliminar este registro corporal?")) return;
+    saveBodyHistory(getBodyHistory().filter(row=>row.id!==Number(button.dataset.deleteBody)));
+    renderBody();
+  });
+  bindNav();
+}
+
 function renderSettings(){
   app.innerHTML=`<div class="app-shell">
-    <header class="topbar"><div><div class="brand">Ajustes</div><div class="subtle">GymOS v1.6 · Datos y copias</div></div></header>
+    <header class="topbar"><div><div class="brand">Ajustes</div><div class="subtle">GymOS v1.7 · Datos y copias</div></div></header>
     <main class="screen">
+      <section class="card">
+        <h2>Seguimiento corporal</h2>
+        <p class="subtle">Registra peso y cintura para comprobar la tendencia junto con tu rendimiento.</p>
+        <button id="openBodySettings" class="secondary full">Abrir seguimiento corporal</button>
+      </section>
       <section class="card">
         <h2>Rutina desde Excel</h2>
         <p class="subtle">Descarga la plantilla, modifícala y vuelve a importarla. El historial anterior no se borra.</p>
@@ -777,6 +907,7 @@ function renderSettings(){
       </section>
     </main>${nav("settings")}
   </div>`;
+  document.getElementById("openBodySettings").onclick=()=>{state.screen="body";renderBody();};
   document.getElementById("importRoutine").onclick=()=>{
     if(typeof XLSX==="undefined"){
       alert("No se ha podido cargar el lector de Excel. Abre GymOS con conexión a Internet y vuelve a intentarlo.");
@@ -924,7 +1055,8 @@ function exportData(){
       C:JSON.parse(localStorage.getItem(draftKey("C"))||"null")
     },
     selectedSession:state.selectedSession,
-    routine:getRoutine()
+    routine:getRoutine(),
+    body:getBodyHistory()
   };
   const blob=new Blob([JSON.stringify(payload,null,2)],{type:"application/json"});
   const a=document.createElement("a");a.href=URL.createObjectURL(blob);
@@ -938,6 +1070,7 @@ importFile.onchange=async()=>{
     const data=JSON.parse(await file.text());
     if(!Array.isArray(data.history))throw new Error();
     saveHistory(data.history);
+    if(Array.isArray(data.body)) saveBodyHistory(data.body);
     if(data.routine){saveRoutine(data.routine);sessions=getRoutine();}
     ["A","B","C"].forEach(s=>{
       if(data.drafts&&data.drafts[s])localStorage.setItem(draftKey(s),JSON.stringify(data.drafts[s]));

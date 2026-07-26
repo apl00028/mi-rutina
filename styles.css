@@ -289,3 +289,66 @@ select{
   .bottom-nav button{font-size:.64rem;padding-left:1px;padding-right:1px}
   .records-grid{grid-template-columns:1fr 1fr}
 }
+
+.card-heading-row{
+  display:flex;align-items:flex-start;justify-content:space-between;gap:12px
+}
+.card-heading-row h2,.card-heading-row p{margin:0}
+.body-home-values{
+  display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px
+}
+.body-home-values div{
+  background:#f9fafb;border-radius:13px;padding:12px
+}
+.body-home-values span,.body-home-values strong{display:block}
+.body-home-values span{font-size:.75rem;color:#6b7280;margin-bottom:4px}
+.body-form-grid{
+  display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:12px 0
+}
+.body-form-grid label span{
+  display:block;font-size:.75rem;color:#6b7280;font-weight:800;margin-bottom:6px
+}
+.body-form-grid input{
+  width:100%;box-sizing:border-box;border:1px solid #d1d5db;
+  border-radius:11px;padding:12px;font-size:16px
+}
+.body-note{grid-column:1/-1}
+.body-summary-grid{
+  display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px
+}
+.body-summary-grid small{
+  display:block;color:#6b7280;font-size:.72rem;margin-top:5px;line-height:1.3
+}
+.body-chart{
+  color:#111827;margin-top:10px
+}
+.body-chart svg{
+  display:block;width:100%;height:auto;background:#f9fafb;border-radius:14px
+}
+.body-chart-range{
+  display:flex;justify-content:space-between;color:#6b7280;font-size:.75rem;margin-top:5px
+}
+.body-empty-chart{
+  min-height:120px;display:grid;place-items:center;text-align:center;
+  color:#6b7280;background:#f9fafb;border-radius:14px;margin-top:10px;padding:14px
+}
+.body-history-row{
+  display:flex;justify-content:space-between;align-items:center;gap:12px;
+  padding:12px 0;border-bottom:1px solid #f3f4f6
+}
+.body-history-row:last-child{border-bottom:0}
+.body-history-row strong,.body-history-row small{display:block}
+.body-history-row small{color:#6b7280;margin-top:3px;max-width:180px}
+.body-history-values{
+  display:flex;align-items:center;gap:8px;font-weight:800;font-size:.85rem
+}
+.body-delete{
+  width:28px;height:28px;border-radius:50%;border:0;background:#fee2e2;
+  color:#991b1b;font-size:1.1rem;line-height:1
+}
+@media(max-width:420px){
+  .body-form-grid{grid-template-columns:1fr}
+  .body-note{grid-column:auto}
+  .body-history-row{align-items:flex-start}
+  .body-history-values{flex-wrap:wrap;justify-content:flex-end}
+}

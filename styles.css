@@ -530,3 +530,21 @@ select{
 .sync-help p{
   color:#6b7280;font-size:.8rem;line-height:1.45;margin-bottom:0
 }
+
+.sync-badge{
+  border:1px solid #e5e7eb;background:#fff;border-radius:999px;
+  padding:8px 10px;display:flex;align-items:center;gap:7px;
+  font-size:.72rem;font-weight:850;color:#374151
+}
+.sync-dot.syncing{background:#2563eb;box-shadow:0 0 0 4px rgba(37,99,235,.15);animation:syncPulse 1s infinite}
+.sync-dot.pending{background:#d97706;box-shadow:0 0 0 4px rgba(217,119,6,.15)}
+.sync-dot.offline{background:#6b7280;box-shadow:0 0 0 4px rgba(107,114,128,.15)}
+@keyframes syncPulse{50%{opacity:.35}}
+.sync-summary{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:14px 0}
+.sync-summary div{padding:11px;background:#f9fafb;border-radius:11px;display:flex;flex-direction:column;gap:4px}
+.sync-summary span{font-size:.68rem;color:#6b7280;font-weight:800}
+.sync-summary strong{font-size:.82rem}
+@media(max-width:420px){
+  .sync-badge span:last-child{display:none}
+  .sync-badge{padding:9px}
+}

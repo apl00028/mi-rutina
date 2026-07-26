@@ -1,4 +1,4 @@
-# GymOS v2.0.1 — Sincronización opcional con Supabase
+# GymOS v2.1 — Smart Sync — Sincronización opcional con Supabase
 
 GymOS sigue funcionando completamente en modo local.
 
@@ -43,4 +43,17 @@ Configura:
 - Site URL: `https://apl00028.github.io/mi-rutina/`
 - Redirect URLs: `https://apl00028.github.io/mi-rutina/`
 
-Si Supabase mantiene `http://localhost:3000`, el enlace mágico abrirá localhost y fallará.
+
+## Novedades de la versión 2.1
+
+- Sincronización automática al abrir GymOS.
+- Sincronización al finalizar un entrenamiento.
+- Reintento automático al recuperar Internet.
+- Sincronización periódica cada cinco minutos.
+- Indicador visible de estado.
+- Fecha de última sincronización.
+- Nombre identificativo del dispositivo.
+- Copia local previa antes de descargar datos remotos más recientes.
+- Funcionamiento normal sin conexión.
+
+La resolución de conflictos conserva la copia con la fecha `updatedAt` más reciente. Antes de sustituir datos locales por una copia remota, GymOS guarda una copia local de seguridad.

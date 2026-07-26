@@ -1,8 +1,7 @@
 *{box-sizing:border-box}
 :root{
   font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
-  color:#111827;
-  background:#f3f4f6;
+  color:#111827;background:#f3f4f6
 }
 body{margin:0;min-height:100vh;background:#f3f4f6}
 button,input,textarea{font:inherit}
@@ -10,98 +9,122 @@ button{cursor:pointer}
 .app-shell{max-width:760px;margin:0 auto;min-height:100vh}
 .topbar{
   display:flex;justify-content:space-between;align-items:center;
-  padding:18px 16px;background:#111827;color:white;
+  padding:18px 16px;background:#111827;color:#fff
 }
 .brand{font-size:1.25rem;font-weight:800}
-.subtle{color:#6b7280}
-.topbar .subtle{color:#cbd5e1}
-.icon-btn{
-  width:42px;height:42px;border:0;border-radius:12px;
-  background:#1f2937;color:white;font-size:1.1rem;
-}
-.screen{padding:18px 14px 110px}
+.subtle{color:#6b7280}.topbar .subtle{color:#cbd5e1}
+.screen{padding:18px 14px 108px}
 .hero{
   background:linear-gradient(135deg,#111827,#374151);
   color:white;border-radius:22px;padding:24px;margin-bottom:16px;
-  box-shadow:0 10px 30px rgba(17,24,39,.18);
+  box-shadow:0 10px 30px rgba(17,24,39,.18)
 }
 .hero-label{opacity:.75;font-size:.9rem}
-.hero h1{margin:6px 0 6px;font-size:2rem}
+.hero h1{margin:6px 0;font-size:2rem}
 .hero p{margin:0 0 22px;color:#d1d5db}
-.primary{
-  border:0;border-radius:14px;background:#111827;color:white;
-  padding:14px 18px;font-weight:800;
+.primary,.secondary,.danger{
+  border:0;border-radius:14px;padding:14px 18px;font-weight:800
 }
-.hero .primary{background:white;color:#111827;width:100%;font-size:1.05rem}
-.secondary{
-  border:0;border-radius:12px;background:#e5e7eb;color:#111827;
-  padding:11px 14px;font-weight:700;
-}
+.primary{background:#111827;color:#fff}
+.secondary{background:#e5e7eb;color:#111827}
+.danger{background:#fee2e2;color:#991b1b}
 .full{width:100%}
+.hero .primary{background:#fff;color:#111827;width:100%;font-size:1.05rem}
 .session-picker{
-  display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:16px;
+  display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:16px
 }
 .session-picker button{
-  border:0;border-radius:12px;padding:12px;background:#e5e7eb;font-weight:800;
+  border:0;border-radius:12px;padding:12px;background:#e5e7eb;font-weight:800
 }
-.session-picker button.active{background:#111827;color:white}
-.info-card,.exercise-card,.summary-card{
+.session-picker button.active{background:#111827;color:#fff}
+.card{
   background:white;border-radius:18px;padding:16px;margin-bottom:12px;
-  box-shadow:0 2px 10px rgba(0,0,0,.05);
+  box-shadow:0 2px 10px rgba(0,0,0,.05)
 }
-.info-card h2,.summary-card h2{margin:0 0 8px;font-size:1rem}
-.info-row{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #f3f4f6}
+.card h2{margin:0 0 8px;font-size:1rem}
+.info-row{
+  display:flex;justify-content:space-between;gap:12px;
+  padding:9px 0;border-bottom:1px solid #f3f4f6
+}
 .info-row:last-child{border-bottom:0}
 .workout-header{
   position:sticky;top:0;z-index:20;background:rgba(243,244,246,.96);
-  backdrop-filter:blur(10px);padding:10px 0 12px;margin-bottom:6px;
+  backdrop-filter:blur(10px);padding:10px 0 12px;margin-bottom:6px
 }
 .workout-title-row{display:flex;justify-content:space-between;align-items:center;gap:12px}
 .workout-title-row h1{font-size:1.35rem;margin:0}
+.progress{height:8px;background:#e5e7eb;border-radius:999px;margin-top:10px;overflow:hidden}
+.progress span{display:block;height:100%;background:#111827}
 .timer-chip{
-  border:0;border-radius:999px;padding:10px 13px;background:#111827;color:white;
-  font-weight:800;min-width:88px;
+  border:0;border-radius:999px;padding:10px 13px;background:#111827;
+  color:white;font-weight:800;min-width:88px
+}
+.exercise-card{
+  background:#fff;border-radius:18px;padding:16px;margin-bottom:12px;
+  box-shadow:0 2px 10px rgba(0,0,0,.05)
 }
 .exercise-card h2{margin:0;font-size:1.05rem}
 .target{font-size:.86rem;color:#6b7280;margin:4px 0 12px}
 .last-session{
   background:#f9fafb;border-radius:12px;padding:10px;margin-bottom:12px;
-  color:#4b5563;font-size:.86rem;
+  color:#4b5563;font-size:.86rem
 }
 .series-header,.series-row{
-  display:grid;grid-template-columns:44px 1fr 1fr 46px;gap:8px;align-items:center;
+  display:grid;grid-template-columns:44px 1fr 1fr 46px;gap:8px;align-items:center
 }
 .series-header{font-size:.75rem;color:#6b7280;text-align:center;margin-bottom:6px}
 .series-row{margin-bottom:8px}
 .series-number{text-align:center;font-weight:800}
 input,textarea{
   width:100%;border:1px solid #d1d5db;border-radius:11px;
-  padding:11px;background:white;font-size:16px;
+  padding:11px;background:white;font-size:16px
 }
 .complete-btn{
   width:42px;height:42px;border-radius:12px;border:1px solid #d1d5db;
-  background:white;font-weight:900;color:#6b7280;
+  background:white;font-weight:900;color:#6b7280
 }
-.complete-btn.done{background:#111827;color:white;border-color:#111827}
+.complete-btn.done{background:#111827;color:#fff;border-color:#111827}
 textarea{min-height:58px;resize:vertical;margin-top:4px}
+.bottom-nav{
+  position:fixed;left:0;right:0;bottom:0;z-index:30;
+  display:grid;grid-template-columns:repeat(3,1fr);
+  background:rgba(255,255,255,.97);border-top:1px solid #e5e7eb;
+  padding:8px 10px calc(8px + env(safe-area-inset-bottom))
+}
+.bottom-nav button{
+  border:0;background:transparent;padding:9px 4px;color:#6b7280;font-weight:700
+}
+.bottom-nav button.active{color:#111827}
 .sticky-actions{
   position:fixed;bottom:0;left:0;right:0;z-index:30;
   padding:12px 14px calc(12px + env(safe-area-inset-bottom));
-  background:rgba(255,255,255,.96);border-top:1px solid #e5e7eb;
+  background:rgba(255,255,255,.96);border-top:1px solid #e5e7eb
 }
-.sticky-actions-inner{max-width:732px;margin:0 auto;display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.sticky-actions-inner{
+  max-width:732px;margin:0 auto;display:grid;grid-template-columns:1fr 1fr;gap:10px
+}
 .timer-panel{
   position:fixed;inset:auto 14px 90px 14px;max-width:732px;margin:auto;
   background:#111827;color:white;border-radius:18px;padding:16px;
-  box-shadow:0 16px 40px rgba(0,0,0,.28);z-index:40;
+  box-shadow:0 16px 40px rgba(0,0,0,.28);z-index:40
 }
 .timer-panel.hidden{display:none}
 .timer-main{display:flex;justify-content:space-between;align-items:center;gap:12px}
 .timer-value{font-size:2rem;font-weight:900}
 .timer-actions{display:flex;gap:8px;margin-top:12px}
 .timer-actions button{flex:1}
-dialog{border:0;border-radius:18px;padding:0;max-width:360px;width:calc(100% - 32px)}
-dialog::backdrop{background:rgba(0,0,0,.45)}
-.dialog-card{padding:22px}
-.dialog-card h2{margin-top:0}
-.empty{color:#6b7280;text-align:center;padding:30px}
+.history-item{display:flex;justify-content:space-between;gap:12px;align-items:center}
+.history-item strong{display:block}
+.history-item small{color:#6b7280}
+.chevron{font-size:1.4rem;color:#9ca3af}
+.history-detail{margin-top:12px;padding-top:12px;border-top:1px solid #e5e7eb}
+.exercise-summary{padding:10px 0;border-bottom:1px solid #f3f4f6}
+.exercise-summary:last-child{border-bottom:0}
+.exercise-summary strong{display:block;margin-bottom:4px}
+.settings-actions{display:grid;gap:10px}
+.empty{text-align:center;color:#6b7280;padding:30px 12px}
+.toast{
+  position:fixed;left:50%;bottom:90px;transform:translateX(-50%);
+  background:#111827;color:white;padding:11px 15px;border-radius:999px;
+  z-index:60;font-size:.9rem
+}

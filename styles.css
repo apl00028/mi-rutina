@@ -1,0 +1,110 @@
+* { box-sizing: border-box; }
+:root {
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  color: #111827;
+  background: #f3f4f6;
+}
+body {
+  margin: 0;
+  min-height: 100vh;
+  padding-bottom: env(safe-area-inset-bottom);
+}
+header {
+  padding: 22px 18px 12px;
+  background: #111827;
+  color: white;
+}
+header h1 { margin: 0; font-size: 1.7rem; }
+header p { margin: 5px 0 0; opacity: .75; }
+.tabs {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  padding: 10px;
+  background: rgba(243,244,246,.95);
+  backdrop-filter: blur(10px);
+}
+.tab {
+  border: 0;
+  border-radius: 12px;
+  padding: 12px 8px;
+  font-weight: 700;
+  background: #e5e7eb;
+  color: #374151;
+}
+.tab.active {
+  background: #111827;
+  color: white;
+}
+main { padding: 2px 10px 96px; }
+.exercise {
+  background: white;
+  border-radius: 16px;
+  padding: 15px;
+  margin: 10px 0;
+  box-shadow: 0 1px 8px rgba(0,0,0,.06);
+}
+.exercise h2 {
+  margin: 0;
+  font-size: 1.05rem;
+}
+.target {
+  margin: 4px 0 13px;
+  color: #6b7280;
+  font-size: .9rem;
+}
+.series-grid {
+  display: grid;
+  grid-template-columns: 56px 1fr 1fr;
+  gap: 8px;
+  align-items: center;
+}
+.series-grid .head {
+  font-size: .78rem;
+  color: #6b7280;
+  text-align: center;
+}
+.series-grid label {
+  font-weight: 700;
+  font-size: .88rem;
+}
+input, textarea {
+  width: 100%;
+  border: 1px solid #d1d5db;
+  border-radius: 10px;
+  padding: 11px;
+  font-size: 16px;
+  background: #fff;
+}
+textarea {
+  margin-top: 12px;
+  min-height: 58px;
+  resize: vertical;
+}
+footer {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 14px calc(12px + env(safe-area-inset-bottom));
+  background: rgba(255,255,255,.96);
+  border-top: 1px solid #e5e7eb;
+}
+.secondary {
+  border: 0;
+  border-radius: 10px;
+  padding: 10px 12px;
+  background: #e5e7eb;
+  font-weight: 700;
+}
+#saveStatus {
+  color: #6b7280;
+  font-size: .83rem;
+}

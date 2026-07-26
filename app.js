@@ -66,6 +66,84 @@ function getDraft(s){ return JSON.parse(localStorage.getItem(draftKey(s)) || "nu
 function saveDraft(d){ localStorage.setItem(draftKey(d.session), JSON.stringify(d)); }
 function clearDraft(s){ localStorage.removeItem(draftKey(s)); }
 function lastWorkoutForSession(s){ return getHistory().find(w=>w.session===s); }
+function parseRepRange(target){
+  const nums=(target.match(/\d+/g)||[]).map(Number);
+  if(!nums.length) return null;
+  if(nums.length===1) return {min:nums[0],max:nums[0]};
+  return {min:nums[0],max:nums[1]};
+}
+function numericValue(value){
+  if(value===null||value===undefined||value==="") return null;
+  const parsed=Number(String(value).replace(",","."));
+  return Number.isFinite(parsed)?parsed:null;
+}
+function formatWeight(value){
+  return Number.isInteger(value)?String(value):String(value).replace(".",",");
+}
+function exerciseRecommendation(lastExercise,target){
+  if(!lastExercise) return {
+    status:"neutral",
+    title:"Primera referencia",
+    text:"Registra esta sesión para que GymOS pueda recomendarte el siguiente objetivo."
+  };
+
+  const range=parseRepRange(target);
+  if(!range) return {
+    status:"neutral",
+    title:"Repite y compara",
+    text:"Mantén una ejecución cómoda y registra el resultado."
+  };
+
+  const validSeries=lastExercise.series
+    .map(s=>({weight:numericValue(s.weight),reps:numericValue(s.reps)}))
+    .filter(s=>s.weight!==null&&s.reps!==null);
+
+  if(!validSeries.length) return {
+    status:"neutral",
+    title:"Faltan datos",
+    text:"No hay suficientes pesos y repeticiones de la última sesión."
+  };
+
+  const reps=validSeries.map(s=>s.reps);
+  const weights=validSeries.map(s=>s.weight);
+  const sameWeight=weights.every(w=>w===weights[0]);
+  const allAtMax=reps.every(r=>r>=range.max);
+  const allAtMin=reps.every(r=>r>=range.min);
+  const belowMin=reps.filter(r=>r<range.min).length;
+
+  if(allAtMax&&sameWeight){
+    const next=weights[0]+2.5;
+    return {
+      status:"up",
+      title:"Puedes progresar",
+      text:`Completaste el rango alto. Prueba ${formatWeight(next)} kg y busca al menos ${range.min} repeticiones por serie.`
+    };
+  }
+
+  if(allAtMin){
+    const nextTarget=reps.map(r=>Math.min(range.max,r+1)).join(" · ");
+    return {
+      status:"hold",
+      title:"Mantén el peso",
+      text:`Intenta mejorar una repetición: ${nextTarget}. Cuando alcances ${range.max} en todas las series, sube el peso.`
+    };
+  }
+
+  if(belowMin>=2&&sameWeight){
+    const next=Math.max(0,weights[0]-2.5);
+    return {
+      status:"down",
+      title:"Reduce ligeramente",
+      text:`Dos o más series quedaron por debajo del rango. Prueba ${formatWeight(next)} kg y prioriza técnica y control.`
+    };
+  }
+
+  return {
+    status:"hold",
+    title:"Consolida el peso",
+    text:`Mantén la carga e intenta alcanzar al menos ${range.min} repeticiones en todas las series.`
+  };
+}
 function formatDuration(ms){ return `${Math.max(1,Math.round(ms/60000))} min`; }
 function formatDate(iso){
   return new Intl.DateTimeFormat("es-ES",{day:"numeric",month:"long",year:"numeric"}).format(new Date(iso));
@@ -148,6 +226,14 @@ function renderWorkout(){
           <h2>${ex.name}</h2>
           <div class="target">Objetivo: ${ex.target} · RIR 3–4</div>
           ${last?`<div class="last-session"><strong>Última vez:</strong> ${last.exercises[i].series.map(x=>x.weight||x.reps?`${x.weight||"—"} × ${x.reps||"—"}`:"—").join(" · ")}</div>`:""}
+          ${(()=>{
+            const rec=exerciseRecommendation(last?.exercises?.[i],ex.target);
+            return `<div class="recommendation ${rec.status}">
+              <div class="recommendation-label">Recomendación</div>
+              <strong>${rec.title}</strong>
+              <span>${rec.text}</span>
+            </div>`;
+          })()}
           <div class="series-header"><span></span><span>Peso</span><span>Reps</span><span>Hecha</span></div>
           ${ex.series.map((x,j)=>`
             <div class="series-row">
@@ -248,7 +334,7 @@ function renderHistory(){
 
 function renderSettings(){
   app.innerHTML=`<div class="app-shell">
-    <header class="topbar"><div><div class="brand">Ajustes</div><div class="subtle">GymOS v1.2 · Datos y copias</div></div></header>
+    <header class="topbar"><div><div class="brand">Ajustes</div><div class="subtle">GymOS v1.3 · Datos y copias</div></div></header>
     <main class="screen">
       <section class="card">
         <h2>Copia de seguridad</h2>

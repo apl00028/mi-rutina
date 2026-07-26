@@ -140,3 +140,18 @@ textarea{min-height:58px;resize:vertical;margin-top:4px}
   flex:0 0 auto;border:0;background:transparent;color:#075985;
   font-weight:800;padding:8px
 }
+
+.recommendation{
+  border-radius:14px;padding:12px 13px;margin-bottom:12px;
+  border:1px solid #e5e7eb;background:#f9fafb
+}
+.recommendation-label{
+  font-size:.72rem;text-transform:uppercase;letter-spacing:.06em;
+  font-weight:900;opacity:.65;margin-bottom:3px
+}
+.recommendation strong,.recommendation span{display:block}
+.recommendation span{font-size:.86rem;line-height:1.35;margin-top:3px}
+.recommendation.up{background:#ecfdf5;border-color:#a7f3d0;color:#065f46}
+.recommendation.hold{background:#eff6ff;border-color:#bfdbfe;color:#1e3a8a}
+.recommendation.down{background:#fff7ed;border-color:#fed7aa;color:#9a3412}
+.recommendation.neutral{background:#f9fafb;border-color:#e5e7eb;color:#374151}

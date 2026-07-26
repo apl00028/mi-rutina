@@ -31,7 +31,7 @@ button{cursor:pointer}
 .full{width:100%}
 .hero .primary{background:#fff;color:#111827;width:100%;font-size:1.05rem}
 .session-picker{
-  display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:16px
+  display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:16px
 }
 .session-picker button{
   border:0;border-radius:12px;padding:12px;background:#e5e7eb;font-weight:800
@@ -87,7 +87,7 @@ input,textarea{
 textarea{min-height:58px;resize:vertical;margin-top:4px}
 .bottom-nav{
   position:fixed;left:0;right:0;bottom:0;z-index:30;
-  display:grid;grid-template-columns:repeat(3,1fr);
+  display:grid;grid-template-columns:repeat(4,1fr);
   background:rgba(255,255,255,.97);border-top:1px solid #e5e7eb;
   padding:8px 10px calc(8px + env(safe-area-inset-bottom))
 }
@@ -206,3 +206,21 @@ select{
 @media(max-width:420px){
   .bottom-nav button{font-size:.72rem}
 }
+
+.download-link{
+  display:block;text-align:center;text-decoration:none
+}
+.routine-preview{
+  margin-top:14px;padding-top:14px;border-top:1px solid #e5e7eb
+}
+.preview-session{
+  display:flex;justify-content:space-between;padding:8px 0;
+  border-bottom:1px solid #f3f4f6
+}
+.import-mode{
+  display:grid;gap:8px;margin:14px 0
+}
+.import-mode label{
+  display:flex;align-items:center;gap:8px;font-size:.9rem
+}
+.import-mode input{width:auto}

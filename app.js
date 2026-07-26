@@ -1,4 +1,4 @@
-const sessions = {
+const defaultSessions = {
   A: [
     ["Press banca / máquina pecho", "8–10 reps"],
     ["Remo sentado", "8–10 reps"],
@@ -25,8 +25,49 @@ const sessions = {
   ]
 };
 
+function normalizeRoutine(raw){
+  const output={A:[],B:[],C:[]};
+  ["A","B","C"].forEach(session=>{
+    (raw?.[session]||[]).forEach(item=>{
+      if(Array.isArray(item)){
+        output[session].push({
+          name:String(item[0]||"").trim(),
+          target:String(item[1]||"8–10 reps"),
+          sets:3,
+          increment:2.5,
+          type:"peso"
+        });
+      }else if(item&&item.name){
+        output[session].push({
+          name:String(item.name).trim(),
+          target:String(item.target||"8–10 reps"),
+          sets:Math.max(1,Math.min(10,Number(item.sets)||3)),
+          increment:Number(item.increment)||0,
+          type:item.type||"peso"
+        });
+      }
+    });
+  });
+  return output;
+}
+function getRoutine(){
+  const saved=JSON.parse(localStorage.getItem("gymos:routine")||"null");
+  if(saved) return normalizeRoutine(saved);
+  const converted={A:[],B:[],C:[]};
+  Object.entries(defaultSessions).forEach(([session,items])=>{
+    converted[session]=items.map(([name,target])=>({name,target,sets:3,increment:2.5,type:"peso"}));
+  });
+  return converted;
+}
+function saveRoutine(routine){
+  localStorage.setItem("gymos:routine",JSON.stringify(normalizeRoutine(routine)));
+}
+let sessions=getRoutine();
+
+
 const app = document.getElementById("app");
 const importFile = document.getElementById("importFile");
+const routineFile = document.getElementById("routineFile");
 
 let state = {
   screen: "home",
@@ -51,10 +92,13 @@ function emptyDraft(s){
     session:s,
     startedAt:Date.now(),
     copiedFromLastSession:Boolean(last),
-    exercises:sessions[s].map(([name,target],exerciseIndex)=>({
-      name,
-      target,
-      series:[1,2,3].map((_,seriesIndex)=>({
+    exercises:sessions[s].map((item,exerciseIndex)=>({
+      name:item.name,
+      target:item.target,
+      sets:item.sets,
+      increment:item.increment,
+      type:item.type,
+      series:Array.from({length:item.sets},(_,seriesIndex)=>({
         weight:last?.exercises?.[exerciseIndex]?.series?.[seriesIndex]?.weight || "",
         reps:"",
         done:false
@@ -81,7 +125,7 @@ function numericValue(value){
 function formatWeight(value){
   return Number.isInteger(value)?String(value):String(value).replace(".",",");
 }
-function exerciseRecommendation(lastExercise,target){
+function exerciseRecommendation(lastExercise,target,increment=2.5,type="peso"){
   if(!lastExercise) return {
     status:"neutral",
     title:"Primera referencia",
@@ -113,7 +157,7 @@ function exerciseRecommendation(lastExercise,target){
   const belowMin=reps.filter(r=>r<range.min).length;
 
   if(allAtMax&&sameWeight){
-    const next=weights[0]+2.5;
+    const next=weights[0]+Math.max(0,Number(increment)||0);
     return {
       status:"up",
       title:"Puedes progresar",
@@ -131,7 +175,7 @@ function exerciseRecommendation(lastExercise,target){
   }
 
   if(belowMin>=2&&sameWeight){
-    const next=Math.max(0,weights[0]-2.5);
+    const next=Math.max(0,weights[0]-Math.max(0,Number(increment)||0));
     return {
       status:"down",
       title:"Reduce ligeramente",
@@ -150,7 +194,7 @@ function formatDate(iso){
   return new Intl.DateTimeFormat("es-ES",{day:"numeric",month:"long",year:"numeric"}).format(new Date(iso));
 }
 function allExerciseNames(){
-  return [...new Set(Object.values(sessions).flat().map(([name])=>name))];
+  return [...new Set(Object.values(sessions).flat().map(item=>item.name))];
 }
 function getExerciseHistory(name){
   const rows=[];
@@ -282,7 +326,7 @@ function renderHome(){
 function renderWorkout(){
   const s=state.selectedSession,d=getDraft(s),last=lastWorkoutForSession(s);
   const done=d.exercises.reduce((n,e)=>n+e.series.filter(x=>x.done).length,0);
-  const total=d.exercises.length*3;
+  const total=d.exercises.reduce((sum,e)=>sum+e.series.length,0);
   app.innerHTML=`<div class="app-shell">
     <main class="screen">
       <div class="workout-header">
@@ -303,7 +347,7 @@ function renderWorkout(){
           <div class="target">Objetivo: ${ex.target} · RIR 3–4</div>
           ${last?`<div class="last-session"><strong>Última vez:</strong> ${last.exercises[i].series.map(x=>x.weight||x.reps?`${x.weight||"—"} × ${x.reps||"—"}`:"—").join(" · ")}</div>`:""}
           ${(()=>{
-            const rec=exerciseRecommendation(last?.exercises?.[i],ex.target);
+            const rec=exerciseRecommendation(last?.exercises?.[i],ex.target,ex.increment,ex.type);
             return `<div class="recommendation ${rec.status}">
               <div class="recommendation-label">Recomendación</div>
               <strong>${rec.title}</strong>
@@ -471,8 +515,18 @@ function renderStats(){
 
 function renderSettings(){
   app.innerHTML=`<div class="app-shell">
-    <header class="topbar"><div><div class="brand">Ajustes</div><div class="subtle">GymOS v1.4 · Datos y copias</div></div></header>
+    <header class="topbar"><div><div class="brand">Ajustes</div><div class="subtle">GymOS v1.5 · Datos y copias</div></div></header>
     <main class="screen">
+      <section class="card">
+        <h2>Rutina desde Excel</h2>
+        <p class="subtle">Descarga la plantilla, modifícala y vuelve a importarla. El historial anterior no se borra.</p>
+        <div class="settings-actions">
+          <a class="primary download-link" href="plantilla-rutina-gymos.xlsx" download>Descargar plantilla Excel</a>
+          <button id="importRoutine" class="secondary">Importar rutina Excel</button>
+          <button id="exportRoutine" class="secondary">Exportar rutina actual</button>
+        </div>
+        <div id="routinePreview"></div>
+      </section>
       <section class="card">
         <h2>Copia de seguridad</h2>
         <p class="subtle">Exporta tus entrenamientos a un archivo y podrás recuperarlos en este u otro móvil.</p>
@@ -488,6 +542,14 @@ function renderSettings(){
       </section>
     </main>${nav("settings")}
   </div>`;
+  document.getElementById("importRoutine").onclick=()=>{
+    if(typeof XLSX==="undefined"){
+      alert("No se ha podido cargar el lector de Excel. Abre GymOS con conexión a Internet y vuelve a intentarlo.");
+      return;
+    }
+    routineFile.click();
+  };
+  document.getElementById("exportRoutine").onclick=exportRoutine;
   document.getElementById("exportData").onclick=exportData;
   document.getElementById("importData").onclick=()=>importFile.click();
   document.getElementById("deleteData").onclick=()=>{
@@ -497,6 +559,124 @@ function renderSettings(){
   };
   bindNav();
 }
+
+
+function normalizeHeader(value){
+  return String(value||"").trim().toLowerCase()
+    .normalize("NFD").replace(/[\u0300-\u036f]/g,"")
+    .replace(/\s+/g," ");
+}
+function parseRoutineRows(rows){
+  const routine={A:[],B:[],C:[]};
+  const errors=[];
+  rows.forEach((row,index)=>{
+    const line=index+2;
+    const normalized={};
+    Object.entries(row).forEach(([key,value])=>normalized[normalizeHeader(key)]=value);
+    const session=String(normalized["sesion"]||"").trim().toUpperCase();
+    const name=String(normalized["ejercicio"]||"").trim();
+    if(!session&&!name) return;
+    if(!["A","B","C"].includes(session)){errors.push(`Fila ${line}: sesión no válida.`);return;}
+    if(!name){errors.push(`Fila ${line}: falta el ejercicio.`);return;}
+    const order=Number(normalized["orden"]);
+    const sets=Number(normalized["series"]);
+    const min=Number(normalized["reps min."]??normalized["reps min"]??normalized["reps minima"]);
+    const max=Number(normalized["reps max."]??normalized["reps max"]??normalized["reps maxima"]);
+    const increment=Number(normalized["incremento kg"]||0);
+    const type=String(normalized["tipo"]||"peso").trim().toLowerCase();
+    if(!Number.isFinite(order)){errors.push(`Fila ${line}: orden no válido.`);return;}
+    if(!Number.isFinite(sets)||sets<1||sets>10){errors.push(`Fila ${line}: series debe estar entre 1 y 10.`);return;}
+    if(!Number.isFinite(min)||!Number.isFinite(max)||max<min){errors.push(`Fila ${line}: rango objetivo no válido.`);return;}
+    if(!["peso","tiempo","repeticiones","distancia"].includes(type)){errors.push(`Fila ${line}: tipo no válido.`);return;}
+    const unit=type==="tiempo"?"s":"reps";
+    routine[session].push({name,target:min===max?`${min} ${unit}`:`${min}–${max} ${unit}`,sets,increment:Number.isFinite(increment)?increment:0,type,order});
+  });
+  Object.keys(routine).forEach(s=>routine[s].sort((a,b)=>a.order-b.order).forEach(x=>delete x.order));
+  if(Object.values(routine).every(items=>items.length===0)) errors.push("El archivo no contiene ejercicios válidos.");
+  return {routine,errors};
+}
+function showRoutinePreview(routine,fileName){
+  const preview=document.getElementById("routinePreview");
+  preview.innerHTML=`<div class="routine-preview">
+    <strong>Vista previa: ${fileName}</strong>
+    ${["A","B","C"].map(s=>`<div class="preview-session"><span>Sesión ${s}</span><strong>${routine[s].length} ejercicios</strong></div>`).join("")}
+    <div class="import-mode">
+      <label><input type="radio" name="routineMode" value="all" checked> Sustituir toda la rutina</label>
+      <label><input type="radio" name="routineMode" value="A"> Solo sesión A</label>
+      <label><input type="radio" name="routineMode" value="B"> Solo sesión B</label>
+      <label><input type="radio" name="routineMode" value="C"> Solo sesión C</label>
+    </div>
+    <button id="confirmRoutineImport" class="primary full">Confirmar importación</button>
+  </div>`;
+  document.getElementById("confirmRoutineImport").onclick=()=>{
+    const mode=document.querySelector('input[name="routineMode"]:checked').value;
+    const current=getRoutine();
+    if(mode==="all"){
+      ["A","B","C"].forEach(s=>{
+        if(routine[s].length) current[s]=routine[s];
+      });
+    }else{
+      if(!routine[mode].length){
+        alert(`El Excel no contiene ejercicios para la sesión ${mode}.`);
+        return;
+      }
+      current[mode]=routine[mode];
+    }
+    saveRoutine(current);
+    sessions=getRoutine();
+    ["A","B","C"].forEach(clearDraft);
+    state.selectedStatsExercise=null;
+    toast("Rutina actualizada");
+    renderSettings();
+  };
+}
+function exportRoutine(){
+  if(typeof XLSX==="undefined"){
+    alert("No se ha podido cargar el generador de Excel.");
+    return;
+  }
+  const rows=[];
+  const routine=getRoutine();
+  ["A","B","C"].forEach(session=>{
+    routine[session].forEach((item,index)=>{
+      const range=parseRepRange(item.target)||{min:"",max:""};
+      rows.push({
+        "Sesión":session,
+        "Orden":index+1,
+        "Ejercicio":item.name,
+        "Series":item.sets,
+        "Reps mín.":range.min,
+        "Reps máx.":range.max,
+        "Incremento kg":item.increment,
+        "Tipo":item.type
+      });
+    });
+  });
+  const ws=XLSX.utils.json_to_sheet(rows);
+  const wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb,ws,"Rutina");
+  XLSX.writeFile(wb,`rutina-gymos-${new Date().toISOString().slice(0,10)}.xlsx`);
+}
+routineFile.onchange=async()=>{
+  const file=routineFile.files[0];
+  if(!file) return;
+  try{
+    const data=await file.arrayBuffer();
+    const workbook=XLSX.read(data,{type:"array"});
+    const first=workbook.Sheets[workbook.SheetNames[0]];
+    const rows=XLSX.utils.sheet_to_json(first,{defval:""});
+    const parsed=parseRoutineRows(rows);
+    if(parsed.errors.length){
+      alert("No se ha importado la rutina:\n\n"+parsed.errors.slice(0,12).join("\n"));
+      return;
+    }
+    showRoutinePreview(parsed.routine,file.name);
+  }catch(error){
+    alert("No se ha podido leer el Excel. Comprueba que utilizas la plantilla de GymOS.");
+  }finally{
+    routineFile.value="";
+  }
+};
 
 function exportData(){
   const payload={
@@ -508,7 +688,8 @@ function exportData(){
       B:JSON.parse(localStorage.getItem(draftKey("B"))||"null"),
       C:JSON.parse(localStorage.getItem(draftKey("C"))||"null")
     },
-    selectedSession:state.selectedSession
+    selectedSession:state.selectedSession,
+    routine:getRoutine()
   };
   const blob=new Blob([JSON.stringify(payload,null,2)],{type:"application/json"});
   const a=document.createElement("a");a.href=URL.createObjectURL(blob);
@@ -522,6 +703,7 @@ importFile.onchange=async()=>{
     const data=JSON.parse(await file.text());
     if(!Array.isArray(data.history))throw new Error();
     saveHistory(data.history);
+    if(data.routine){saveRoutine(data.routine);sessions=getRoutine();}
     ["A","B","C"].forEach(s=>{
       if(data.drafts&&data.drafts[s])localStorage.setItem(draftKey(s),JSON.stringify(data.drafts[s]));
     });

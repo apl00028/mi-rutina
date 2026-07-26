@@ -153,6 +153,8 @@ function saveWeeklyGoal(value){
   localStorage.setItem("gymos:weeklyGoal",String(Math.max(1,Math.min(7,Number(value)||3))));
   markLocalUpdated();
 }
+const GYMOS_PRODUCTION_URL="https://apl00028.github.io/mi-rutina/";
+
 function getSyncConfig(){
   return {
     url:localStorage.getItem("gymos:supabaseUrl")||"",
@@ -212,16 +214,30 @@ function getSupabaseClient(){
 async function refreshSyncSession(){
   const client=getSupabaseClient();
   if(!client){state.syncUser=null;state.syncStatus="local";return null;}
-  const {data,error}=await client.auth.getSession();
-  if(error){state.syncUser=null;state.syncStatus="error";return null;}
-  state.syncUser=data.session?.user||null;
-  state.syncStatus=state.syncUser?"connected":"configured";
-  return state.syncUser;
+  try{
+    const params=new URLSearchParams(location.search);
+    const code=params.get("code");
+    if(code){
+      const {error:exchangeError}=await client.auth.exchangeCodeForSession(code);
+      if(exchangeError) throw exchangeError;
+      history.replaceState({},document.title,GYMOS_PRODUCTION_URL);
+    }
+    const {data,error}=await client.auth.getSession();
+    if(error) throw error;
+    state.syncUser=data.session?.user||null;
+    state.syncStatus=state.syncUser?"connected":"configured";
+    return state.syncUser;
+  }catch(error){
+    console.error("GymOS auth error",error);
+    state.syncUser=null;
+    state.syncStatus="error";
+    return null;
+  }
 }
 async function sendMagicLink(email){
   const client=getSupabaseClient();
   if(!client) throw new Error("Configura primero Supabase.");
-  const redirectTo=location.origin+location.pathname;
+  const redirectTo=GYMOS_PRODUCTION_URL;
   const {error}=await client.auth.signInWithOtp({
     email,
     options:{emailRedirectTo:redirectTo}
@@ -1370,7 +1386,7 @@ function renderPlan(){
 
 function renderSettings(){
   app.innerHTML=`<div class="app-shell">
-    <header class="topbar"><div><div class="brand">Ajustes</div><div class="subtle">GymOS v2.0 · Local-first y sincronización</div></div></header>
+    <header class="topbar"><div><div class="brand">Ajustes</div><div class="subtle">GymOS v2.0.1 · Sincronización corregida</div></div></header>
     <main class="screen">
       <section class="card sync-card">
         <div class="card-heading-row">
@@ -1392,7 +1408,7 @@ function renderSettings(){
         ${state.syncUser?`<div class="sync-user">Conectado como <strong>${state.syncUser.email||"usuario"}</strong></div>`:""}
         <details class="sync-help">
           <summary>Cómo configurarlo</summary>
-          <p>Ejecuta el archivo <strong>supabase-schema.sql</strong> en tu proyecto de Supabase. Usa únicamente la clave <strong>anon public</strong>, nunca la service role.</p>
+          <p>Ejecuta <strong>supabase-schema.sql</strong> y añade <strong>https://apl00028.github.io/mi-rutina/</strong> en Authentication → URL Configuration → Redirect URLs. Usa la clave <strong>Publishable</strong> o <strong>anon public</strong>, nunca una secret/service role.</p>
         </details>
       </section>
       <section class="card">
@@ -1458,7 +1474,7 @@ function renderSettings(){
         email
       });
       await sendMagicLink(email);
-      alert("Te hemos enviado un enlace de acceso. Ábrelo desde este dispositivo y vuelve a GymOS.");
+      alert("Enlace enviado. Ábrelo desde este dispositivo. Debe volver automáticamente a GymOS.");
     }catch(error){
       alert("No se pudo enviar el enlace: "+error.message);
     }

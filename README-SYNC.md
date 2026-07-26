@@ -1,4 +1,4 @@
-# GymOS v2.0 — Sincronización opcional con Supabase
+# GymOS v2.0.1 — Sincronización opcional con Supabase
 
 GymOS sigue funcionando completamente en modo local.
 
@@ -30,3 +30,17 @@ Seguridad:
 - usa únicamente la anon public key;
 - nunca introduzcas la service_role key;
 - Row Level Security limita cada fila a su propietario.
+
+
+## URL de autenticación obligatoria
+
+En Supabase abre:
+
+Authentication → URL Configuration
+
+Configura:
+
+- Site URL: `https://apl00028.github.io/mi-rutina/`
+- Redirect URLs: `https://apl00028.github.io/mi-rutina/`
+
+Si Supabase mantiene `http://localhost:3000`, el enlace mágico abrirá localhost y fallará.

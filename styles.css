@@ -128,3 +128,15 @@ textarea{min-height:58px;resize:vertical;margin-top:4px}
   background:#111827;color:white;padding:11px 15px;border-radius:999px;
   z-index:60;font-size:.9rem
 }
+
+.prefill-banner{
+  display:flex;justify-content:space-between;align-items:center;gap:12px;
+  background:#e0f2fe;border:1px solid #bae6fd;border-radius:16px;
+  padding:13px 14px;margin-bottom:12px;color:#0c4a6e
+}
+.prefill-banner strong,.prefill-banner span{display:block}
+.prefill-banner span{font-size:.82rem;margin-top:2px}
+.text-button{
+  flex:0 0 auto;border:0;background:transparent;color:#075985;
+  font-weight:800;padding:8px
+}

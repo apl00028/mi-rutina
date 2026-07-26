@@ -45,10 +45,20 @@ function nextSuggestedSession(){
 }
 function draftKey(s){ return `gymos:draft:${s}`; }
 function emptyDraft(s){
+  const last = lastWorkoutForSession(s);
   return {
-    session:s, startedAt:Date.now(),
-    exercises:sessions[s].map(([name,target])=>({
-      name,target,series:[1,2,3].map(()=>({weight:"",reps:"",done:false})),notes:""
+    session:s,
+    startedAt:Date.now(),
+    copiedFromLastSession:Boolean(last),
+    exercises:sessions[s].map(([name,target],exerciseIndex)=>({
+      name,
+      target,
+      series:[1,2,3].map((_,seriesIndex)=>({
+        weight:last?.exercises?.[exerciseIndex]?.series?.[seriesIndex]?.weight || "",
+        reps:"",
+        done:false
+      })),
+      notes:""
     }))
   };
 }
@@ -128,6 +138,11 @@ function renderWorkout(){
         </div>
         <div class="progress"><span style="width:${(done/total)*100}%"></span></div>
       </div>
+      ${d.copiedFromLastSession ? `
+        <div class="prefill-banner">
+          <div><strong>Pesos preparados</strong><span>Se han copiado de tu última sesión ${s}.</span></div>
+          <button id="clearPrefilledWeights" class="text-button">Vaciar pesos</button>
+        </div>` : ""}
       ${d.exercises.map((ex,i)=>`
         <section class="exercise-card" data-exercise="${i}">
           <h2>${ex.name}</h2>
@@ -166,6 +181,15 @@ function renderWorkout(){
   document.querySelectorAll("[data-notes]").forEach(a=>a.oninput=()=>{
     const draft=getDraft(s); draft.exercises[Number(a.dataset.notes)].notes=a.value; saveDraft(draft);
   });
+  const clearPrefilledWeights=document.getElementById("clearPrefilledWeights");
+  if(clearPrefilledWeights) clearPrefilledWeights.onclick=()=>{
+    const draft=getDraft(s);
+    draft.exercises.forEach(ex=>ex.series.forEach(series=>series.weight=""));
+    draft.copiedFromLastSession=false;
+    saveDraft(draft);
+    renderWorkout();
+    toast("Pesos vaciados");
+  };
   document.getElementById("backHome").onclick=()=>{state.screen="home";renderHome();};
   document.getElementById("finishWorkout").onclick=finishWorkout;
   document.getElementById("timerChip").onclick=()=>document.getElementById("timerPanel").classList.remove("hidden");
@@ -224,7 +248,7 @@ function renderHistory(){
 
 function renderSettings(){
   app.innerHTML=`<div class="app-shell">
-    <header class="topbar"><div><div class="brand">Ajustes</div><div class="subtle">Datos y copias</div></div></header>
+    <header class="topbar"><div><div class="brand">Ajustes</div><div class="subtle">GymOS v1.2 · Datos y copias</div></div></header>
     <main class="screen">
       <section class="card">
         <h2>Copia de seguridad</h2>

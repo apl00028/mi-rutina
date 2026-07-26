@@ -31,7 +31,7 @@ button{cursor:pointer}
 .full{width:100%}
 .hero .primary{background:#fff;color:#111827;width:100%;font-size:1.05rem}
 .session-picker{
-  display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:16px
+  display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:16px
 }
 .session-picker button{
   border:0;border-radius:12px;padding:12px;background:#e5e7eb;font-weight:800
@@ -155,3 +155,54 @@ textarea{min-height:58px;resize:vertical;margin-top:4px}
 .recommendation.hold{background:#eff6ff;border-color:#bfdbfe;color:#1e3a8a}
 .recommendation.down{background:#fff7ed;border-color:#fed7aa;color:#9a3412}
 .recommendation.neutral{background:#f9fafb;border-color:#e5e7eb;color:#374151}
+
+.stats-summary,.stats-grid{
+  display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px
+}
+.metric-card{
+  background:white;border-radius:16px;padding:14px;
+  box-shadow:0 2px 10px rgba(0,0,0,.05)
+}
+.metric-card span{display:block;color:#6b7280;font-size:.78rem;margin-bottom:5px}
+.metric-card strong{display:block;font-size:1.15rem}
+.select-label{
+  display:block;font-size:.78rem;color:#6b7280;font-weight:800;
+  margin-bottom:7px;text-transform:uppercase;letter-spacing:.04em
+}
+select{
+  width:100%;border:1px solid #d1d5db;border-radius:11px;
+  padding:12px;background:white;font-size:16px
+}
+.stats-card-title{
+  display:flex;justify-content:space-between;align-items:flex-start;gap:12px
+}
+.stats-card-title h2,.stats-card-title p{margin:0}
+.trend{
+  border-radius:999px;padding:7px 10px;font-weight:900;font-size:.82rem
+}
+.trend.positive{background:#ecfdf5;color:#065f46}
+.trend.negative{background:#fff7ed;color:#9a3412}
+.mini-chart{
+  height:180px;display:flex;align-items:flex-end;gap:10px;
+  padding:20px 2px 4px;margin-top:10px
+}
+.mini-bar-wrap{
+  flex:1;height:100%;display:flex;flex-direction:column;
+  justify-content:flex-end;align-items:center;gap:5px
+}
+.mini-bar{
+  width:100%;max-width:42px;background:#111827;border-radius:8px 8px 3px 3px;
+  min-height:8px
+}
+.mini-bar-wrap small{font-size:.68rem;color:#6b7280}
+.stat-history-row{
+  display:flex;justify-content:space-between;align-items:center;gap:12px;
+  padding:11px 0;border-bottom:1px solid #f3f4f6
+}
+.stat-history-row:last-child{border-bottom:0}
+.stat-history-row>div:last-child{text-align:right}
+.stat-history-row strong,.stat-history-row small{display:block}
+.stat-history-row small{color:#6b7280;margin-top:2px}
+@media(max-width:420px){
+  .bottom-nav button{font-size:.72rem}
+}

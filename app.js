@@ -33,7 +33,8 @@ let state = {
   selectedSession: localStorage.getItem("gymos:selectedSession") || nextSuggestedSession(),
   timerSeconds: 0,
   timerInterval: null,
-  expandedHistoryId: null
+  expandedHistoryId: null,
+  selectedStatsExercise: null
 };
 
 function getHistory(){ return JSON.parse(localStorage.getItem("gymos:history") || "[]"); }
@@ -148,10 +149,84 @@ function formatDuration(ms){ return `${Math.max(1,Math.round(ms/60000))} min`; }
 function formatDate(iso){
   return new Intl.DateTimeFormat("es-ES",{day:"numeric",month:"long",year:"numeric"}).format(new Date(iso));
 }
+function allExerciseNames(){
+  return [...new Set(Object.values(sessions).flat().map(([name])=>name))];
+}
+function getExerciseHistory(name){
+  const rows=[];
+  getHistory().forEach(workout=>{
+    const exercise=workout.exercises.find(e=>e.name===name);
+    if(!exercise) return;
+    const validSeries=exercise.series
+      .map(s=>({weight:numericValue(s.weight),reps:numericValue(s.reps)}))
+      .filter(s=>s.weight!==null&&s.reps!==null);
+    if(!validSeries.length) return;
+    rows.push({
+      date:workout.date,
+      session:workout.session,
+      series:validSeries,
+      volume:validSeries.reduce((sum,s)=>sum+s.weight*s.reps,0),
+      maxWeight:Math.max(...validSeries.map(s=>s.weight)),
+      bestSet:validSeries.reduce((best,s)=>{
+        const score=s.weight*s.reps;
+        return !best||score>best.score?{...s,score}:best;
+      },null)
+    });
+  });
+  return rows.sort((a,b)=>new Date(a.date)-new Date(b.date));
+}
+function exerciseStats(name){
+  const rows=getExerciseHistory(name);
+  if(!rows.length) return null;
+  const allSeries=rows.flatMap(r=>r.series.map(s=>({...s,date:r.date})));
+  const maxWeight=Math.max(...allSeries.map(s=>s.weight));
+  const bestSet=allSeries.reduce((best,s)=>{
+    const score=s.weight*s.reps;
+    return !best||score>best.score?{...s,score}:best;
+  },null);
+  const totalVolume=rows.reduce((sum,r)=>sum+r.volume,0);
+  const lastVolume=rows.at(-1)?.volume||0;
+  const previousVolume=rows.at(-2)?.volume||0;
+  const change=previousVolume?((lastVolume-previousVolume)/previousVolume)*100:null;
+  return {rows,maxWeight,bestSet,totalVolume,lastVolume,change};
+}
+function weekStart(date){
+  const d=new Date(date); const day=(d.getDay()+6)%7;
+  d.setDate(d.getDate()-day); d.setHours(0,0,0,0); return d;
+}
+function weeklySessionCount(){
+  const start=weekStart(new Date());
+  return getHistory().filter(w=>new Date(w.date)>=start).length;
+}
+function totalCurrentWeekVolume(){
+  const start=weekStart(new Date());
+  return getHistory()
+    .filter(w=>new Date(w.date)>=start)
+    .reduce((sum,w)=>sum+w.exercises.reduce((exSum,e)=>
+      exSum+e.series.reduce((s,x)=>{
+        const weight=numericValue(x.weight),reps=numericValue(x.reps);
+        return s+(weight!==null&&reps!==null?weight*reps:0);
+      },0),0),0);
+}
+function compactNumber(value){
+  return new Intl.NumberFormat("es-ES",{maximumFractionDigits:0}).format(value);
+}
+function miniBars(rows){
+  const recent=rows.slice(-6);
+  const max=Math.max(...recent.map(r=>r.volume),1);
+  return `<div class="mini-chart">${recent.map(r=>{
+    const height=Math.max(8,(r.volume/max)*100);
+    return `<div class="mini-bar-wrap" title="${formatDate(r.date)}: ${compactNumber(r.volume)} kg">
+      <div class="mini-bar" style="height:${height}%"></div>
+      <small>${new Date(r.date).toLocaleDateString("es-ES",{day:"2-digit",month:"2-digit"})}</small>
+    </div>`;
+  }).join("")}</div>`;
+}
 function nav(active){
   return `<nav class="bottom-nav">
     <button data-nav="home" class="${active==="home"?"active":""}">Inicio</button>
     <button data-nav="history" class="${active==="history"?"active":""}">Historial</button>
+    <button data-nav="stats" class="${active==="stats"?"active":""}">Estadísticas</button>
     <button data-nav="settings" class="${active==="settings"?"active":""}">Ajustes</button>
   </nav>`;
 }
@@ -169,6 +244,7 @@ function render(){
   if(state.screen==="home") renderHome();
   else if(state.screen==="workout") renderWorkout();
   else if(state.screen==="history") renderHistory();
+  else if(state.screen==="stats") renderStats();
   else renderSettings();
 }
 
@@ -332,9 +408,70 @@ function renderHistory(){
   bindNav();
 }
 
+function renderStats(){
+  const names=allExerciseNames();
+  if(!state.selectedStatsExercise){
+    state.selectedStatsExercise=names.find(name=>exerciseStats(name))||names[0];
+  }
+  const selected=state.selectedStatsExercise;
+  const stats=exerciseStats(selected);
+  const weekSessions=weeklySessionCount();
+  const weekVolume=totalCurrentWeekVolume();
+
+  app.innerHTML=`<div class="app-shell">
+    <header class="topbar"><div><div class="brand">Estadísticas</div><div class="subtle">Tu evolución real</div></div></header>
+    <main class="screen">
+      <section class="stats-summary">
+        <div class="metric-card"><span>Sesiones esta semana</span><strong>${weekSessions}</strong></div>
+        <div class="metric-card"><span>Volumen semanal</span><strong>${compactNumber(weekVolume)} kg</strong></div>
+      </section>
+
+      <section class="card">
+        <label class="select-label" for="exerciseSelect">Ejercicio</label>
+        <select id="exerciseSelect">
+          ${names.map(name=>`<option value="${name}" ${name===selected?"selected":""}>${name}</option>`).join("")}
+        </select>
+      </section>
+
+      ${stats?`
+        <section class="stats-grid">
+          <div class="metric-card"><span>Peso máximo</span><strong>${formatWeight(stats.maxWeight)} kg</strong></div>
+          <div class="metric-card"><span>Mejor serie</span><strong>${formatWeight(stats.bestSet.weight)} × ${stats.bestSet.reps}</strong></div>
+          <div class="metric-card"><span>Volumen total</span><strong>${compactNumber(stats.totalVolume)} kg</strong></div>
+          <div class="metric-card"><span>Última sesión</span><strong>${compactNumber(stats.lastVolume)} kg</strong></div>
+        </section>
+
+        <section class="card">
+          <div class="stats-card-title">
+            <div><h2>Evolución de volumen</h2><p class="subtle">Últimas ${Math.min(6,stats.rows.length)} sesiones</p></div>
+            ${stats.change===null?"":`<div class="trend ${stats.change>=0?"positive":"negative"}">${stats.change>=0?"+":""}${stats.change.toFixed(1).replace(".",",")}%</div>`}
+          </div>
+          ${miniBars(stats.rows)}
+        </section>
+
+        <section class="card">
+          <h2>Últimos registros</h2>
+          ${stats.rows.slice(-5).reverse().map(row=>`
+            <div class="stat-history-row">
+              <div><strong>${formatDate(row.date)}</strong><small>Sesión ${row.session}</small></div>
+              <div><strong>${compactNumber(row.volume)} kg</strong><small>${formatWeight(row.maxWeight)} kg máx.</small></div>
+            </div>
+          `).join("")}
+        </section>
+      `:`<div class="empty">Aún no hay datos suficientes para este ejercicio.</div>`}
+    </main>${nav("stats")}
+  </div>`;
+
+  document.getElementById("exerciseSelect").onchange=e=>{
+    state.selectedStatsExercise=e.target.value;
+    renderStats();
+  };
+  bindNav();
+}
+
 function renderSettings(){
   app.innerHTML=`<div class="app-shell">
-    <header class="topbar"><div><div class="brand">Ajustes</div><div class="subtle">GymOS v1.3 · Datos y copias</div></div></header>
+    <header class="topbar"><div><div class="brand">Ajustes</div><div class="subtle">GymOS v1.4 · Datos y copias</div></div></header>
     <main class="screen">
       <section class="card">
         <h2>Copia de seguridad</h2>

@@ -76,7 +76,8 @@ let state = {
   timerInterval: null,
   expandedHistoryId: null,
   selectedStatsExercise: null,
-  selectedRecordExercise: null
+  selectedRecordExercise: null,
+  editWorkoutId: null
 };
 
 function getHistory(){ return JSON.parse(localStorage.getItem("gymos:history") || "[]"); }
@@ -119,6 +120,25 @@ function bodyTrendSvg(rows,field,label){
   </div>`;
 }
 function saveHistory(h){ localStorage.setItem("gymos:history", JSON.stringify(h)); }
+function normalizeSeries(series){
+  return {
+    weight:series?.weight??"",
+    reps:series?.reps??"",
+    rir:series?.rir??"",
+    warmup:Boolean(series?.warmup),
+    done:Boolean(series?.done)
+  };
+}
+function workingSeries(series){
+  return (series||[]).map(normalizeSeries).filter(s=>!s.warmup);
+}
+function getRestSeconds(){
+  const value=Number(localStorage.getItem("gymos:restSeconds")||90);
+  return [60,90,120,180].includes(value)?value:90;
+}
+function saveRestSeconds(value){
+  localStorage.setItem("gymos:restSeconds",String(value));
+}
 function nextSuggestedSession(){
   const h = JSON.parse(localStorage.getItem("gymos:history") || "[]");
   if(!h.length) return "A";
@@ -140,13 +160,19 @@ function emptyDraft(s){
       series:Array.from({length:item.sets},(_,seriesIndex)=>({
         weight:last?.exercises?.[exerciseIndex]?.series?.[seriesIndex]?.weight || "",
         reps:"",
+        rir:"",
+        warmup:false,
         done:false
       })),
       notes:""
     }))
   };
 }
-function getDraft(s){ return JSON.parse(localStorage.getItem(draftKey(s)) || "null") || emptyDraft(s); }
+function getDraft(s){
+  const draft=JSON.parse(localStorage.getItem(draftKey(s))||"null")||emptyDraft(s);
+  draft.exercises.forEach(ex=>ex.series=ex.series.map(normalizeSeries));
+  return draft;
+}
 function saveDraft(d){ localStorage.setItem(draftKey(d.session), JSON.stringify(d)); }
 function clearDraft(s){ localStorage.removeItem(draftKey(s)); }
 function lastWorkoutForSession(s){ return getHistory().find(w=>w.session===s); }
@@ -178,8 +204,8 @@ function exerciseRecommendation(lastExercise,target,increment=2.5,type="peso"){
     text:"Mantén una ejecución cómoda y registra el resultado."
   };
 
-  const validSeries=lastExercise.series
-    .map(s=>({weight:numericValue(s.weight),reps:numericValue(s.reps)}))
+  const validSeries=workingSeries(lastExercise.series)
+    .map(s=>({weight:numericValue(s.weight),reps:numericValue(s.reps),rir:numericValue(s.rir)}))
     .filter(s=>s.weight!==null&&s.reps!==null);
 
   if(!validSeries.length) return {
@@ -194,13 +220,24 @@ function exerciseRecommendation(lastExercise,target,increment=2.5,type="peso"){
   const allAtMax=reps.every(r=>r>=range.max);
   const allAtMin=reps.every(r=>r>=range.min);
   const belowMin=reps.filter(r=>r<range.min).length;
+  const knownRir=validSeries.map(s=>s.rir).filter(r=>r!==null);
+  const tooHard=knownRir.length&&Math.min(...knownRir)<=0;
+  const comfortable=knownRir.length===0||Math.min(...knownRir)>=1;
 
-  if(allAtMax&&sameWeight){
+  if(allAtMax&&sameWeight&&comfortable){
     const next=weights[0]+Math.max(0,Number(increment)||0);
     return {
       status:"up",
       title:"Puedes progresar",
       text:`Completaste el rango alto. Prueba ${formatWeight(next)} kg y busca al menos ${range.min} repeticiones por serie.`
+    };
+  }
+
+  if(allAtMax&&sameWeight&&tooHard){
+    return {
+      status:"hold",
+      title:"No subas todavía",
+      text:"Completaste el rango, pero llegaste a RIR 0. Repite la carga hasta dejar al menos 1–2 repeticiones en reserva."
     };
   }
 
@@ -240,8 +277,8 @@ function getExerciseHistory(name){
   getHistory().forEach(workout=>{
     const exercise=workout.exercises.find(e=>e.name===name);
     if(!exercise) return;
-    const validSeries=exercise.series
-      .map(s=>({weight:numericValue(s.weight),reps:numericValue(s.reps)}))
+    const validSeries=workingSeries(exercise.series)
+      .map(s=>({weight:numericValue(s.weight),reps:numericValue(s.reps),rir:numericValue(s.rir)}))
       .filter(s=>s.weight!==null&&s.reps!==null);
     if(!validSeries.length) return;
     rows.push({
@@ -286,7 +323,7 @@ function totalCurrentWeekVolume(){
   return getHistory()
     .filter(w=>new Date(w.date)>=start)
     .reduce((sum,w)=>sum+w.exercises.reduce((exSum,e)=>
-      exSum+e.series.reduce((s,x)=>{
+      exSum+workingSeries(e.series).reduce((s,x)=>{
         const weight=numericValue(x.weight),reps=numericValue(x.reps);
         return s+(weight!==null&&reps!==null?weight*reps:0);
       },0),0),0);
@@ -304,7 +341,8 @@ function allExercisePerformances(name,excludeWorkoutId=null){
     if(excludeWorkoutId!==null&&workout.id===excludeWorkoutId) return;
     const exercise=workout.exercises.find(e=>e.name===name);
     if(!exercise) return;
-    exercise.series.forEach((series,index)=>{
+    exercise.series.map(normalizeSeries).forEach((series,index)=>{
+      if(series.warmup) return;
       const weight=numericValue(series.weight);
       const reps=numericValue(series.reps);
       if(weight===null||reps===null||weight<=0||reps<=0) return;
@@ -339,7 +377,8 @@ function recordsForWorkout(workout){
     const previousBestE1rm=previous.length?Math.max(...previous.map(p=>p.e1rm)):0;
     const previousBestVolume=previous.length?Math.max(...previous.map(p=>p.volume)):0;
 
-    const current=exercise.series.map((series,index)=>{
+    const current=exercise.series.map(normalizeSeries).map((series,index)=>{
+      if(series.warmup) return null;
       const weight=numericValue(series.weight);
       const reps=numericValue(series.reps);
       if(weight===null||reps===null||weight<=0||reps<=0) return null;
@@ -467,6 +506,7 @@ function render(){
   else if(state.screen==="stats") renderStats();
   else if(state.screen==="records") renderRecords();
   else if(state.screen==="body") renderBody();
+  else if(state.screen==="editWorkout") renderEditWorkout();
   else renderSettings();
 }
 
@@ -534,7 +574,10 @@ function renderWorkout(){
         <section class="exercise-card" data-exercise="${i}">
           <h2>${ex.name}</h2>
           <div class="target">Objetivo: ${ex.target} · RIR 3–4</div>
-          ${last?`<div class="last-session"><strong>Última vez:</strong> ${last.exercises[i].series.map(x=>x.weight||x.reps?`${x.weight||"—"} × ${x.reps||"—"}`:"—").join(" · ")}</div>`:""}
+          ${last?.exercises?.[i]?`<div class="last-session"><strong>Última vez:</strong> ${last.exercises[i].series.map(x=>{
+            const s=normalizeSeries(x);
+            return s.weight||s.reps?`${s.warmup?"Cal. ":""}${s.weight||"—"} × ${s.reps||"—"}${s.rir!==""?` · RIR ${s.rir}`:""}`:"—";
+          }).join(" · ")}</div>`:""}
           ${(()=>{
             const rec=exerciseRecommendation(last?.exercises?.[i],ex.target,ex.increment,ex.type);
             const record=recordStats(ex.name);
@@ -545,12 +588,17 @@ function renderWorkout(){
               ${record?`<small class="recommendation-record">Récord: ${formatWeight(record.maxWeight.weight)} kg · e1RM ${formatWeight(Math.round(record.bestE1rm.e1rm*10)/10)} kg</small>`:""}
             </div>`;
           })()}
-          <div class="series-header"><span></span><span>Peso</span><span>Reps</span><span>Hecha</span></div>
+          <div class="series-header series-header-v18"><span></span><span>Peso</span><span>Reps</span><span>RIR</span><span>Cal.</span><span>Hecha</span></div>
           ${ex.series.map((x,j)=>`
-            <div class="series-row">
+            <div class="series-row series-row-v18 ${x.warmup?"warmup-row":""}">
               <div class="series-number">${j+1}</div>
               <input inputmode="decimal" data-field="weight" data-series="${j}" value="${x.weight}" placeholder="kg">
               <input inputmode="numeric" data-field="reps" data-series="${j}" value="${x.reps}" placeholder="reps">
+              <select data-field="rir" data-series="${j}" aria-label="RIR">
+                <option value="" ${x.rir===""?"selected":""}>—</option>
+                ${[0,1,2,3,4,5].map(v=>`<option value="${v}" ${String(x.rir)===String(v)?"selected":""}>${v}</option>`).join("")}
+              </select>
+              <label class="warmup-toggle"><input type="checkbox" data-warmup="${j}" ${x.warmup?"checked":""}><span>Cal.</span></label>
               <button class="complete-btn ${x.done?"done":""}" data-done="${j}">${x.done?"✓":""}</button>
             </div>`).join("")}
           <textarea data-notes="${i}" placeholder="Notas">${ex.notes||""}</textarea>
@@ -558,21 +606,25 @@ function renderWorkout(){
     </main>
     <div id="timerPanel" class="timer-panel hidden">
       <div class="timer-main"><div><div class="subtle">Descanso</div><div id="timerValue" class="timer-value">${formatTimer(state.timerSeconds)}</div></div><button id="closeTimer" class="secondary">Cerrar</button></div>
-      <div class="timer-actions"><button class="secondary" data-time="60">60 s</button><button class="secondary" data-time="90">90 s</button><button class="secondary" data-time="120">120 s</button></div>
+      <div class="timer-actions"><button class="secondary" data-time="60">60 s</button><button class="secondary" data-time="90">90 s</button><button class="secondary" data-time="120">120 s</button><button class="secondary" data-time="180">180 s</button></div>
     </div>
     <footer class="sticky-actions"><div class="sticky-actions-inner"><button id="backHome" class="secondary">Salir</button><button id="finishWorkout" class="primary">Finalizar</button></div></footer>
   </div>`;
 
   document.querySelectorAll("[data-exercise]").forEach(card=>{
     const i=Number(card.dataset.exercise);
-    card.querySelectorAll("input[data-field]").forEach(inp=>inp.oninput=()=>{
+    card.querySelectorAll("[data-field]").forEach(inp=>inp.oninput=()=>{
       const draft=getDraft(s),j=Number(inp.dataset.series);
       draft.exercises[i].series[j][inp.dataset.field]=inp.value; saveDraft(draft);
+    });
+    card.querySelectorAll("[data-warmup]").forEach(inp=>inp.onchange=()=>{
+      const draft=getDraft(s),j=Number(inp.dataset.warmup);
+      draft.exercises[i].series[j].warmup=inp.checked; saveDraft(draft); renderWorkout();
     });
     card.querySelectorAll("[data-done]").forEach(btn=>btn.onclick=()=>{
       const draft=getDraft(s),j=Number(btn.dataset.done);
       draft.exercises[i].series[j].done=!draft.exercises[i].series[j].done;
-      saveDraft(draft); if(draft.exercises[i].series[j].done) startTimer(90); renderWorkout();
+      saveDraft(draft); if(draft.exercises[i].series[j].done) startTimer(getRestSeconds()); renderWorkout();
     });
   });
   document.querySelectorAll("[data-notes]").forEach(a=>a.oninput=()=>{
@@ -610,7 +662,7 @@ function updateTimerUI(){
 }
 function finishWorkout(){
   const s=state.selectedSession,d=getDraft(s);
-  const completed=d.exercises.reduce((n,e)=>n+e.series.filter(x=>x.done).length,0);
+  const completed=d.exercises.reduce((n,e)=>n+workingSeries(e.series).filter(x=>x.done).length,0);
   const workout={id:Date.now(),date:new Date().toISOString(),session:s,
     durationMs:Date.now()-(d.startedAt||Date.now()),completedSeries:completed,exercises:d.exercises};
   const h=getHistory();h.unshift(workout);saveHistory(h);clearDraft(s);
@@ -648,20 +700,115 @@ function renderHistory(){
       ${h.length?h.map(w=>`
         <section class="card" data-history="${w.id}">
           <div class="history-item">
-            <div><strong>Sesión ${w.session}</strong><small>${formatDate(w.date)} · ${formatDuration(w.durationMs)} · ${w.completedSeries} series</small></div>
+            <div><strong>Sesión ${w.session}</strong><small>${formatDate(w.date)} · ${formatDuration(w.durationMs)} · ${w.completedSeries} series efectivas</small></div>
             <div class="chevron">›</div>
           </div>
           ${state.expandedHistoryId===w.id?`<div class="history-detail">
-            ${w.exercises.map(e=>`<div class="exercise-summary"><strong>${e.name}</strong><span>${e.series.map(x=>x.weight||x.reps?`${x.weight||"—"} × ${x.reps||"—"}`:"—").join(" · ")}</span>${e.notes?`<small> · ${e.notes}</small>`:""}</div>`).join("")}
+            ${w.exercises.map(e=>`<div class="exercise-summary"><strong>${e.name}</strong><span>${e.series.map(x=>{
+              const s=normalizeSeries(x);
+              return s.weight||s.reps?`${s.warmup?"Cal. ":""}${s.weight||"—"} × ${s.reps||"—"}${s.rir!==""?` · RIR ${s.rir}`:""}`:"—";
+            }).join(" · ")}</span>${e.notes?`<small>${e.notes}</small>`:""}</div>`).join("")}
+            <div class="history-actions">
+              <button class="secondary" data-edit-workout="${w.id}">Editar sesión</button>
+              <button class="danger-button" data-delete-workout="${w.id}">Eliminar</button>
+            </div>
           </div>`:""}
         </section>`).join(""):`<div class="empty">Todavía no hay entrenamientos guardados.</div>`}
     </main>${nav("history")}
   </div>`;
-  document.querySelectorAll("[data-history]").forEach(c=>c.onclick=()=>{
-    const id=Number(c.dataset.history);state.expandedHistoryId=state.expandedHistoryId===id?null:id;renderHistory();
+
+  document.querySelectorAll("[data-history]").forEach(card=>card.onclick=()=>{
+    const id=Number(card.dataset.history);
+    state.expandedHistoryId=state.expandedHistoryId===id?null:id;
+    renderHistory();
+  });
+  document.querySelectorAll("[data-edit-workout]").forEach(button=>button.onclick=event=>{
+    event.stopPropagation();
+    state.editWorkoutId=Number(button.dataset.editWorkout);
+    state.screen="editWorkout";
+    renderEditWorkout();
+  });
+  document.querySelectorAll("[data-delete-workout]").forEach(button=>button.onclick=event=>{
+    event.stopPropagation();
+    const id=Number(button.dataset.deleteWorkout);
+    if(!confirm("¿Eliminar definitivamente este entrenamiento?")) return;
+    saveHistory(getHistory().filter(w=>w.id!==id));
+    state.expandedHistoryId=null;
+    toast("Entrenamiento eliminado");
+    renderHistory();
   });
   bindNav();
 }
+
+function renderEditWorkout(){
+  const workout=getHistory().find(w=>w.id===state.editWorkoutId);
+  if(!workout){state.screen="history";renderHistory();return;}
+  workout.exercises.forEach(ex=>ex.series=ex.series.map(normalizeSeries));
+
+  app.innerHTML=`<div class="app-shell">
+    <header class="topbar"><div><div class="brand">Editar sesión ${workout.session}</div><div class="subtle">${formatDate(workout.date)}</div></div></header>
+    <main class="screen">
+      <section class="card">
+        <label class="select-label">Fecha y hora</label>
+        <input id="editWorkoutDate" type="datetime-local" value="${new Date(new Date(workout.date).getTime()-new Date(workout.date).getTimezoneOffset()*60000).toISOString().slice(0,16)}">
+      </section>
+      ${workout.exercises.map((ex,i)=>`
+        <section class="exercise-card" data-edit-exercise="${i}">
+          <h2>${ex.name}</h2>
+          <div class="series-header series-header-v18"><span></span><span>Peso</span><span>Reps</span><span>RIR</span><span>Cal.</span><span></span></div>
+          ${ex.series.map((x,j)=>`
+            <div class="series-row series-row-v18 ${x.warmup?"warmup-row":""}">
+              <div class="series-number">${j+1}</div>
+              <input inputmode="decimal" data-edit-field="weight" data-series="${j}" value="${x.weight}" placeholder="kg">
+              <input inputmode="numeric" data-edit-field="reps" data-series="${j}" value="${x.reps}" placeholder="reps">
+              <select data-edit-field="rir" data-series="${j}">
+                <option value="" ${x.rir===""?"selected":""}>—</option>
+                ${[0,1,2,3,4,5].map(v=>`<option value="${v}" ${String(x.rir)===String(v)?"selected":""}>${v}</option>`).join("")}
+              </select>
+              <label class="warmup-toggle"><input type="checkbox" data-edit-warmup="${j}" ${x.warmup?"checked":""}><span>Cal.</span></label>
+              <button class="complete-btn ${x.done?"done":""}" data-edit-done="${j}">${x.done?"✓":""}</button>
+            </div>`).join("")}
+          <textarea data-edit-notes="${i}" placeholder="Notas">${ex.notes||""}</textarea>
+        </section>`).join("")}
+    </main>
+    <footer class="sticky-actions"><div class="sticky-actions-inner"><button id="cancelEditWorkout" class="secondary">Cancelar</button><button id="saveEditedWorkout" class="primary">Guardar cambios</button></div></footer>
+  </div>`;
+
+  const edited=structuredClone(workout);
+  document.querySelectorAll("[data-edit-exercise]").forEach(card=>{
+    const i=Number(card.dataset.editExercise);
+    card.querySelectorAll("[data-edit-field]").forEach(input=>input.oninput=()=>{
+      edited.exercises[i].series[Number(input.dataset.series)][input.dataset.editField]=input.value;
+    });
+    card.querySelectorAll("[data-edit-warmup]").forEach(input=>input.onchange=()=>{
+      edited.exercises[i].series[Number(input.dataset.editWarmup)].warmup=input.checked;
+      input.closest(".series-row").classList.toggle("warmup-row",input.checked);
+    });
+    card.querySelectorAll("[data-edit-done]").forEach(button=>button.onclick=()=>{
+      const series=edited.exercises[i].series[Number(button.dataset.editDone)];
+      series.done=!series.done;
+      button.classList.toggle("done",series.done);
+      button.textContent=series.done?"✓":"";
+    });
+  });
+  document.querySelectorAll("[data-edit-notes]").forEach(area=>area.oninput=()=>{
+    edited.exercises[Number(area.dataset.editNotes)].notes=area.value;
+  });
+  document.getElementById("cancelEditWorkout").onclick=()=>{state.screen="history";renderHistory();};
+  document.getElementById("saveEditedWorkout").onclick=()=>{
+    const dateValue=document.getElementById("editWorkoutDate").value;
+    if(!dateValue){alert("Selecciona una fecha válida.");return;}
+    edited.date=new Date(dateValue).toISOString();
+    edited.completedSeries=edited.exercises.reduce((sum,e)=>sum+workingSeries(e.series).filter(s=>s.done).length,0);
+    const history=getHistory().map(w=>w.id===edited.id?edited:w);
+    saveHistory(history);
+    state.screen="history";
+    state.expandedHistoryId=edited.id;
+    toast("Entrenamiento actualizado");
+    renderHistory();
+  };
+}
+
 
 function renderStats(){
   const names=allExerciseNames();
@@ -875,8 +1022,15 @@ function renderBody(){
 
 function renderSettings(){
   app.innerHTML=`<div class="app-shell">
-    <header class="topbar"><div><div class="brand">Ajustes</div><div class="subtle">GymOS v1.7 · Datos y copias</div></div></header>
+    <header class="topbar"><div><div class="brand">Ajustes</div><div class="subtle">GymOS v1.8 · Datos y copias</div></div></header>
     <main class="screen">
+      <section class="card">
+        <h2>Descanso entre series</h2>
+        <p class="subtle">El temporizador se inicia al marcar una serie como completada.</p>
+        <div class="rest-options">
+          ${[60,90,120,180].map(value=>`<button class="rest-option ${getRestSeconds()===value?"active":""}" data-rest-setting="${value}">${value===60?"1 min":value===90?"1:30":value===120?"2 min":"3 min"}</button>`).join("")}
+        </div>
+      </section>
       <section class="card">
         <h2>Seguimiento corporal</h2>
         <p class="subtle">Registra peso y cintura para comprobar la tendencia junto con tu rendimiento.</p>
@@ -907,6 +1061,11 @@ function renderSettings(){
       </section>
     </main>${nav("settings")}
   </div>`;
+  document.querySelectorAll("[data-rest-setting]").forEach(button=>button.onclick=()=>{
+    saveRestSeconds(Number(button.dataset.restSetting));
+    toast("Descanso actualizado");
+    renderSettings();
+  });
   document.getElementById("openBodySettings").onclick=()=>{state.screen="body";renderBody();};
   document.getElementById("importRoutine").onclick=()=>{
     if(typeof XLSX==="undefined"){
@@ -1056,7 +1215,8 @@ function exportData(){
     },
     selectedSession:state.selectedSession,
     routine:getRoutine(),
-    body:getBodyHistory()
+    body:getBodyHistory(),
+    restSeconds:getRestSeconds()
   };
   const blob=new Blob([JSON.stringify(payload,null,2)],{type:"application/json"});
   const a=document.createElement("a");a.href=URL.createObjectURL(blob);
@@ -1071,6 +1231,7 @@ importFile.onchange=async()=>{
     if(!Array.isArray(data.history))throw new Error();
     saveHistory(data.history);
     if(Array.isArray(data.body)) saveBodyHistory(data.body);
+    if([60,90,120,180].includes(Number(data.restSeconds))) saveRestSeconds(Number(data.restSeconds));
     if(data.routine){saveRoutine(data.routine);sessions=getRoutine();}
     ["A","B","C"].forEach(s=>{
       if(data.drafts&&data.drafts[s])localStorage.setItem(draftKey(s),JSON.stringify(data.drafts[s]));

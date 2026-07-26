@@ -574,3 +574,23 @@ select{
 .routine-editor-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .modal-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:18px}
 @media(min-width:700px){.routine-modal-layer{align-items:center}.routine-modal{border-radius:22px}}
+
+.block-home-card{overflow:hidden}
+.block-progress-track{height:9px;background:#e5e7eb;border-radius:999px;overflow:hidden;margin:14px 0}
+.block-progress-track>div{height:100%;background:#111827;border-radius:999px}
+.training-block-card.active-block{border:2px solid #111827}
+.block-title-row{display:flex;align-items:center;gap:8px}
+.block-title-row h2{margin:0}
+.active-pill{display:inline-flex;padding:4px 8px;border-radius:999px;background:#dcfce7;color:#166534;font-size:.7rem;font-weight:850}
+.block-metrics{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:14px}
+.block-metrics div{background:#f3f4f6;border-radius:11px;padding:10px}
+.block-metrics span{display:block;font-size:.66rem;color:#6b7280}
+.block-metrics strong{display:block;margin-top:3px;font-size:.9rem}
+.block-editor-form label{display:flex;flex-direction:column;gap:6px;margin:12px 0}
+.block-editor-form label span{font-size:.72rem;font-weight:850;color:#4b5563}
+.block-editor-form input,.block-editor-form select,.block-editor-form textarea{
+  width:100%;padding:12px;border:1px solid #d1d5db;border-radius:11px;background:#fff;font:inherit
+}
+.block-week-list{display:flex;flex-direction:column;gap:8px;margin-top:12px}
+.block-week-row{display:flex;justify-content:space-between;align-items:center;padding:11px 12px;border-radius:10px;background:#f3f4f6}
+.block-week-row.met{background:#dcfce7;color:#166534}

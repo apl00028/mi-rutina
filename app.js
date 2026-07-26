@@ -65,6 +65,62 @@ function saveRoutine(routine){
 }
 let sessions=getRoutine();
 
+function getTrainingBlocks(){
+  const raw=JSON.parse(localStorage.getItem("gymos:blocks")||"[]");
+  return Array.isArray(raw)?raw:[];
+}
+function saveTrainingBlocks(blocks){
+  localStorage.setItem("gymos:blocks",JSON.stringify(blocks));
+  markLocalUpdated();
+}
+function getActiveBlock(){
+  const id=localStorage.getItem("gymos:activeBlockId");
+  return getTrainingBlocks().find(block=>block.id===id)||null;
+}
+function setActiveBlock(id){
+  if(id) localStorage.setItem("gymos:activeBlockId",id);
+  else localStorage.removeItem("gymos:activeBlockId");
+  markLocalUpdated();
+}
+function makeBlockId(){
+  return crypto.randomUUID?crypto.randomUUID():`block-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
+function addDays(date,days){
+  const copy=new Date(date);
+  copy.setDate(copy.getDate()+days);
+  return copy;
+}
+function dateOnly(value){
+  const d=new Date(`${value}T12:00:00`);
+  return Number.isNaN(d.getTime())?null:d;
+}
+function blockStatus(block){
+  const start=dateOnly(block.startDate);
+  if(!start) return {week:1,total:block.weeks||4,status:"planned",progress:0};
+  const today=new Date(); today.setHours(12,0,0,0);
+  const total=Math.max(1,Number(block.weeks)||4);
+  const end=addDays(start,total*7-1);
+  if(today<start) return {week:1,total,status:"planned",progress:0,start,end};
+  if(today>end) return {week:total,total,status:"completed",progress:100,start,end};
+  const diff=Math.floor((today-start)/86400000);
+  const week=Math.min(total,Math.floor(diff/7)+1);
+  return {week,total,status:"active",progress:Math.round(((diff+1)/(total*7))*100),start,end};
+}
+function blockWeekWorkouts(block,weekNumber){
+  const start=dateOnly(block.startDate);
+  if(!start) return 0;
+  const from=addDays(start,(weekNumber-1)*7);
+  const to=addDays(from,7);
+  return getHistory().filter(workout=>{
+    const d=new Date(workout.date||workout.finishedAt||workout.startedAt);
+    return d>=from&&d<to;
+  }).length;
+}
+function formatBlockDate(value){
+  const d=dateOnly(value);
+  return d?d.toLocaleDateString("es-ES",{day:"2-digit",month:"short",year:"numeric"}):"—";
+}
+
 
 const app = document.getElementById("app");
 const importFile = document.getElementById("importFile");
@@ -85,7 +141,8 @@ let state = {
   syncTimer: null,
   syncInProgress: false,
   applyingRemote: false,
-  editingSession: "A"
+  editingSession: "A",
+  editingBlockId: null
 };
 
 function getHistory(){ return JSON.parse(localStorage.getItem("gymos:history") || "[]"); }
@@ -221,7 +278,7 @@ function formatSyncDate(value){
 }
 function buildSyncPayload(){
   return {
-    version:"2.1",
+    version:"2.3.0",
     updatedAt:getLocalUpdatedAt(),
     deviceId:getDeviceId(),
     deviceName:getDeviceName(),
@@ -231,6 +288,8 @@ function buildSyncPayload(){
     selectedSession:localStorage.getItem("gymos:selectedSession")||"A",
     restSeconds:getRestSeconds(),
     weeklyGoal:getWeeklyGoal(),
+    blocks:getTrainingBlocks(),
+    activeBlockId:localStorage.getItem("gymos:activeBlockId"),
     updatedAt:getLocalUpdatedAt()
   };
 }
@@ -247,6 +306,8 @@ function applySyncPayload(payload){
   }
   if([60,90,120,180].includes(Number(payload.restSeconds))) saveRestSeconds(Number(payload.restSeconds));
   if(Number(payload.weeklyGoal)>=1&&Number(payload.weeklyGoal)<=7) saveWeeklyGoal(Number(payload.weeklyGoal));
+  if(Array.isArray(payload.blocks)) saveTrainingBlocks(payload.blocks);
+  if(payload.activeBlockId) localStorage.setItem("gymos:activeBlockId",payload.activeBlockId);
     localStorage.setItem("gymos:updatedAt",payload.updatedAt||new Date().toISOString());
     localStorage.removeItem("gymos:syncPending");
   }finally{
@@ -867,6 +928,8 @@ function render(){
   else if(state.screen==="editWorkout") renderEditWorkout();
   else if(state.screen==="plan") renderPlan();
   else if(state.screen==="routineEditor") renderRoutineEditor();
+  else if(state.screen==="blocks") renderBlocks();
+  else if(state.screen==="blockEditor") renderBlockEditor();
   else renderSettings();
 }
 
@@ -890,6 +953,26 @@ function renderHome(){
         <div class="info-row"><span>Duración</span><strong>${last?formatDuration(last.durationMs):"—"}</strong></div>
         <div class="info-row"><span>Entrenamientos guardados</span><strong>${h.length}</strong></div>
       </section>
+      ${(()=>{
+        const block=getActiveBlock();
+        if(!block) return `<section class="card block-home-card">
+          <div class="card-heading-row"><div><h2>Bloque de entrenamiento</h2><p class="subtle">Todavía no has creado uno</p></div><button id="openBlocksHome" class="text-button">Crear</button></div>
+          <p class="subtle">Planifica tu rutina durante 4, 6 u 8 semanas.</p>
+        </section>`;
+        const status=blockStatus(block);
+        const done=blockWeekWorkouts(block,status.week);
+        return `<section class="card block-home-card">
+          <div class="card-heading-row">
+            <div><h2>${esc(block.name)}</h2><p class="subtle">Semana ${status.week} de ${status.total}</p></div>
+            <button id="openBlocksHome" class="text-button">Abrir</button>
+          </div>
+          <div class="block-progress-track"><div style="width:${status.progress}%"></div></div>
+          <div class="weekly-home-footer">
+            <strong>${done} de ${block.sessionsPerWeek} sesiones esta semana</strong>
+            <span>${status.status==="completed"?"Finalizado":status.status==="planned"?"Pendiente":"En curso"}</span>
+          </div>
+        </section>`;
+      })()}
       ${(()=>{
         const week=weeklyProgress();
         return `<section class="card weekly-home-card">
@@ -925,6 +1008,8 @@ function renderHome(){
   if(openSyncSettings) openSyncSettings.onclick=()=>{state.screen="settings";renderSettings();};
   document.getElementById("startWorkout").onclick=()=>{state.screen="workout";renderWorkout();};
   document.getElementById("openPlan").onclick=()=>{state.screen="plan";renderPlan();};
+  const openBlocksHome=document.getElementById("openBlocksHome");
+  if(openBlocksHome) openBlocksHome.onclick=()=>{state.screen="blocks";renderBlocks();};
   document.getElementById("openBody").onclick=()=>{state.screen="body";renderBody();};
   bindNav();
 }
@@ -1651,9 +1736,168 @@ function renderRoutineEditor(){
   };
 }
 
+
+function renderBlocks(){
+  const blocks=getTrainingBlocks();
+  const active=getActiveBlock();
+  app.innerHTML=`<div class="app-shell">
+    <header class="topbar">
+      <button id="backBlocks" class="back-button">←</button>
+      <div><div class="brand">Bloques</div><div class="subtle">Planificación por semanas</div></div>
+      <button id="newBlockTop" class="header-action">＋</button>
+    </header>
+    <main class="screen">
+      ${blocks.length?blocks.map(block=>{
+        const status=blockStatus(block);
+        const isActive=active&&active.id===block.id;
+        const completedWeeks=Array.from({length:status.total},(_,i)=>blockWeekWorkouts(block,i+1)>=block.sessionsPerWeek).filter(Boolean).length;
+        return `<section class="card training-block-card ${isActive?"active-block":""}">
+          <div class="card-heading-row">
+            <div>
+              <div class="block-title-row"><h2>${esc(block.name)}</h2>${isActive?'<span class="active-pill">Activo</span>':""}</div>
+              <p class="subtle">${formatBlockDate(block.startDate)} · ${block.weeks} semanas</p>
+            </div>
+            <button class="icon-button" data-edit-block="${block.id}">✎</button>
+          </div>
+          <div class="block-metrics">
+            <div><span>Semana</span><strong>${status.week}/${status.total}</strong></div>
+            <div><span>Objetivo</span><strong>${block.sessionsPerWeek}/sem</strong></div>
+            <div><span>Cumplidas</span><strong>${completedWeeks}</strong></div>
+          </div>
+          <div class="block-progress-track"><div style="width:${status.progress}%"></div></div>
+          <div class="settings-actions compact-actions">
+            ${!isActive?`<button class="primary" data-activate-block="${block.id}">Activar</button>`:""}
+            <button class="secondary" data-duplicate-block="${block.id}">Duplicar</button>
+            <button class="danger-soft" data-delete-block="${block.id}">Eliminar</button>
+          </div>
+        </section>`;
+      }).join(""):`<section class="card routine-empty"><strong>No hay bloques</strong><p>Crea uno para organizar las próximas semanas.</p></section>`}
+      <section class="card"><button id="newBlockBottom" class="primary full">Crear bloque</button></section>
+    </main>${nav("settings")}
+  </div>`;
+
+  document.getElementById("backBlocks").onclick=()=>{state.screen="settings";renderSettings();};
+  const create=()=>{state.editingBlockId=null;state.screen="blockEditor";renderBlockEditor();};
+  document.getElementById("newBlockTop").onclick=create;
+  document.getElementById("newBlockBottom").onclick=create;
+
+  document.querySelectorAll("[data-edit-block]").forEach(button=>button.onclick=()=>{
+    state.editingBlockId=button.dataset.editBlock;
+    state.screen="blockEditor";
+    renderBlockEditor();
+  });
+  document.querySelectorAll("[data-activate-block]").forEach(button=>button.onclick=()=>{
+    setActiveBlock(button.dataset.activateBlock);
+    toast("Bloque activado");
+    renderBlocks();
+  });
+  document.querySelectorAll("[data-duplicate-block]").forEach(button=>button.onclick=()=>{
+    const source=blocks.find(x=>x.id===button.dataset.duplicateBlock);
+    if(!source) return;
+    const copy={...source,id:makeBlockId(),name:`${source.name} (copia)`,createdAt:new Date().toISOString()};
+    saveTrainingBlocks([...blocks,copy]);
+    toast("Bloque duplicado");
+    renderBlocks();
+  });
+  document.querySelectorAll("[data-delete-block]").forEach(button=>button.onclick=()=>{
+    const block=blocks.find(x=>x.id===button.dataset.deleteBlock);
+    if(!confirm(`¿Eliminar "${block?.name||"este bloque"}"?`)) return;
+    const next=blocks.filter(x=>x.id!==button.dataset.deleteBlock);
+    saveTrainingBlocks(next);
+    if(localStorage.getItem("gymos:activeBlockId")===button.dataset.deleteBlock) setActiveBlock(null);
+    toast("Bloque eliminado");
+    renderBlocks();
+  });
+  bindNav();
+}
+function renderBlockEditor(){
+  const blocks=getTrainingBlocks();
+  const existing=blocks.find(x=>x.id===state.editingBlockId);
+  const today=new Date().toISOString().slice(0,10);
+  const block=existing||{
+    name:"Nuevo bloque",
+    startDate:today,
+    weeks:4,
+    sessionsPerWeek:getWeeklyGoal(),
+    deloadWeek:4,
+    notes:""
+  };
+  app.innerHTML=`<div class="app-shell">
+    <header class="topbar">
+      <button id="backBlockEditor" class="back-button">←</button>
+      <div><div class="brand">${existing?"Editar bloque":"Nuevo bloque"}</div><div class="subtle">Planificación semanal</div></div>
+      <button id="saveBlockTop" class="header-action">✓</button>
+    </header>
+    <main class="screen">
+      <section class="card block-editor-form">
+        <label><span>Nombre del bloque</span><input id="blockName" value="${esc(block.name)}" placeholder="Ej. Retorno al gimnasio"></label>
+        <label><span>Fecha de inicio</span><input id="blockStart" type="date" value="${block.startDate}"></label>
+        <div class="routine-editor-grid">
+          <label><span>Duración</span><select id="blockWeeks">
+            ${[4,6,8].map(n=>`<option value="${n}" ${Number(block.weeks)===n?"selected":""}>${n} semanas</option>`).join("")}
+          </select></label>
+          <label><span>Sesiones por semana</span><select id="blockSessions">
+            ${[1,2,3,4,5,6,7].map(n=>`<option value="${n}" ${Number(block.sessionsPerWeek)===n?"selected":""}>${n}</option>`).join("")}
+          </select></label>
+        </div>
+        <label><span>Semana de descarga</span><select id="blockDeload">
+          <option value="0" ${!block.deloadWeek?"selected":""}>Sin descarga</option>
+          ${[4,6,8].map(n=>`<option value="${n}" ${Number(block.deloadWeek)===n?"selected":""}>Semana ${n}</option>`).join("")}
+        </select></label>
+        <label><span>Notas</span><textarea id="blockNotes" rows="4" placeholder="Objetivo, indicaciones o recordatorios">${esc(block.notes||"")}</textarea></label>
+        <button id="saveBlockBottom" class="primary full">Guardar bloque</button>
+      </section>
+      ${existing?`<section class="card">
+        <h2>Progreso semanal</h2>
+        <div class="block-week-list">
+          ${Array.from({length:Number(block.weeks)},(_,i)=>{
+            const week=i+1;
+            const done=blockWeekWorkouts(block,week);
+            const met=done>=block.sessionsPerWeek;
+            return `<div class="block-week-row ${met?"met":""}">
+              <span>Semana ${week}${Number(block.deloadWeek)===week?" · descarga":""}</span>
+              <strong>${done}/${block.sessionsPerWeek}</strong>
+            </div>`;
+          }).join("")}
+        </div>
+      </section>`:""}
+    </main>
+  </div>`;
+
+  document.getElementById("backBlockEditor").onclick=()=>{state.screen="blocks";renderBlocks();};
+  const save=()=>{
+    const name=document.getElementById("blockName").value.trim();
+    const startDate=document.getElementById("blockStart").value;
+    if(!name){alert("Escribe un nombre para el bloque.");return;}
+    if(!startDate){alert("Selecciona una fecha de inicio.");return;}
+    const weeks=Number(document.getElementById("blockWeeks").value);
+    let deloadWeek=Number(document.getElementById("blockDeload").value);
+    if(deloadWeek>weeks) deloadWeek=weeks;
+    const value={
+      id:existing?.id||makeBlockId(),
+      name,
+      startDate,
+      weeks,
+      sessionsPerWeek:Number(document.getElementById("blockSessions").value),
+      deloadWeek,
+      notes:document.getElementById("blockNotes").value.trim(),
+      createdAt:existing?.createdAt||new Date().toISOString(),
+      updatedAt:new Date().toISOString()
+    };
+    const next=existing?blocks.map(x=>x.id===existing.id?value:x):[...blocks,value];
+    saveTrainingBlocks(next);
+    if(!getActiveBlock()) setActiveBlock(value.id);
+    toast("Bloque guardado");
+    state.screen="blocks";
+    renderBlocks();
+  };
+  document.getElementById("saveBlockTop").onclick=save;
+  document.getElementById("saveBlockBottom").onclick=save;
+}
+
 function renderSettings(){
   app.innerHTML=`<div class="app-shell">
-    <header class="topbar"><div><div class="brand">Ajustes</div><div class="subtle">GymOS v2.2 · Editor de rutinas</div></div></header>
+    <header class="topbar"><div><div class="brand">Ajustes</div><div class="subtle">GymOS v2.3.0 · Bloques de entrenamiento</div></div></header>
     <main class="screen">
       <section class="card sync-card">
         <div class="card-heading-row">
@@ -1682,6 +1926,11 @@ function renderSettings(){
           <summary>Cómo configurarlo</summary>
           <p>Ejecuta <strong>supabase-schema.sql</strong> y añade <strong>https://apl00028.github.io/mi-rutina/</strong> en Authentication → URL Configuration → Redirect URLs. Usa la clave <strong>Publishable</strong> o <strong>anon public</strong>, nunca una secret/service role.</p>
         </details>
+      </section>
+      <section class="card">
+        <h2>Bloques de entrenamiento</h2>
+        <p class="subtle">Organiza la rutina en periodos de 4, 6 u 8 semanas y controla el avance.</p>
+        <button id="openBlocksSettings" class="primary full">Gestionar bloques</button>
       </section>
       <section class="card">
         <h2>Objetivo y calendario</h2>
@@ -1779,6 +2028,7 @@ function renderSettings(){
     renderSettings();
   };
   document.getElementById("openPlanSettings").onclick=()=>{state.screen="plan";renderPlan();};
+  document.getElementById("openBlocksSettings").onclick=()=>{state.screen="blocks";renderBlocks();};
   document.querySelectorAll("[data-rest-setting]").forEach(button=>button.onclick=()=>{
     saveRestSeconds(Number(button.dataset.restSetting));
     toast("Descanso actualizado");
@@ -1937,6 +2187,8 @@ function exportData(){
     body:getBodyHistory(),
     restSeconds:getRestSeconds(),
     weeklyGoal:getWeeklyGoal(),
+    blocks:getTrainingBlocks(),
+    activeBlockId:localStorage.getItem("gymos:activeBlockId"),
     updatedAt:getLocalUpdatedAt()
   };
   const blob=new Blob([JSON.stringify(payload,null,2)],{type:"application/json"});
@@ -1954,6 +2206,8 @@ importFile.onchange=async()=>{
     if(Array.isArray(data.body)) saveBodyHistory(data.body);
     if([60,90,120,180].includes(Number(data.restSeconds))) saveRestSeconds(Number(data.restSeconds));
     if(Number(data.weeklyGoal)>=1&&Number(data.weeklyGoal)<=7) saveWeeklyGoal(Number(data.weeklyGoal));
+    if(Array.isArray(data.blocks)) saveTrainingBlocks(data.blocks);
+    if(data.activeBlockId) localStorage.setItem("gymos:activeBlockId",data.activeBlockId);
     if(data.routine){saveRoutine(data.routine);sessions=getRoutine();}
     ["A","B","C"].forEach(s=>{
       if(data.drafts&&data.drafts[s])localStorage.setItem(draftKey(s),JSON.stringify(data.drafts[s]));

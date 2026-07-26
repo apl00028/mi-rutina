@@ -1,4 +1,4 @@
-# GymOS v2.2 — Editor de rutinas
+# GymOS v2.3.0 — Bloques de entrenamiento
 
 GymOS sigue funcionando completamente en modo local.
 
@@ -68,3 +68,16 @@ La resolución de conflictos conserva la copia con la fecha `updatedAt` más rec
 - Copiar una sesión completa a otra.
 - Vaciar una sesión.
 - Importación y exportación mediante Excel conservadas.
+
+
+## Novedades de la versión 2.3.0
+
+- Creación de bloques de 4, 6 u 8 semanas.
+- Fecha de inicio y objetivo de sesiones semanales.
+- Bloque activo visible en la pantalla principal.
+- Cálculo automático de la semana actual.
+- Progreso temporal del bloque.
+- Seguimiento de sesiones realizadas por semana.
+- Semana de descarga configurable.
+- Duplicar, editar, activar y eliminar bloques.
+- Sincronización y copia de seguridad de los bloques.

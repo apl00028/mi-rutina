@@ -1,6 +1,6 @@
 {
-  "name": "Mi rutina de gimnasio",
-  "short_name": "Mi rutina",
+  "name": "GymOS",
+  "short_name": "GymOS",
   "start_url": "./",
   "display": "standalone",
   "background_color": "#f3f4f6",

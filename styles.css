@@ -1,110 +1,107 @@
-* { box-sizing: border-box; }
-:root {
-  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  color: #111827;
-  background: #f3f4f6;
+*{box-sizing:border-box}
+:root{
+  font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+  color:#111827;
+  background:#f3f4f6;
 }
-body {
-  margin: 0;
-  min-height: 100vh;
-  padding-bottom: env(safe-area-inset-bottom);
+body{margin:0;min-height:100vh;background:#f3f4f6}
+button,input,textarea{font:inherit}
+button{cursor:pointer}
+.app-shell{max-width:760px;margin:0 auto;min-height:100vh}
+.topbar{
+  display:flex;justify-content:space-between;align-items:center;
+  padding:18px 16px;background:#111827;color:white;
 }
-header {
-  padding: 22px 18px 12px;
-  background: #111827;
-  color: white;
+.brand{font-size:1.25rem;font-weight:800}
+.subtle{color:#6b7280}
+.topbar .subtle{color:#cbd5e1}
+.icon-btn{
+  width:42px;height:42px;border:0;border-radius:12px;
+  background:#1f2937;color:white;font-size:1.1rem;
 }
-header h1 { margin: 0; font-size: 1.7rem; }
-header p { margin: 5px 0 0; opacity: .75; }
-.tabs {
-  position: sticky;
-  top: 0;
-  z-index: 10;
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 8px;
-  padding: 10px;
-  background: rgba(243,244,246,.95);
-  backdrop-filter: blur(10px);
+.screen{padding:18px 14px 110px}
+.hero{
+  background:linear-gradient(135deg,#111827,#374151);
+  color:white;border-radius:22px;padding:24px;margin-bottom:16px;
+  box-shadow:0 10px 30px rgba(17,24,39,.18);
 }
-.tab {
-  border: 0;
-  border-radius: 12px;
-  padding: 12px 8px;
-  font-weight: 700;
-  background: #e5e7eb;
-  color: #374151;
+.hero-label{opacity:.75;font-size:.9rem}
+.hero h1{margin:6px 0 6px;font-size:2rem}
+.hero p{margin:0 0 22px;color:#d1d5db}
+.primary{
+  border:0;border-radius:14px;background:#111827;color:white;
+  padding:14px 18px;font-weight:800;
 }
-.tab.active {
-  background: #111827;
-  color: white;
+.hero .primary{background:white;color:#111827;width:100%;font-size:1.05rem}
+.secondary{
+  border:0;border-radius:12px;background:#e5e7eb;color:#111827;
+  padding:11px 14px;font-weight:700;
 }
-main { padding: 2px 10px 96px; }
-.exercise {
-  background: white;
-  border-radius: 16px;
-  padding: 15px;
-  margin: 10px 0;
-  box-shadow: 0 1px 8px rgba(0,0,0,.06);
+.full{width:100%}
+.session-picker{
+  display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:16px;
 }
-.exercise h2 {
-  margin: 0;
-  font-size: 1.05rem;
+.session-picker button{
+  border:0;border-radius:12px;padding:12px;background:#e5e7eb;font-weight:800;
 }
-.target {
-  margin: 4px 0 13px;
-  color: #6b7280;
-  font-size: .9rem;
+.session-picker button.active{background:#111827;color:white}
+.info-card,.exercise-card,.summary-card{
+  background:white;border-radius:18px;padding:16px;margin-bottom:12px;
+  box-shadow:0 2px 10px rgba(0,0,0,.05);
 }
-.series-grid {
-  display: grid;
-  grid-template-columns: 56px 1fr 1fr;
-  gap: 8px;
-  align-items: center;
+.info-card h2,.summary-card h2{margin:0 0 8px;font-size:1rem}
+.info-row{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #f3f4f6}
+.info-row:last-child{border-bottom:0}
+.workout-header{
+  position:sticky;top:0;z-index:20;background:rgba(243,244,246,.96);
+  backdrop-filter:blur(10px);padding:10px 0 12px;margin-bottom:6px;
 }
-.series-grid .head {
-  font-size: .78rem;
-  color: #6b7280;
-  text-align: center;
+.workout-title-row{display:flex;justify-content:space-between;align-items:center;gap:12px}
+.workout-title-row h1{font-size:1.35rem;margin:0}
+.timer-chip{
+  border:0;border-radius:999px;padding:10px 13px;background:#111827;color:white;
+  font-weight:800;min-width:88px;
 }
-.series-grid label {
-  font-weight: 700;
-  font-size: .88rem;
+.exercise-card h2{margin:0;font-size:1.05rem}
+.target{font-size:.86rem;color:#6b7280;margin:4px 0 12px}
+.last-session{
+  background:#f9fafb;border-radius:12px;padding:10px;margin-bottom:12px;
+  color:#4b5563;font-size:.86rem;
 }
-input, textarea {
-  width: 100%;
-  border: 1px solid #d1d5db;
-  border-radius: 10px;
-  padding: 11px;
-  font-size: 16px;
-  background: #fff;
+.series-header,.series-row{
+  display:grid;grid-template-columns:44px 1fr 1fr 46px;gap:8px;align-items:center;
 }
-textarea {
-  margin-top: 12px;
-  min-height: 58px;
-  resize: vertical;
+.series-header{font-size:.75rem;color:#6b7280;text-align:center;margin-bottom:6px}
+.series-row{margin-bottom:8px}
+.series-number{text-align:center;font-weight:800}
+input,textarea{
+  width:100%;border:1px solid #d1d5db;border-radius:11px;
+  padding:11px;background:white;font-size:16px;
 }
-footer {
-  position: fixed;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  display: flex;
-  gap: 12px;
-  align-items: center;
-  justify-content: space-between;
-  padding: 12px 14px calc(12px + env(safe-area-inset-bottom));
-  background: rgba(255,255,255,.96);
-  border-top: 1px solid #e5e7eb;
+.complete-btn{
+  width:42px;height:42px;border-radius:12px;border:1px solid #d1d5db;
+  background:white;font-weight:900;color:#6b7280;
 }
-.secondary {
-  border: 0;
-  border-radius: 10px;
-  padding: 10px 12px;
-  background: #e5e7eb;
-  font-weight: 700;
+.complete-btn.done{background:#111827;color:white;border-color:#111827}
+textarea{min-height:58px;resize:vertical;margin-top:4px}
+.sticky-actions{
+  position:fixed;bottom:0;left:0;right:0;z-index:30;
+  padding:12px 14px calc(12px + env(safe-area-inset-bottom));
+  background:rgba(255,255,255,.96);border-top:1px solid #e5e7eb;
 }
-#saveStatus {
-  color: #6b7280;
-  font-size: .83rem;
+.sticky-actions-inner{max-width:732px;margin:0 auto;display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.timer-panel{
+  position:fixed;inset:auto 14px 90px 14px;max-width:732px;margin:auto;
+  background:#111827;color:white;border-radius:18px;padding:16px;
+  box-shadow:0 16px 40px rgba(0,0,0,.28);z-index:40;
 }
+.timer-panel.hidden{display:none}
+.timer-main{display:flex;justify-content:space-between;align-items:center;gap:12px}
+.timer-value{font-size:2rem;font-weight:900}
+.timer-actions{display:flex;gap:8px;margin-top:12px}
+.timer-actions button{flex:1}
+dialog{border:0;border-radius:18px;padding:0;max-width:360px;width:calc(100% - 32px)}
+dialog::backdrop{background:rgba(0,0,0,.45)}
+.dialog-card{padding:22px}
+.dialog-card h2{margin-top:0}
+.empty{color:#6b7280;text-align:center;padding:30px}

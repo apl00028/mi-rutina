@@ -7,26 +7,18 @@
   <link rel="manifest" href="manifest.json">
   <link rel="apple-touch-icon" href="icon-192.png">
   <link rel="stylesheet" href="styles.css">
-  <title>Mi rutina</title>
+  <title>GymOS</title>
 </head>
 <body>
-  <header>
-    <h1>Mi rutina</h1>
-    <p>Pesos, repeticiones y notas</p>
-  </header>
+  <div id="app"></div>
 
-  <nav class="tabs" aria-label="Sesiones">
-    <button class="tab active" data-session="A">Sesión A</button>
-    <button class="tab" data-session="B">Sesión B</button>
-    <button class="tab" data-session="C">Sesión C</button>
-  </nav>
-
-  <main id="workout"></main>
-
-  <footer>
-    <button id="clearSession" class="secondary">Vaciar sesión actual</button>
-    <span id="saveStatus">Guardado automático</span>
-  </footer>
+  <dialog id="finishDialog">
+    <form method="dialog" class="dialog-card">
+      <h2>Entrenamiento terminado</h2>
+      <p id="finishSummary"></p>
+      <button value="close" class="primary full">Cerrar</button>
+    </form>
+  </dialog>
 
   <script src="app.js"></script>
 </body>

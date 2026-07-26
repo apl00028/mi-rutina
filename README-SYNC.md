@@ -1,4 +1,4 @@
-# GymOS v2.3.1 — Plan semanal y adherencia
+# GymOS v2.3.2 — Descarga y finalización de bloques
 
 GymOS sigue funcionando completamente en modo local.
 
@@ -92,3 +92,15 @@ La resolución de conflictos conserva la copia con la fecha `updatedAt` más rec
 - Estado visual de cada sesión prevista.
 - Desglose semanal completo dentro del bloque.
 - Ajuste automático del plan al cambiar el número de sesiones por semana.
+
+
+## Novedades de la versión 2.3.2
+
+- Semana de descarga destacada en la pantalla principal.
+- Configuración del porcentaje de volumen e intensidad durante la descarga.
+- Resumen global de adherencia del bloque.
+- Total de sesiones previstas y completadas.
+- Finalización manual del bloque.
+- Posibilidad de reabrir un bloque finalizado.
+- Estado visual de bloques terminados.
+- El bloque finalizado deja de mostrarse como activo.

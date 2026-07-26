@@ -613,3 +613,24 @@ select{
 .block-week-detail.met{background:#dcfce7;color:#166534}
 .block-week-detail .block-week-row{padding:0;background:transparent}
 @media(max-width:420px){.session-plan-slots{grid-template-columns:repeat(2,1fr)}}
+
+.deload-card{border:2px solid #c4b5fd}
+.deload-banner,.completed-banner{
+  display:flex;flex-direction:column;gap:3px;padding:11px 12px;border-radius:11px;margin:12px 0
+}
+.deload-banner{background:#ede9fe;color:#5b21b6}
+.completed-banner{background:#dcfce7;color:#166534}
+.deload-banner span,.completed-banner span{font-size:.72rem}
+.finished-pill{
+  display:inline-flex;padding:4px 8px;border-radius:999px;background:#e0e7ff;color:#3730a3;
+  font-size:.7rem;font-weight:850
+}
+.finished-block{opacity:.92}
+.deload-settings-grid{margin-top:2px}
+.block-summary-card{background:#fafafa}
+.summary-score{font-size:1.35rem}
+.block-summary-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:14px}
+.block-summary-grid div{background:#fff;border:1px solid #e5e7eb;border-radius:11px;padding:10px}
+.block-summary-grid span{display:block;font-size:.66rem;color:#6b7280}
+.block-summary-grid strong{display:block;margin-top:4px}
+.block-finish-button{margin-top:10px}

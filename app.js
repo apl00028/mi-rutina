@@ -162,6 +162,59 @@ function nextPlannedSession(block,weekNumber){
   const summary=blockWeekSessionSummary(block,weekNumber);
   return summary.remaining[0]||null;
 }
+
+function isDeloadWeek(block,weekNumber){
+  return Number(block.deloadWeek)>0 && Number(block.deloadWeek)===Number(weekNumber);
+}
+function deloadSettings(block){
+  return {
+    volumePercent: Math.max(30,Math.min(100,Number(block.deloadVolumePercent)||60)),
+    intensityPercent: Math.max(40,Math.min(100,Number(block.deloadIntensityPercent)||80))
+  };
+}
+function blockCompletionSummary(block){
+  const totalWeeks=Math.max(1,Number(block.weeks)||4);
+  const weeks=Array.from({length:totalWeeks},(_,i)=>{
+    const week=i+1;
+    const summary=blockWeekSessionSummary(block,week);
+    return {
+      week,
+      adherence:summary.adherence,
+      completed:summary.completed,
+      planned:summary.plan.length,
+      deload:isDeloadWeek(block,week)
+    };
+  });
+  const totalCompleted=weeks.reduce((sum,w)=>sum+w.completed,0);
+  const totalPlanned=weeks.reduce((sum,w)=>sum+w.planned,0);
+  const adherence=Math.round((totalCompleted/Math.max(1,totalPlanned))*100);
+  return {
+    weeks,
+    totalCompleted,
+    totalPlanned,
+    adherence,
+    completedWeeks:weeks.filter(w=>w.adherence>=100).length
+  };
+}
+function completeTrainingBlock(id){
+  const blocks=getTrainingBlocks();
+  const block=blocks.find(item=>item.id===id);
+  if(!block) return;
+  block.completedAt=new Date().toISOString();
+  block.status="completed";
+  block.updatedAt=new Date().toISOString();
+  saveTrainingBlocks(blocks);
+  if(localStorage.getItem("gymos:activeBlockId")===id) setActiveBlock(null);
+}
+function reopenTrainingBlock(id){
+  const blocks=getTrainingBlocks();
+  const block=blocks.find(item=>item.id===id);
+  if(!block) return;
+  delete block.completedAt;
+  block.status="active";
+  block.updatedAt=new Date().toISOString();
+  saveTrainingBlocks(blocks);
+}
 function formatBlockDate(value){
   const d=dateOnly(value);
   return d?d.toLocaleDateString("es-ES",{day:"2-digit",month:"short",year:"numeric"}):"—";
@@ -324,7 +377,7 @@ function formatSyncDate(value){
 }
 function buildSyncPayload(){
   return {
-    version:"2.3.1",
+    version:"2.3.2",
     updatedAt:getLocalUpdatedAt(),
     deviceId:getDeviceId(),
     deviceName:getDeviceName(),
@@ -1008,11 +1061,19 @@ function renderHome(){
         const status=blockStatus(block);
         const summary=blockWeekSessionSummary(block,status.week);
         const next=nextPlannedSession(block,status.week);
-        return `<section class="card block-home-card">
+        const deload=isDeloadWeek(block,status.week);
+        const deloadCfg=deloadSettings(block);
+        const finished=block.status==="completed"||Boolean(block.completedAt);
+        return `<section class="card block-home-card ${deload?"deload-card":""}">
           <div class="card-heading-row">
             <div><h2>${esc(block.name)}</h2><p class="subtle">Semana ${status.week} de ${status.total}</p></div>
             <button id="openBlocksHome" class="text-button">Abrir</button>
           </div>
+          ${deload?`<div class="deload-banner">
+            <strong>Semana de descarga</strong>
+            <span>${deloadCfg.volumePercent}% del volumen · ${deloadCfg.intensityPercent}% de intensidad</span>
+          </div>`:""}
+          ${finished?`<div class="completed-banner"><strong>Bloque finalizado</strong><span>Consulta el resumen completo desde Bloques.</span></div>`:""}
           <div class="block-session-strip">
             ${summary.plan.map((session,index)=>{
               const completed=index<summary.matched.length;
@@ -1818,10 +1879,12 @@ function renderBlocks(){
         const isActive=active&&active.id===block.id;
         const completedWeeks=Array.from({length:status.total},(_,i)=>blockWeekSessionSummary(block,i+1).adherence>=100).filter(Boolean).length;
         const currentSummary=blockWeekSessionSummary(block,status.week);
-        return `<section class="card training-block-card ${isActive?"active-block":""}">
+        const completion=blockCompletionSummary(block);
+        const finished=block.status==="completed"||Boolean(block.completedAt);
+        return `<section class="card training-block-card ${isActive?"active-block":""} ${finished?"finished-block":""}">
           <div class="card-heading-row">
             <div>
-              <div class="block-title-row"><h2>${esc(block.name)}</h2>${isActive?'<span class="active-pill">Activo</span>':""}</div>
+              <div class="block-title-row"><h2>${esc(block.name)}</h2>${isActive?'<span class="active-pill">Activo</span>':""}${finished?'<span class="finished-pill">Finalizado</span>':""}</div>
               <p class="subtle">${formatBlockDate(block.startDate)} · ${block.weeks} semanas</p>
             </div>
             <button class="icon-button" data-edit-block="${block.id}">✎</button>
@@ -1829,7 +1892,7 @@ function renderBlocks(){
           <div class="block-metrics">
             <div><span>Semana</span><strong>${status.week}/${status.total}</strong></div>
             <div><span>Objetivo</span><strong>${block.sessionsPerWeek}/sem</strong></div>
-            <div><span>Cumplidas</span><strong>${completedWeeks}</strong></div>
+            <div><span>Adherencia</span><strong>${completion.adherence}%</strong></div>
           </div>
           <div class="block-session-strip compact">
             ${currentSummary.plan.map((s,i)=>`<span class="${i<currentSummary.matched.length?"done":""}">${i<currentSummary.matched.length?"✓ ":""}${s}</span>`).join("")}
@@ -1837,7 +1900,8 @@ function renderBlocks(){
           <div class="block-progress-track"><div style="width:${currentSummary.adherence}%"></div></div>
           <p class="subtle block-adherence-label">Adherencia de la semana actual: ${currentSummary.adherence}%</p>
           <div class="settings-actions compact-actions">
-            ${!isActive?`<button class="primary" data-activate-block="${block.id}">Activar</button>`:""}
+            ${!finished&&!isActive?`<button class="primary" data-activate-block="${block.id}">Activar</button>`:""}
+            ${finished?`<button class="secondary" data-reopen-block="${block.id}">Reabrir</button>`:`<button class="secondary" data-complete-block="${block.id}">Finalizar</button>`}
             <button class="secondary" data-duplicate-block="${block.id}">Duplicar</button>
             <button class="danger-soft" data-delete-block="${block.id}">Eliminar</button>
           </div>
@@ -1868,6 +1932,19 @@ function renderBlocks(){
     const copy={...source,id:makeBlockId(),name:`${source.name} (copia)`,createdAt:new Date().toISOString()};
     saveTrainingBlocks([...blocks,copy]);
     toast("Bloque duplicado");
+    renderBlocks();
+  });
+  document.querySelectorAll("[data-complete-block]").forEach(button=>button.onclick=()=>{
+    const block=blocks.find(x=>x.id===button.dataset.completeBlock);
+    const summary=blockCompletionSummary(block);
+    if(!confirm(`¿Finalizar "${block?.name||"este bloque"}"? Adherencia actual: ${summary.adherence}%.`)) return;
+    completeTrainingBlock(button.dataset.completeBlock);
+    toast("Bloque finalizado");
+    renderBlocks();
+  });
+  document.querySelectorAll("[data-reopen-block]").forEach(button=>button.onclick=()=>{
+    reopenTrainingBlock(button.dataset.reopenBlock);
+    toast("Bloque reabierto");
     renderBlocks();
   });
   document.querySelectorAll("[data-delete-block]").forEach(button=>button.onclick=()=>{
@@ -1915,6 +1992,14 @@ function renderBlockEditor(){
           <option value="0" ${!block.deloadWeek?"selected":""}>Sin descarga</option>
           ${[4,6,8].map(n=>`<option value="${n}" ${Number(block.deloadWeek)===n?"selected":""}>Semana ${n}</option>`).join("")}
         </select></label>
+        <div class="routine-editor-grid deload-settings-grid">
+          <label><span>Volumen en descarga</span><select id="blockDeloadVolume">
+            ${[40,50,60,70,80].map(n=>`<option value="${n}" ${Number(block.deloadVolumePercent||60)===n?"selected":""}>${n}%</option>`).join("")}
+          </select></label>
+          <label><span>Intensidad en descarga</span><select id="blockDeloadIntensity">
+            ${[60,70,80,90].map(n=>`<option value="${n}" ${Number(block.deloadIntensityPercent||80)===n?"selected":""}>${n}%</option>`).join("")}
+          </select></label>
+        </div>
         <div class="session-plan-editor">
           <span class="field-label">Orden semanal de sesiones</span>
           <div id="sessionPlanSlots" class="session-plan-slots">
@@ -1926,8 +2011,25 @@ function renderBlockEditor(){
         </div>
         <label><span>Notas</span><textarea id="blockNotes" rows="4" placeholder="Objetivo, indicaciones o recordatorios">${esc(block.notes||"")}</textarea></label>
         <button id="saveBlockBottom" class="primary full">Guardar bloque</button>
+        ${existing?`<button id="finishBlockFromEditor" class="${block.status==="completed"?"secondary":"danger-soft"} full block-finish-button">
+          ${block.status==="completed"?"Reabrir bloque":"Finalizar bloque"}
+        </button>`:""}
       </section>
-      ${existing?`<section class="card">
+      ${existing?`<section class="card block-summary-card">
+        ${(()=>{
+          const summary=blockCompletionSummary(block);
+          return `<div class="card-heading-row">
+            <div><h2>Resumen del bloque</h2><p class="subtle">${summary.totalCompleted} de ${summary.totalPlanned} sesiones</p></div>
+            <strong class="summary-score">${summary.adherence}%</strong>
+          </div>
+          <div class="block-summary-grid">
+            <div><span>Semanas completas</span><strong>${summary.completedWeeks}/${block.weeks}</strong></div>
+            <div><span>Sesiones hechas</span><strong>${summary.totalCompleted}</strong></div>
+            <div><span>Sesiones previstas</span><strong>${summary.totalPlanned}</strong></div>
+          </div>`;
+        })()}
+      </section>
+      <section class="card">
         <h2>Progreso semanal</h2>
         <div class="block-week-list">
           ${Array.from({length:Number(block.weeks)},(_,i)=>{
@@ -1973,6 +2075,8 @@ function renderBlockEditor(){
       sessionsPerWeek:Number(document.getElementById("blockSessions").value),
       sessionPlan:[...document.querySelectorAll("[data-plan-slot]")].map(select=>select.value),
       deloadWeek,
+      deloadVolumePercent:Number(document.getElementById("blockDeloadVolume").value),
+      deloadIntensityPercent:Number(document.getElementById("blockDeloadIntensity").value),
       notes:document.getElementById("blockNotes").value.trim(),
       createdAt:existing?.createdAt||new Date().toISOString(),
       updatedAt:new Date().toISOString()
@@ -1986,11 +2090,25 @@ function renderBlockEditor(){
   };
   document.getElementById("saveBlockTop").onclick=save;
   document.getElementById("saveBlockBottom").onclick=save;
+  const finishButton=document.getElementById("finishBlockFromEditor");
+  if(finishButton) finishButton.onclick=()=>{
+    if(block.status==="completed"){
+      reopenTrainingBlock(block.id);
+      toast("Bloque reabierto");
+    }else{
+      const summary=blockCompletionSummary(block);
+      if(!confirm(`¿Finalizar este bloque? Adherencia actual: ${summary.adherence}%.`)) return;
+      completeTrainingBlock(block.id);
+      toast("Bloque finalizado");
+    }
+    state.screen="blocks";
+    renderBlocks();
+  };
 }
 
 function renderSettings(){
   app.innerHTML=`<div class="app-shell">
-    <header class="topbar"><div><div class="brand">Ajustes</div><div class="subtle">GymOS v2.3.1 · Plan semanal</div></div></header>
+    <header class="topbar"><div><div class="brand">Ajustes</div><div class="subtle">GymOS v2.3.2 · Descarga y cierre</div></div></header>
     <main class="screen">
       <section class="card sync-card">
         <div class="card-heading-row">

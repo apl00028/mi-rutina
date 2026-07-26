@@ -77,7 +77,8 @@ let state = {
   expandedHistoryId: null,
   selectedStatsExercise: null,
   selectedRecordExercise: null,
-  editWorkoutId: null
+  editWorkoutId: null,
+  planMonth: new Date().toISOString().slice(0,7)
 };
 
 function getHistory(){ return JSON.parse(localStorage.getItem("gymos:history") || "[]"); }
@@ -138,6 +139,116 @@ function getRestSeconds(){
 }
 function saveRestSeconds(value){
   localStorage.setItem("gymos:restSeconds",String(value));
+}
+function getWeeklyGoal(){
+  const value=Number(localStorage.getItem("gymos:weeklyGoal")||3);
+  return Number.isInteger(value)&&value>=1&&value<=7?value:3;
+}
+function saveWeeklyGoal(value){
+  localStorage.setItem("gymos:weeklyGoal",String(Math.max(1,Math.min(7,Number(value)||3))));
+}
+function dateKey(value){
+  const d=new Date(value);
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+}
+function mondayOf(date){
+  const d=new Date(date);
+  const day=(d.getDay()+6)%7;
+  d.setDate(d.getDate()-day);
+  d.setHours(0,0,0,0);
+  return d;
+}
+function addDays(date,days){
+  const d=new Date(date);
+  d.setDate(d.getDate()+days);
+  return d;
+}
+function workoutsInRange(start,end){
+  return getHistory().filter(w=>{
+    const d=new Date(w.date);
+    return d>=start&&d<end;
+  });
+}
+function weeklyProgress(reference=new Date()){
+  const start=mondayOf(reference);
+  const end=addDays(start,7);
+  const count=workoutsInRange(start,end).length;
+  const goal=getWeeklyGoal();
+  return {
+    start,end,count,goal,
+    remaining:Math.max(0,goal-count),
+    percentage:Math.min(100,Math.round((count/goal)*100))
+  };
+}
+function adherenceWeeks(total=8){
+  const currentStart=mondayOf(new Date());
+  const goal=getWeeklyGoal();
+  const weeks=[];
+  for(let i=total-1;i>=0;i--){
+    const start=addDays(currentStart,-7*i);
+    const end=addDays(start,7);
+    const count=workoutsInRange(start,end).length;
+    weeks.push({
+      start,end,count,goal,
+      met:count>=goal,
+      percentage:Math.min(100,Math.round((count/goal)*100))
+    });
+  }
+  return weeks;
+}
+function completedWeekStreak(){
+  const goal=getWeeklyGoal();
+  let streak=0;
+  let cursor=mondayOf(new Date());
+  const currentCount=workoutsInRange(cursor,addDays(cursor,7)).length;
+  if(currentCount<goal) cursor=addDays(cursor,-7);
+  while(true){
+    const count=workoutsInRange(cursor,addDays(cursor,7)).length;
+    if(count<goal) break;
+    streak++;
+    cursor=addDays(cursor,-7);
+    if(streak>260) break;
+  }
+  return streak;
+}
+function monthData(monthString){
+  const [year,month]=monthString.split("-").map(Number);
+  const first=new Date(year,month-1,1);
+  const last=new Date(year,month,0);
+  const leading=(first.getDay()+6)%7;
+  const totalCells=Math.ceil((leading+last.getDate())/7)*7;
+  const workouts={};
+  getHistory().forEach(w=>{
+    const key=dateKey(w.date);
+    workouts[key]=(workouts[key]||0)+1;
+  });
+  const bodyDates=new Set(getBodyHistory().map(r=>dateKey(r.date)));
+  const cells=[];
+  for(let i=0;i<totalCells;i++){
+    const day=i-leading+1;
+    if(day<1||day>last.getDate()){
+      cells.push(null);
+      continue;
+    }
+    const date=new Date(year,month-1,day);
+    const key=dateKey(date);
+    cells.push({
+      day,key,
+      workouts:workouts[key]||0,
+      body:bodyDates.has(key),
+      today:key===dateKey(new Date())
+    });
+  }
+  return {year,month,first,last,cells};
+}
+function monthLabel(monthString){
+  const [year,month]=monthString.split("-").map(Number);
+  return new Intl.DateTimeFormat("es-ES",{month:"long",year:"numeric"}).format(new Date(year,month-1,1));
+}
+function shiftMonth(monthString,delta){
+  const [year,month]=monthString.split("-").map(Number);
+  const d=new Date(year,month-1+delta,1);
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`;
 }
 function nextSuggestedSession(){
   const h = JSON.parse(localStorage.getItem("gymos:history") || "[]");
@@ -507,6 +618,7 @@ function render(){
   else if(state.screen==="records") renderRecords();
   else if(state.screen==="body") renderBody();
   else if(state.screen==="editWorkout") renderEditWorkout();
+  else if(state.screen==="plan") renderPlan();
   else renderSettings();
 }
 
@@ -531,6 +643,20 @@ function renderHome(){
         <div class="info-row"><span>Entrenamientos guardados</span><strong>${h.length}</strong></div>
       </section>
       ${(()=>{
+        const week=weeklyProgress();
+        return `<section class="card weekly-home-card">
+          <div class="card-heading-row">
+            <div><h2>Objetivo semanal</h2><p class="subtle">${week.count} de ${week.goal} sesiones</p></div>
+            <button id="openPlan" class="text-button">Ver plan</button>
+          </div>
+          <div class="weekly-progress-track"><div style="width:${week.percentage}%"></div></div>
+          <div class="weekly-home-footer">
+            <strong>${week.remaining===0?"Objetivo cumplido":`${week.remaining} ${week.remaining===1?"sesión pendiente":"sesiones pendientes"}`}</strong>
+            <span>${completedWeekStreak()} semanas de racha</span>
+          </div>
+        </section>`;
+      })()}
+      ${(()=>{
         const body=latestBodyEntry();
         return `<section class="card body-home-card">
           <div class="card-heading-row"><div><h2>Seguimiento corporal</h2><p class="subtle">Peso y cintura</p></div><button id="openBody" class="text-button">Abrir</button></div>
@@ -548,6 +674,7 @@ function renderHome(){
     renderHome();
   });
   document.getElementById("startWorkout").onclick=()=>{state.screen="workout";renderWorkout();};
+  document.getElementById("openPlan").onclick=()=>{state.screen="plan";renderPlan();};
   document.getElementById("openBody").onclick=()=>{state.screen="body";renderBody();};
   bindNav();
 }
@@ -1020,10 +1147,106 @@ function renderBody(){
   bindNav();
 }
 
+function renderPlan(){
+  const week=weeklyProgress();
+  const weeks=adherenceWeeks(8);
+  const month=monthData(state.planMonth);
+  const streak=completedWeekStreak();
+  const monthWorkouts=month.cells.filter(Boolean).reduce((sum,c)=>sum+c.workouts,0);
+
+  app.innerHTML=`<div class="app-shell">
+    <header class="topbar"><div><div class="brand">Plan semanal</div><div class="subtle">Objetivo, adherencia y calendario</div></div></header>
+    <main class="screen">
+      <section class="weekly-hero ${week.remaining===0?"completed":""}">
+        <div class="record-kicker">Esta semana</div>
+        <div class="weekly-hero-number">${week.count}<span> / ${week.goal}</span></div>
+        <h2>${week.remaining===0?"Objetivo cumplido":`${week.remaining} ${week.remaining===1?"sesión pendiente":"sesiones pendientes"}`}</h2>
+        <div class="weekly-progress-track large"><div style="width:${week.percentage}%"></div></div>
+        <p>${week.remaining===0?"La semana ya cumple el objetivo definido.":week.remaining===1?"Una sesión más completa el objetivo semanal.":`Distribuye las ${week.remaining} sesiones restantes según tu recuperación.`}</p>
+      </section>
+
+      <section class="plan-summary-grid">
+        <div class="metric-card"><span>Racha</span><strong>${streak}</strong><small>${streak===1?"semana cumplida":"semanas cumplidas"}</small></div>
+        <div class="metric-card"><span>Este mes</span><strong>${monthWorkouts}</strong><small>entrenamientos</small></div>
+      </section>
+
+      <section class="card">
+        <div class="card-heading-row">
+          <div><h2>Adherencia</h2><p class="subtle">Últimas ocho semanas</p></div>
+          <strong>${Math.round((weeks.filter(w=>w.met).length/weeks.length)*100)}%</strong>
+        </div>
+        <div class="adherence-chart">
+          ${weeks.map(w=>`
+            <div class="adherence-column">
+              <div class="adherence-bar-area">
+                <div class="adherence-bar ${w.met?"met":""}" style="height:${Math.max(8,w.percentage)}%"></div>
+              </div>
+              <small>${new Intl.DateTimeFormat("es-ES",{day:"2-digit",month:"2-digit"}).format(w.start)}</small>
+              <strong>${w.count}</strong>
+            </div>
+          `).join("")}
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="calendar-heading">
+          <button id="previousMonth" class="calendar-nav" aria-label="Mes anterior">‹</button>
+          <div><h2>${monthLabel(state.planMonth)}</h2><p class="subtle">${monthWorkouts} entrenamientos registrados</p></div>
+          <button id="nextMonth" class="calendar-nav" aria-label="Mes siguiente">›</button>
+        </div>
+        <div class="calendar-weekdays">${["L","M","X","J","V","S","D"].map(d=>`<span>${d}</span>`).join("")}</div>
+        <div class="calendar-grid">
+          ${month.cells.map(cell=>cell?`
+            <div class="calendar-day ${cell.today?"today":""} ${cell.workouts?"trained":""}">
+              <span>${cell.day}</span>
+              <div class="calendar-markers">
+                ${cell.workouts?`<i class="workout-marker">${cell.workouts>1?cell.workouts:""}</i>`:""}
+                ${cell.body?`<i class="body-marker"></i>`:""}
+              </div>
+            </div>
+          `:`<div class="calendar-day empty-day"></div>`).join("")}
+        </div>
+        <div class="calendar-legend">
+          <span><i class="workout-marker"></i> Entrenamiento</span>
+          <span><i class="body-marker"></i> Peso/cintura</span>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>Objetivo semanal</h2>
+        <p class="subtle">Elige cuántas sesiones quieres completar cada semana.</p>
+        <div class="weekly-goal-options">
+          ${[1,2,3,4,5,6,7].map(value=>`<button data-weekly-goal="${value}" class="${getWeeklyGoal()===value?"active":""}">${value}</button>`).join("")}
+        </div>
+      </section>
+    </main>${nav("")}
+  </div>`;
+
+  document.getElementById("previousMonth").onclick=()=>{
+    state.planMonth=shiftMonth(state.planMonth,-1);
+    renderPlan();
+  };
+  document.getElementById("nextMonth").onclick=()=>{
+    state.planMonth=shiftMonth(state.planMonth,1);
+    renderPlan();
+  };
+  document.querySelectorAll("[data-weekly-goal]").forEach(button=>button.onclick=()=>{
+    saveWeeklyGoal(Number(button.dataset.weeklyGoal));
+    toast("Objetivo semanal actualizado");
+    renderPlan();
+  });
+  bindNav();
+}
+
 function renderSettings(){
   app.innerHTML=`<div class="app-shell">
-    <header class="topbar"><div><div class="brand">Ajustes</div><div class="subtle">GymOS v1.8 · Datos y copias</div></div></header>
+    <header class="topbar"><div><div class="brand">Ajustes</div><div class="subtle">GymOS v1.9 · Datos y copias</div></div></header>
     <main class="screen">
+      <section class="card">
+        <h2>Objetivo y calendario</h2>
+        <p class="subtle">Consulta la adherencia semanal, la racha y el calendario de actividad.</p>
+        <button id="openPlanSettings" class="secondary full">Abrir plan semanal</button>
+      </section>
       <section class="card">
         <h2>Descanso entre series</h2>
         <p class="subtle">El temporizador se inicia al marcar una serie como completada.</p>
@@ -1061,6 +1284,7 @@ function renderSettings(){
       </section>
     </main>${nav("settings")}
   </div>`;
+  document.getElementById("openPlanSettings").onclick=()=>{state.screen="plan";renderPlan();};
   document.querySelectorAll("[data-rest-setting]").forEach(button=>button.onclick=()=>{
     saveRestSeconds(Number(button.dataset.restSetting));
     toast("Descanso actualizado");
@@ -1216,7 +1440,8 @@ function exportData(){
     selectedSession:state.selectedSession,
     routine:getRoutine(),
     body:getBodyHistory(),
-    restSeconds:getRestSeconds()
+    restSeconds:getRestSeconds(),
+    weeklyGoal:getWeeklyGoal()
   };
   const blob=new Blob([JSON.stringify(payload,null,2)],{type:"application/json"});
   const a=document.createElement("a");a.href=URL.createObjectURL(blob);
@@ -1232,6 +1457,7 @@ importFile.onchange=async()=>{
     saveHistory(data.history);
     if(Array.isArray(data.body)) saveBodyHistory(data.body);
     if([60,90,120,180].includes(Number(data.restSeconds))) saveRestSeconds(Number(data.restSeconds));
+    if(Number(data.weeklyGoal)>=1&&Number(data.weeklyGoal)<=7) saveWeeklyGoal(Number(data.weeklyGoal));
     if(data.routine){saveRoutine(data.routine);sessions=getRoutine();}
     ["A","B","C"].forEach(s=>{
       if(data.drafts&&data.drafts[s])localStorage.setItem(draftKey(s),JSON.stringify(data.drafts[s]));

@@ -1997,6 +1997,189 @@ function renderAuthConfigurationRequired(){
   </div>`;
 }
 
+function renderAuthLoading(){
+  app.innerHTML=`<div class="auth-gate-shell">
+    <main class="auth-gate-card auth-loading-card" aria-live="polite">
+      <div class="auth-logo">G</div>
+      <p>Comprobando tu acceso…</p>
+    </main>
+  </div>`;
+}
+
+function hasPasswordRecoveryUrl(){
+  const searchParams=new URLSearchParams(location.search);
+  const hashParams=new URLSearchParams(location.hash.replace(/^#/,""));
+  return searchParams.get("type")==="recovery"||hashParams.get("type")==="recovery";
+}
+
+function hasAuthCallbackUrl(){
+  return new URLSearchParams(location.search).has("code");
+}
+
+function friendlyAuthError(error,fallback="No se pudo completar la operación."){
+  const message=String(error?.message||"");
+  const normalized=message.toLowerCase();
+  if(normalized.includes("invalid login credentials")){
+    return "El correo o la contraseña no son correctos.";
+  }
+  if(normalized.includes("email rate limit exceeded")){
+    return "Has solicitado demasiados correos. Espera antes de volver a intentarlo.";
+  }
+  return message||fallback;
+}
+
+function showAccountMessage(type,text){
+  state.accountMessage={type,text};
+  const element=document.getElementById("accountMessage");
+  if(!element) return;
+  element.className=`verification-message ${type}`;
+  element.setAttribute("role",type==="error"?"alert":"status");
+  element.textContent=text;
+  element.hidden=false;
+}
+
+function showAccountManagementMessage(type,text){
+  state.accountManagementMessage={type,text};
+  const element=document.getElementById("accountManagementMessage");
+  if(!element) return;
+  element.className=`verification-message ${type}`;
+  element.setAttribute("role",type==="error"?"alert":"status");
+  element.textContent=text;
+  element.hidden=false;
+}
+
+function renderPasswordRecoveryGate(){
+  const message=state.passwordRecoveryMessage;
+  const sessionReady=Boolean(state.syncSession);
+  app.innerHTML=`<div class="auth-gate-shell">
+    <main class="auth-gate-card password-recovery-card">
+      <div class="auth-logo" aria-hidden="true">G</div>
+      <span class="section-kicker">RECUPERACIÓN DE CUENTA</span>
+      <h1>Crea una nueva contraseña</h1>
+      <p>Elige una contraseña nueva para tu cuenta de GymOS.</p>
+      <label><span>Nueva contraseña</span><input id="newPassword" type="password" autocomplete="new-password" minlength="8" ${sessionReady?"":"disabled"}></label>
+      <label><span>Confirmar contraseña</span><input id="confirmNewPassword" type="password" autocomplete="new-password" minlength="8" ${sessionReady?"":"disabled"}></label>
+      <div id="passwordRecoveryMessage" class="verification-message ${message?.type||""}" role="${message?.type==="error"?"alert":"status"}" ${message?"":"hidden"}>${message?esc(message.text):""}</div>
+      <button type="button" id="saveNewPassword" class="primary full" ${sessionReady?"":"disabled"}>${sessionReady?"Guardar nueva contraseña":"Preparando recuperación…"}</button>
+    </main>
+  </div>`;
+
+  document.getElementById("saveNewPassword").onclick=async event=>{
+    const password=document.getElementById("newPassword").value;
+    const confirmation=document.getElementById("confirmNewPassword").value;
+    const messageElement=document.getElementById("passwordRecoveryMessage");
+    const showMessage=(type,text)=>{
+      state.passwordRecoveryMessage={type,text};
+      messageElement.className=`verification-message ${type}`;
+      messageElement.setAttribute("role",type==="error"?"alert":"status");
+      messageElement.textContent=text;
+      messageElement.hidden=false;
+    };
+    if(password.length<8){
+      showMessage("error","La nueva contraseña debe tener al menos 8 caracteres.");
+      return;
+    }
+    if(password!==confirmation){
+      showMessage("error","Las contraseñas no coinciden.");
+      return;
+    }
+
+    const button=event.currentTarget;
+    button.disabled=true;
+    button.textContent="Guardando…";
+    try{
+      const client=getSupabaseClient();
+      if(!client||!state.syncSession) throw new Error("La sesión de recuperación no está disponible. Vuelve a abrir el enlace del correo.");
+      const {error}=await client.auth.updateUser({password});
+      if(error) throw error;
+
+      showMessage("success","Contraseña actualizada correctamente. Cerrando la sesión de recuperación…");
+      button.textContent="Contraseña guardada";
+      state.accountMessage={type:"success",text:"Contraseña actualizada correctamente. Inicia sesión con tu nueva contraseña."};
+      await client.auth.signOut();
+      state.passwordRecoveryMode=false;
+      state.passwordRecoveryMessage=null;
+      resolveAuthenticatedAppState(null);
+      history.replaceState({},document.title,GYMOS_PRODUCTION_URL);
+      state.accountMode="login";
+      state.screen="account";
+      render();
+    }catch(error){
+      showMessage("error",friendlyAuthError(error,"No se pudo guardar la nueva contraseña."));
+      button.disabled=false;
+      button.textContent="Guardar nueva contraseña";
+    }
+  };
+}
+
+function renderEmailVerificationGate(user=state.syncUser){
+  const message=state.emailVerificationMessage;
+  app.innerHTML=`<div class="auth-gate-shell">
+    <main class="auth-gate-card email-verification-card">
+      <div class="auth-logo" aria-hidden="true">✉</div>
+      <span class="section-kicker">VERIFICACIÓN NECESARIA</span>
+      <h1>Confirma tu correo</h1>
+      <p>Hemos enviado un enlace de confirmación a tu correo. Ábrelo para activar tu cuenta y acceder a GymOS.</p>
+      ${user?.email?`<div class="verification-email">${esc(user.email)}</div>`:""}
+      ${message?`<div class="verification-message ${message.type}" role="${message.type==="error"?"alert":"status"}">${esc(message.text)}</div>`:""}
+      <div class="verification-actions">
+        <button type="button" id="resendConfirmation" class="primary full">Reenviar correo de confirmación</button>
+        <button type="button" id="checkConfirmation" class="secondary full">Ya lo he confirmado</button>
+        <button type="button" id="verificationSignOut" class="text-button full">Cerrar sesión</button>
+      </div>
+    </main>
+  </div>`;
+
+  document.getElementById("resendConfirmation").onclick=async event=>{
+    const button=event.currentTarget;
+    button.disabled=true;
+    button.textContent="Reenviando…";
+    try{
+      await resendEmailConfirmation(user?.email);
+      state.emailVerificationMessage={type:"success",text:"Correo de confirmación reenviado. Revisa también la carpeta de spam."};
+    }catch(error){
+      state.emailVerificationMessage={
+        type:"error",
+        text:friendlyAuthError(error,"No se pudo reenviar el correo de confirmación.")
+      };
+    }
+    renderEmailVerificationGate(state.syncUser);
+  };
+  document.getElementById("checkConfirmation").onclick=async event=>{
+    const button=event.currentTarget;
+    button.disabled=true;
+    button.textContent="Comprobando…";
+    try{
+      const accessState=await refreshEmailConfirmation();
+      if(accessState==="authenticated"){
+        state.emailVerificationMessage=null;
+        state.screen="home";
+        render();
+        setTimeout(()=>autoSync("correo confirmado"),500);
+        return;
+      }
+      state.emailVerificationMessage={type:"error",text:"El correo todavía no aparece como confirmado. Abre el enlace recibido y vuelve a intentarlo."};
+    }catch(error){
+      state.emailVerificationMessage={type:"error",text:error?.message||"No se pudo comprobar la confirmación."};
+    }
+    renderEmailVerificationGate(state.syncUser||user);
+  };
+  document.getElementById("verificationSignOut").onclick=async event=>{
+    const button=event.currentTarget;
+    button.disabled=true;
+    try{
+      await signOutSync();
+    }catch(error){
+      console.error("GymOS sign out",error);
+    }
+    deactivateLocalUser();
+    state.emailVerificationMessage=null;
+    state.accountMode="login";
+    state.screen="account";
+    render();
+  };
+}
+
 let state = {
   screen: "home",
   selectedSession: localStorage.getItem("gymos:selectedSession") || nextSuggestedSession(),
@@ -2007,7 +2190,20 @@ let state = {
   selectedRecordExercise: null,
   editWorkoutId: null,
   planMonth: new Date().toISOString().slice(0,7),
+  authResolved: false,
+  authRedirectInProgress: hasAuthCallbackUrl(),
+  syncSession: null,
   syncUser: null,
+  accountProfile: null,
+  accountProfileUserId: null,
+  accountProfileStatus: "idle",
+  accountIdentityDirty: false,
+  accountPasswordEditorOpen: false,
+  accountManagementMessage: null,
+  passwordRecoveryMode: hasPasswordRecoveryUrl(),
+  passwordRecoveryMessage: null,
+  accountMessage: null,
+  emailVerificationMessage: null,
   syncStatus: navigator.onLine ? "local" : "offline",
   syncTimer: null,
   syncInProgress: false,
@@ -2151,14 +2347,14 @@ function markLocalUpdated(){
   if(state.applyingRemote) return;
   localStorage.setItem("gymos:updatedAt",new Date().toISOString());
   localStorage.setItem("gymos:syncPending","1");
-  if(state.syncUser){
+  if(isAppAuthenticated()){
     state.syncStatus=navigator.onLine?"pending":"offline";
     scheduleAutoSync();
   }
 }
 function scheduleAutoSync(delay=2500){
   clearTimeout(state.syncTimer);
-  if(!state.syncUser||state.syncInProgress) return;
+  if(!isAppAuthenticated()||state.syncInProgress) return;
   state.syncTimer=setTimeout(()=>autoSync("cambio local"),delay);
 }
 function formatSyncDate(value){
@@ -2262,7 +2458,7 @@ function buildSyncEnvelope(){
   return {schemaVersion:2,revision,deviceId:getDeviceId(),updatedAt:new Date().toISOString(),checksum:simpleChecksum(payload),payload};
 }
 function syncSecurityState(){
-  return {authenticated:Boolean(state.syncUser),deviceId:getDeviceId(),localRevision:getLocalRevision(),lastRemoteRevision:getLastRemoteRevision(),conflictMode:getSyncConflictPreference(),audit:getSyncAudit().slice(-10)};
+  return {authenticated:isAppAuthenticated(),deviceId:getDeviceId(),localRevision:getLocalRevision(),lastRemoteRevision:getLastRemoteRevision(),conflictMode:getSyncConflictPreference(),audit:getSyncAudit().slice(-10)};
 }
 async function chooseConflictResolution(remote){
   const mode=getSyncConflictPreference();
@@ -2271,11 +2467,128 @@ async function chooseConflictResolution(remote){
   return confirm("Hay cambios tanto en este dispositivo como en la nube.\n\nAceptar: usar la nube.\nCancelar: mantener este dispositivo.")?"remote":"local";
 }
 
+const ACCOUNT_AVATAR_OPTIONS=[
+  {key:"initials",label:"Iniciales",icon:null},
+  {key:"strength",label:"Fuerza",icon:"🏋"},
+  {key:"energy",label:"Energía",icon:"⚡"},
+  {key:"fire",label:"Constancia",icon:"🔥"},
+  {key:"heart",label:"Bienestar",icon:"♥"},
+  {key:"star",label:"Objetivo",icon:"★"}
+];
+function normalizeAccountAlias(value){
+  return String(value||"").trim().slice(0,30);
+}
+function accountAlias(){
+  return normalizeAccountAlias(state.accountProfile?.alias);
+}
 function accountDisplayName(user=state.syncUser){
-  return user?.user_metadata?.full_name||
-    user?.user_metadata?.name||
+  return accountAlias()||
+    String(getOnboardingProfile()?.name||"").trim()||
     user?.email?.split("@")[0]||
     "Usuario";
+}
+function accountInitials(alias=accountDisplayName()){
+  const parts=String(alias||"").trim().split(/\s+/).filter(Boolean);
+  return (parts.length>1?`${parts[0][0]}${parts[parts.length-1][0]}`:parts[0]?.slice(0,2)||"G").toUpperCase();
+}
+function validAccountAvatarKey(value){
+  return ACCOUNT_AVATAR_OPTIONS.some(option=>option.key===value)?value:"initials";
+}
+function accountAvatarContent(key=state.accountProfile?.avatarKey,alias=accountDisplayName()){
+  const normalized=validAccountAvatarKey(key);
+  const option=ACCOUNT_AVATAR_OPTIONS.find(item=>item.key===normalized);
+  return option?.icon||accountInitials(alias);
+}
+function updateVisibleAccountIdentity(){
+  document.querySelectorAll("[data-account-display-name]").forEach(element=>element.textContent=accountDisplayName());
+  document.querySelectorAll("[data-account-avatar]").forEach(element=>element.textContent=accountAvatarContent());
+}
+function scheduleAccountProfileLoad(userId){
+  if(!userId||state.accountProfileUserId===userId&&state.accountProfileStatus!=="error") return;
+  if(state.accountProfileUserId!==userId){
+    state.accountProfile=null;
+    state.accountManagementMessage=null;
+    state.accountIdentityDirty=false;
+    state.accountPasswordEditorOpen=false;
+  }
+  state.accountProfileUserId=userId;
+  state.accountProfileStatus="loading";
+  queueMicrotask(()=>loadAccountIdentityProfile(userId));
+}
+async function loadAccountIdentityProfile(userId=state.syncUser?.id){
+  const client=getSupabaseClient();
+  if(!client||!userId||!isAppAuthenticated()) return null;
+  const {data,error}=await client.from("profiles").select("alias,avatar_key").eq("id",userId).maybeSingle();
+  if(state.syncUser?.id!==userId) return null;
+  if(error){
+    state.accountProfileStatus="error";
+    if(state.screen==="account"){
+      showAccountManagementMessage("error","No se pudo cargar el alias y el avatar. Comprueba que has ejecutado supabase-account-profile.sql.");
+    }
+    return null;
+  }
+  state.accountProfile={
+    alias:normalizeAccountAlias(data?.alias),
+    avatarKey:validAccountAvatarKey(data?.avatar_key)
+  };
+  state.accountProfileStatus="loaded";
+  updateVisibleAccountIdentity();
+  if(state.screen==="account"&&!state.accountIdentityDirty) renderAccount();
+  return state.accountProfile;
+}
+async function saveAccountIdentityProfile(alias,avatarKey){
+  const client=getSupabaseClient();
+  if(!client||!isAppAuthenticated()) throw new Error("No hay una cuenta confirmada.");
+  const normalizedAlias=normalizeAccountAlias(alias);
+  const normalizedAvatar=validAccountAvatarKey(avatarKey);
+  const {error}=await client.from("profiles").upsert({
+    id:state.syncUser.id,
+    alias:normalizedAlias||null,
+    avatar_key:normalizedAvatar,
+    updated_at:new Date().toISOString()
+  },{onConflict:"id"});
+  if(error) throw error;
+  state.accountProfile={alias:normalizedAlias,avatarKey:normalizedAvatar};
+  state.accountProfileStatus="loaded";
+  state.accountIdentityDirty=false;
+  updateVisibleAccountIdentity();
+  return state.accountProfile;
+}
+function isEmailConfirmed(user){
+  return Boolean(user?.email_confirmed_at||user?.confirmed_at);
+}
+function isAppAuthenticated(){
+  return Boolean(!state.passwordRecoveryMode&&state.syncSession&&isEmailConfirmed(state.syncUser));
+}
+function resolveAuthenticatedAppState(session,pendingUser=null){
+  const previousAuthorizedUserId=isAppAuthenticated()?state.syncUser?.id:null;
+  const user=session?.user||(pendingUser&&!isEmailConfirmed(pendingUser)?pendingUser:null);
+
+  state.syncSession=session||null;
+  state.syncUser=user;
+  state.authResolved=true;
+  state.syncStatus=session&&isEmailConfirmed(user)?"connected":"configured";
+
+  if(state.passwordRecoveryMode){
+    state.syncStatus="configured";
+    return "password-recovery";
+  }
+  if(session&&isEmailConfirmed(user)){
+    if(user.id!==previousAuthorizedUserId) activateLocalUser(user.id);
+    scheduleAccountProfileLoad(user.id);
+    return "authenticated";
+  }
+  if(previousAuthorizedUserId) deactivateLocalUser();
+  if(!user){
+    state.accountProfile=null;
+    state.accountProfileUserId=null;
+    state.accountProfileStatus="idle";
+    state.accountIdentityDirty=false;
+    state.accountManagementMessage=null;
+    state.accountPasswordEditorOpen=false;
+  }
+  if(user&&!isEmailConfirmed(user)) return "email-verification";
+  return "signed-out";
 }
 function hasLocalUserData(){
   return getHistory().length>0||
@@ -2302,7 +2615,7 @@ async function signUpWithPassword(email,password,fullName){
     }
   });
   if(error) throw error;
-  state.syncUser=data.user||null;
+  resolveAuthenticatedAppState(data.session,data.user);
   return data;
 }
 async function signInWithPassword(email,password){
@@ -2310,8 +2623,7 @@ async function signInWithPassword(email,password){
   if(!client) throw new Error("Configura Supabase antes de iniciar sesión.");
   const {data,error}=await client.auth.signInWithPassword({email,password});
   if(error) throw error;
-  state.syncUser=data.user||null;
-  state.syncStatus="connected";
+  resolveAuthenticatedAppState(data.session);
   return data;
 }
 async function signInWithGoogle(){
@@ -2326,28 +2638,20 @@ async function signInWithGoogle(){
 async function requestPasswordReset(email){
   const client=getSupabaseClient();
   if(!client) throw new Error("Configura Supabase antes de recuperar la contraseña.");
-  const {error}=await client.auth.resetPasswordForEmail(email,{
-    redirectTo:GYMOS_PRODUCTION_URL
+  const {error}=await client.auth.resetPasswordForEmail(email, {
+    redirectTo: "https://apl00028.github.io/mi-rutina/"
   });
   if(error) throw error;
 }
-async function updateAccountProfile(fullName){
+async function updateAccountPassword(newPassword){
   const client=getSupabaseClient();
-  if(!client) throw new Error("Supabase no está configurado.");
-  const {data,error}=await client.auth.updateUser({
-    data:{full_name:fullName.trim()}
-  });
+  if(!client||!isAppAuthenticated()) throw new Error("No hay una cuenta confirmada.");
+  const {data,error}=await client.auth.updateUser({password:newPassword});
   if(error) throw error;
-  state.syncUser=data.user;
-  await client.from("profiles").upsert({
-    id:data.user.id,
-    display_name:fullName.trim(),
-    updated_at:new Date().toISOString()
-  },{onConflict:"id"});
   return data.user;
 }
 async function migrateLocalDataToAccount(){
-  if(!state.syncUser) throw new Error("Inicia sesión antes de migrar los datos.");
+  if(!isAppAuthenticated()) throw new Error("Confirma tu correo antes de migrar los datos.");
   const result=await syncNow({forceUpload:true});
   setLocalMigrationStatus("completed");
   localStorage.setItem("gymos:accountMigrationAt",new Date().toISOString());
@@ -2355,7 +2659,7 @@ async function migrateLocalDataToAccount(){
 }
 async function deleteCloudData(){
   const client=getSupabaseClient();
-  if(!client||!state.syncUser) throw new Error("No hay una cuenta conectada.");
+  if(!client||!isAppAuthenticated()) throw new Error("No hay una cuenta confirmada.");
   const userId=state.syncUser.id;
   const {error}=await client.from("gymos_sync").delete().eq("user_id",userId);
   if(error) throw error;
@@ -2364,7 +2668,7 @@ async function deleteCloudData(){
 }
 async function requestAccountDeletion(){
   const client=getSupabaseClient();
-  if(!client||!state.syncUser) throw new Error("No hay una cuenta conectada.");
+  if(!client||!isAppAuthenticated()) throw new Error("No hay una cuenta confirmada.");
   const {error}=await client.from("account_deletion_requests").insert({
     user_id:state.syncUser.id,
     requested_at:new Date().toISOString(),
@@ -2374,31 +2678,63 @@ async function requestAccountDeletion(){
 }
 function accountSecuritySummary(){
   return {
-    authenticated:Boolean(state.syncUser),
+    authenticated:isAppAuthenticated(),
     userId:state.syncUser?.id||null,
-    emailVerified:Boolean(state.syncUser?.email_confirmed_at),
+    emailVerified:isEmailConfirmed(state.syncUser),
     rlsRequired:true,
     publicKeyConfigured:Boolean(getSyncConfig().key),
     secretKeyInClient:false
   };
 }
 
+let supabaseClient=null;
+let supabaseClientConfig="";
+let authStateSubscription=null;
 function getSupabaseClient(){
   const config=getSyncConfig();
   if(!config.url||!config.key) return null;
   if(typeof supabase==="undefined") return null;
+  const clientConfig=`${config.url}|${config.key}`;
+  if(supabaseClient&&supabaseClientConfig===clientConfig) return supabaseClient;
   try{
-    return supabase.createClient(config.url,config.key,{
+    authStateSubscription?.unsubscribe?.();
+    authStateSubscription=null;
+    supabaseClient=supabase.createClient(config.url,config.key,{
       auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}
     });
+    supabaseClientConfig=clientConfig;
+    ensureAuthStateListener(supabaseClient);
+    return supabaseClient;
   }catch(error){
     return null;
   }
 }
+function ensureAuthStateListener(client){
+  if(authStateSubscription) return;
+  const {data:listener}=client.auth.onAuthStateChange((event,session)=>{
+    if(event==="PASSWORD_RECOVERY"){
+      if(isAppAuthenticated()) deactivateLocalUser();
+      state.passwordRecoveryMode=true;
+      state.passwordRecoveryMessage=null;
+    }
+    resolveAuthenticatedAppState(session);
+    if(event==="SIGNED_OUT"&&!state.passwordRecoveryMode){
+      state.screen="account";
+    }
+    updateSyncIndicators();
+    queueMicrotask(()=>render());
+  });
+  authStateSubscription=listener.subscription;
+}
 async function refreshSyncSession(){
   const client=getSupabaseClient();
-  if(!client){state.syncUser=null;state.syncStatus="local";return null;}
+  if(!client){
+    resolveAuthenticatedAppState(null);
+    state.syncStatus="local";
+    return null;
+  }
   try{
+    ensureAuthStateListener(client);
     const params=new URLSearchParams(location.search);
     const code=params.get("code");
     if(code){
@@ -2408,31 +2744,37 @@ async function refreshSyncSession(){
     }
     const {data,error}=await client.auth.getSession();
     if(error) throw error;
-    state.syncUser=data.session?.user||null;
-    state.syncStatus=state.syncUser?"connected":"configured";
-    client.auth.onAuthStateChange((event,session)=>{
-      const previousUserId=state.syncUser?.id||null;
-      state.syncUser=session?.user||null;
-      state.syncStatus=state.syncUser?"connected":"configured";
-
-      if(state.syncUser&&state.syncUser.id!==previousUserId){
-        activateLocalUser(state.syncUser.id);
-      }
-      if(event==="SIGNED_OUT"){
-        deactivateLocalUser();
-        state.screen="account";
-      }
-
-      updateSyncIndicators();
-      if(event==="SIGNED_IN"||event==="SIGNED_OUT") queueMicrotask(()=>render());
-    });
+    state.authRedirectInProgress=false;
+    resolveAuthenticatedAppState(data.session);
     return state.syncUser;
   }catch(error){
     console.error("GymOS auth error",error);
-    state.syncUser=null;
+    state.authRedirectInProgress=false;
+    resolveAuthenticatedAppState(null);
     state.syncStatus="error";
     return null;
   }
+}
+async function resendEmailConfirmation(email){
+  const client=getSupabaseClient();
+  if(!client) throw new Error("Supabase no está configurado.");
+  if(!email) throw new Error("No se ha podido identificar el correo de la cuenta.");
+  const {error}=await client.auth.resend({type:"signup",email});
+  if(error) throw error;
+}
+async function refreshEmailConfirmation(){
+  const client=getSupabaseClient();
+  if(!client) throw new Error("Supabase no está configurado.");
+  const {data:refreshData,error:refreshError}=await client.auth.refreshSession();
+  if(refreshError) throw refreshError;
+  const {data:userData,error:userError}=await client.auth.getUser();
+  if(userError) throw userError;
+  const session=refreshData.session
+    ?{...refreshData.session,user:userData.user}
+    :state.syncSession
+      ?{...state.syncSession,user:userData.user}
+      :null;
+  return resolveAuthenticatedAppState(session,userData.user);
 }
 async function sendMagicLink(email){
   const client=getSupabaseClient();
@@ -2447,12 +2789,11 @@ async function sendMagicLink(email){
 async function signOutSync(){
   const client=getSupabaseClient();
   if(client) await client.auth.signOut();
-  state.syncUser=null;
-  state.syncStatus="configured";
+  resolveAuthenticatedAppState(null);
 }
 async function syncNow(options={}){
   const client=getSupabaseClient();
-  if(!client||!state.syncUser) throw new Error("No hay una cuenta conectada.");
+  if(!client||!isAppAuthenticated()) throw new Error("Confirma tu correo antes de sincronizar.");
   state.syncStatus="syncing";updateSyncIndicators();addSyncAudit("sync","started");
   try{
     const {data:remote,error:readError}=await client.from("gymos_sync").select("payload,revision,device_id,updated_at,checksum").eq("user_id",state.syncUser.id).maybeSingle();
@@ -2480,7 +2821,7 @@ async function syncNow(options={}){
 }
 
 async function autoSync(reason="automática"){
-  if(!state.syncUser||!navigator.onLine||state.syncInProgress) return;
+  if(!isAppAuthenticated()||!navigator.onLine||state.syncInProgress) return;
   await syncNow({silent:true});
 }
 function updateSyncIndicators(){
@@ -2499,7 +2840,7 @@ function syncStatusLabel(){
   return "Solo en este dispositivo";
 }
 function syncBadge(){
-  if(!state.syncUser) return "";
+  if(!isAppAuthenticated()) return "";
   return `<button class="sync-badge" id="openSyncSettings" type="button">
     <span class="sync-dot ${state.syncStatus}" data-sync-dot></span>
     <span data-sync-label>${syncStatusLabel()}</span>
@@ -3183,6 +3524,10 @@ function onboardingSafetyMessage(profile){
   return "Empieza con cargas cómodas, deja 3–4 repeticiones en reserva y prioriza una técnica estable durante las primeras semanas.";
 }
 function renderOnboarding(){
+  if(!isAppAuthenticated()){
+    render();
+    return;
+  }
   const p=ensureOnboardingDraft();
   const step=Math.max(1,Math.min(5,Number(state.onboardingStep)||1));
   const progress=step*20;
@@ -3435,14 +3780,33 @@ function render(){
     return;
   }
 
-  if(AUTH_REQUIRED&&!state.syncUser){
-    state.screen="account";
-    renderAccount();
-  setTimeout(bindGlobalAppearanceControls,0);
+  if(state.passwordRecoveryMode){
+    renderPasswordRecoveryGate();
     return;
   }
 
-  if(state.syncUser&&!onboardingCompleted()&&!getOnboardingProfile()?.onboardingDismissed&&state.screen!=="account"){
+  if(state.authRedirectInProgress||!state.authResolved){
+    renderAuthLoading();
+    return;
+  }
+
+  if(AUTH_REQUIRED&&!state.syncSession){
+    if(state.syncUser&&!isEmailConfirmed(state.syncUser)){
+      renderEmailVerificationGate(state.syncUser);
+      return;
+    }
+    state.screen="account";
+    renderAccount();
+    setTimeout(bindGlobalAppearanceControls,0);
+    return;
+  }
+
+  if(AUTH_REQUIRED&&!isEmailConfirmed(state.syncUser)){
+    renderEmailVerificationGate(state.syncUser);
+    return;
+  }
+
+  if(isAppAuthenticated()&&!onboardingCompleted()&&!getOnboardingProfile()?.onboardingDismissed&&state.screen!=="account"){
     state.screen="onboarding";
     renderOnboarding();
     return;
@@ -3484,7 +3848,7 @@ function render(){
 function renderHome(){
   const h=getHistory(), last=h[0];
   app.innerHTML=`<div class="app-shell">
-    <header class="topbar home-topbar"><div><div class="eyebrow">TU ENTRENAMIENTO</div><div class="brand">GymOS</div></div><div class="home-header-actions"><button id="homeThemeToggle" class="icon-button" aria-label="Cambiar tema">${resolvedTheme()==="dark"?"☀":"◐"}</button>${syncBadge()}</div></header>
+    <header class="topbar home-topbar"><div><div class="eyebrow">TU ENTRENAMIENTO</div><div class="brand">GymOS</div><div class="subtle">Hola, <span data-account-display-name>${esc(accountDisplayName())}</span></div></div><div class="home-header-actions"><button id="homeThemeToggle" class="icon-button" aria-label="Cambiar tema">${resolvedTheme()==="dark"?"☀":"◐"}</button>${syncBadge()}</div></header>
     <main class="screen">
       <section class="hero">
         <div class="hero-label">Hoy toca</div>
@@ -6271,6 +6635,12 @@ function renderAccount(){
   const user=state.syncUser;
   const security=accountSecuritySummary();
   const migrationNeeded=Boolean(user&&hasLocalUserData()&&localMigrationStatus()!=="completed");
+  const alias=accountAlias();
+  const avatarKey=validAccountAvatarKey(state.accountProfile?.avatarKey);
+  const createdAt=user?.created_at?new Date(user.created_at):null;
+  const createdAtLabel=createdAt&&!Number.isNaN(createdAt.getTime())
+    ?createdAt.toLocaleDateString("es-ES",{day:"2-digit",month:"long",year:"numeric"})
+    :"No disponible";
 
   app.innerHTML=`<div class="app-shell">
     <header class="topbar">
@@ -6281,14 +6651,15 @@ function renderAccount(){
     <main class="screen">
       ${user?`
         <section class="card account-profile-card">
-          <div class="large-account-avatar">${esc(accountDisplayName(user).slice(0,1).toUpperCase())}</div>
+          <div class="large-account-avatar" data-account-avatar>${esc(accountAvatarContent(avatarKey))}</div>
           <div>
             <span class="section-kicker">SESIÓN ACTIVA</span>
-            <h1>${esc(accountDisplayName(user))}</h1>
+            <h1 data-account-display-name>${esc(accountDisplayName(user))}</h1>
             <p>${esc(user.email||"")}</p>
             <small>ID interno: ${esc(user.id.slice(0,8))}…</small>
           </div>
         </section>
+        <div id="accountManagementMessage" class="verification-message ${state.accountManagementMessage?.type||""}" role="${state.accountManagementMessage?.type==="error"?"alert":"status"}" ${state.accountManagementMessage?"":"hidden"}>${state.accountManagementMessage?esc(state.accountManagementMessage.text):""}</div>
 
         ${migrationNeeded?`
         <section class="card migration-card">
@@ -6298,11 +6669,44 @@ function renderAccount(){
           <button id="migrateLocalData" class="primary full">Asociar mis datos a esta cuenta</button>
         </section>`:""}
 
-        <section class="card">
-          <h2>Perfil</h2>
-          <label><span>Nombre visible</span><input id="accountFullName" type="text" value="${esc(accountDisplayName(user))}" maxlength="80"></label>
-          <label><span>Correo</span><input type="email" value="${esc(user.email||"")}" disabled></label>
-          <button id="saveAccountProfile" class="secondary full">Guardar perfil</button>
+        <section class="card account-identity-card">
+          <div class="card-heading-row">
+            <div><h2>Identidad visible</h2><p class="subtle">El alias y el avatar se sincronizan entre tus dispositivos.</p></div>
+            <div class="account-avatar-preview" id="accountAvatarPreview">${esc(accountAvatarContent(avatarKey))}</div>
+          </div>
+          <label><span>Alias</span><input id="accountAlias" type="text" value="${esc(alias)}" maxlength="30" autocomplete="nickname" placeholder="${esc(accountDisplayName(user))}"></label>
+          <span class="field-label">Elige un avatar</span>
+          <div class="account-avatar-grid">
+            ${ACCOUNT_AVATAR_OPTIONS.map(option=>`<button type="button" class="account-avatar-option ${option.key===avatarKey?"selected":""}" data-avatar-key="${option.key}" aria-pressed="${option.key===avatarKey}">
+              <span>${esc(option.icon||accountInitials(alias||accountDisplayName(user)))}</span><small>${esc(option.label)}</small>
+            </button>`).join("")}
+          </div>
+          ${state.accountProfileStatus==="loading"?`<p class="subtle account-profile-status">Cargando perfil de cuenta…</p>`:""}
+          ${state.accountProfileStatus==="error"?`<p class="verification-message error account-profile-status">No se pudo cargar el perfil. Ejecuta <strong>supabase-account-profile.sql</strong> en Supabase y vuelve a iniciar sesión.</p>`:""}
+          <button id="saveAccountProfile" class="primary full">Guardar cambios</button>
+        </section>
+
+        <section class="card account-data-card">
+          <h2>Datos de la cuenta</h2>
+          <div class="account-data-list">
+            <div><span>Correo electrónico</span><strong>${esc(user.email||"No disponible")}</strong></div>
+            <div><span>Correo verificado</span><strong class="${isEmailConfirmed(user)?"verified":"pending"}">${isEmailConfirmed(user)?"Sí":"No"}</strong></div>
+            <div><span>Cuenta creada</span><strong>${esc(createdAtLabel)}</strong></div>
+          </div>
+        </section>
+
+        <section class="card account-password-card">
+          <h2>Cambiar contraseña</h2>
+          <p class="subtle">La sesión actual se mantendrá abierta después del cambio.</p>
+          <button type="button" id="openAccountPassword" class="secondary full" ${state.accountPasswordEditorOpen?"hidden":""}>Cambiar contraseña</button>
+          <div id="accountPasswordForm" class="account-password-form" ${state.accountPasswordEditorOpen?"":"hidden"}>
+            <label><span>Nueva contraseña</span><input id="accountNewPassword" type="password" autocomplete="new-password" minlength="8"></label>
+            <label><span>Confirmar nueva contraseña</span><input id="accountConfirmPassword" type="password" autocomplete="new-password" minlength="8"></label>
+            <div class="settings-actions">
+              <button type="button" id="cancelAccountPassword" class="secondary">Cancelar</button>
+              <button type="button" id="saveAccountPassword" class="primary">Guardar contraseña</button>
+            </div>
+          </div>
         </section>
 
         <section class="card">
@@ -6327,7 +6731,7 @@ function renderAccount(){
         </section>
 
         <section class="card">
-          <h2>Datos de la cuenta</h2>
+          <h2>Copia y sincronización</h2>
           <div class="settings-actions">
             <button id="accountSyncNow" class="primary">Sincronizar ahora</button>
             <button id="accountExport" class="secondary">Exportar copia</button>
@@ -6357,6 +6761,7 @@ function renderAccount(){
             <button data-account-mode="login" class="${state.accountMode==="login"?"active":""}">Iniciar sesión</button>
             <button data-account-mode="signup" class="${state.accountMode==="signup"?"active":""}">Crear cuenta</button>
           </div>
+          <div id="accountMessage" class="verification-message ${state.accountMessage?.type||""}" role="${state.accountMessage?.type==="error"?"alert":"status"}" ${state.accountMessage?"":"hidden"}>${state.accountMessage?esc(state.accountMessage.text):""}</div>
           ${state.accountMode==="signup"?`
             <label><span>Nombre</span><input id="accountName" type="text" autocomplete="name" maxlength="80" placeholder="Tu nombre"></label>
           `:""}
@@ -6379,9 +6784,28 @@ function renderAccount(){
   </div>`;
 
   const backAccount=document.getElementById("backAccount");
-  if(backAccount) backAccount.onclick=()=>{state.screen="settings";renderSettings();};
+  if(backAccount) backAccount.onclick=()=>{state.accountIdentityDirty=false;state.screen="settings";renderSettings();};
 
   if(user){
+    document.querySelectorAll("[data-avatar-key]").forEach(button=>button.onclick=()=>{
+      state.accountIdentityDirty=true;
+      document.querySelectorAll("[data-avatar-key]").forEach(option=>{
+        const selected=option===button;
+        option.classList.toggle("selected",selected);
+        option.setAttribute("aria-pressed",String(selected));
+      });
+      const aliasValue=normalizeAccountAlias(document.getElementById("accountAlias").value)||accountDisplayName(user);
+      document.getElementById("accountAvatarPreview").textContent=accountAvatarContent(button.dataset.avatarKey,aliasValue);
+    });
+    document.getElementById("accountAlias").oninput=event=>{
+      state.accountIdentityDirty=true;
+      const initialsButton=document.querySelector('[data-avatar-key="initials"] span');
+      const displayValue=normalizeAccountAlias(event.target.value)||accountDisplayName(user);
+      if(initialsButton) initialsButton.textContent=accountInitials(displayValue);
+      if(document.querySelector('[data-avatar-key="initials"]')?.classList.contains("selected")){
+        document.getElementById("accountAvatarPreview").textContent=accountInitials(displayValue);
+      }
+    };
     const migrateButton=document.getElementById("migrateLocalData");
     if(migrateButton) migrateButton.onclick=async()=>{
       migrateButton.disabled=true;
@@ -6391,7 +6815,7 @@ function renderAccount(){
         toast("Datos asociados a tu cuenta");
         renderAccount();
       }catch(error){
-        alert(error.message);
+        showAccountManagementMessage("error",error?.message||"No se pudieron asociar los datos.");
         migrateButton.disabled=false;
         migrateButton.textContent="Asociar mis datos a esta cuenta";
       }
@@ -6402,67 +6826,136 @@ function renderAccount(){
       const url=URL.createObjectURL(blob);const link=document.createElement("a");link.href=url;link.download=`gymos-sync-audit-${new Date().toISOString().slice(0,10)}.json`;link.click();URL.revokeObjectURL(url);
     };
     document.getElementById("saveAccountProfile").onclick=async()=>{
+      const button=document.getElementById("saveAccountProfile");
+      const aliasInput=document.getElementById("accountAlias");
+      const selectedAvatar=document.querySelector("[data-avatar-key].selected")?.dataset.avatarKey||"initials";
+      const normalizedAlias=normalizeAccountAlias(aliasInput.value);
+      aliasInput.value=normalizedAlias;
+      button.disabled=true;
+      button.textContent="Guardando…";
       try{
-        await updateAccountProfile(document.getElementById("accountFullName").value);
-        toast("Perfil actualizado");
+        await saveAccountIdentityProfile(normalizedAlias,selectedAvatar);
+        state.accountManagementMessage={type:"success",text:"Alias y avatar guardados correctamente."};
         renderAccount();
-      }catch(error){alert(error.message);}
+      }catch(error){
+        showAccountManagementMessage("error",error?.message||"No se pudieron guardar el alias y el avatar.");
+        button.disabled=false;
+        button.textContent="Guardar cambios";
+      }
+    };
+    const openPasswordButton=document.getElementById("openAccountPassword");
+    const passwordForm=document.getElementById("accountPasswordForm");
+    openPasswordButton.onclick=()=>{
+      state.accountPasswordEditorOpen=true;
+      openPasswordButton.hidden=true;
+      passwordForm.hidden=false;
+      document.getElementById("accountNewPassword").focus();
+    };
+    document.getElementById("cancelAccountPassword").onclick=()=>{
+      state.accountPasswordEditorOpen=false;
+      document.getElementById("accountNewPassword").value="";
+      document.getElementById("accountConfirmPassword").value="";
+      passwordForm.hidden=true;
+      openPasswordButton.hidden=false;
+    };
+    document.getElementById("saveAccountPassword").onclick=async()=>{
+      const password=document.getElementById("accountNewPassword").value;
+      const confirmation=document.getElementById("accountConfirmPassword").value;
+      if(password.length<8){
+        showAccountManagementMessage("error","La nueva contraseña debe tener al menos 8 caracteres.");
+        return;
+      }
+      if(password!==confirmation){
+        showAccountManagementMessage("error","Las contraseñas no coinciden.");
+        return;
+      }
+      const button=document.getElementById("saveAccountPassword");
+      button.disabled=true;
+      button.textContent="Guardando…";
+      try{
+        await updateAccountPassword(password);
+        state.accountPasswordEditorOpen=false;
+        document.getElementById("accountNewPassword").value="";
+        document.getElementById("accountConfirmPassword").value="";
+        passwordForm.hidden=true;
+        openPasswordButton.hidden=false;
+        button.disabled=false;
+        button.textContent="Guardar contraseña";
+        showAccountManagementMessage("success","Contraseña actualizada correctamente. Tu sesión continúa abierta.");
+      }catch(error){
+        showAccountManagementMessage("error",friendlyAuthError(error,"No se pudo cambiar la contraseña."));
+        button.disabled=false;
+        button.textContent="Guardar contraseña";
+      }
     };
     document.getElementById("accountSyncNow").onclick=async()=>{
       try{await syncNow();toast("Sincronización completada");renderAccount();}
-      catch(error){alert(error.message);}
+      catch(error){showAccountManagementMessage("error",error?.message||"No se pudo sincronizar.");}
     };
     document.getElementById("accountExport").onclick=()=>exportBackup();
     document.getElementById("deleteCloudData").onclick=async()=>{
       if(!confirm("¿Borrar la copia de tus datos alojada en la nube? Los datos del dispositivo no se borrarán.")) return;
       try{await deleteCloudData();toast("Datos de la nube eliminados");}
-      catch(error){alert(error.message);}
+      catch(error){showAccountManagementMessage("error",error?.message||"No se pudieron borrar los datos de la nube.");}
     };
     document.getElementById("requestAccountDeletion").onclick=async()=>{
       if(!confirm("¿Registrar una solicitud de eliminación completa de tu cuenta?")) return;
       try{
         await requestAccountDeletion();
         toast("Solicitud registrada");
-      }catch(error){alert(error.message);}
+      }catch(error){showAccountManagementMessage("error",error?.message||"No se pudo registrar la solicitud.");}
     };
     document.getElementById("accountSignOut").onclick=async()=>{
+      if(!confirm("¿Quieres cerrar la sesión de GymOS?")) return;
       if(state.syncUser) saveCurrentUserVault(state.syncUser.id);
-      await signOutSync();
-      deactivateLocalUser();
-      state.accountMode="login";
-      state.screen="account";
-      render();
+      try{
+        await signOutSync();
+        deactivateLocalUser();
+        state.accountMode="login";
+        state.screen="account";
+        render();
+      }catch(error){
+        showAccountManagementMessage("error",error?.message||"No se pudo cerrar la sesión.");
+      }
     };
   }else{
     document.querySelectorAll("[data-account-mode]").forEach(button=>button.onclick=()=>{
       state.accountMode=button.dataset.accountMode;
+      state.accountMessage=null;
       renderAccount();
     });
     document.getElementById("accountSubmit").onclick=async()=>{
       const email=document.getElementById("accountEmail").value.trim();
       const password=document.getElementById("accountPassword").value;
-      if(!email) return alert("Introduce tu correo.");
-      if(password.length<8) return alert("La contraseña debe tener al menos 8 caracteres.");
+      if(!email){
+        showAccountMessage("error","Introduce tu correo.");
+        return;
+      }
+      if(password.length<8){
+        showAccountMessage("error","La contraseña debe tener al menos 8 caracteres.");
+        return;
+      }
       try{
         saveSyncConfig({...getSyncConfig(),email});
         if(state.accountMode==="signup"){
           const consent=document.getElementById("accountConsent");
-          if(!consent.checked) return alert("Debes aceptar el almacenamiento de tus datos para crear la cuenta.");
-          const name=document.getElementById("accountName").value.trim();
-          if(!name) return alert("Introduce tu nombre.");
-          const result=await signUpWithPassword(email,password,name);
-          if(result.session){
-            await refreshSyncSession();
-            if(state.syncUser) activateLocalUser(state.syncUser.id);
-            toast("Cuenta creada");
-          }else{
-            alert("Cuenta creada. Revisa tu correo para verificarla.");
+          if(!consent.checked){
+            showAccountMessage("error","Debes aceptar el almacenamiento de tus datos para crear la cuenta.");
+            return;
           }
+          const name=document.getElementById("accountName").value.trim();
+          if(!name){
+            showAccountMessage("error","Introduce tu nombre.");
+            return;
+          }
+          await signUpWithPassword(email,password,name);
+          state.accountMessage=null;
+          state.emailVerificationMessage={type:"success",text:"Cuenta creada. Revisa tu correo y abre el enlace de confirmación."};
+          toast("Cuenta creada");
         }else{
           await signInWithPassword(email,password);
-          await refreshSyncSession();
-          if(state.syncUser) activateLocalUser(state.syncUser.id);
-          toast("Sesión iniciada");
+          state.accountMessage=null;
+          toast(isAppAuthenticated()?"Sesión iniciada":"Confirma tu correo para continuar");
         }
         if(state.syncUser){
           state.screen="home";
@@ -6470,17 +6963,24 @@ function renderAccount(){
         }else{
           renderAccount();
         }
-      }catch(error){alert(error.message);}
+      }catch(error){
+        showAccountMessage("error",friendlyAuthError(error,"No se pudo completar el acceso."));
+      }
     };
 
     const resetButton=document.getElementById("accountResetPassword");
     if(resetButton) resetButton.onclick=async()=>{
       const email=document.getElementById("accountEmail").value.trim();
-      if(!email) return alert("Introduce primero tu correo.");
+      if(!email){
+        showAccountMessage("error","Introduce primero tu correo.");
+        return;
+      }
       try{
         await requestPasswordReset(email);
-        alert("Te hemos enviado un correo para restablecer la contraseña.");
-      }catch(error){alert(error.message);}
+        showAccountMessage("success","Te hemos enviado un correo para restablecer la contraseña.");
+      }catch(error){
+        showAccountMessage("error",friendlyAuthError(error,"No se pudo enviar el correo de recuperación."));
+      }
     };
   }
 }
@@ -6491,10 +6991,10 @@ function renderSettings(){
     <main class="screen">
       <section class="card account-entry-card">
         <div class="account-entry-main">
-          <div class="account-avatar">${state.syncUser?esc(accountDisplayName().slice(0,1).toUpperCase()):"○"}</div>
+          <div class="account-avatar" ${state.syncUser?"data-account-avatar":""}>${state.syncUser?esc(accountAvatarContent()):"○"}</div>
           <div>
             <span class="section-kicker">CUENTA GYMOS</span>
-            <h2>${state.syncUser?`Hola, ${esc(accountDisplayName())}`:"Tus datos, solo para ti"}</h2>
+            <h2>${state.syncUser?`Hola, <span data-account-display-name>${esc(accountDisplayName())}</span>`:"Tus datos, solo para ti"}</h2>
             <p class="subtle">${state.syncUser
               ?`Sesión iniciada como ${esc(state.syncUser.email||"usuario")}.`
               :"Crea una cuenta para mantener entrenamientos, nutrición y salud separados de otros usuarios."}</p>
@@ -6601,7 +7101,7 @@ function renderSettings(){
         ${state.syncUser?`<div class="sync-user">Conectado como <strong>${state.syncUser.email||"usuario"}</strong></div>`:""}
         <details class="sync-help">
           <summary>Cómo configurarlo</summary>
-          <p>Ejecuta <strong>supabase-schema.sql</strong> y añade <strong>https://apl00028.github.io/mi-rutina/</strong> en Authentication → URL Configuration → Redirect URLs. Usa la clave <strong>Publishable</strong> o <strong>anon public</strong>, nunca una secret/service role.</p>
+          <p>Ejecuta <strong>supabase-schema.sql</strong> y <strong>supabase-account-profile.sql</strong>, y añade <strong>https://apl00028.github.io/mi-rutina/</strong> en Authentication → URL Configuration → Redirect URLs. Usa la clave <strong>Publishable</strong> o <strong>anon public</strong>, nunca una secret/service role.</p>
         </details>
       </section>
       <section class="card health-entry-card">
@@ -6905,7 +7405,7 @@ importFile.onchange=async()=>{
 if("serviceWorker" in navigator){navigator.serviceWorker.register("service-worker.js");}
 
 window.addEventListener("online",()=>{
-  state.syncStatus=state.syncUser?"pending":"local";
+  state.syncStatus=isAppAuthenticated()?"pending":"local";
   updateSyncIndicators();
   autoSync("conexión recuperada");
 });
@@ -6918,10 +7418,10 @@ document.addEventListener("visibilitychange",()=>{
 });
 setInterval(()=>autoSync("sincronización periódica"),5*60*1000);
 
+render();
 refreshSyncSession().then(user=>{
-  if(user) activateLocalUser(user.id);
   render();
-  if(user) setTimeout(()=>autoSync("inicio"),500);
+  if(isAppAuthenticated()) setTimeout(()=>autoSync("inicio"),500);
 }).catch(error=>{
   console.error("GymOS startup auth",error);
   render();

@@ -1386,3 +1386,132 @@ body.large-tap-targets .quick-action-card{min-height:122px}
 #cancelOnboarding{
   white-space:nowrap;
 }
+
+
+/* v4.0.6: appearance and text-size controls available before login */
+:root{
+  --gymos-font-scale:1;
+}
+html.font-scale-sm{--gymos-font-scale:.92}
+html.font-scale-md{--gymos-font-scale:1}
+html.font-scale-lg{--gymos-font-scale:1.10}
+html.font-scale-xl{--gymos-font-scale:1.22}
+html{font-size:calc(16px * var(--gymos-font-scale))}
+
+.global-accessibility-controls{
+  position:fixed;
+  top:14px;
+  right:16px;
+  z-index:10000;
+  display:flex;
+  align-items:center;
+  gap:8px;
+}
+.global-accessibility-controls button{
+  min-height:40px;
+  border-radius:999px;
+  padding:8px 12px;
+  border:1px solid rgba(15,23,42,.18);
+  background:rgba(255,255,255,.94);
+  color:#111827;
+  box-shadow:0 6px 20px rgba(15,23,42,.12);
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  gap:7px;
+  font:inherit;
+  font-weight:700;
+  cursor:pointer;
+  backdrop-filter:blur(12px);
+}
+.global-accessibility-controls button:hover{
+  transform:translateY(-1px);
+}
+.aaa-symbol{
+  display:inline-flex;
+  align-items:flex-end;
+  gap:1px;
+  line-height:1;
+}
+.aaa-symbol span:nth-child(1){font-size:.72em}
+.aaa-symbol span:nth-child(2){font-size:.92em}
+.aaa-symbol span:nth-child(3){font-size:1.18em}
+
+html.theme-light,
+html[data-appearance="light"]{
+  color-scheme:light;
+}
+html.theme-light body,
+html[data-appearance="light"] body{
+  background:#f7f8fb !important;
+  color:#111827 !important;
+}
+html.theme-light .app-shell,
+html.theme-light .auth-shell,
+html.theme-light main,
+html[data-appearance="light"] .app-shell,
+html[data-appearance="light"] .auth-shell,
+html[data-appearance="light"] main{
+  color:#111827;
+}
+html.theme-light input,
+html.theme-light select,
+html.theme-light textarea,
+html[data-appearance="light"] input,
+html[data-appearance="light"] select,
+html[data-appearance="light"] textarea{
+  background:#ffffff !important;
+  color:#111827 !important;
+  border-color:#d6dbe6 !important;
+}
+html.theme-dark,
+html[data-appearance="dark"]{
+  color-scheme:dark;
+}
+html.theme-dark body,
+html[data-appearance="dark"] body{
+  background:#070b14 !important;
+  color:#f8fafc !important;
+}
+html.theme-dark .global-accessibility-controls button,
+html[data-appearance="dark"] .global-accessibility-controls button{
+  background:rgba(17,24,39,.94);
+  color:#f8fafc;
+  border-color:rgba(255,255,255,.18);
+}
+
+html.theme-system{color-scheme:light dark}
+@media(prefers-color-scheme:dark){
+  html.theme-system body,
+  html[data-appearance="system"] body{
+    background:#070b14 !important;
+    color:#f8fafc !important;
+  }
+  html.theme-system .global-accessibility-controls button,
+  html[data-appearance="system"] .global-accessibility-controls button{
+    background:rgba(17,24,39,.94);
+    color:#f8fafc;
+    border-color:rgba(255,255,255,.18);
+  }
+}
+@media(prefers-color-scheme:light){
+  html.theme-system body,
+  html[data-appearance="system"] body{
+    background:#f7f8fb !important;
+    color:#111827 !important;
+  }
+}
+
+@media(max-width:640px){
+  .global-accessibility-controls{
+    top:10px;
+    right:10px;
+  }
+  .global-accessibility-controls button{
+    min-height:38px;
+    padding:7px 10px;
+  }
+  .appearance-control span:last-child{
+    display:none;
+  }
+}

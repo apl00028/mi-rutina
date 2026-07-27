@@ -10,6 +10,16 @@
   <title>GymOS</title>
 </head>
 <body>
+
+<div class="global-accessibility-controls" aria-label="Apariencia y accesibilidad">
+  <button id="appearanceCycleButton" class="appearance-control" type="button" aria-label="Cambiar tema">
+    <span aria-hidden="true">☀</span><span>Claro</span>
+  </button>
+  <button id="fontScaleCycleButton" class="font-scale-control" type="button" aria-label="Cambiar tamaño de letra" title="Cambiar tamaño de letra">
+    <span class="aaa-symbol" aria-hidden="true"><span>A</span><span>A</span><span>A</span></span>
+  </button>
+</div>
+
   <div id="app"></div>
   <input id="importFile" type="file" accept="application/json" hidden>
   <input id="routineFile" type="file" accept=".xlsx,.xls" hidden>

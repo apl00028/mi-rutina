@@ -568,7 +568,7 @@ function updateExerciseTechnicalNotes(id,notes){
   return true;
 }
 
-const GYMOS_BACKUP_VERSION="4.0.5";
+const GYMOS_BACKUP_VERSION="4.0.6";
 const GYMOS_BACKUP_KEYS=[
   "gymos:routine",
   "gymos:history",
@@ -3347,6 +3347,7 @@ function render(){
   if(AUTH_REQUIRED&&!state.syncUser){
     state.screen="account";
     renderAccount();
+  setTimeout(bindGlobalAppearanceControls,0);
     return;
   }
 
@@ -6395,7 +6396,7 @@ function renderAccount(){
 
 function renderSettings(){
   app.innerHTML=`<div class="app-shell">
-    <header class="topbar"><div><div class="brand">Ajustes</div><div class="subtle">GymOS v4.0.5 · Persistencia del onboarding corregida</div></div></header>
+    <header class="topbar"><div><div class="brand">Ajustes</div><div class="subtle">GymOS v4.0.6 · Apariencia accesible desde el acceso</div></div></header>
     <main class="screen">
       <section class="card account-entry-card">
         <div class="account-entry-main">
@@ -6838,3 +6839,9 @@ refreshSyncSession().then(user=>{
 applyAppPreferences();
 
 window.addEventListener("DOMContentLoaded",()=>bindNav());
+
+document.addEventListener("DOMContentLoaded",()=>{
+  applyAppearancePreference();
+  applyFontScalePreference();
+  bindGlobalAppearanceControls();
+});

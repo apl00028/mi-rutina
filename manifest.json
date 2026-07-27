@@ -1,7 +1,7 @@
 {
-  "name": "GymOS 4.0",
+  "name": "GymOS 4.0.1",
   "short_name": "GymOS",
-  "start_url": "./?v=400",
+  "start_url": "./?v=401",
   "display": "standalone",
   "background_color": "#f4f6fa",
   "theme_color": "#6d28d9",

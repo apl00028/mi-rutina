@@ -568,7 +568,7 @@ function updateExerciseTechnicalNotes(id,notes){
   return true;
 }
 
-const GYMOS_BACKUP_VERSION="4.0.0";
+const GYMOS_BACKUP_VERSION="4.0.1";
 const GYMOS_BACKUP_KEYS=[
   "gymos:routine",
   "gymos:history",
@@ -3099,9 +3099,10 @@ function renderOnboarding(){
   let content="";
   if(step===1){
     content=`
-      <span class="section-kicker">PASO 1 DE 5</span>
-      <h1>Conozcámonos</h1>
-      <p class="subtle">Estos datos ayudan a ajustar el punto de partida. Solo se guardan en tu cuenta de GymOS.</p>
+      <div class="onboarding-step-icon" aria-hidden="true">01</div>
+      <span class="section-kicker">TU PERFIL</span>
+      <h1>Empecemos por ti</h1>
+      <p class="onboarding-lead">Necesitamos cuatro datos para ajustar tu punto de partida.</p>
       <div class="onboarding-grid two">
         <label><span>Nombre</span><input id="obName" type="text" value="${esc(p.name)}" maxlength="80"></label>
         <label><span>Edad</span><input id="obAge" type="number" inputmode="numeric" min="14" max="100" value="${esc(p.age)}" placeholder="Ej. 34"></label>
@@ -3116,18 +3117,19 @@ function renderOnboarding(){
       </select></label>`;
   }else if(step===2){
     content=`
-      <span class="section-kicker">PASO 2 DE 5</span>
+      <div class="onboarding-step-icon" aria-hidden="true">02</div>
+      <span class="section-kicker">OBJETIVO</span>
       <h1>¿Qué quieres conseguir?</h1>
-      <p class="subtle">Elige un objetivo principal. Podrás cambiarlo más adelante.</p>
+      <p class="onboarding-lead">Elige la prioridad que mejor representa tu situación actual.</p>
       <div class="choice-card-grid">
         ${[
-          ["fat_loss","Perder grasa","Manteniendo músculo y rendimiento"],
-          ["muscle","Ganar músculo","Aumentar masa muscular de forma progresiva"],
-          ["strength","Mejorar fuerza","Priorizar movimientos básicos y progresión"],
-          ["health","Mejorar salud","Moverte mejor y ganar condición física"],
-          ["return","Retomar el gimnasio","Volver de forma gradual y sostenible"],
-          ["maintain","Mantenerte","Conservar fuerza y composición corporal"]
-        ].map(([value,title,desc])=>`<label class="choice-card ${p.goal===value?"selected":""}"><input type="radio" name="obGoal" value="${value}" ${p.goal===value?"checked":""}><strong>${title}</strong><small>${desc}</small></label>`).join("")}
+          ["fat_loss","↘","Perder grasa","Manteniendo músculo y rendimiento"],
+          ["muscle","+","Ganar músculo","Aumentar masa muscular progresivamente"],
+          ["strength","↑","Mejorar fuerza","Priorizar fuerza y progresión"],
+          ["health","♥","Mejorar salud","Moverte mejor y ganar condición física"],
+          ["return","↻","Retomar el gimnasio","Volver de forma gradual y sostenible"],
+          ["maintain","=","Mantenerte","Conservar fuerza y composición corporal"]
+        ].map(([value,icon,title,desc])=>`<label class="choice-card ${p.goal===value?"selected":""}"><input type="radio" name="obGoal" value="${value}" ${p.goal===value?"checked":""}><span class="choice-icon">${icon}</span><span class="choice-copy"><strong>${title}</strong><small>${desc}</small></span><span class="choice-check">✓</span></label>`).join("")}
       </div>
       <label><span>Experiencia</span><select id="obExperience">
         <option value="new" ${p.experience==="new"?"selected":""}>Nunca he entrenado</option>
@@ -3137,9 +3139,10 @@ function renderOnboarding(){
       </select></label>`;
   }else if(step===3){
     content=`
-      <span class="section-kicker">PASO 3 DE 5</span>
-      <h1>Tu disponibilidad real</h1>
-      <p class="subtle">La mejor rutina es la que puedes mantener.</p>
+      <div class="onboarding-step-icon" aria-hidden="true">03</div>
+      <span class="section-kicker">DISPONIBILIDAD</span>
+      <h1>Diseñemos algo sostenible</h1>
+      <p class="onboarding-lead">La mejor rutina es la que encaja de verdad en tu semana.</p>
       <div class="onboarding-grid two">
         <label><span>Días por semana</span><select id="obDays">
           ${[2,3,4,5].map(v=>`<option value="${v}" ${Number(p.days)===v?"selected":""}>${v} días</option>`).join("")}
@@ -3160,9 +3163,10 @@ function renderOnboarding(){
       </select></label>`;
   }else if(step===4){
     content=`
-      <span class="section-kicker">PASO 4 DE 5</span>
-      <h1>Lesiones y molestias</h1>
-      <p class="subtle">Marca cualquier zona que requiera precaución. Esto no sustituye una valoración médica.</p>
+      <div class="onboarding-step-icon" aria-hidden="true">04</div>
+      <span class="section-kicker">SEGURIDAD</span>
+      <h1>¿Hay algo que debamos cuidar?</h1>
+      <p class="onboarding-lead">Marca las zonas con molestias para evitar propuestas poco adecuadas.</p>
       <div class="pain-grid">
         ${[
           ["shoulder","Hombro"],["back","Espalda"],["knee","Rodilla"],["hip","Cadera"],
@@ -3179,8 +3183,10 @@ function renderOnboarding(){
     const proposed=buildRecommendedRoutine(p);
     const sessionsToShow=Number(p.days)<=2?["A","B"]:["A","B","C"];
     content=`
-      <span class="section-kicker">PASO 5 DE 5</span>
-      <h1>Tu punto de partida</h1>
+      <div class="onboarding-step-icon success" aria-hidden="true">✓</div>
+      <span class="section-kicker">TU PROPUESTA</span>
+      <h1>Este es tu punto de partida</h1>
+      <p class="onboarding-lead">Un plan inicial sencillo, progresivo y adaptado a tus respuestas.</p>
       <div class="onboarding-summary">
         <div><span>Objetivo</span><strong>${esc(onboardingGoalLabel(p.goal))}</strong></div>
         <div><span>Nivel</span><strong>${esc(onboardingExperienceLabel(p.experience))}</strong></div>
@@ -3197,17 +3203,22 @@ function renderOnboarding(){
 
   app.innerHTML=`<div class="onboarding-shell">
     <header class="onboarding-header">
-      <div><div class="brand">GymOS</div><div class="subtle">Configuración inicial</div></div>
-      ${getOnboardingProfile()?.completedAt?`<button id="cancelOnboarding" class="text-button">Cancelar</button>`:""}
+      <div class="onboarding-brand"><span class="onboarding-logo">G</span><div><div class="brand">GymOS</div><div class="subtle">Tu entrenamiento, bien planteado</div></div></div>
+      ${getOnboardingProfile()?.completedAt?`<button id="cancelOnboarding" class="text-button">Cerrar</button>`:""}
     </header>
+    <div class="onboarding-stepper" aria-label="Paso ${step} de 5">
+      ${[1,2,3,4,5].map(n=>`<span class="${n<step?"done":n===step?"active":""}">${n<step?"✓":n}</span>`).join("")}
+    </div>
     <div class="onboarding-progress"><span style="width:${progress}%"></span></div>
     <main class="onboarding-main">
-      <section class="card onboarding-card">${content}</section>
+      <section class="onboarding-card">${content}</section>
+    </main>
+    <div class="onboarding-actions-wrap">
       <div class="onboarding-actions">
         ${step>1?`<button id="obBack" class="secondary">Atrás</button>`:"<span></span>"}
-        <button id="obNext" class="primary">${step===5?"Crear mi plan":"Continuar"}</button>
+        <button id="obNext" class="primary">${step===5?"Usar este plan":"Continuar"}</button>
       </div>
-    </main>
+    </div>
   </div>`;
 
   const cancel=document.getElementById("cancelOnboarding");
@@ -6335,7 +6346,7 @@ function renderAccount(){
 
 function renderSettings(){
   app.innerHTML=`<div class="app-shell">
-    <header class="topbar"><div><div class="brand">Ajustes</div><div class="subtle">GymOS v4.0.0 · Perfil y plan personalizado</div></div></header>
+    <header class="topbar"><div><div class="brand">Ajustes</div><div class="subtle">GymOS v4.0.1 · Onboarding renovado</div></div></header>
     <main class="screen">
       <section class="card account-entry-card">
         <div class="account-entry-main">

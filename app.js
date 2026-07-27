@@ -1,3 +1,75 @@
+
+const GYMOS_APPEARANCE_KEY="gymos:appearance";
+const GYMOS_FONT_SCALE_KEY="gymos:fontScale";
+const GYMOS_FONT_SCALES=["font-scale-sm","font-scale-md","font-scale-lg","font-scale-xl"];
+
+function getAppearancePreference(){
+  return localStorage.getItem(GYMOS_APPEARANCE_KEY)||"light";
+}
+function updateAppearanceButton(value=getAppearancePreference()){
+  const button=document.getElementById("appearanceCycleButton");
+  if(!button) return;
+  const labels={light:"Claro",dark:"Oscuro",system:"Sistema"};
+  const icons={light:"☀",dark:"☾",system:"◐"};
+  button.innerHTML=`<span aria-hidden="true">${icons[value]}</span><span>${labels[value]}</span>`;
+  button.setAttribute("aria-label",`Tema actual: ${labels[value]}. Pulsa para cambiar.`);
+}
+function applyAppearancePreference(value=getAppearancePreference()){
+  const allowed=["light","dark","system"];
+  const next=allowed.includes(value)?value:"light";
+  document.documentElement.dataset.appearance=next;
+  document.documentElement.classList.remove("theme-light","theme-dark","theme-system");
+  document.documentElement.classList.add(`theme-${next}`);
+  localStorage.setItem(GYMOS_APPEARANCE_KEY,next);
+  updateAppearanceButton(next);
+}
+function cycleAppearancePreference(){
+  const values=["light","dark","system"];
+  const current=getAppearancePreference();
+  const next=values[(values.indexOf(current)+1)%values.length];
+  applyAppearancePreference(next);
+}
+function getFontScalePreference(){
+  const stored=localStorage.getItem(GYMOS_FONT_SCALE_KEY)||"font-scale-md";
+  return GYMOS_FONT_SCALES.includes(stored)?stored:"font-scale-md";
+}
+function updateFontScaleButton(value=getFontScalePreference()){
+  const button=document.getElementById("fontScaleCycleButton");
+  if(!button) return;
+  const position=GYMOS_FONT_SCALES.indexOf(value)+1;
+  button.setAttribute("aria-label",`Tamaño de letra ${position} de ${GYMOS_FONT_SCALES.length}. Pulsa para cambiar.`);
+  button.title=`Tamaño de letra ${position}/${GYMOS_FONT_SCALES.length}`;
+}
+function applyFontScalePreference(value=getFontScalePreference()){
+  GYMOS_FONT_SCALES.forEach(cls=>document.documentElement.classList.remove(cls));
+  const next=GYMOS_FONT_SCALES.includes(value)?value:"font-scale-md";
+  document.documentElement.classList.add(next);
+  localStorage.setItem(GYMOS_FONT_SCALE_KEY,next);
+  updateFontScaleButton(next);
+}
+function cycleFontScalePreference(){
+  const current=getFontScalePreference();
+  const next=GYMOS_FONT_SCALES[(GYMOS_FONT_SCALES.indexOf(current)+1)%GYMOS_FONT_SCALES.length];
+  applyFontScalePreference(next);
+}
+function bindGlobalAppearanceControls(){
+  const appearance=document.getElementById("appearanceCycleButton");
+  if(appearance&&!appearance.dataset.bound){
+    appearance.dataset.bound="1";
+    appearance.addEventListener("click",cycleAppearancePreference);
+  }
+  const font=document.getElementById("fontScaleCycleButton");
+  if(font&&!font.dataset.bound){
+    font.dataset.bound="1";
+    font.addEventListener("click",cycleFontScalePreference);
+  }
+  updateAppearanceButton();
+  updateFontScaleButton();
+}
+applyAppearancePreference();
+applyFontScalePreference();
+bindGlobalAppearanceControls();
+
 const defaultSessions = {
   A: [
     ["Press banca / máquina pecho", "8–10 reps"],
@@ -568,7 +640,7 @@ function updateExerciseTechnicalNotes(id,notes){
   return true;
 }
 
-const GYMOS_BACKUP_VERSION="4.0.6";
+const GYMOS_BACKUP_VERSION="4.0.7";
 const GYMOS_BACKUP_KEYS=[
   "gymos:routine",
   "gymos:history",
@@ -6396,7 +6468,7 @@ function renderAccount(){
 
 function renderSettings(){
   app.innerHTML=`<div class="app-shell">
-    <header class="topbar"><div><div class="brand">Ajustes</div><div class="subtle">GymOS v4.0.6 · Apariencia accesible desde el acceso</div></div></header>
+    <header class="topbar"><div><div class="brand">Ajustes</div><div class="subtle">GymOS v4.0.7 · Controles de apariencia corregidos</div></div></header>
     <main class="screen">
       <section class="card account-entry-card">
         <div class="account-entry-main">

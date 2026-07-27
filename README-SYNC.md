@@ -1,4 +1,4 @@
-# GymOS v3.8.6 — Progreso y Coach corregidos
+# GymOS v3.9.0 — Acceso privado y cuentas
 
 GymOS sigue funcionando completamente en modo local.
 
@@ -388,3 +388,16 @@ de cuenta y pruebas automáticas con dos usuarios independientes.
 - Todos los botones inferiores son explícitamente `type="button"`.
 - Progreso y Coach toleran datos históricos incompletos o dañados sin bloquearse.
 - Si una pantalla produce un error inesperado, aparece una opción segura para volver a Inicio.
+
+
+## GymOS v3.9.0
+
+- Acceso obligatorio con correo y contraseña.
+- No se muestra ninguna pantalla de entrenamiento sin una sesión válida.
+- Configuración de Supabase separada en `auth-config.js`.
+- Bóveda local independiente por cuenta en el mismo navegador.
+- Al cerrar sesión, los datos activos desaparecen de la interfaz.
+- Restablecimiento de contraseña.
+- Migración de datos locales a la cuenta.
+- Row Level Security mediante `supabase-schema.sql`.
+- Guía completa en `SETUP-AUTH.md`.

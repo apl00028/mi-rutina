@@ -936,7 +936,7 @@ function undoLastCoachChange(){
 }
 function coachContextPayload(){
   return {
-    version:"3.8.6",
+    version:"3.9.0",
     generatedAt:new Date().toISOString(),
     settings:getCoachSettings(),
     routine:getRoutine(),
@@ -1817,6 +1817,94 @@ const app = document.getElementById("app");
 const importFile = document.getElementById("importFile");
 const routineFile = document.getElementById("routineFile");
 
+
+const AUTH_REQUIRED=true;
+const LOCAL_OWNER_KEY="gymos:localDataOwnerId";
+const LOCAL_VAULT_PREFIX="gymos:userVault:";
+const AUTH_CONFIGURED=()=>Boolean(getSyncConfig().url&&getSyncConfig().key);
+
+function localDataKeys(){
+  const draftKeys=["A","B","C"].map(session=>draftKey(session));
+  const additional=[
+    "gymos:body","gymos:selectedSession","gymos:restSeconds","gymos:weeklyGoal",
+    "gymos:localUpdatedAt","gymos:lastSyncAt","gymos:lastSyncHash"
+  ];
+  return [...new Set([...GYMOS_BACKUP_KEYS,...draftKeys,...additional])];
+}
+
+function snapshotCurrentLocalData(){
+  const snapshot={};
+  localDataKeys().forEach(key=>{
+    const value=localStorage.getItem(key);
+    if(value!==null) snapshot[key]=value;
+  });
+  return snapshot;
+}
+
+function clearCurrentUserData(){
+  localDataKeys().forEach(key=>localStorage.removeItem(key));
+}
+
+function saveCurrentUserVault(userId){
+  if(!userId) return;
+  localStorage.setItem(`${LOCAL_VAULT_PREFIX}${userId}`,JSON.stringify(snapshotCurrentLocalData()));
+}
+
+function loadUserVault(userId){
+  clearCurrentUserData();
+  if(!userId) return;
+  try{
+    const snapshot=JSON.parse(localStorage.getItem(`${LOCAL_VAULT_PREFIX}${userId}`)||"{}");
+    Object.entries(snapshot).forEach(([key,value])=>localStorage.setItem(key,String(value)));
+  }catch(error){
+    console.error("Could not load local user vault",error);
+  }
+}
+
+function activateLocalUser(userId){
+  if(!userId) return;
+  const previous=localStorage.getItem(LOCAL_OWNER_KEY);
+  if(previous===userId) return;
+
+  if(previous){
+    saveCurrentUserVault(previous);
+    loadUserVault(userId);
+  }else{
+    const hasExisting=hasLocalUserData();
+    if(hasExisting){
+      localStorage.setItem(`${LOCAL_VAULT_PREFIX}${userId}`,JSON.stringify(snapshotCurrentLocalData()));
+    }else{
+      loadUserVault(userId);
+    }
+  }
+  localStorage.setItem(LOCAL_OWNER_KEY,userId);
+  state.selectedSession=localStorage.getItem("gymos:selectedSession")||nextSuggestedSession();
+}
+
+function deactivateLocalUser(){
+  const current=localStorage.getItem(LOCAL_OWNER_KEY);
+  if(current) saveCurrentUserVault(current);
+  clearCurrentUserData();
+  localStorage.removeItem(LOCAL_OWNER_KEY);
+}
+
+function renderAuthConfigurationRequired(){
+  app.innerHTML=`<div class="auth-gate-shell">
+    <main class="auth-gate-card">
+      <div class="auth-logo">G</div>
+      <span class="section-kicker">CONFIGURACIÓN NECESARIA</span>
+      <h1>Activa el acceso privado</h1>
+      <p>GymOS necesita la URL y la clave pública de tu proyecto Supabase antes de permitir cuentas.</p>
+      <div class="security-check-list">
+        <article class="ok"><span>1</span><div><strong>Crea un proyecto Supabase</strong><small>Puede ser el plan gratuito.</small></div></article>
+        <article class="ok"><span>2</span><div><strong>Edita auth-config.js</strong><small>Pega Project URL y anon public key.</small></div></article>
+        <article class="ok"><span>3</span><div><strong>Ejecuta supabase-schema.sql</strong><small>Activa tablas y políticas por usuario.</small></div></article>
+      </div>
+      <p class="auth-config-note">No pongas nunca la clave <code>service_role</code> en GitHub Pages.</p>
+    </main>
+  </div>`;
+}
+
 let state = {
   screen: "home",
   selectedSession: localStorage.getItem("gymos:selectedSession") || nextSuggestedSession(),
@@ -1925,9 +2013,10 @@ function saveWeeklyGoal(value){
 const GYMOS_PRODUCTION_URL="https://apl00028.github.io/mi-rutina/";
 
 function getSyncConfig(){
+  const deployed=window.GYMOS_AUTH_CONFIG||{};
   return {
-    url:localStorage.getItem("gymos:supabaseUrl")||"",
-    key:localStorage.getItem("gymos:supabaseAnonKey")||"",
+    url:String(deployed.supabaseUrl||localStorage.getItem("gymos:supabaseUrl")||"").trim(),
+    key:String(deployed.supabaseAnonKey||localStorage.getItem("gymos:supabaseAnonKey")||"").trim(),
     email:localStorage.getItem("gymos:syncEmail")||""
   };
 }
@@ -2227,10 +2316,21 @@ async function refreshSyncSession(){
     if(error) throw error;
     state.syncUser=data.session?.user||null;
     state.syncStatus=state.syncUser?"connected":"configured";
-    client.auth.onAuthStateChange((_event,session)=>{
+    client.auth.onAuthStateChange((event,session)=>{
+      const previousUserId=state.syncUser?.id||null;
       state.syncUser=session?.user||null;
       state.syncStatus=state.syncUser?"connected":"configured";
+
+      if(state.syncUser&&state.syncUser.id!==previousUserId){
+        activateLocalUser(state.syncUser.id);
+      }
+      if(event==="SIGNED_OUT"){
+        deactivateLocalUser();
+        state.screen="account";
+      }
+
       updateSyncIndicators();
+      if(event==="SIGNED_IN"||event==="SIGNED_OUT") queueMicrotask(()=>render());
     });
     return state.syncUser;
   }catch(error){
@@ -2832,6 +2932,18 @@ function toast(msg){
 
 function render(){
   applyAppPreferences();
+
+  if(AUTH_REQUIRED&&!AUTH_CONFIGURED()){
+    renderAuthConfigurationRequired();
+    return;
+  }
+
+  if(AUTH_REQUIRED&&!state.syncUser){
+    state.screen="account";
+    renderAccount();
+    return;
+  }
+
   if(state.screen==="home") renderHome();
   else if(state.screen==="workout") renderWorkout();
   else if(state.screen==="history") renderHistory();
@@ -5657,9 +5769,9 @@ function renderAccount(){
 
   app.innerHTML=`<div class="app-shell">
     <header class="topbar">
-      <button id="backAccount" class="back-button">←</button>
-      <div><div class="brand">Cuenta GymOS</div><div class="subtle">Acceso y privacidad</div></div>
-      ${user?`<span class="secure-account-badge">Protegida</span>`:""}
+      ${user?`<button id="backAccount" class="back-button">←</button>`:`<span></span>`}
+      <div><div class="brand">Cuenta GymOS</div><div class="subtle">${user?"Acceso y privacidad":"Acceso obligatorio"}</div></div>
+      ${user?`<span class="secure-account-badge">Protegida</span>`:`<span class="secure-account-badge">Privado</span>`}
     </header>
     <main class="screen">
       ${user?`
@@ -5749,7 +5861,7 @@ function renderAccount(){
             <label class="consent-row"><input id="accountConsent" type="checkbox"><span>Acepto que GymOS almacene mis datos de entrenamiento y salud en mi cuenta.</span></label>
           `:""}
           <button id="accountSubmit" class="primary full">${state.accountMode==="signup"?"Crear mi cuenta":"Iniciar sesión"}</button>
-          <button id="accountGoogle" class="secondary full">Continuar con Google</button>
+          
           ${state.accountMode==="login"?`<button id="accountResetPassword" class="text-button full">He olvidado mi contraseña</button>`:""}
         </section>
 
@@ -5761,7 +5873,8 @@ function renderAccount(){
     </main>
   </div>`;
 
-  document.getElementById("backAccount").onclick=()=>{state.screen="settings";renderSettings();};
+  const backAccount=document.getElementById("backAccount");
+  if(backAccount) backAccount.onclick=()=>{state.screen="settings";renderSettings();};
 
   if(user){
     const migrateButton=document.getElementById("migrateLocalData");
@@ -5808,9 +5921,12 @@ function renderAccount(){
       }catch(error){alert(error.message);}
     };
     document.getElementById("accountSignOut").onclick=async()=>{
+      if(state.syncUser) saveCurrentUserVault(state.syncUser.id);
       await signOutSync();
+      deactivateLocalUser();
       state.accountMode="login";
-      renderAccount();
+      state.screen="account";
+      render();
     };
   }else{
     document.querySelectorAll("[data-account-mode]").forEach(button=>button.onclick=()=>{
@@ -5832,20 +5948,26 @@ function renderAccount(){
           const result=await signUpWithPassword(email,password,name);
           if(result.session){
             await refreshSyncSession();
+            if(state.syncUser) activateLocalUser(state.syncUser.id);
             toast("Cuenta creada");
           }else{
             alert("Cuenta creada. Revisa tu correo para verificarla.");
           }
         }else{
           await signInWithPassword(email,password);
+          await refreshSyncSession();
+          if(state.syncUser) activateLocalUser(state.syncUser.id);
           toast("Sesión iniciada");
         }
-        renderAccount();
+        if(state.syncUser){
+          state.screen="home";
+          render();
+        }else{
+          renderAccount();
+        }
       }catch(error){alert(error.message);}
     };
-    document.getElementById("accountGoogle").onclick=async()=>{
-      try{await signInWithGoogle();}catch(error){alert(error.message);}
-    };
+
     const resetButton=document.getElementById("accountResetPassword");
     if(resetButton) resetButton.onclick=async()=>{
       const email=document.getElementById("accountEmail").value.trim();
@@ -5860,7 +5982,7 @@ function renderAccount(){
 
 function renderSettings(){
   app.innerHTML=`<div class="app-shell">
-    <header class="topbar"><div><div class="brand">Ajustes</div><div class="subtle">GymOS v3.8.6 · Progreso y Coach corregidos</div></div></header>
+    <header class="topbar"><div><div class="brand">Ajustes</div><div class="subtle">GymOS v3.9.0 · Acceso privado y cuentas</div></div></header>
     <main class="screen">
       <section class="card account-entry-card">
         <div class="account-entry-main">
@@ -6275,9 +6397,13 @@ document.addEventListener("visibilitychange",()=>{
 setInterval(()=>autoSync("sincronización periódica"),5*60*1000);
 
 refreshSyncSession().then(user=>{
+  if(user) activateLocalUser(user.id);
   render();
   if(user) setTimeout(()=>autoSync("inicio"),500);
-}).catch(()=>render());
+}).catch(error=>{
+  console.error("GymOS startup auth",error);
+  render();
+});
 
 applyAppPreferences();
 

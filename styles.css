@@ -1151,3 +1151,35 @@ body.large-tap-targets .quick-action-card{min-height:122px}
   .timed-series-row .complete-btn{grid-column:4}
   .mini-timer{grid-column:2/-1}
 }
+
+
+/* GymOS v3.9.0 — mandatory authentication */
+.auth-gate-shell{
+  min-height:100dvh;
+  display:grid;
+  place-items:center;
+  padding:24px;
+  background:
+    radial-gradient(circle at top left,var(--brand-soft),transparent 45%),
+    var(--background);
+}
+.auth-gate-card{
+  width:min(100%,480px);
+  background:var(--surface-elevated);
+  border:1px solid var(--border);
+  border-radius:28px;
+  padding:28px;
+  box-shadow:0 24px 70px rgba(15,23,42,.14);
+}
+.auth-gate-card h1{margin:8px 0 10px}
+.auth-gate-card p{color:var(--muted);line-height:1.55}
+.auth-logo{
+  width:58px;height:58px;border-radius:18px;
+  display:grid;place-items:center;margin-bottom:20px;
+  background:var(--brand);color:white;font-size:1.55rem;font-weight:950;
+}
+.auth-config-note{
+  margin-top:18px;padding:12px 14px;border-radius:14px;
+  background:var(--brand-soft);color:var(--text)!important;
+}
+.auth-config-note code{font-weight:850}

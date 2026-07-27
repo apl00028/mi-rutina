@@ -568,7 +568,7 @@ function updateExerciseTechnicalNotes(id,notes){
   return true;
 }
 
-const GYMOS_BACKUP_VERSION="2.5.3";
+const GYMOS_BACKUP_VERSION="4.0.0";
 const GYMOS_BACKUP_KEYS=[
   "gymos:routine",
   "gymos:history",
@@ -596,7 +596,8 @@ const GYMOS_BACKUP_KEYS=[
   "gymos:deviceId",
   "gymos:localRevision",
   "gymos:lastRemoteRevision",
-  "gymos:syncConflictMode"
+  "gymos:syncConflictMode",
+  "gymos:onboardingProfile"
 ];
 
 function getFavoriteExercises(){
@@ -1938,6 +1939,8 @@ let state = {
   developerLogFilter: "all",
   healthDate: new Date().toISOString().slice(0,10),
   accountMode: "login",
+  onboardingStep: 1,
+  onboardingDraft: null,
   exerciseTimers: {}
 };
 
@@ -2929,6 +2932,350 @@ function toast(msg){
   document.body.appendChild(el); setTimeout(()=>el.remove(),1800);
 }
 
+
+const ONBOARDING_KEY="gymos:onboardingProfile";
+
+function getOnboardingProfile(){
+  try{
+    const value=JSON.parse(localStorage.getItem(ONBOARDING_KEY)||"null");
+    return value&&typeof value==="object"?value:null;
+  }catch(error){
+    return null;
+  }
+}
+function onboardingCompleted(){
+  return Boolean(getOnboardingProfile()?.completedAt);
+}
+function saveOnboardingProfile(profile){
+  localStorage.setItem(ONBOARDING_KEY,JSON.stringify(profile));
+  markLocalUpdated();
+}
+function newOnboardingDraft(){
+  const current=getOnboardingProfile()||{};
+  return {
+    name:current.name||accountDisplayName(state.syncUser)||"",
+    age:current.age||"",
+    sex:current.sex||"",
+    height:current.height||"",
+    weight:current.weight||"",
+    experience:current.experience||"beginner",
+    goal:current.goal||"return",
+    days:Number(current.days)||3,
+    duration:Number(current.duration)||50,
+    location:current.location||"gym",
+    equipment:current.equipment||"full",
+    painAreas:Array.isArray(current.painAreas)?current.painAreas:[],
+    injuryNotes:current.injuryNotes||"",
+    medicalRestriction:current.medicalRestriction||"no",
+    avoidExercises:current.avoidExercises||"",
+    preference:current.preference||"mixed",
+    cardio:current.cardio||"walking",
+    completedAt:current.completedAt||null
+  };
+}
+function ensureOnboardingDraft(){
+  if(!state.onboardingDraft) state.onboardingDraft=newOnboardingDraft();
+  return state.onboardingDraft;
+}
+function onboardingGoalLabel(value){
+  return ({
+    fat_loss:"Perder grasa",
+    muscle:"Ganar masa muscular",
+    strength:"Mejorar fuerza",
+    health:"Mejorar salud y condición física",
+    return:"Retomar el entrenamiento",
+    maintain:"Mantener forma física"
+  })[value]||"Entrenamiento general";
+}
+function onboardingExperienceLabel(value){
+  return ({new:"Nunca he entrenado",beginner:"Principiante",intermediate:"Intermedio",advanced:"Avanzado"})[value]||"Principiante";
+}
+function onboardingLocationLabel(value){
+  return ({gym:"Gimnasio",home:"Casa",both:"Gimnasio y casa"})[value]||"Gimnasio";
+}
+function selectedPain(profile,area){
+  return profile.painAreas.includes(area)?"checked":"";
+}
+function safeExercise(base,alternatives,profile){
+  const avoided=String(profile.avoidExercises||"").toLowerCase();
+  const pain=new Set(profile.painAreas||[]);
+  const candidates=[base,...alternatives].filter(Boolean);
+  return candidates.find(item=>{
+    const name=item.name.toLowerCase();
+    if(avoided&&avoided.split(/[,;\n]+/).some(term=>term.trim()&&name.includes(term.trim()))) return false;
+    if(pain.has("knee")&&item.flags?.includes("knee")) return false;
+    if(pain.has("back")&&item.flags?.includes("back")) return false;
+    if(pain.has("shoulder")&&item.flags?.includes("shoulder")) return false;
+    if(pain.has("hip")&&item.flags?.includes("hip")) return false;
+    return true;
+  })||candidates[candidates.length-1];
+}
+function generatedExercise(name,target,sets=3,increment=2.5,type="peso"){
+  return {name,target,sets,increment,type};
+}
+function buildRecommendedRoutine(profile){
+  const beginner=["new","beginner"].includes(profile.experience);
+  const sets=beginner?2:3;
+  const repMain=profile.goal==="strength"?"5–8 reps":"8–12 reps";
+  const repAccessory="10–15 reps";
+  const kneeSafe=safeExercise(
+    {name:"Prensa de piernas",flags:["knee"]},
+    [{name:"Sentadilla a cajón",flags:["knee"]},{name:"Puente de glúteo en máquina",flags:[]}],
+    profile
+  );
+  const hingeSafe=safeExercise(
+    {name:"Peso muerto rumano con mancuernas",flags:["back"]},
+    [{name:"Curl femoral sentado",flags:[]},{name:"Hip thrust en máquina",flags:[]}],
+    profile
+  );
+  const chestSafe=safeExercise(
+    {name:"Press de pecho en máquina",flags:["shoulder"]},
+    [{name:"Press con mancuernas agarre neutro",flags:["shoulder"]},{name:"Pec deck con rango cómodo",flags:[]}],
+    profile
+  );
+  const shoulderSafe=safeExercise(
+    {name:"Press de hombro en máquina",flags:["shoulder"]},
+    [{name:"Elevaciones laterales en máquina",flags:["shoulder"]},{name:"Face pull ligero",flags:[]}],
+    profile
+  );
+  const rowSafe=safeExercise(
+    {name:"Remo sentado con apoyo",flags:["back"]},
+    [{name:"Remo pecho apoyado",flags:[]},{name:"Jalón al pecho agarre neutro",flags:[]}],
+    profile
+  );
+
+  const routine={
+    A:[
+      generatedExercise(chestSafe.name,repMain,sets),
+      generatedExercise(rowSafe.name,repMain,sets),
+      generatedExercise(kneeSafe.name,"10–12 reps",sets),
+      generatedExercise("Curl femoral sentado",repAccessory,sets),
+      generatedExercise("Elevaciones laterales",repAccessory,2),
+      generatedExercise("Plancha o dead bug","30–45 s",2,0,"tiempo")
+    ],
+    B:[
+      generatedExercise(hingeSafe.name,repMain,sets),
+      generatedExercise("Jalón al pecho agarre neutro",repMain,sets),
+      generatedExercise(shoulderSafe.name,repMain,sets),
+      generatedExercise((profile.painAreas||[]).includes("knee")?"Extensión de cadera en máquina":"Zancada asistida","8–12 por pierna",sets),
+      generatedExercise("Curl de bíceps en polea",repAccessory,2),
+      generatedExercise("Tríceps en polea",repAccessory,2)
+    ],
+    C:[
+      generatedExercise(kneeSafe.name,repMain,sets),
+      generatedExercise("Press inclinado en máquina",repMain,sets),
+      generatedExercise("Remo pecho apoyado",repMain,sets),
+      generatedExercise("Hip thrust en máquina","8–12 reps",sets),
+      generatedExercise("Face pull",repAccessory,2),
+      generatedExercise("Gemelo en máquina",repAccessory,2)
+    ]
+  };
+
+  if(Number(profile.days)<=2){
+    routine.A=routine.A.slice(0,6);
+    routine.B=routine.B.slice(0,6);
+    routine.C=[];
+  }
+  if(Number(profile.duration)<=35){
+    Object.keys(routine).forEach(key=>routine[key]=routine[key].slice(0,5));
+  }
+  return normalizeRoutine(routine);
+}
+function onboardingSafetyMessage(profile){
+  const hasPain=(profile.painAreas||[]).length>0||String(profile.injuryNotes||"").trim();
+  if(profile.medicalRestriction==="yes"){
+    return "Has indicado una restricción médica. GymOS no debe sustituir la valoración de un profesional sanitario. La rutina evita decisiones agresivas y debe revisarse antes de empezar.";
+  }
+  if(hasPain){
+    return "La propuesta evita de forma básica los movimientos relacionados con las zonas señaladas. Si un ejercicio provoca dolor, no lo hagas y usa una alternativa sin dolor.";
+  }
+  return "Empieza con cargas cómodas, deja 3–4 repeticiones en reserva y prioriza una técnica estable durante las primeras semanas.";
+}
+function renderOnboarding(){
+  const p=ensureOnboardingDraft();
+  const step=Math.max(1,Math.min(5,Number(state.onboardingStep)||1));
+  const progress=step*20;
+
+  let content="";
+  if(step===1){
+    content=`
+      <span class="section-kicker">PASO 1 DE 5</span>
+      <h1>Conozcámonos</h1>
+      <p class="subtle">Estos datos ayudan a ajustar el punto de partida. Solo se guardan en tu cuenta de GymOS.</p>
+      <div class="onboarding-grid two">
+        <label><span>Nombre</span><input id="obName" type="text" value="${esc(p.name)}" maxlength="80"></label>
+        <label><span>Edad</span><input id="obAge" type="number" inputmode="numeric" min="14" max="100" value="${esc(p.age)}" placeholder="Ej. 34"></label>
+        <label><span>Altura (cm)</span><input id="obHeight" type="number" inputmode="decimal" min="120" max="230" value="${esc(p.height)}" placeholder="Ej. 178"></label>
+        <label><span>Peso (kg)</span><input id="obWeight" type="number" inputmode="decimal" step="0.1" min="35" max="300" value="${esc(p.weight)}" placeholder="Ej. 78,5"></label>
+      </div>
+      <label><span>Sexo (opcional)</span><select id="obSex">
+        <option value="" ${p.sex===""?"selected":""}>Prefiero no indicarlo</option>
+        <option value="male" ${p.sex==="male"?"selected":""}>Hombre</option>
+        <option value="female" ${p.sex==="female"?"selected":""}>Mujer</option>
+        <option value="other" ${p.sex==="other"?"selected":""}>Otro</option>
+      </select></label>`;
+  }else if(step===2){
+    content=`
+      <span class="section-kicker">PASO 2 DE 5</span>
+      <h1>¿Qué quieres conseguir?</h1>
+      <p class="subtle">Elige un objetivo principal. Podrás cambiarlo más adelante.</p>
+      <div class="choice-card-grid">
+        ${[
+          ["fat_loss","Perder grasa","Manteniendo músculo y rendimiento"],
+          ["muscle","Ganar músculo","Aumentar masa muscular de forma progresiva"],
+          ["strength","Mejorar fuerza","Priorizar movimientos básicos y progresión"],
+          ["health","Mejorar salud","Moverte mejor y ganar condición física"],
+          ["return","Retomar el gimnasio","Volver de forma gradual y sostenible"],
+          ["maintain","Mantenerte","Conservar fuerza y composición corporal"]
+        ].map(([value,title,desc])=>`<label class="choice-card ${p.goal===value?"selected":""}"><input type="radio" name="obGoal" value="${value}" ${p.goal===value?"checked":""}><strong>${title}</strong><small>${desc}</small></label>`).join("")}
+      </div>
+      <label><span>Experiencia</span><select id="obExperience">
+        <option value="new" ${p.experience==="new"?"selected":""}>Nunca he entrenado</option>
+        <option value="beginner" ${p.experience==="beginner"?"selected":""}>Principiante o volviendo tras una pausa</option>
+        <option value="intermediate" ${p.experience==="intermediate"?"selected":""}>Intermedio</option>
+        <option value="advanced" ${p.experience==="advanced"?"selected":""}>Avanzado</option>
+      </select></label>`;
+  }else if(step===3){
+    content=`
+      <span class="section-kicker">PASO 3 DE 5</span>
+      <h1>Tu disponibilidad real</h1>
+      <p class="subtle">La mejor rutina es la que puedes mantener.</p>
+      <div class="onboarding-grid two">
+        <label><span>Días por semana</span><select id="obDays">
+          ${[2,3,4,5].map(v=>`<option value="${v}" ${Number(p.days)===v?"selected":""}>${v} días</option>`).join("")}
+        </select></label>
+        <label><span>Tiempo por sesión</span><select id="obDuration">
+          ${[[30,"30 min"],[45,"45 min"],[50,"50–60 min"],[75,"60–75 min"]].map(([v,l])=>`<option value="${v}" ${Number(p.duration)===v?"selected":""}>${l}</option>`).join("")}
+        </select></label>
+      </div>
+      <label><span>Dónde entrenas</span><select id="obLocation">
+        <option value="gym" ${p.location==="gym"?"selected":""}>Gimnasio</option>
+        <option value="home" ${p.location==="home"?"selected":""}>Casa</option>
+        <option value="both" ${p.location==="both"?"selected":""}>Gimnasio y casa</option>
+      </select></label>
+      <label><span>Equipamiento</span><select id="obEquipment">
+        <option value="full" ${p.equipment==="full"?"selected":""}>Gimnasio completo</option>
+        <option value="basic" ${p.equipment==="basic"?"selected":""}>Mancuernas, banco y bandas</option>
+        <option value="bodyweight" ${p.equipment==="bodyweight"?"selected":""}>Peso corporal o equipo mínimo</option>
+      </select></label>`;
+  }else if(step===4){
+    content=`
+      <span class="section-kicker">PASO 4 DE 5</span>
+      <h1>Lesiones y molestias</h1>
+      <p class="subtle">Marca cualquier zona que requiera precaución. Esto no sustituye una valoración médica.</p>
+      <div class="pain-grid">
+        ${[
+          ["shoulder","Hombro"],["back","Espalda"],["knee","Rodilla"],["hip","Cadera"],
+          ["elbow","Codo"],["wrist","Muñeca"],["ankle","Tobillo"],["neck","Cuello"]
+        ].map(([value,label])=>`<label><input type="checkbox" name="obPain" value="${value}" ${selectedPain(p,value)}><span>${label}</span></label>`).join("")}
+      </div>
+      <label><span>Lesión, dolor o limitación que debamos conocer</span><textarea id="obInjuryNotes" rows="3" placeholder="Ej. dolor anterior de rodilla al bajar profundo">${esc(p.injuryNotes)}</textarea></label>
+      <label><span>¿Tienes alguna restricción médica para entrenar?</span><select id="obMedical">
+        <option value="no" ${p.medicalRestriction==="no"?"selected":""}>No</option>
+        <option value="yes" ${p.medicalRestriction==="yes"?"selected":""}>Sí o no estoy seguro</option>
+      </select></label>
+      <label><span>Ejercicios que quieres evitar</span><textarea id="obAvoid" rows="2" placeholder="Sepáralos con comas">${esc(p.avoidExercises)}</textarea></label>`;
+  }else{
+    const proposed=buildRecommendedRoutine(p);
+    const sessionsToShow=Number(p.days)<=2?["A","B"]:["A","B","C"];
+    content=`
+      <span class="section-kicker">PASO 5 DE 5</span>
+      <h1>Tu punto de partida</h1>
+      <div class="onboarding-summary">
+        <div><span>Objetivo</span><strong>${esc(onboardingGoalLabel(p.goal))}</strong></div>
+        <div><span>Nivel</span><strong>${esc(onboardingExperienceLabel(p.experience))}</strong></div>
+        <div><span>Disponibilidad</span><strong>${p.days} días · ${p.duration} min</strong></div>
+        <div><span>Entorno</span><strong>${esc(onboardingLocationLabel(p.location))}</strong></div>
+      </div>
+      <div class="safety-callout"><strong>Antes de empezar</strong><p>${esc(onboardingSafetyMessage(p))}</p></div>
+      <h2>Rutina recomendada</h2>
+      <div class="routine-preview-list">
+        ${sessionsToShow.map(session=>`<article><h3>Sesión ${session}</h3>${proposed[session].map(item=>`<div><span>${esc(item.name)}</span><small>${item.sets} × ${esc(item.target)}</small></div>`).join("")}</article>`).join("")}
+      </div>
+      <label class="consent-row"><input id="obConfirm" type="checkbox"><span>He revisado mis respuestas y quiero guardar esta rutina como punto de partida.</span></label>`;
+  }
+
+  app.innerHTML=`<div class="onboarding-shell">
+    <header class="onboarding-header">
+      <div><div class="brand">GymOS</div><div class="subtle">Configuración inicial</div></div>
+      ${getOnboardingProfile()?.completedAt?`<button id="cancelOnboarding" class="text-button">Cancelar</button>`:""}
+    </header>
+    <div class="onboarding-progress"><span style="width:${progress}%"></span></div>
+    <main class="onboarding-main">
+      <section class="card onboarding-card">${content}</section>
+      <div class="onboarding-actions">
+        ${step>1?`<button id="obBack" class="secondary">Atrás</button>`:"<span></span>"}
+        <button id="obNext" class="primary">${step===5?"Crear mi plan":"Continuar"}</button>
+      </div>
+    </main>
+  </div>`;
+
+  const cancel=document.getElementById("cancelOnboarding");
+  if(cancel) cancel.onclick=()=>{state.onboardingDraft=null;state.onboardingStep=1;state.screen="settings";renderSettings();};
+
+  const persistStep=()=>{
+    if(step===1){
+      p.name=document.getElementById("obName").value.trim();
+      p.age=document.getElementById("obAge").value;
+      p.height=document.getElementById("obHeight").value;
+      p.weight=document.getElementById("obWeight").value;
+      p.sex=document.getElementById("obSex").value;
+    }else if(step===2){
+      p.goal=document.querySelector('input[name="obGoal"]:checked')?.value||p.goal;
+      p.experience=document.getElementById("obExperience").value;
+    }else if(step===3){
+      p.days=Number(document.getElementById("obDays").value);
+      p.duration=Number(document.getElementById("obDuration").value);
+      p.location=document.getElementById("obLocation").value;
+      p.equipment=document.getElementById("obEquipment").value;
+    }else if(step===4){
+      p.painAreas=[...document.querySelectorAll('input[name="obPain"]:checked')].map(x=>x.value);
+      p.injuryNotes=document.getElementById("obInjuryNotes").value.trim();
+      p.medicalRestriction=document.getElementById("obMedical").value;
+      p.avoidExercises=document.getElementById("obAvoid").value.trim();
+    }
+    state.onboardingDraft=p;
+  };
+  document.querySelectorAll(".choice-card input").forEach(input=>input.onchange=()=>renderOnboarding());
+  const back=document.getElementById("obBack");
+  if(back) back.onclick=()=>{persistStep();state.onboardingStep--;renderOnboarding();};
+  document.getElementById("obNext").onclick=async()=>{
+    persistStep();
+    if(step===1){
+      if(!p.name||!p.age||!p.height||!p.weight){
+        alert("Completa nombre, edad, altura y peso para continuar.");
+        return;
+      }
+      if(Number(p.age)<14||Number(p.age)>100){alert("Revisa la edad indicada.");return;}
+    }
+    if(step<5){
+      state.onboardingStep++;
+      renderOnboarding();
+      return;
+    }
+    if(!document.getElementById("obConfirm").checked){
+      alert("Confirma que has revisado la propuesta.");
+      return;
+    }
+    const now=new Date().toISOString();
+    p.completedAt=now;
+    p.updatedAt=now;
+    const routine=buildRecommendedRoutine(p);
+    saveOnboardingProfile(p);
+    saveRoutine(routine);
+    sessions=getRoutine();
+    saveWeeklyGoal(Math.max(2,Math.min(5,Number(p.days)||3)));
+    state.selectedSession="A";
+    localStorage.setItem("gymos:selectedSession","A");
+    state.onboardingDraft=null;
+    state.onboardingStep=1;
+    state.screen="home";
+    toast("Tu plan inicial está listo");
+    renderHome();
+    setTimeout(()=>autoSync("onboarding completado"),400);
+  };
+}
+
 function render(){
   applyAppPreferences();
 
@@ -2943,7 +3290,14 @@ function render(){
     return;
   }
 
-  if(state.screen==="home") renderHome();
+  if(state.syncUser&&!onboardingCompleted()&&state.screen!=="account"){
+    state.screen="onboarding";
+    renderOnboarding();
+    return;
+  }
+
+  if(state.screen==="onboarding") renderOnboarding();
+  else if(state.screen==="home") renderHome();
   else if(state.screen==="workout") renderWorkout();
   else if(state.screen==="history") renderHistory();
   else if(state.screen==="stats") renderStats();
@@ -5981,7 +6335,7 @@ function renderAccount(){
 
 function renderSettings(){
   app.innerHTML=`<div class="app-shell">
-    <header class="topbar"><div><div class="brand">Ajustes</div><div class="subtle">GymOS v3.9.1 · Más corregido y navegación simplificada</div></div></header>
+    <header class="topbar"><div><div class="brand">Ajustes</div><div class="subtle">GymOS v4.0.0 · Perfil y plan personalizado</div></div></header>
     <main class="screen">
       <section class="card account-entry-card">
         <div class="account-entry-main">
@@ -5995,6 +6349,21 @@ function renderSettings(){
           </div>
         </div>
         <button id="openAccount" class="primary full">${state.syncUser?"Gestionar cuenta":"Crear cuenta o iniciar sesión"}</button>
+      </section>
+
+
+      <section class="card onboarding-profile-card">
+        <div class="card-heading-row">
+          <div>
+            <span class="section-kicker">MI PLAN</span>
+            <h2>Objetivo y perfil deportivo</h2>
+            <p class="subtle">${onboardingCompleted()
+              ?`${esc(onboardingGoalLabel(getOnboardingProfile().goal))} · ${getOnboardingProfile().days} días por semana`
+              :"Completa el cuestionario para crear una rutina adaptada."}</p>
+          </div>
+          <span class="mode-pill">${onboardingCompleted()?"Configurado":"Pendiente"}</span>
+        </div>
+        <button id="openOnboarding" class="primary full">${onboardingCompleted()?"Revisar objetivo y regenerar rutina":"Configurar mi plan"}</button>
       </section>
 
       <section class="card experience-card">
@@ -6202,6 +6571,8 @@ function renderSettings(){
     </main>${nav("settings")}
   </div>`;
   document.getElementById("openAccount").onclick=()=>{state.screen="account";renderAccount();};
+  const openOnboarding=document.getElementById("openOnboarding");
+  if(openOnboarding) openOnboarding.onclick=()=>{state.onboardingDraft=newOnboardingDraft();state.onboardingStep=1;state.screen="onboarding";renderOnboarding();};
   const openAccountFromSync=document.getElementById("openAccountFromSync");
   if(openAccountFromSync) openAccountFromSync.onclick=()=>{state.screen="account";renderAccount();};
   document.querySelectorAll("[data-app-mode]").forEach(button=>button.onclick=()=>{

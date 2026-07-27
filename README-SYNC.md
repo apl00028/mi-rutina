@@ -1,4 +1,4 @@
-# GymOS v3.2.0 — Coach IA conectado
+# GymOS v3.3.0 — Nutrición y composición corporal
 
 GymOS sigue funcionando completamente en modo local.
 
@@ -230,3 +230,19 @@ La resolución de conflictos conserva la copia con la fecha `updatedAt` más rec
 - Configuración segura mediante variables de entorno.
 - Restricción CORS configurable.
 - La clave de OpenAI nunca se guarda en el frontend.
+
+
+## Novedades de la versión 3.3.0
+
+- Nuevo módulo de nutrición.
+- Registro diario de calorías, proteínas, carbohidratos y grasas.
+- Registro de agua, pasos y notas.
+- Objetivos configurables de calorías y macronutrientes.
+- Fases de definición, mantenimiento y volumen.
+- Objetivo de cambio de peso semanal.
+- Promedios de los últimos siete días.
+- Barras de cumplimiento diario.
+- Comparación entre tendencia de peso y objetivo semanal.
+- Contexto nutricional integrado en GymOS Coach.
+- Datos nutricionales incluidos en copias de seguridad y sincronización.
+- Backend actualizado para interpretar el contexto nutricional de forma conservadora.

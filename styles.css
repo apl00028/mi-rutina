@@ -856,3 +856,29 @@ select{
 .coach-chat-composer{position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:min(100%,520px);display:grid;grid-template-columns:1fr auto;gap:8px;padding:10px 14px calc(10px + env(safe-area-inset-bottom));background:rgba(255,255,255,.96);border-top:1px solid #e5e7eb;backdrop-filter:blur(12px);z-index:20}
 .coach-chat-composer textarea{resize:none;min-height:54px;margin:0}
 .coach-chat-composer button{align-self:stretch}
+
+.nutrition-entry-card{border:1px solid #bfdbfe;background:linear-gradient(180deg,#eff6ff,#fff)}
+.header-date{max-width:132px;padding:7px;border-radius:9px;border:1px solid #d1d5db;background:#fff;font-size:.68rem}
+.nutrition-hero{background:linear-gradient(155deg,#0f766e,#14b8a6);color:#fff}
+.nutrition-hero h1{margin:0 0 5px;font-size:1.45rem}
+.nutrition-hero p{margin:0;opacity:.9;font-size:.72rem}
+.nutrition-status{padding:6px 9px;border-radius:999px;background:rgba(255,255,255,.18);font-size:.6rem;font-weight:900}
+.nutrition-target-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:7px;margin-top:15px}
+.nutrition-target-grid article{padding:9px;border-radius:11px;background:rgba(255,255,255,.13)}
+.nutrition-target-grid span,.nutrition-target-grid strong{display:block}
+.nutrition-target-grid span{font-size:.56rem;opacity:.82}
+.nutrition-target-grid strong{font-size:.8rem;margin-top:4px}
+.nutrition-input-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:9px}
+.nutrition-progress-row{margin:13px 0}
+.nutrition-progress-row>div:first-child{display:flex;justify-content:space-between;gap:8px;font-size:.68rem}
+.nutrition-progress{height:8px;border-radius:999px;background:#e5e7eb;overflow:hidden;margin-top:6px}
+.nutrition-progress span{display:block;height:100%;border-radius:999px;background:#0d9488}
+.nutrition-week-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:11px}
+.nutrition-week-grid article{padding:10px;border-radius:11px;background:#f3f4f6}
+.nutrition-week-grid span,.nutrition-week-grid strong{display:block}
+.nutrition-week-grid span{font-size:.58rem;color:#6b7280}
+.nutrition-week-grid strong{font-size:.86rem;margin-top:5px}
+@media(max-width:420px){
+  .nutrition-target-grid,.nutrition-week-grid{grid-template-columns:repeat(2,1fr)}
+  .nutrition-input-grid{grid-template-columns:1fr}
+}

@@ -582,7 +582,9 @@ const GYMOS_BACKUP_KEYS=[
   "gymos:coachProposals",
   "gymos:coachSnapshots",
   "gymos:coachChat",
-  "gymos:coachConnection"
+  "gymos:coachConnection",
+  "gymos:nutritionSettings",
+  "gymos:nutritionEntries"
 ];
 
 function getFavoriteExercises(){
@@ -922,13 +924,14 @@ function undoLastCoachChange(){
 }
 function coachContextPayload(){
   return {
-    version:"3.2.0",
+    version:"3.3.0",
     generatedAt:new Date().toISOString(),
     settings:getCoachSettings(),
     routine:getRoutine(),
     recentWorkouts:lastCompletedWorkouts(12),
     exerciseSummary:coachExerciseSummary(),
     bodyWeight:getBodyWeightEntries?.()||[],
+    nutrition:nutritionCoachContext(),
     activeBlock:getActiveTrainingBlock?.()||null
   };
 }
@@ -1088,6 +1091,113 @@ function personalRecords(){
 }
 
 
+
+const NUTRITION_SETTINGS_KEY="gymos:nutritionSettings";
+const NUTRITION_ENTRIES_KEY="gymos:nutritionEntries";
+
+function getNutritionSettings(){
+  try{
+    return {
+      calories:2200,
+      protein:160,
+      carbs:230,
+      fat:65,
+      goal:"Definición",
+      weeklyTarget:-0.3,
+      ...JSON.parse(localStorage.getItem(NUTRITION_SETTINGS_KEY)||"{}")
+    };
+  }catch(error){
+    return {calories:2200,protein:160,carbs:230,fat:65,goal:"Definición",weeklyTarget:-0.3};
+  }
+}
+function saveNutritionSettings(value){
+  localStorage.setItem(NUTRITION_SETTINGS_KEY,JSON.stringify(value));
+}
+function getNutritionEntries(){
+  try{
+    const data=JSON.parse(localStorage.getItem(NUTRITION_ENTRIES_KEY)||"[]");
+    return Array.isArray(data)?data:[];
+  }catch(error){return [];}
+}
+function saveNutritionEntries(entries){
+  localStorage.setItem(NUTRITION_ENTRIES_KEY,JSON.stringify(entries.slice(-500)));
+}
+function nutritionEntryForDate(date){
+  return getNutritionEntries().find(item=>item.date===date)||{
+    date,calories:"",protein:"",carbs:"",fat:"",water:"",steps:"",notes:""
+  };
+}
+function upsertNutritionEntry(entry){
+  const entries=getNutritionEntries();
+  const index=entries.findIndex(item=>item.date===entry.date);
+  if(index>=0) entries[index]=entry;
+  else entries.push(entry);
+  entries.sort((a,b)=>a.date.localeCompare(b.date));
+  saveNutritionEntries(entries);
+}
+function nutritionProgress(value,target){
+  const current=Number(value||0);
+  const goal=Number(target||0);
+  return goal>0?Math.min(100,current/goal*100):0;
+}
+function nutritionWeeklySummary(){
+  const entries=getNutritionEntries()
+    .filter(item=>{
+      const date=new Date(item.date+"T12:00:00");
+      return Date.now()-date.getTime()<=7*86400000;
+    });
+  const average=field=>{
+    const values=entries.map(item=>Number(item[field]||0)).filter(value=>value>0);
+    return values.length?values.reduce((a,b)=>a+b,0)/values.length:null;
+  };
+  return {
+    days:entries.length,
+    calories:average("calories"),
+    protein:average("protein"),
+    carbs:average("carbs"),
+    fat:average("fat"),
+    water:average("water"),
+    steps:average("steps")
+  };
+}
+function bodyCompositionAssessment(){
+  const trend=bodyWeightTrend();
+  const settings=getNutritionSettings();
+  if(trend.weeklyRate===null){
+    return {
+      status:"Sin datos",
+      message:"Registra al menos dos pesos para valorar la tendencia."
+    };
+  }
+  const target=Number(settings.weeklyTarget||0);
+  const difference=trend.weeklyRate-target;
+  if(Math.abs(difference)<=0.15){
+    return {status:"En objetivo",message:`Ritmo actual: ${trend.weeklyRate.toFixed(2)} kg/semana.`};
+  }
+  if(settings.goal==="Definición"&&trend.weeklyRate>target+0.15){
+    return {status:"Por encima",message:"El peso baja más lento de lo previsto o está aumentando."};
+  }
+  if(settings.goal==="Definición"&&trend.weeklyRate<target-0.15){
+    return {status:"Demasiado rápido",message:"La pérdida de peso es más rápida de lo planificado. Vigila rendimiento y recuperación."};
+  }
+  if(settings.goal==="Volumen"&&trend.weeklyRate<target-0.15){
+    return {status:"Por debajo",message:"La subida de peso es menor de lo previsto."};
+  }
+  if(settings.goal==="Volumen"&&trend.weeklyRate>target+0.15){
+    return {status:"Demasiado rápido",message:"La subida de peso es más rápida de lo planificado."};
+  }
+  return {status:"Revisar",message:`Ritmo actual: ${trend.weeklyRate.toFixed(2)} kg/semana.`};
+}
+function nutritionCoachContext(){
+  return {
+    settings:getNutritionSettings(),
+    recentEntries:getNutritionEntries().slice(-14),
+    weeklySummary:nutritionWeeklySummary(),
+    weightTrend:bodyWeightTrend(),
+    bodyCompositionAssessment:bodyCompositionAssessment()
+  };
+}
+
 const COACH_CHAT_KEY="gymos:coachChat";
 const COACH_CONNECTION_KEY="gymos:coachConnection";
 
@@ -1178,6 +1288,7 @@ function coachChatContext(){
     fatigue:fatigueAssessment(),
     periodization:periodizationRecommendation(),
     bodyWeight:bodyWeightTrend(),
+    nutrition:nutritionCoachContext(),
     activeBlock:typeof getActiveTrainingBlock==="function"?getActiveTrainingBlock():null
   };
 }
@@ -1362,7 +1473,8 @@ let state = {
   favoritesSort: "name",
   coachSessionId: null,
   progressRangeWeeks: 8,
-  coachChatMessages: []
+  coachChatMessages: [],
+  nutritionDate: new Date().toISOString().slice(0,10)
 };
 
 function getHistory(){ return JSON.parse(localStorage.getItem("gymos:history") || "[]"); }
@@ -2166,6 +2278,7 @@ function render(){
   else if(state.screen==="coachProposal") renderCoachProposal();
   else if(state.screen==="progressDashboard") renderProgressDashboard();
   else if(state.screen==="coachChat") renderCoachChat();
+  else if(state.screen==="nutrition") renderNutrition();
   else renderSettings();
 }
 
@@ -3859,6 +3972,127 @@ function renderSubstitutionHistory(){
 
 
 
+
+function renderNutrition(){
+  const settings=getNutritionSettings();
+  const entry=nutritionEntryForDate(state.nutritionDate);
+  const weekly=nutritionWeeklySummary();
+  const assessment=bodyCompositionAssessment();
+
+  app.innerHTML=`<div class="app-shell">
+    <header class="topbar">
+      <button id="backNutrition" class="back-button">←</button>
+      <div><div class="brand">Nutrición</div><div class="subtle">Macros y composición corporal</div></div>
+      <input id="nutritionDate" class="header-date" type="date" value="${esc(state.nutritionDate)}">
+    </header>
+    <main class="screen">
+      <section class="card nutrition-hero">
+        <div class="card-heading-row">
+          <div><h1>${esc(settings.goal)}</h1><p>${esc(assessment.message)}</p></div>
+          <span class="nutrition-status">${esc(assessment.status)}</span>
+        </div>
+        <div class="nutrition-target-grid">
+          <article><span>Calorías</span><strong>${Number(settings.calories).toLocaleString("es-ES")}</strong></article>
+          <article><span>Proteína</span><strong>${Number(settings.protein)} g</strong></article>
+          <article><span>Carbohidratos</span><strong>${Number(settings.carbs)} g</strong></article>
+          <article><span>Grasa</span><strong>${Number(settings.fat)} g</strong></article>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>Registro diario</h2>
+        <div class="nutrition-input-grid">
+          <label><span>Calorías</span><input id="nutritionCalories" type="number" min="0" value="${esc(entry.calories)}"></label>
+          <label><span>Proteína (g)</span><input id="nutritionProtein" type="number" min="0" value="${esc(entry.protein)}"></label>
+          <label><span>Carbohidratos (g)</span><input id="nutritionCarbs" type="number" min="0" value="${esc(entry.carbs)}"></label>
+          <label><span>Grasa (g)</span><input id="nutritionFat" type="number" min="0" value="${esc(entry.fat)}"></label>
+          <label><span>Agua (L)</span><input id="nutritionWater" type="number" min="0" step="0.1" value="${esc(entry.water)}"></label>
+          <label><span>Pasos</span><input id="nutritionSteps" type="number" min="0" value="${esc(entry.steps)}"></label>
+        </div>
+        <label><span>Notas</span><textarea id="nutritionNotes" rows="3" placeholder="Hambre, energía, comidas libres...">${esc(entry.notes)}</textarea></label>
+        <button id="saveNutritionEntry" class="primary full">Guardar día</button>
+      </section>
+
+      <section class="card">
+        <h2>Objetivos diarios</h2>
+        ${[
+          ["Calorías",entry.calories,settings.calories,"kcal"],
+          ["Proteína",entry.protein,settings.protein,"g"],
+          ["Carbohidratos",entry.carbs,settings.carbs,"g"],
+          ["Grasa",entry.fat,settings.fat,"g"]
+        ].map(([label,value,target,unit])=>`<div class="nutrition-progress-row">
+          <div><span>${label}</span><strong>${Number(value||0).toLocaleString("es-ES")} / ${Number(target).toLocaleString("es-ES")} ${unit}</strong></div>
+          <div class="nutrition-progress"><span style="width:${nutritionProgress(value,target)}%"></span></div>
+        </div>`).join("")}
+      </section>
+
+      <section class="card">
+        <h2>Promedio de los últimos 7 días</h2>
+        <div class="nutrition-week-grid">
+          <article><span>Días registrados</span><strong>${weekly.days}</strong></article>
+          <article><span>Calorías</span><strong>${weekly.calories?Math.round(weekly.calories).toLocaleString("es-ES"):"—"}</strong></article>
+          <article><span>Proteína</span><strong>${weekly.protein?Math.round(weekly.protein)+" g":"—"}</strong></article>
+          <article><span>Pasos</span><strong>${weekly.steps?Math.round(weekly.steps).toLocaleString("es-ES"):"—"}</strong></article>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>Configurar objetivo</h2>
+        <label><span>Fase actual</span>
+          <select id="nutritionGoal">
+            ${["Definición","Mantenimiento","Volumen"].map(goal=>`<option ${settings.goal===goal?"selected":""}>${goal}</option>`).join("")}
+          </select>
+        </label>
+        <div class="nutrition-input-grid">
+          <label><span>Calorías</span><input id="nutritionTargetCalories" type="number" min="1000" value="${Number(settings.calories)}"></label>
+          <label><span>Proteína (g)</span><input id="nutritionTargetProtein" type="number" min="0" value="${Number(settings.protein)}"></label>
+          <label><span>Carbohidratos (g)</span><input id="nutritionTargetCarbs" type="number" min="0" value="${Number(settings.carbs)}"></label>
+          <label><span>Grasa (g)</span><input id="nutritionTargetFat" type="number" min="0" value="${Number(settings.fat)}"></label>
+          <label><span>Objetivo kg/semana</span><input id="nutritionWeeklyTarget" type="number" step="0.05" value="${Number(settings.weeklyTarget)}"></label>
+        </div>
+        <button id="saveNutritionSettings" class="secondary full">Guardar objetivos</button>
+      </section>
+
+      <section class="card warning-card">
+        <h2>Interpretación</h2>
+        <p>GymOS compara el promedio registrado con tu tendencia de peso, pero no sustituye una valoración sanitaria o nutricional profesional.</p>
+      </section>
+    </main>
+  </div>`;
+
+  document.getElementById("backNutrition").onclick=()=>{state.screen="settings";renderSettings();};
+  document.getElementById("nutritionDate").onchange=e=>{
+    state.nutritionDate=e.target.value;
+    renderNutrition();
+  };
+  document.getElementById("saveNutritionEntry").onclick=()=>{
+    upsertNutritionEntry({
+      date:state.nutritionDate,
+      calories:document.getElementById("nutritionCalories").value,
+      protein:document.getElementById("nutritionProtein").value,
+      carbs:document.getElementById("nutritionCarbs").value,
+      fat:document.getElementById("nutritionFat").value,
+      water:document.getElementById("nutritionWater").value,
+      steps:document.getElementById("nutritionSteps").value,
+      notes:document.getElementById("nutritionNotes").value.trim()
+    });
+    toast("Registro nutricional guardado");
+    renderNutrition();
+  };
+  document.getElementById("saveNutritionSettings").onclick=()=>{
+    saveNutritionSettings({
+      goal:document.getElementById("nutritionGoal").value,
+      calories:Number(document.getElementById("nutritionTargetCalories").value||0),
+      protein:Number(document.getElementById("nutritionTargetProtein").value||0),
+      carbs:Number(document.getElementById("nutritionTargetCarbs").value||0),
+      fat:Number(document.getElementById("nutritionTargetFat").value||0),
+      weeklyTarget:Number(document.getElementById("nutritionWeeklyTarget").value||0)
+    });
+    toast("Objetivos nutricionales guardados");
+    renderNutrition();
+  };
+}
+
 function renderProgressDashboard(){
   const weeks=weeklyTrainingAnalytics(state.progressRangeWeeks);
   const fatigue=fatigueAssessment();
@@ -4405,7 +4639,7 @@ function renderBackupRestore(){
 
 function renderSettings(){
   app.innerHTML=`<div class="app-shell">
-    <header class="topbar"><div><div class="brand">Ajustes</div><div class="subtle">GymOS v3.2.0 · Coach IA conectado</div></div></header>
+    <header class="topbar"><div><div class="brand">Ajustes</div><div class="subtle">GymOS v3.3.0 · Nutrición y composición corporal</div></div></header>
     <main class="screen">
       <section class="card sync-card">
         <div class="card-heading-row">
@@ -4435,6 +4669,17 @@ function renderSettings(){
           <p>Ejecuta <strong>supabase-schema.sql</strong> y añade <strong>https://apl00028.github.io/mi-rutina/</strong> en Authentication → URL Configuration → Redirect URLs. Usa la clave <strong>Publishable</strong> o <strong>anon public</strong>, nunca una secret/service role.</p>
         </details>
       </section>
+      <section class="card nutrition-entry-card">
+        <div class="card-heading-row">
+          <div>
+            <span class="coach-badge">NUEVO</span>
+            <h2>Nutrición</h2>
+            <p class="subtle">Registra calorías y macros, revisa tu tendencia semanal y compárala con el peso.</p>
+          </div>
+        </div>
+        <button id="openNutrition" class="primary full">Abrir nutrición</button>
+      </section>
+
       <section class="card">
         <h2>Dashboard de progreso</h2>
         <p class="subtle">Volumen semanal, fatiga, adherencia, grupos musculares y récords personales.</p>
@@ -4584,6 +4829,7 @@ function renderSettings(){
   document.getElementById("openGlobalAnalytics").onclick=()=>{state.screen="globalAnalytics";renderGlobalAnalytics();};
   document.getElementById("openExerciseLibrary").onclick=()=>{state.screen="exerciseLibrary";renderExerciseLibrary();};
   document.getElementById("openSubstitutionHistory").onclick=()=>{state.screen="substitutionHistory";renderSubstitutionHistory();};
+  document.getElementById("openNutrition").onclick=()=>{state.screen="nutrition";renderNutrition();};
   document.getElementById("openProgressDashboard").onclick=()=>{state.screen="progressDashboard";renderProgressDashboard();};
   document.getElementById("openCoach").onclick=()=>{state.screen="coach";renderCoach();};
   document.getElementById("openFavoriteExercises").onclick=()=>{state.screen="favoriteExercises";renderFavoriteExercises();};

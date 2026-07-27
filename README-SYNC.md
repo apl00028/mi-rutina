@@ -1,4 +1,4 @@
-# GymOS v3.8.5 — Corrección de bloqueo de navegación
+# GymOS v3.8.6 — Progreso y Coach corregidos
 
 GymOS sigue funcionando completamente en modo local.
 
@@ -378,3 +378,13 @@ de cuenta y pruebas automáticas con dos usuarios independientes.
 - La limpieza de cronómetros ahora es defensiva.
 - Un posible error del cronómetro ya no puede bloquear Inicio, Entrenar, Progreso, Coach o Más.
 - Mantiene todas las funciones de las versiones anteriores.
+
+
+## Parche v3.8.6
+
+- Corregido el acceso directo a Progreso y Coach.
+- La barra inferior permanece visible dentro de ambas pantallas.
+- La navegación utiliza un único controlador global, evitando eventos duplicados.
+- Todos los botones inferiores son explícitamente `type="button"`.
+- Progreso y Coach toleran datos históricos incompletos o dañados sin bloquearse.
+- Si una pantalla produce un error inesperado, aparece una opción segura para volver a Inicio.

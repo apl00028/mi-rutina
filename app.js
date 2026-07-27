@@ -936,7 +936,7 @@ function undoLastCoachChange(){
 }
 function coachContextPayload(){
   return {
-    version:"3.8.5",
+    version:"3.8.6",
     generatedAt:new Date().toISOString(),
     settings:getCoachSettings(),
     routine:getRoutine(),
@@ -2764,7 +2764,7 @@ function nav(active){
     ["settings","☰","Más"]
   ];
   return `<nav class="bottom-nav modern-bottom-nav">
-    ${items.map(([screen,icon,label])=>`<button data-nav="${screen}" class="${active===screen?"active":""}">
+    ${items.map(([screen,icon,label])=>`<button type="button" data-nav="${screen}" class="${active===screen?"active":""}">
       <span class="nav-icon">${icon}</span><span class="nav-label">${label}</span>
     </button>`).join("")}
   </nav>`;
@@ -2791,26 +2791,37 @@ function navigateToScreen(screen){
   }
 
   state.screen=screen;
-  render();
+
+  try{
+    render();
+  }catch(error){
+    console.error(`Could not render screen: ${screen}`,error);
+    app.innerHTML=`<div class="app-shell">
+      <main class="screen">
+        <section class="card warning-card">
+          <h1>No se pudo abrir ${esc(screen)}</h1>
+          <p class="subtle">${esc(error?.message||"Error desconocido")}</p>
+          <button type="button" id="recoverHome" class="primary full">Volver a Inicio</button>
+        </section>
+      </main>
+      ${nav(screen)}
+    </div>`;
+    document.getElementById("recoverHome").onclick=()=>{
+      state.screen="home";
+      renderHome();
+    };
+  }
 }
 
 function bindNav(){
-  // Direct bindings remain useful for keyboard/accessibility.
-  document.querySelectorAll("[data-nav]").forEach(button=>{
-    button.onclick=event=>{
-      event.preventDefault();
-      event.stopPropagation();
-      navigateToScreen(button.dataset.nav);
-    };
-  });
-
-  // One delegated listener makes navigation survive every re-render.
   if(globalNavigationBound) return;
   globalNavigationBound=true;
+
   document.addEventListener("click",event=>{
     const button=event.target.closest?.("[data-nav]");
     if(!button) return;
     event.preventDefault();
+    event.stopPropagation();
     navigateToScreen(button.dataset.nav);
   });
 }
@@ -4959,12 +4970,17 @@ function renderNutrition(){
 }
 
 function renderProgressDashboard(){
-  const weeks=weeklyTrainingAnalytics(state.progressRangeWeeks);
-  const fatigue=fatigueAssessment();
-  const periodization=periodizationRecommendation();
-  const adherence=adherenceSummary(state.progressRangeWeeks);
-  const weightTrend=bodyWeightTrend();
-  const records=personalRecords();
+  let weeks=[],fatigue={score:0,level:"baja",reasons:[]};
+  let periodization={phase:"Acumulación",action:"Mantener el plan actual.",reason:"Sin datos suficientes."};
+  let adherence={completed:0,possible:0,percent:0};
+  let weightTrend={entries:[],change:null,weeklyRate:null};
+  let records=[];
+  try{weeks=weeklyTrainingAnalytics(state.progressRangeWeeks);}catch(error){console.error("Progress weeks",error);}
+  try{fatigue=fatigueAssessment();}catch(error){console.error("Progress fatigue",error);}
+  try{periodization=periodizationRecommendation();}catch(error){console.error("Progress periodization",error);}
+  try{adherence=adherenceSummary(state.progressRangeWeeks);}catch(error){console.error("Progress adherence",error);}
+  try{weightTrend=bodyWeightTrend();}catch(error){console.error("Progress body trend",error);}
+  try{records=personalRecords();}catch(error){console.error("Progress records",error);}
   const current=weeks.at(-1)||{workouts:0,sets:0,volume:0,muscleSets:{}};
   const muscleTotals={};
   weeks.forEach(week=>Object.entries(week.muscleSets).forEach(([muscle,count])=>{
@@ -5048,9 +5064,10 @@ function renderProgressDashboard(){
         </div>
       </section>
     </main>
+    ${nav("progressDashboard")}
   </div>`;
 
-  document.getElementById("backProgressDashboard").onclick=()=>{state.screen="settings";renderSettings();};
+  document.getElementById("backProgressDashboard").onclick=()=>{state.screen="home";renderHome();};
   document.getElementById("progressRange").onchange=e=>{
     state.progressRangeWeeks=Number(e.target.value);
     renderProgressDashboard();
@@ -5141,11 +5158,13 @@ function renderCoachChat(){
 }
 
 function renderCoach(){
-  const settings=getCoachSettings();
-  const proposals=getCoachProposals();
+  let settings={backendUrl:"",requireApproval:true,goal:"Mantenerme definido",sessionDuration:60};
+  let proposals=[],snapshots=[],summaries=[];
+  try{settings=getCoachSettings();}catch(error){console.error("Coach settings",error);}
+  try{proposals=getCoachProposals();}catch(error){console.error("Coach proposals",error);}
+  try{snapshots=getCoachSnapshots();}catch(error){console.error("Coach snapshots",error);}
+  try{summaries=coachExerciseSummary();}catch(error){console.error("Coach summary",error);}
   const latest=proposals[0]||null;
-  const snapshots=getCoachSnapshots();
-  const summaries=coachExerciseSummary();
   const tracked=summaries.filter(item=>item.historyCount>0).length;
 
   app.innerHTML=`<div class="app-shell">
@@ -5216,9 +5235,10 @@ function renderCoach(){
         <p>Esta versión prepara la integración, pero no guarda claves de OpenAI en GitHub Pages. Para usar IA real necesitas un backend seguro configurado en esta pantalla.</p>
       </section>
     </main>
+    ${nav("coach")}
   </div>`;
 
-  document.getElementById("backCoach").onclick=()=>{state.screen="settings";renderSettings();};
+  document.getElementById("backCoach").onclick=()=>{state.screen="home";renderHome();};
   document.getElementById("openCoachChat").onclick=()=>{state.screen="coachChat";renderCoachChat();};
   document.getElementById("testCoachConnection").onclick=async()=>{
     const button=document.getElementById("testCoachConnection");
@@ -5840,7 +5860,7 @@ function renderAccount(){
 
 function renderSettings(){
   app.innerHTML=`<div class="app-shell">
-    <header class="topbar"><div><div class="brand">Ajustes</div><div class="subtle">GymOS v3.8.5 · Corrección de bloqueo de navegación</div></div></header>
+    <header class="topbar"><div><div class="brand">Ajustes</div><div class="subtle">GymOS v3.8.6 · Progreso y Coach corregidos</div></div></header>
     <main class="screen">
       <section class="card account-entry-card">
         <div class="account-entry-main">

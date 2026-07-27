@@ -936,7 +936,7 @@ function undoLastCoachChange(){
 }
 function coachContextPayload(){
   return {
-    version:"3.8.1",
+    version:"3.8.2",
     generatedAt:new Date().toISOString(),
     settings:getCoachSettings(),
     routine:getRoutine(),
@@ -2934,6 +2934,95 @@ function renderHome(){
   bindNav();
 }
 
+
+function isTimedExercise(exercise){
+  const type=String(exercise?.type||"").toLowerCase();
+  const target=String(exercise?.target||"").toLowerCase();
+  const name=String(exercise?.name||"").toLowerCase();
+  return type.includes("time")||
+    type.includes("tiempo")||
+    target.includes("seg")||
+    target.includes("sec")||
+    target.includes("min")||
+    /plancha|plank|isometr|wall sit|dead hang|farmer hold/.test(name);
+}
+function exerciseTimerKey(session,exerciseIndex,setIndex){
+  return `${session}:${exerciseIndex}:${setIndex}`;
+}
+function getExerciseTimer(session,exerciseIndex,setIndex){
+  const key=exerciseTimerKey(session,exerciseIndex,setIndex);
+  if(!state.exerciseTimers[key]){
+    state.exerciseTimers[key]={running:false,startedAt:null,elapsedMs:0,intervalId:null};
+  }
+  return state.exerciseTimers[key];
+}
+function currentExerciseTimerMs(timer){
+  if(!timer.running||!timer.startedAt) return timer.elapsedMs||0;
+  return (timer.elapsedMs||0)+(Date.now()-timer.startedAt);
+}
+function formatExerciseTimer(ms){
+  const total=Math.max(0,Math.floor(ms/1000));
+  return `${String(Math.floor(total/60)).padStart(2,"0")}:${String(total%60).padStart(2,"0")}`;
+}
+function updateExerciseTimerDisplay(key){
+  const timer=state.exerciseTimers[key];
+  const display=document.querySelector(`[data-exercise-timer-display="${CSS.escape(key)}"]`);
+  if(display&&timer) display.textContent=formatExerciseTimer(currentExerciseTimerMs(timer));
+}
+function startExerciseTimer(session,exerciseIndex,setIndex){
+  const key=exerciseTimerKey(session,exerciseIndex,setIndex);
+  const timer=getExerciseTimer(session,exerciseIndex,setIndex);
+  if(timer.running) return;
+  timer.running=true;
+  timer.startedAt=Date.now();
+  timer.intervalId=setInterval(()=>updateExerciseTimerDisplay(key),250);
+  updateExerciseTimerDisplay(key);
+}
+function stopExerciseTimer(session,exerciseIndex,setIndex){
+  const key=exerciseTimerKey(session,exerciseIndex,setIndex);
+  const timer=getExerciseTimer(session,exerciseIndex,setIndex);
+  if(timer.running){
+    timer.elapsedMs=currentExerciseTimerMs(timer);
+    timer.running=false;
+    timer.startedAt=null;
+    if(timer.intervalId) clearInterval(timer.intervalId);
+    timer.intervalId=null;
+  }
+  const seconds=Math.max(1,Math.round((timer.elapsedMs||0)/1000));
+  const draft=getDraft(session);
+  draft.exercises[exerciseIndex].series[setIndex].seconds=seconds;
+  draft.exercises[exerciseIndex].series[setIndex].reps="";
+  draft.exercises[exerciseIndex].series[setIndex].weight="";
+  saveDraft(draft);
+  updateExerciseTimerDisplay(key);
+  const input=document.querySelector(`[data-seconds="${exerciseIndex}:${setIndex}"]`);
+  if(input) input.value=seconds;
+  toast(`${seconds} segundos registrados`);
+}
+function resetExerciseTimer(session,exerciseIndex,setIndex){
+  const key=exerciseTimerKey(session,exerciseIndex,setIndex);
+  const timer=getExerciseTimer(session,exerciseIndex,setIndex);
+  if(timer.intervalId) clearInterval(timer.intervalId);
+  state.exerciseTimers[key]={running:false,startedAt:null,elapsedMs:0,intervalId:null};
+  const draft=getDraft(session);
+  draft.exercises[exerciseIndex].series[setIndex].seconds="";
+  saveDraft(draft);
+  updateExerciseTimerDisplay(key);
+  const input=document.querySelector(`[data-seconds="${exerciseIndex}:${setIndex}"]`);
+  if(input) input.value="";
+}
+function stopAllExerciseTimers(){
+  Object.values(state.exerciseTimers).forEach(timer=>{
+    if(timer?.intervalId) clearInterval(timer.intervalId);
+    if(timer?.running){
+      timer.elapsedMs=currentExerciseTimerMs(timer);
+      timer.running=false;
+      timer.startedAt=null;
+      timer.intervalId=null;
+    }
+  });
+}
+
 function renderWorkout(){
   const s=state.selectedSession,d=getDraft(s),last=lastWorkoutForSession(s);
   const done=d.exercises.reduce((n,e)=>n+e.series.filter(x=>x.done).length,0);
@@ -2952,15 +3041,22 @@ function renderWorkout(){
           <div><strong>Pesos preparados</strong><span>Se han copiado de tu última sesión ${s}.</span></div>
           <button id="clearPrefilledWeights" class="text-button">Vaciar pesos</button>
         </div>` : ""}
-      ${d.exercises.map((ex,i)=>`
-        <section class="exercise-card" data-exercise="${i}">
+      ${d.exercises.map((ex,i)=>{
+        const timed=isTimedExercise(ex);
+        return `
+        <section class="exercise-card ${timed?"timed-exercise-card":""}" data-exercise="${i}">
           <h2>${ex.name}</h2>
           <div class="target">Objetivo: ${ex.target} · RIR 3–4</div>
+          ${timed?`<div class="timed-exercise-note">Ejercicio por tiempo: inicia y detén el cronómetro en cada serie.</div>`:""}
           ${last?.exercises?.[i]?`<div class="last-session"><strong>Última vez:</strong> ${last.exercises[i].series.map(x=>{
-            const s=normalizeSeries(x);
-            return s.weight||s.reps?`${s.warmup?"Cal. ":""}${s.weight||"—"} × ${s.reps||"—"}${s.rir!==""?` · RIR ${s.rir}`:""}`:"—";
+            const normalized=normalizeSeries(x);
+            if(timed){
+              const seconds=Number(x.seconds||0);
+              return seconds?`${seconds} s${normalized.rir!==""?` · RIR ${normalized.rir}`:""}`:"—";
+            }
+            return normalized.weight||normalized.reps?`${normalized.warmup?"Cal. ":""}${normalized.weight||"—"} × ${normalized.reps||"—"}${normalized.rir!==""?` · RIR ${normalized.rir}`:""}`:"—";
           }).join(" · ")}</div>`:""}
-          ${(()=>{
+          ${timed?"":(()=>{
             const rec=exerciseRecommendation(last?.exercises?.[i],ex.target,ex.increment,ex.type);
             const record=recordStats(ex.name);
             return `<div class="recommendation ${rec.status}">
@@ -2970,8 +3066,28 @@ function renderWorkout(){
               ${record?`<small class="recommendation-record">Récord: ${formatWeight(record.maxWeight.weight)} kg · e1RM ${formatWeight(Math.round(record.bestE1rm.e1rm*10)/10)} kg</small>`:""}
             </div>`;
           })()}
-          <div class="series-header series-header-v18"><span></span><span>Peso</span><span>Reps</span><span>RIR</span><span>Cal.</span><span>Hecha</span></div>
-          ${ex.series.map((x,j)=>`
+          ${timed
+            ?`<div class="series-header timed-series-header"><span></span><span>Tiempo</span><span>Segundos</span><span>RIR</span><span>Hecha</span></div>`
+            :`<div class="series-header series-header-v18"><span></span><span>Peso</span><span>Reps</span><span>RIR</span><span>Cal.</span><span>Hecha</span></div>`}
+          ${ex.series.map((x,j)=>timed?`
+            <div class="series-row timed-series-row">
+              <div class="series-number">${j+1}</div>
+              <div class="mini-timer">
+                <strong data-exercise-timer-display="${exerciseTimerKey(s,i,j)}">${formatExerciseTimer(currentExerciseTimerMs(getExerciseTimer(s,i,j)))}</strong>
+                <div class="mini-timer-actions">
+                  <button type="button" class="timer-start" data-timer-start="${i}:${j}">Iniciar</button>
+                  <button type="button" class="timer-stop" data-timer-stop="${i}:${j}">Parar</button>
+                  <button type="button" class="timer-reset" data-timer-reset="${i}:${j}" aria-label="Reiniciar">↺</button>
+                </div>
+              </div>
+              <input inputmode="numeric" data-seconds="${i}:${j}" value="${x.seconds||""}" placeholder="seg">
+              <select data-field="rir" data-series="${j}" aria-label="RIR">
+                <option value="" ${x.rir===""?"selected":""}>—</option>
+                ${[0,1,2,3,4,5].map(v=>`<option value="${v}" ${String(x.rir)===String(v)?"selected":""}>${v}</option>`).join("")}
+              </select>
+              <button class="complete-btn ${x.done?"done":""}" data-done="${j}">${x.done?"✓":""}</button>
+            </div>`
+            :`
             <div class="series-row series-row-v18 ${x.warmup?"warmup-row":""}">
               <div class="series-number">${j+1}</div>
               <input inputmode="decimal" data-field="weight" data-series="${j}" value="${x.weight}" placeholder="kg">
@@ -2984,7 +3100,8 @@ function renderWorkout(){
               <button class="complete-btn ${x.done?"done":""}" data-done="${j}">${x.done?"✓":""}</button>
             </div>`).join("")}
           <textarea data-notes="${i}" placeholder="Notas">${ex.notes||""}</textarea>
-        </section>`).join("")}
+        </section>`;
+      }).join("")}
     </main>
     <div id="timerPanel" class="timer-panel hidden">
       <div class="timer-main"><div><div class="subtle">Descanso</div><div id="timerValue" class="timer-value">${formatTimer(state.timerSeconds)}</div></div><button id="closeTimer" class="secondary">Cerrar</button></div>
@@ -2999,14 +3116,39 @@ function renderWorkout(){
       const draft=getDraft(s),j=Number(inp.dataset.series);
       draft.exercises[i].series[j][inp.dataset.field]=inp.value; saveDraft(draft);
     });
+    card.querySelectorAll("[data-seconds]").forEach(inp=>inp.oninput=()=>{
+      const [exerciseIndex,setIndex]=inp.dataset.seconds.split(":").map(Number);
+      const draft=getDraft(s);
+      draft.exercises[exerciseIndex].series[setIndex].seconds=inp.value;
+      draft.exercises[exerciseIndex].series[setIndex].weight="";
+      draft.exercises[exerciseIndex].series[setIndex].reps="";
+      saveDraft(draft);
+    });
+    card.querySelectorAll("[data-timer-start]").forEach(btn=>btn.onclick=()=>{
+      const [exerciseIndex,setIndex]=btn.dataset.timerStart.split(":").map(Number);
+      startExerciseTimer(s,exerciseIndex,setIndex);
+    });
+    card.querySelectorAll("[data-timer-stop]").forEach(btn=>btn.onclick=()=>{
+      const [exerciseIndex,setIndex]=btn.dataset.timerStop.split(":").map(Number);
+      stopExerciseTimer(s,exerciseIndex,setIndex);
+    });
+    card.querySelectorAll("[data-timer-reset]").forEach(btn=>btn.onclick=()=>{
+      const [exerciseIndex,setIndex]=btn.dataset.timerReset.split(":").map(Number);
+      resetExerciseTimer(s,exerciseIndex,setIndex);
+    });
     card.querySelectorAll("[data-warmup]").forEach(inp=>inp.onchange=()=>{
       const draft=getDraft(s),j=Number(inp.dataset.warmup);
       draft.exercises[i].series[j].warmup=inp.checked; saveDraft(draft); renderWorkout();
     });
     card.querySelectorAll("[data-done]").forEach(btn=>btn.onclick=()=>{
       const draft=getDraft(s),j=Number(btn.dataset.done);
+      if(isTimedExercise(draft.exercises[i])&&!draft.exercises[i].series[j].seconds){
+        stopExerciseTimer(s,i,j);
+      }
       draft.exercises[i].series[j].done=!draft.exercises[i].series[j].done;
-      saveDraft(draft); if(draft.exercises[i].series[j].done) startTimer(getRestSeconds()); renderWorkout();
+      saveDraft(draft);
+      if(draft.exercises[i].series[j].done) startTimer(getRestSeconds());
+      renderWorkout();
     });
   });
   document.querySelectorAll("[data-notes]").forEach(a=>a.oninput=()=>{
@@ -3021,8 +3163,8 @@ function renderWorkout(){
     renderWorkout();
     toast("Pesos vaciados");
   };
-  document.getElementById("backHome").onclick=()=>{state.screen="home";renderHome();};
-  document.getElementById("finishWorkout").onclick=finishWorkout;
+  document.getElementById("backHome").onclick=()=>{stopAllExerciseTimers();state.screen="home";renderHome();};
+  document.getElementById("finishWorkout").onclick=()=>{stopAllExerciseTimers();finishWorkout();};
   document.getElementById("timerChip").onclick=()=>document.getElementById("timerPanel").classList.remove("hidden");
   document.getElementById("closeTimer").onclick=()=>document.getElementById("timerPanel").classList.add("hidden");
   document.querySelectorAll("[data-time]").forEach(b=>b.onclick=()=>startTimer(Number(b.dataset.time)));
@@ -5652,7 +5794,7 @@ function renderAccount(){
 
 function renderSettings(){
   app.innerHTML=`<div class="app-shell">
-    <header class="topbar"><div><div class="brand">Ajustes</div><div class="subtle">GymOS v3.8.1 · Corrección de navegación y descargas</div></div></header>
+    <header class="topbar"><div><div class="brand">Ajustes</div><div class="subtle">GymOS v3.8.2 · Cronómetro para ejercicios por tiempo</div></div></header>
     <main class="screen">
       <section class="card account-entry-card">
         <div class="account-entry-main">

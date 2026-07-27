@@ -1,4 +1,4 @@
-# GymOS v3.8.1 — Corrección de navegación y descargas
+# GymOS v3.8.2 — Cronómetro para ejercicios por tiempo
 
 GymOS sigue funcionando completamente en modo local.
 
@@ -339,3 +339,14 @@ de cuenta y pruebas automáticas con dos usuarios independientes.
 - La rutina solo se exporta al pulsar «Exportar rutina actual».
 - Se restauran correctamente los botones de navegación y las pantallas de Ajustes.
 - Se corrige la configuración técnica cuando el campo de correo no está presente.
+
+
+## Parche v3.8.2
+
+- Detección automática de planchas, planks e isométricos.
+- Los ejercicios por tiempo no muestran peso ni repeticiones.
+- Mini cronómetro independiente en cada serie.
+- Botones para iniciar, parar y reiniciar.
+- Al parar, el tiempo queda registrado automáticamente en segundos.
+- También se puede corregir el número de segundos manualmente.
+- El historial muestra el tiempo realizado en cada serie.

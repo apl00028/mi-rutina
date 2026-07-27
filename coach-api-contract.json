@@ -29,7 +29,7 @@
       }
     ]
   },
-  "version": "3.8.1",
+  "version": "3.8.2",
   "health": {
     "endpoint": "GET /health"
   },
@@ -88,5 +88,15 @@
       "local",
       "remote"
     ]
+  },
+  "timed_exercises": {
+    "supported": true,
+    "stored_field": "seconds",
+    "controls": [
+      "start",
+      "stop",
+      "reset"
+    ],
+    "behavior": "stopping writes elapsed seconds into the current set"
   }
 }

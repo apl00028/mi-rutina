@@ -486,6 +486,151 @@ function addExerciseToRoutine(sessionKey,exercise){
   });
   saveRoutine(routine);
 }
+
+const EXERCISE_SUBSTITUTIONS_KEY="gymos:exerciseSubstitutions";
+const FAVORITE_SUBSTITUTIONS_KEY="gymos:favoriteSubstitutions";
+
+function getExerciseSubstitutions(){
+  try{
+    const data=JSON.parse(localStorage.getItem(EXERCISE_SUBSTITUTIONS_KEY)||"[]");
+    return Array.isArray(data)?data:[];
+  }catch(error){return [];}
+}
+function saveExerciseSubstitutions(items){
+  localStorage.setItem(EXERCISE_SUBSTITUTIONS_KEY,JSON.stringify(items));
+}
+function getFavoriteSubstitutions(){
+  try{
+    const data=JSON.parse(localStorage.getItem(FAVORITE_SUBSTITUTIONS_KEY)||"[]");
+    return Array.isArray(data)?data:[];
+  }catch(error){return [];}
+}
+function saveFavoriteSubstitutions(items){
+  localStorage.setItem(FAVORITE_SUBSTITUTIONS_KEY,JSON.stringify(items));
+}
+function substitutionPairKey(fromName,toName){
+  return `${normalizeExerciseName(fromName)}=>${normalizeExerciseName(toName)}`;
+}
+function exerciseLibraryItemByName(name){
+  const key=normalizeExerciseName(name);
+  return getExerciseLibrary().find(item=>normalizeExerciseName(item.name)===key)||null;
+}
+
+function exerciseTrainingHistory(name){
+  const key=normalizeExerciseName(name);
+  const workouts=getHistory();
+  const entries=[];
+  workouts.forEach(workout=>{
+    const date=workout.date||workout.completedAt||workout.createdAt||"";
+    const session=workout.session||workout.sessionKey||"";
+    const exercises=workout.exercises||workout.items||[];
+    exercises.forEach(exercise=>{
+      if(normalizeExerciseName(exercise.name)!==key) return;
+      const sets=exercise.sets||exercise.completedSets||[];
+      sets.forEach((set,index)=>{
+        const weight=Number(set.weight??set.kg??0);
+        const reps=Number(set.reps??0);
+        if(!weight&&!reps) return;
+        entries.push({
+          date,
+          session,
+          set:index+1,
+          weight,
+          reps,
+          rir:set.rir??set.RIR??null,
+          rpe:set.rpe??set.RPE??null,
+          volume:weight*reps,
+          estimated1RM:estimatedOneRepMax(weight,reps)
+        });
+      });
+    });
+  });
+  return entries.sort((a,b)=>new Date(b.date)-new Date(a.date));
+}
+function exerciseDetailStats(name){
+  const rows=exerciseTrainingHistory(name);
+  if(!rows.length) return {rows:[],bestWeight:0,best1RM:0,totalVolume:0,totalSets:0,last:null};
+  return {
+    rows,
+    bestWeight:Math.max(...rows.map(row=>row.weight||0)),
+    best1RM:Math.max(...rows.map(row=>row.estimated1RM||0)),
+    totalVolume:rows.reduce((sum,row)=>sum+(row.volume||0),0),
+    totalSets:rows.length,
+    last:rows[0]
+  };
+}
+function updateExerciseTechnicalNotes(id,notes){
+  const library=getExerciseLibrary();
+  const item=library.find(exercise=>exercise.id===id);
+  if(!item) return false;
+  item.notes=String(notes||"").trim();
+  saveExerciseLibrary(library);
+  return true;
+}
+function suggestedSubstitutes(currentName,query="",equipment="Todos",favoritesOnly=false){
+  const current=exerciseLibraryItemByName(currentName);
+  const q=String(query||"").trim().toLowerCase();
+  const favoritePairs=getFavoriteSubstitutions();
+  return getExerciseLibrary()
+    .filter(item=>normalizeExerciseName(item.name)!==normalizeExerciseName(currentName))
+    .filter(item=>!q||[item.name,item.muscle,item.equipment,item.type,item.notes].join(" ").toLowerCase().includes(q))
+    .filter(item=>equipment==="Todos"||item.equipment===equipment)
+    .map(item=>{
+      const sameMuscle=current&&item.muscle===current.muscle;
+      const sameType=current&&item.type===current.type;
+      const favorite=favoritePairs.includes(substitutionPairKey(currentName,item.name));
+      let score=0;
+      if(sameMuscle) score+=4;
+      if(sameType) score+=2;
+      if(favorite) score+=6;
+      if(item.favorite) score+=1;
+      return {...item,sameMuscle,sameType,favorite,score};
+    })
+    .filter(item=>!favoritesOnly||item.favorite)
+    .sort((a,b)=>b.score-a.score||a.name.localeCompare(b.name,"es"));
+}
+function applyExerciseSubstitution(session,index,replacement,reason){
+  const routine=JSON.parse(JSON.stringify(getRoutine()));
+  const current=routine[session]?.[index];
+  if(!current||!replacement) return false;
+  const next={
+    ...current,
+    name:replacement.name,
+    substitutionOf:current.name,
+    substitutionReason:reason||"",
+    notes:current.notes||replacement.notes||""
+  };
+  routine[session][index]=next;
+  saveRoutine(routine);
+  sessions=getRoutine();
+
+  const history=getExerciseSubstitutions();
+  history.unshift({
+    id:`sub-${Date.now().toString(36)}`,
+    date:new Date().toISOString(),
+    session,
+    from:current.name,
+    to:replacement.name,
+    reason:reason||"",
+    preserved:{sets:current.sets,target:current.target,increment:current.increment,type:current.type}
+  });
+  saveExerciseSubstitutions(history.slice(0,200));
+  return true;
+}
+function revertLastSubstitution(session,index){
+  const routine=JSON.parse(JSON.stringify(getRoutine()));
+  const current=routine[session]?.[index];
+  if(!current?.substitutionOf) return false;
+  routine[session][index]={
+    ...current,
+    name:current.substitutionOf
+  };
+  delete routine[session][index].substitutionOf;
+  delete routine[session][index].substitutionReason;
+  saveRoutine(routine);
+  sessions=getRoutine();
+  return true;
+}
 function formatBlockDate(value){
   const d=dateOnly(value);
   return d?d.toLocaleDateString("es-ES",{day:"2-digit",month:"short",year:"numeric"}):"—";
@@ -519,7 +664,8 @@ let state = {
   libraryMuscle: "Todos",
   libraryEquipment: "Todos",
   libraryFavoritesOnly: false,
-  editingLibraryExerciseId: null
+  editingLibraryExerciseId: null,
+  selectedLibraryExerciseId: null
 };
 
 function getHistory(){ return JSON.parse(localStorage.getItem("gymos:history") || "[]"); }
@@ -655,7 +801,7 @@ function formatSyncDate(value){
 }
 function buildSyncPayload(){
   return {
-    version:"2.5.0",
+    version:"2.5.2",
     updatedAt:getLocalUpdatedAt(),
     deviceId:getDeviceId(),
     deviceName:getDeviceName(),
@@ -668,6 +814,8 @@ function buildSyncPayload(){
     blocks:getTrainingBlocks(),
     activeBlockId:localStorage.getItem("gymos:activeBlockId"),
     exerciseLibrary:getExerciseLibrary(),
+    exerciseSubstitutions:getExerciseSubstitutions(),
+    favoriteSubstitutions:getFavoriteSubstitutions(),
     updatedAt:getLocalUpdatedAt()
   };
 }
@@ -1313,6 +1461,8 @@ function render(){
   else if(state.screen==="exerciseAnalytics") renderExerciseAnalytics();
   else if(state.screen==="exerciseLibrary") renderExerciseLibrary();
   else if(state.screen==="exerciseLibraryEditor") renderExerciseLibraryEditor();
+  else if(state.screen==="substitutionHistory") renderSubstitutionHistory();
+  else if(state.screen==="exerciseDetail") renderExerciseDetail();
   else renderSettings();
 }
 
@@ -2055,6 +2205,91 @@ function editExerciseModal(session,index=null){
     renderRoutineEditor();
   };
 }
+
+function substituteExerciseModal(session,index){
+  const routine=getRoutine();
+  const current=routine[session]?.[index];
+  if(!current) return;
+  const library=getExerciseLibrary();
+  const equipmentOptions=["Todos",...new Set(library.map(item=>item.equipment).filter(Boolean))];
+
+  const layer=document.createElement("div");
+  layer.className="routine-modal-layer";
+  layer.innerHTML=`<div class="routine-modal substitution-modal">
+    <div class="modal-handle"></div>
+    <div class="card-heading-row">
+      <div><h2>Sustituir ejercicio</h2><p class="subtle">${esc(current.name)}</p></div>
+      <button id="closeSubstitutionModal" class="icon-button">×</button>
+    </div>
+    <div class="substitution-preserve-banner">
+      Se conservarán las series, el objetivo y el incremento configurados.
+    </div>
+    <div class="library-filter-grid">
+      <label><span>Buscar alternativa</span><input id="substitutionSearch" type="search" placeholder="Ejercicio, músculo o material"></label>
+      <label><span>Material disponible</span><select id="substitutionEquipment">
+        ${equipmentOptions.map(value=>`<option value="${esc(value)}">${esc(value)}</option>`).join("")}
+      </select></label>
+    </div>
+    <label class="favorite-filter"><input id="substitutionFavoritesOnly" type="checkbox"><span>Solo sustituciones favoritas</span></label>
+    <label><span>Motivo</span><select id="substitutionReason">
+      <option value="">Sin indicar</option>
+      <option value="Dolor o molestia">Dolor o molestia</option>
+      <option value="Material no disponible">Material no disponible</option>
+      <option value="Máquina ocupada">Máquina ocupada</option>
+      <option value="Preferencia personal">Preferencia personal</option>
+      <option value="Entrenamiento en casa">Entrenamiento en casa</option>
+      <option value="Otro">Otro</option>
+    </select></label>
+    <div id="substitutionResults" class="substitution-results"></div>
+  </div>`;
+  document.body.appendChild(layer);
+
+  const close=()=>layer.remove();
+  document.getElementById("closeSubstitutionModal").onclick=close;
+  layer.onclick=e=>{if(e.target===layer) close();};
+
+  const renderResults=()=>{
+    const query=document.getElementById("substitutionSearch").value;
+    const equipment=document.getElementById("substitutionEquipment").value;
+    const favoritesOnly=document.getElementById("substitutionFavoritesOnly").checked;
+    const results=suggestedSubstitutes(current.name,query,equipment,favoritesOnly);
+    const container=document.getElementById("substitutionResults");
+    container.innerHTML=results.length?results.map(item=>`
+      <article class="substitution-option">
+        <button class="substitution-option-main" data-choose-substitute="${item.id}">
+          <strong>${esc(item.name)}</strong>
+          <span>${esc(item.muscle)} · ${esc(item.equipment)} · ${esc(item.type)}</span>
+          <small>${item.sameMuscle?"Mismo grupo muscular":item.muscle}${item.sameType?" · Mismo tipo":""}</small>
+        </button>
+        <button class="favorite-button ${item.favorite?"active":""}" data-favorite-substitute="${item.id}" aria-label="Favorito">★</button>
+      </article>`).join(""):`<div class="routine-empty"><strong>Sin alternativas</strong><p>Prueba con otros filtros.</p></div>`;
+
+    container.querySelectorAll("[data-choose-substitute]").forEach(button=>button.onclick=()=>{
+      const replacement=library.find(item=>item.id===button.dataset.chooseSubstitute);
+      const reason=document.getElementById("substitutionReason").value;
+      if(applyExerciseSubstitution(session,index,replacement,reason)){
+        close();
+        toast(`${current.name} sustituido por ${replacement.name}`);
+        renderRoutineEditor();
+      }
+    });
+    container.querySelectorAll("[data-favorite-substitute]").forEach(button=>button.onclick=()=>{
+      const replacement=library.find(item=>item.id===button.dataset.favoriteSubstitute);
+      if(!replacement) return;
+      const key=substitutionPairKey(current.name,replacement.name);
+      const favorites=getFavoriteSubstitutions();
+      const next=favorites.includes(key)?favorites.filter(item=>item!==key):[...favorites,key];
+      saveFavoriteSubstitutions(next);
+      renderResults();
+    });
+  };
+
+  document.getElementById("substitutionSearch").oninput=renderResults;
+  document.getElementById("substitutionEquipment").onchange=renderResults;
+  document.getElementById("substitutionFavoritesOnly").onchange=renderResults;
+  renderResults();
+}
+
 function moveRoutineExercise(session,index,direction){
   const routine=JSON.parse(JSON.stringify(getRoutine()));
   const target=index+direction;
@@ -2093,8 +2328,13 @@ function renderRoutineEditor(){
             <button class="routine-edit-main" data-edit="${index}">
               <strong>${esc(item.name)}</strong>
               <span>${item.sets} series · ${esc(item.target)} · +${Number(item.increment||0).toLocaleString("es-ES")} kg</span>
+              ${item.substitutionOf?`<small class="substitution-note">Sustituye a ${esc(item.substitutionOf)}${item.substitutionReason?` · ${esc(item.substitutionReason)}`:""}</small>`:""}
             </button>
-            <button class="icon-button" data-edit="${index}">✎</button>
+            <div class="routine-item-actions">
+              <button class="icon-button substitution-button" data-substitute="${index}" title="Sustituir">⇄</button>
+              ${item.substitutionOf?`<button class="icon-button" data-revert-substitution="${index}" title="Restaurar">↶</button>`:""}
+              <button class="icon-button" data-edit="${index}">✎</button>
+            </div>
           </article>`).join("") : `<div class="routine-empty"><strong>Sesión vacía</strong><p>Añade el primer ejercicio.</p></div>`}
         </div>
       </section>
@@ -2117,6 +2357,13 @@ function renderRoutineEditor(){
   document.getElementById("addRoutineExercise").onclick=add;
   document.getElementById("addRoutineExerciseTop").onclick=add;
   document.querySelectorAll("[data-edit]").forEach(b=>b.onclick=()=>editExerciseModal(session,Number(b.dataset.edit)));
+  document.querySelectorAll("[data-substitute]").forEach(b=>b.onclick=()=>substituteExerciseModal(session,Number(b.dataset.substitute)));
+  document.querySelectorAll("[data-revert-substitution]").forEach(b=>b.onclick=()=>{
+    if(revertLastSubstitution(session,Number(b.dataset.revertSubstitution))){
+      toast("Ejercicio original restaurado");
+      renderRoutineEditor();
+    }
+  });
   document.querySelectorAll("[data-up]").forEach(b=>b.onclick=()=>moveRoutineExercise(session,Number(b.dataset.up),-1));
   document.querySelectorAll("[data-down]").forEach(b=>b.onclick=()=>moveRoutineExercise(session,Number(b.dataset.down),1));
 
@@ -2676,7 +2923,11 @@ function renderExerciseLibrary(){
           </div>
           ${item.notes?`<p class="exercise-library-notes">${esc(item.notes)}</p>`:""}
           <div class="library-session-actions">${["A","B","C"].map(session=>`<button class="secondary" data-add-library-exercise="${item.id}" data-target-session="${session}">Añadir a ${session}</button>`).join("")}</div>
-          <div class="settings-actions compact-actions"><button class="secondary" data-edit-library-exercise="${item.id}">Editar</button>${item.custom?`<button class="danger-soft" data-delete-library-exercise="${item.id}">Eliminar</button>`:""}</div>
+          <div class="settings-actions compact-actions">
+            <button class="secondary" data-open-exercise-detail="${item.id}">Ver ficha</button>
+            <button class="secondary" data-edit-library-exercise="${item.id}">Editar</button>
+            ${item.custom?`<button class="danger-soft" data-delete-library-exercise="${item.id}">Eliminar</button>`:""}
+          </div>
         </article>`).join(""):`<section class="card empty-library-state"><h2>Sin resultados</h2><p class="subtle">Prueba con otros filtros o crea un ejercicio personalizado.</p></section>`}
       </section>
     </main>${nav("settings")}
@@ -2706,6 +2957,11 @@ function renderExerciseLibrary(){
     if(!item) return;
     addExerciseToRoutine(button.dataset.targetSession,item);
     toast(`${item.name} añadido a la sesión ${button.dataset.targetSession}`);
+  });
+  document.querySelectorAll("[data-open-exercise-detail]").forEach(button=>button.onclick=()=>{
+    state.selectedLibraryExerciseId=button.dataset.openExerciseDetail;
+    state.screen="exerciseDetail";
+    renderExerciseDetail();
   });
   document.querySelectorAll("[data-edit-library-exercise]").forEach(button=>button.onclick=()=>{
     state.editingLibraryExerciseId=button.dataset.editLibraryExercise;state.screen="exerciseLibraryEditor";renderExerciseLibraryEditor();
@@ -2765,9 +3021,141 @@ function renderExerciseLibraryEditor(){
   document.getElementById("saveLibraryExerciseBottom").onclick=save;
 }
 
+
+
+function renderExerciseDetail(){
+  const item=getExerciseLibrary().find(exercise=>exercise.id===state.selectedLibraryExerciseId);
+  if(!item){
+    state.screen="exerciseLibrary";
+    renderExerciseLibrary();
+    return;
+  }
+  const stats=exerciseDetailStats(item.name);
+  const recent=stats.rows.slice(0,20);
+  const bestWeight=stats.bestWeight?`${stats.bestWeight.toLocaleString("es-ES")} kg`:"—";
+  const best1RM=stats.best1RM?`${Math.round(stats.best1RM*10)/10} kg`:"—";
+  const totalVolume=stats.totalVolume?`${Math.round(stats.totalVolume).toLocaleString("es-ES")} kg`:"—";
+
+  app.innerHTML=`<div class="app-shell">
+    <header class="topbar">
+      <button id="backExerciseDetail" class="back-button">←</button>
+      <div><div class="brand">${esc(item.name)}</div><div class="subtle">Ficha técnica e historial</div></div>
+      <button id="editExerciseFromDetail" class="header-action">Editar</button>
+    </header>
+    <main class="screen">
+      <section class="card exercise-profile-card">
+        <div class="exercise-profile-heading">
+          <div>
+            <h2>${esc(item.name)}</h2>
+            <p class="subtle">${esc(item.muscle)} · ${esc(item.equipment)} · ${esc(item.type)}</p>
+          </div>
+          <span class="favorite-profile ${item.favorite?"active":""}">★</span>
+        </div>
+        <div class="exercise-profile-tags">
+          <span>${esc(item.muscle)}</span><span>${esc(item.equipment)}</span><span>${esc(item.type)}</span>
+        </div>
+      </section>
+
+      <section class="analytics-grid exercise-detail-stats">
+        <article class="stat-card"><span>Mejor peso</span><strong>${bestWeight}</strong></article>
+        <article class="stat-card"><span>1RM estimado</span><strong>${best1RM}</strong></article>
+        <article class="stat-card"><span>Series registradas</span><strong>${stats.totalSets}</strong></article>
+        <article class="stat-card"><span>Volumen acumulado</span><strong>${totalVolume}</strong></article>
+      </section>
+
+      <section class="card">
+        <div class="card-heading-row">
+          <div><h2>Notas técnicas</h2><p class="subtle">Recordatorios visibles para este ejercicio.</p></div>
+        </div>
+        <textarea id="exerciseTechnicalNotes" class="technical-notes-area" rows="5" placeholder="Ej. Mantener escápulas retraídas, controlar la bajada...">${esc(item.notes||"")}</textarea>
+        <button id="saveExerciseTechnicalNotes" class="primary full">Guardar notas</button>
+      </section>
+
+      <section class="card">
+        <div class="card-heading-row">
+          <div><h2>Historial de rendimiento</h2><p class="subtle">${stats.totalSets?`${stats.totalSets} series registradas`:"Todavía no hay datos"}</p></div>
+        </div>
+        <div class="exercise-history-table">
+          ${recent.length?recent.map(row=>`<article>
+            <div>
+              <strong>${row.weight.toLocaleString("es-ES")} kg × ${row.reps}</strong>
+              <span>${row.date?new Date(row.date).toLocaleDateString("es-ES"):"Sin fecha"}${row.session?` · Sesión ${esc(row.session)}`:""} · Serie ${row.set}</span>
+            </div>
+            <div class="exercise-history-metrics">
+              <span>${Math.round(row.volume).toLocaleString("es-ES")} kg vol.</span>
+              <span>1RM ${Math.round(row.estimated1RM*10)/10} kg</span>
+              ${row.rir!==null?`<span>RIR ${esc(row.rir)}</span>`:""}
+              ${row.rpe!==null?`<span>RPE ${esc(row.rpe)}</span>`:""}
+            </div>
+          </article>`).join(""):`<div class="routine-empty"><strong>Sin historial todavía</strong><p>Cuando entrenes este ejercicio, aquí aparecerán tus cargas, repeticiones y estimaciones.</p></div>`}
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>Añadir a una sesión</h2>
+        <p class="subtle">Se añadirá con 3 series y un rango inicial de 8–12 repeticiones.</p>
+        <div class="library-session-actions">
+          ${["A","B","C"].map(session=>`<button class="secondary" data-detail-add-session="${session}">Añadir a ${session}</button>`).join("")}
+        </div>
+      </section>
+    </main>
+  </div>`;
+
+  document.getElementById("backExerciseDetail").onclick=()=>{state.screen="exerciseLibrary";renderExerciseLibrary();};
+  document.getElementById("editExerciseFromDetail").onclick=()=>{
+    state.editingLibraryExerciseId=item.id;
+    state.screen="exerciseLibraryEditor";
+    renderExerciseLibraryEditor();
+  };
+  document.getElementById("saveExerciseTechnicalNotes").onclick=()=>{
+    const notes=document.getElementById("exerciseTechnicalNotes").value;
+    if(updateExerciseTechnicalNotes(item.id,notes)){
+      toast("Notas técnicas guardadas");
+      renderExerciseDetail();
+    }
+  };
+  document.querySelectorAll("[data-detail-add-session]").forEach(button=>button.onclick=()=>{
+    addExerciseToRoutine(button.dataset.detailAddSession,item);
+    toast(`${item.name} añadido a la sesión ${button.dataset.detailAddSession}`);
+  });
+}
+
+function renderSubstitutionHistory(){
+  const history=getExerciseSubstitutions();
+  app.innerHTML=`<div class="app-shell">
+    <header class="topbar">
+      <button id="backSubstitutionHistory" class="back-button">←</button>
+      <div><div class="brand">Sustituciones</div><div class="subtle">Historial de cambios</div></div>
+      <span></span>
+    </header>
+    <main class="screen">
+      <section class="card">
+        <div class="card-heading-row">
+          <div><h2>Historial</h2><p class="subtle">${history.length} sustituciones registradas</p></div>
+          ${history.length?'<button id="clearSubstitutionHistory" class="danger-soft small-button">Borrar</button>':""}
+        </div>
+        <div class="substitution-history-list">
+          ${history.length?history.map(item=>`<article>
+            <div><strong>${esc(item.from)} → ${esc(item.to)}</strong><span>Sesión ${esc(item.session)} · ${new Date(item.date).toLocaleDateString("es-ES")}</span></div>
+            <span>${esc(item.reason||"Sin motivo indicado")}</span>
+          </article>`).join(""):`<div class="routine-empty"><strong>Sin sustituciones</strong><p>Los cambios aparecerán aquí.</p></div>`}
+        </div>
+      </section>
+    </main>
+  </div>`;
+  document.getElementById("backSubstitutionHistory").onclick=()=>{state.screen="settings";renderSettings();};
+  const clear=document.getElementById("clearSubstitutionHistory");
+  if(clear) clear.onclick=()=>{
+    if(!confirm("¿Borrar todo el historial de sustituciones?")) return;
+    saveExerciseSubstitutions([]);
+    toast("Historial eliminado");
+    renderSubstitutionHistory();
+  };
+}
+
 function renderSettings(){
   app.innerHTML=`<div class="app-shell">
-    <header class="topbar"><div><div class="brand">Ajustes</div><div class="subtle">GymOS v2.5.0 · Biblioteca de ejercicios</div></div></header>
+    <header class="topbar"><div><div class="brand">Ajustes</div><div class="subtle">GymOS v2.5.2 · Fichas técnicas e historial</div></div></header>
     <main class="screen">
       <section class="card sync-card">
         <div class="card-heading-row">
@@ -2796,6 +3184,11 @@ function renderSettings(){
           <summary>Cómo configurarlo</summary>
           <p>Ejecuta <strong>supabase-schema.sql</strong> y añade <strong>https://apl00028.github.io/mi-rutina/</strong> en Authentication → URL Configuration → Redirect URLs. Usa la clave <strong>Publishable</strong> o <strong>anon public</strong>, nunca una secret/service role.</p>
         </details>
+      </section>
+      <section class="card">
+        <h2>Sustituciones recientes</h2>
+        <p class="subtle">${getExerciseSubstitutions().length} cambios guardados. Las sustituciones conservan la configuración de la sesión.</p>
+        <button id="openSubstitutionHistory" class="secondary full">Ver historial</button>
       </section>
       <section class="card">
         <h2>Biblioteca de ejercicios</h2>
@@ -2911,6 +3304,7 @@ function renderSettings(){
   document.getElementById("openBlocksSettings").onclick=()=>{state.screen="blocks";renderBlocks();};
   document.getElementById("openGlobalAnalytics").onclick=()=>{state.screen="globalAnalytics";renderGlobalAnalytics();};
   document.getElementById("openExerciseLibrary").onclick=()=>{state.screen="exerciseLibrary";renderExerciseLibrary();};
+  document.getElementById("openSubstitutionHistory").onclick=()=>{state.screen="substitutionHistory";renderSubstitutionHistory();};
   document.querySelectorAll("[data-rest-setting]").forEach(button=>button.onclick=()=>{
     saveRestSeconds(Number(button.dataset.restSetting));
     toast("Descanso actualizado");

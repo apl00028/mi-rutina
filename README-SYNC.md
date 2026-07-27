@@ -1,4 +1,4 @@
-# GymOS v2.5.0 — Biblioteca de ejercicios
+# GymOS v2.5.2 — Fichas técnicas e historial
 
 GymOS sigue funcionando completamente en modo local.
 
@@ -141,3 +141,30 @@ La resolución de conflictos conserva la copia con la fecha `updatedAt` más rec
 - Notas técnicas.
 - Adición directa a las sesiones A, B o C.
 - Biblioteca incluida en la sincronización.
+
+
+## Novedades de la versión 2.5.1
+
+- Sustitución de ejercicios desde el editor de rutina.
+- Alternativas ordenadas por grupo muscular y tipo.
+- Filtro por material disponible.
+- Motivo de sustitución: dolor, material, ocupación, casa o preferencia.
+- Conservación automática de series, objetivo e incremento.
+- Sustituciones favoritas.
+- Restauración rápida del ejercicio original.
+- Historial de sustituciones.
+- Sincronización del historial y favoritos con Supabase.
+
+
+## Novedades de la versión 2.5.2
+
+- Ficha individual para cada ejercicio.
+- Grupo muscular, equipamiento y tipo visibles en la ficha.
+- Notas técnicas editables.
+- Mejor peso registrado.
+- Estimación de 1RM.
+- Volumen acumulado.
+- Número total de series registradas.
+- Historial reciente de cargas, repeticiones, volumen, RIR y RPE.
+- Acceso directo desde la biblioteca.
+- Adición del ejercicio a las sesiones A, B o C desde su ficha.

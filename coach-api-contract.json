@@ -29,7 +29,7 @@
       }
     ]
   },
-  "version": "3.7.0",
+  "version": "3.8.0",
   "health": {
     "endpoint": "GET /health"
   },
@@ -73,5 +73,20 @@
     ],
     "data_isolation": "PostgreSQL Row Level Security by auth.uid()",
     "production_note": "Coach backend authentication and rate limiting remain required before public launch"
+  },
+  "sync_protocol": {
+    "schemaVersion": 2,
+    "fields": [
+      "revision",
+      "deviceId",
+      "updatedAt",
+      "checksum",
+      "payload"
+    ],
+    "conflict_modes": [
+      "ask",
+      "local",
+      "remote"
+    ]
   }
 }

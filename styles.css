@@ -1125,3 +1125,5 @@ body.large-tap-targets .quick-action-card{min-height:122px}
 .security-check-list strong{font-size:.7rem}
 .security-check-list small{font-size:.58rem;color:var(--muted);margin-top:3px;line-height:1.4}
 .privacy-summary-card{border-left:4px solid var(--brand)}
+
+.sync-v2-card{border-left:4px solid var(--brand)}

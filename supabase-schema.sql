@@ -120,3 +120,27 @@ on public.account_deletion_requests(user_id);
 
 create index if not exists account_deletion_requests_status_idx
 on public.account_deletion_requests(status);
+
+
+-- GymOS v3.8.0 secure synchronization metadata
+alter table public.gymos_sync add column if not exists revision bigint not null default 0;
+alter table public.gymos_sync add column if not exists device_id text;
+alter table public.gymos_sync add column if not exists checksum text;
+create index if not exists gymos_sync_updated_at_idx on public.gymos_sync(updated_at desc);
+
+create table if not exists public.sync_audit (
+  id bigint generated always as identity primary key,
+  user_id uuid not null references auth.users(id) on delete cascade,
+  device_id text,
+  action text not null,
+  status text not null,
+  revision bigint,
+  metadata jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default now()
+);
+alter table public.sync_audit enable row level security;
+drop policy if exists "Users can view their own sync audit" on public.sync_audit;
+create policy "Users can view their own sync audit" on public.sync_audit for select to authenticated using ((select auth.uid()) = user_id);
+drop policy if exists "Users can insert their own sync audit" on public.sync_audit;
+create policy "Users can insert their own sync audit" on public.sync_audit for insert to authenticated with check ((select auth.uid()) = user_id);
+create index if not exists sync_audit_user_created_idx on public.sync_audit(user_id,created_at desc);

@@ -1,4 +1,4 @@
-# GymOS v3.7.0 — Cuentas y aislamiento de usuarios
+# GymOS v3.8.0 — Sincronización multiusuario segura
 
 GymOS sigue funcionando completamente en modo local.
 
@@ -319,3 +319,15 @@ Esta versión crea la base multiusuario, pero aún no es la versión final para
 Google Play. Antes de una publicación pública deben añadirse autenticación del
 backend Coach, límites de uso, política de privacidad, página web de eliminación
 de cuenta y pruebas automáticas con dos usuarios independientes.
+
+
+## Novedades de la versión 3.8.0
+
+- Sincronización bidireccional con revisiones.
+- Identificador persistente por dispositivo.
+- Detección y resolución de conflictos.
+- Registro exportable de sincronización.
+- Checksum del contenido.
+- SQL actualizado con metadatos y auditoría protegida por RLS.
+- Prueba de aislamiento entre usuarios.
+- Base de autenticación y limitación de peticiones para el backend Coach.

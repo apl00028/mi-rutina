@@ -591,7 +591,12 @@ const GYMOS_BACKUP_KEYS=[
   "gymos:healthEntries",
   "gymos:healthImports",
   "gymos:accountMigrationStatus",
-  "gymos:accountMigrationAt"
+  "gymos:accountMigrationAt",
+  "gymos:syncAudit",
+  "gymos:deviceId",
+  "gymos:localRevision",
+  "gymos:lastRemoteRevision",
+  "gymos:syncConflictMode"
 ];
 
 function getFavoriteExercises(){
@@ -931,7 +936,7 @@ function undoLastCoachChange(){
 }
 function coachContextPayload(){
   return {
-    version:"3.7.0",
+    version:"3.8.0",
     generatedAt:new Date().toISOString(),
     settings:getCoachSettings(),
     routine:getRoutine(),
@@ -2032,6 +2037,56 @@ function applySyncPayload(payload){
   }
 }
 
+
+const SYNC_AUDIT_KEY="gymos:syncAudit";
+const DEVICE_ID_KEY="gymos:deviceId";
+const LOCAL_REVISION_KEY="gymos:localRevision";
+const LAST_REMOTE_REVISION_KEY="gymos:lastRemoteRevision";
+
+function getDeviceId(){
+  let id=localStorage.getItem(DEVICE_ID_KEY);
+  if(!id){
+    id=`device-${crypto.randomUUID?crypto.randomUUID():Date.now().toString(36)+Math.random().toString(36).slice(2)}`;
+    localStorage.setItem(DEVICE_ID_KEY,id);
+  }
+  return id;
+}
+function getLocalRevision(){return Number(localStorage.getItem(LOCAL_REVISION_KEY)||0);}
+function setLocalRevision(value){localStorage.setItem(LOCAL_REVISION_KEY,String(Number(value)||0));}
+function getLastRemoteRevision(){return Number(localStorage.getItem(LAST_REMOTE_REVISION_KEY)||0);}
+function setLastRemoteRevision(value){localStorage.setItem(LAST_REMOTE_REVISION_KEY,String(Number(value)||0));}
+function getSyncConflictPreference(){return localStorage.getItem("gymos:syncConflictMode")||"ask";}
+function setSyncConflictPreference(value){localStorage.setItem("gymos:syncConflictMode",value);}
+function getSyncAudit(){
+  try{const value=JSON.parse(localStorage.getItem(SYNC_AUDIT_KEY)||"[]");return Array.isArray(value)?value:[];}
+  catch(error){return [];}
+}
+function addSyncAudit(action,status,details={}){
+  const items=getSyncAudit();
+  items.push({id:`audit-${Date.now().toString(36)}`,createdAt:new Date().toISOString(),action,status,userId:state.syncUser?.id||null,deviceId:getDeviceId(),details});
+  localStorage.setItem(SYNC_AUDIT_KEY,JSON.stringify(items.slice(-100)));
+}
+function simpleChecksum(value){
+  const text=JSON.stringify(value);let hash=2166136261;
+  for(let i=0;i<text.length;i++){hash^=text.charCodeAt(i);hash=Math.imul(hash,16777619);}
+  return (hash>>>0).toString(16);
+}
+function buildSyncEnvelope(){
+  const payload=buildSyncPayload();
+  const revision=Math.max(getLocalRevision(),getLastRemoteRevision())+1;
+  setLocalRevision(revision);
+  return {schemaVersion:2,revision,deviceId:getDeviceId(),updatedAt:new Date().toISOString(),checksum:simpleChecksum(payload),payload};
+}
+function syncSecurityState(){
+  return {authenticated:Boolean(state.syncUser),deviceId:getDeviceId(),localRevision:getLocalRevision(),lastRemoteRevision:getLastRemoteRevision(),conflictMode:getSyncConflictPreference(),audit:getSyncAudit().slice(-10)};
+}
+async function chooseConflictResolution(remote){
+  const mode=getSyncConflictPreference();
+  if(mode==="remote") return "remote";
+  if(mode==="local") return "local";
+  return confirm("Hay cambios tanto en este dispositivo como en la nube.\n\nAceptar: usar la nube.\nCancelar: mantener este dispositivo.")?"remote":"local";
+}
+
 function accountDisplayName(user=state.syncUser){
   return user?.user_metadata?.full_name||
     user?.user_metadata?.name||
@@ -2201,69 +2256,34 @@ async function signOutSync(){
   state.syncStatus="configured";
 }
 async function syncNow(options={}){
-  const {silent=false,forceUpload=false}=options;
-  if(state.syncInProgress) return "busy";
-  if(!navigator.onLine){
-    state.syncStatus="offline";
-    updateSyncIndicators();
-    return "offline";
-  }
   const client=getSupabaseClient();
-  if(!client) throw new Error("Supabase no está configurado.");
-  state.syncInProgress=true;
-  state.syncStatus="syncing";
-  updateSyncIndicators();
+  if(!client||!state.syncUser) throw new Error("No hay una cuenta conectada.");
+  state.syncStatus="syncing";updateSyncIndicators();addSyncAudit("sync","started");
   try{
-    const {data:{session},error:sessionError}=await client.auth.getSession();
-    if(sessionError||!session?.user) throw new Error("Inicia sesión antes de sincronizar.");
-    const user=session.user;
-    const {data:remote,error:readError}=await client
-      .from("gymos_sync")
-      .select("payload,updated_at")
-      .eq("user_id",user.id)
-      .maybeSingle();
+    const {data:remote,error:readError}=await client.from("gymos_sync").select("payload,revision,device_id,updated_at,checksum").eq("user_id",state.syncUser.id).maybeSingle();
     if(readError) throw readError;
-
-    const localPayload=buildSyncPayload();
-    const localTime=new Date(localPayload.updatedAt||0).getTime();
-    const remotePayload=remote?.payload||null;
-    const remoteTime=new Date(remotePayload?.updatedAt||remote?.updated_at||0).getTime();
-    let result="uploaded";
-
-    if(remotePayload&&remoteTime>localTime&&!forceUpload){
-      localStorage.setItem("gymos:preSyncBackup",JSON.stringify(localPayload));
-      applySyncPayload(remotePayload);
-      sessions=getRoutine();
-      result="downloaded";
-    }else{
-      const uploadPayload={...localPayload,updatedAt:new Date().toISOString()};
-      const {error:writeError}=await client.from("gymos_sync").upsert({
-        user_id:user.id,
-        payload:uploadPayload,
-        updated_at:uploadPayload.updatedAt
-      },{onConflict:"user_id"});
-      if(writeError) throw writeError;
-      localStorage.setItem("gymos:updatedAt",uploadPayload.updatedAt);
-      localStorage.removeItem("gymos:syncPending");
-      result=remotePayload?"uploaded":"created";
+    const remoteRevision=Number(remote?.revision||0);
+    const localRevision=getLocalRevision();
+    const lastRemote=getLastRemoteRevision();
+    const conflict=remote && remoteRevision>lastRemote && localRevision>lastRemote && !options.forceUpload;
+    if(conflict){
+      const resolution=await chooseConflictResolution(remote);
+      addSyncAudit("conflict",resolution,{remoteRevision,localRevision});
+      if(resolution==="remote"){
+        applySyncPayload(remote.payload||{});setLocalRevision(remoteRevision);setLastRemoteRevision(remoteRevision);
+        localStorage.setItem("gymos:lastSyncAt",new Date().toISOString());state.syncStatus="connected";updateSyncIndicators();return {direction:"download",revision:remoteRevision};
+      }
+    }else if(remote && remoteRevision>localRevision && !options.forceUpload){
+      applySyncPayload(remote.payload||{});setLocalRevision(remoteRevision);setLastRemoteRevision(remoteRevision);
+      localStorage.setItem("gymos:lastSyncAt",new Date().toISOString());state.syncStatus="connected";addSyncAudit("sync","downloaded",{revision:remoteRevision});updateSyncIndicators();return {direction:"download",revision:remoteRevision};
     }
-
-    const now=new Date().toISOString();
-    localStorage.setItem("gymos:lastSyncAt",now);
-    localStorage.setItem("gymos:lastSyncResult",result);
-    state.syncStatus="synced";
-    updateSyncIndicators();
-    return result;
-  }catch(error){
-    state.syncStatus=navigator.onLine?"error":"offline";
-    updateSyncIndicators();
-    if(!silent) throw error;
-    console.error("GymOS automatic sync error",error);
-    return "error";
-  }finally{
-    state.syncInProgress=false;
-  }
+    const envelope=buildSyncEnvelope();
+    const {error:writeError}=await client.from("gymos_sync").upsert({user_id:state.syncUser.id,payload:envelope.payload,revision:envelope.revision,device_id:envelope.deviceId,checksum:envelope.checksum,updated_at:envelope.updatedAt},{onConflict:"user_id"});
+    if(writeError) throw writeError;
+    setLastRemoteRevision(envelope.revision);localStorage.setItem("gymos:lastSyncAt",new Date().toISOString());state.syncStatus="connected";addSyncAudit("sync","uploaded",{revision:envelope.revision});updateSyncIndicators();return {direction:"upload",revision:envelope.revision};
+  }catch(error){state.syncStatus="error";addSyncAudit("sync","error",{message:error.message});updateSyncIndicators();throw error;}
 }
+
 async function autoSync(reason="automática"){
   if(!state.syncUser||!navigator.onLine||state.syncInProgress) return;
   await syncNow({silent:true});
@@ -5470,6 +5490,17 @@ function renderAccount(){
           </div>
         </section>
 
+        <section class="card sync-v2-card">
+          <div class="card-heading-row"><div><h2>Sincronización segura</h2><p class="subtle">Controla revisiones y evita sobrescribir cambios de otro dispositivo.</p></div><span class="mode-pill">v2</span></div>
+          <div class="security-check-list">
+            <article class="ok"><span>✓</span><div><strong>Dispositivo identificado</strong><small>${esc(getDeviceId().slice(0,18))}…</small></div></article>
+            <article class="ok"><span>✓</span><div><strong>Revisión local</strong><small>${getLocalRevision()}</small></div></article>
+            <article class="ok"><span>✓</span><div><strong>Última revisión remota</strong><small>${getLastRemoteRevision()}</small></div></article>
+          </div>
+          <label><span>Cuando haya conflicto</span><select id="syncConflictPreference"><option value="ask" ${getSyncConflictPreference()==="ask"?"selected":""}>Preguntarme</option><option value="local" ${getSyncConflictPreference()==="local"?"selected":""}>Mantener este dispositivo</option><option value="remote" ${getSyncConflictPreference()==="remote"?"selected":""}>Usar la nube</option></select></label>
+          <button id="exportSyncAudit" class="secondary full">Exportar registro de sincronización</button>
+        </section>
+
         <section class="card">
           <h2>Datos de la cuenta</h2>
           <div class="settings-actions">
@@ -5538,6 +5569,11 @@ function renderAccount(){
         migrateButton.disabled=false;
         migrateButton.textContent="Asociar mis datos a esta cuenta";
       }
+    };
+    document.getElementById("syncConflictPreference").onchange=e=>{setSyncConflictPreference(e.target.value);toast("Preferencia guardada");};
+    document.getElementById("exportSyncAudit").onclick=()=>{
+      const blob=new Blob([JSON.stringify({generatedAt:new Date().toISOString(),security:syncSecurityState(),audit:getSyncAudit()},null,2)],{type:"application/json"});
+      const url=URL.createObjectURL(blob);const link=document.createElement("a");link.href=url;link.download=`gymos-sync-audit-${new Date().toISOString().slice(0,10)}.json`;link.click();URL.revokeObjectURL(url);
     };
     document.getElementById("saveAccountProfile").onclick=async()=>{
       try{
@@ -5616,7 +5652,7 @@ function renderAccount(){
 
 function renderSettings(){
   app.innerHTML=`<div class="app-shell">
-    <header class="topbar"><div><div class="brand">Ajustes</div><div class="subtle">GymOS v3.7.0 · Cuentas y aislamiento de usuarios</div></div></header>
+    <header class="topbar"><div><div class="brand">Ajustes</div><div class="subtle">GymOS v3.8.0 · Sincronización multiusuario segura</div></div></header>
     <main class="screen">
       <section class="card account-entry-card">
         <div class="account-entry-main">

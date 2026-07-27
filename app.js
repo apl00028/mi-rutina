@@ -589,7 +589,9 @@ const GYMOS_BACKUP_KEYS=[
   "gymos:developerLogs",
   "gymos:healthSettings",
   "gymos:healthEntries",
-  "gymos:healthImports"
+  "gymos:healthImports",
+  "gymos:accountMigrationStatus",
+  "gymos:accountMigrationAt"
 ];
 
 function getFavoriteExercises(){
@@ -929,7 +931,7 @@ function undoLastCoachChange(){
 }
 function coachContextPayload(){
   return {
-    version:"3.6.0",
+    version:"3.7.0",
     generatedAt:new Date().toISOString(),
     settings:getCoachSettings(),
     routine:getRoutine(),
@@ -1841,7 +1843,8 @@ let state = {
   coachChatMessages: [],
   nutritionDate: new Date().toISOString().slice(0,10),
   developerLogFilter: "all",
-  healthDate: new Date().toISOString().slice(0,10)
+  healthDate: new Date().toISOString().slice(0,10),
+  accountMode: "login"
 };
 
 function getHistory(){ return JSON.parse(localStorage.getItem("gymos:history") || "[]"); }
@@ -1977,7 +1980,7 @@ function formatSyncDate(value){
 }
 function buildSyncPayload(){
   return {
-    version:"3.0.0",
+    version:"3.7.0",
     updatedAt:getLocalUpdatedAt(),
     deviceId:getDeviceId(),
     deviceName:getDeviceName(),
@@ -1991,6 +1994,12 @@ function buildSyncPayload(){
     activeBlockId:localStorage.getItem("gymos:activeBlockId"),
     exerciseLibrary:getExerciseLibrary(),
     exerciseSubstitutions:getExerciseSubstitutions(),
+    nutritionSettings:getNutritionSettings(),
+    nutritionEntries:getNutritionEntries(),
+    healthSettings:getHealthSettings(),
+    healthEntries:getHealthEntries(),
+    healthImports:getHealthImports(),
+    appPreferences:getAppPreferences(),
     favoriteSubstitutions:getFavoriteSubstitutions(),
     updatedAt:getLocalUpdatedAt()
   };
@@ -2002,6 +2011,12 @@ function applySyncPayload(payload){
   if(Array.isArray(payload.history)) saveHistory(payload.history);
   if(payload.routine){saveRoutine(payload.routine);sessions=getRoutine();}
   if(Array.isArray(payload.body)) saveBodyHistory(payload.body);
+  if(payload.nutritionSettings) saveNutritionSettings(payload.nutritionSettings);
+  if(Array.isArray(payload.nutritionEntries)) saveNutritionEntries(payload.nutritionEntries);
+  if(payload.healthSettings) saveHealthSettings(payload.healthSettings);
+  if(Array.isArray(payload.healthEntries)) saveHealthEntries(payload.healthEntries);
+  if(Array.isArray(payload.healthImports)) saveHealthImports(payload.healthImports);
+  if(payload.appPreferences) saveAppPreferences(payload.appPreferences);
   if(["A","B","C"].includes(payload.selectedSession)){
     localStorage.setItem("gymos:selectedSession",payload.selectedSession);
     state.selectedSession=payload.selectedSession;
@@ -2016,6 +2031,119 @@ function applySyncPayload(payload){
     state.applyingRemote=false;
   }
 }
+
+function accountDisplayName(user=state.syncUser){
+  return user?.user_metadata?.full_name||
+    user?.user_metadata?.name||
+    user?.email?.split("@")[0]||
+    "Usuario";
+}
+function hasLocalUserData(){
+  return getHistory().length>0||
+    getBodyHistory().length>0||
+    getNutritionEntries().length>0||
+    getHealthEntries().length>0||
+    Object.values(getRoutine()||{}).some(items=>Array.isArray(items)&&items.length>0);
+}
+function localMigrationStatus(){
+  return localStorage.getItem("gymos:accountMigrationStatus")||"pending";
+}
+function setLocalMigrationStatus(value){
+  localStorage.setItem("gymos:accountMigrationStatus",value);
+}
+async function signUpWithPassword(email,password,fullName){
+  const client=getSupabaseClient();
+  if(!client) throw new Error("Configura Supabase antes de crear una cuenta.");
+  const {data,error}=await client.auth.signUp({
+    email,
+    password,
+    options:{
+      data:{full_name:fullName.trim()},
+      emailRedirectTo:GYMOS_PRODUCTION_URL
+    }
+  });
+  if(error) throw error;
+  state.syncUser=data.user||null;
+  return data;
+}
+async function signInWithPassword(email,password){
+  const client=getSupabaseClient();
+  if(!client) throw new Error("Configura Supabase antes de iniciar sesión.");
+  const {data,error}=await client.auth.signInWithPassword({email,password});
+  if(error) throw error;
+  state.syncUser=data.user||null;
+  state.syncStatus="connected";
+  return data;
+}
+async function signInWithGoogle(){
+  const client=getSupabaseClient();
+  if(!client) throw new Error("Configura Supabase antes de iniciar sesión.");
+  const {error}=await client.auth.signInWithOAuth({
+    provider:"google",
+    options:{redirectTo:GYMOS_PRODUCTION_URL}
+  });
+  if(error) throw error;
+}
+async function requestPasswordReset(email){
+  const client=getSupabaseClient();
+  if(!client) throw new Error("Configura Supabase antes de recuperar la contraseña.");
+  const {error}=await client.auth.resetPasswordForEmail(email,{
+    redirectTo:GYMOS_PRODUCTION_URL
+  });
+  if(error) throw error;
+}
+async function updateAccountProfile(fullName){
+  const client=getSupabaseClient();
+  if(!client) throw new Error("Supabase no está configurado.");
+  const {data,error}=await client.auth.updateUser({
+    data:{full_name:fullName.trim()}
+  });
+  if(error) throw error;
+  state.syncUser=data.user;
+  await client.from("profiles").upsert({
+    id:data.user.id,
+    display_name:fullName.trim(),
+    updated_at:new Date().toISOString()
+  },{onConflict:"id"});
+  return data.user;
+}
+async function migrateLocalDataToAccount(){
+  if(!state.syncUser) throw new Error("Inicia sesión antes de migrar los datos.");
+  const result=await syncNow({forceUpload:true});
+  setLocalMigrationStatus("completed");
+  localStorage.setItem("gymos:accountMigrationAt",new Date().toISOString());
+  return result;
+}
+async function deleteCloudData(){
+  const client=getSupabaseClient();
+  if(!client||!state.syncUser) throw new Error("No hay una cuenta conectada.");
+  const userId=state.syncUser.id;
+  const {error}=await client.from("gymos_sync").delete().eq("user_id",userId);
+  if(error) throw error;
+  await client.from("profiles").delete().eq("id",userId);
+  return true;
+}
+async function requestAccountDeletion(){
+  const client=getSupabaseClient();
+  if(!client||!state.syncUser) throw new Error("No hay una cuenta conectada.");
+  const {error}=await client.from("account_deletion_requests").insert({
+    user_id:state.syncUser.id,
+    requested_at:new Date().toISOString(),
+    status:"pending"
+  });
+  if(error) throw error;
+}
+function accountSecuritySummary(){
+  return {
+    authenticated:Boolean(state.syncUser),
+    userId:state.syncUser?.id||null,
+    emailVerified:Boolean(state.syncUser?.email_confirmed_at),
+    rlsRequired:true,
+    publicKeyConfigured:Boolean(getSyncConfig().key),
+    secretKeyInClient:false
+  };
+}
+
 function getSupabaseClient(){
   const config=getSyncConfig();
   if(!config.url||!config.key) return null;
@@ -2043,6 +2171,11 @@ async function refreshSyncSession(){
     if(error) throw error;
     state.syncUser=data.session?.user||null;
     state.syncStatus=state.syncUser?"connected":"configured";
+    client.auth.onAuthStateChange((_event,session)=>{
+      state.syncUser=session?.user||null;
+      state.syncStatus=state.syncUser?"connected":"configured";
+      updateSyncIndicators();
+    });
     return state.syncUser;
   }catch(error){
     console.error("GymOS auth error",error);
@@ -2654,6 +2787,7 @@ function render(){
   else if(state.screen==="nutrition") renderNutrition();
   else if(state.screen==="developer") renderDeveloperMode();
   else if(state.screen==="health") renderHealth();
+  else if(state.screen==="account") renderAccount();
   else renderSettings();
 }
 
@@ -5287,10 +5421,217 @@ async function renderDeveloperMode(){
   };
 }
 
+
+function renderAccount(){
+  const user=state.syncUser;
+  const security=accountSecuritySummary();
+  const migrationNeeded=Boolean(user&&hasLocalUserData()&&localMigrationStatus()!=="completed");
+
+  app.innerHTML=`<div class="app-shell">
+    <header class="topbar">
+      <button id="backAccount" class="back-button">←</button>
+      <div><div class="brand">Cuenta GymOS</div><div class="subtle">Acceso y privacidad</div></div>
+      ${user?`<span class="secure-account-badge">Protegida</span>`:""}
+    </header>
+    <main class="screen">
+      ${user?`
+        <section class="card account-profile-card">
+          <div class="large-account-avatar">${esc(accountDisplayName(user).slice(0,1).toUpperCase())}</div>
+          <div>
+            <span class="section-kicker">SESIÓN ACTIVA</span>
+            <h1>${esc(accountDisplayName(user))}</h1>
+            <p>${esc(user.email||"")}</p>
+            <small>ID interno: ${esc(user.id.slice(0,8))}…</small>
+          </div>
+        </section>
+
+        ${migrationNeeded?`
+        <section class="card migration-card">
+          <span class="section-kicker">DATOS ENCONTRADOS</span>
+          <h2>Asociar los datos de este dispositivo</h2>
+          <p class="subtle">GymOS ha encontrado información local. Se guardará en tu cuenta y quedará aislada mediante tu identificador de usuario.</p>
+          <button id="migrateLocalData" class="primary full">Asociar mis datos a esta cuenta</button>
+        </section>`:""}
+
+        <section class="card">
+          <h2>Perfil</h2>
+          <label><span>Nombre visible</span><input id="accountFullName" type="text" value="${esc(accountDisplayName(user))}" maxlength="80"></label>
+          <label><span>Correo</span><input type="email" value="${esc(user.email||"")}" disabled></label>
+          <button id="saveAccountProfile" class="secondary full">Guardar perfil</button>
+        </section>
+
+        <section class="card">
+          <h2>Separación y seguridad</h2>
+          <div class="security-check-list">
+            <article class="ok"><span>✓</span><div><strong>Cuenta identificada</strong><small>Cada registro se asocia al UUID de esta cuenta.</small></div></article>
+            <article class="ok"><span>✓</span><div><strong>Row Level Security</strong><small>El esquema incluido restringe cada fila a su propietario.</small></div></article>
+            <article class="${security.publicKeyConfigured?"ok":"warning"}"><span>${security.publicKeyConfigured?"✓":"!"}</span><div><strong>Clave pública</strong><small>${security.publicKeyConfigured?"Configurada para operaciones normales.":"Pendiente de configurar en modo desarrollador."}</small></div></article>
+            <article class="ok"><span>✓</span><div><strong>Sin claves secretas en la app</strong><small>La app cliente no necesita service_role.</small></div></article>
+          </div>
+        </section>
+
+        <section class="card">
+          <h2>Datos de la cuenta</h2>
+          <div class="settings-actions">
+            <button id="accountSyncNow" class="primary">Sincronizar ahora</button>
+            <button id="accountExport" class="secondary">Exportar copia</button>
+          </div>
+          <p class="subtle">Última sincronización: ${formatSyncDate(getLastSyncAt())}</p>
+        </section>
+
+        <section class="card danger-zone">
+          <h2>Privacidad y eliminación</h2>
+          <p class="subtle">Puedes borrar la copia alojada en la nube o registrar una solicitud de eliminación completa de la cuenta.</p>
+          <button id="deleteCloudData" class="danger-soft full">Borrar mis datos de la nube</button>
+          <button id="requestAccountDeletion" class="danger-soft full">Solicitar eliminación de cuenta</button>
+          <button id="accountSignOut" class="secondary full">Cerrar sesión</button>
+        </section>
+      `:`
+        <section class="card auth-hero-card">
+          <span class="section-kicker">GYMOS MULTIUSUARIO</span>
+          <h1>Tu espacio personal de entrenamiento</h1>
+          <p>Cada cuenta mantiene sus entrenamientos, peso, nutrición y métricas de salud separados del resto.</p>
+          <div class="auth-feature-row">
+            <span>Cuenta propia</span><span>Datos aislados</span><span>Sincronización</span>
+          </div>
+        </section>
+
+        <section class="card">
+          <div class="segmented-control">
+            <button data-account-mode="login" class="${state.accountMode==="login"?"active":""}">Iniciar sesión</button>
+            <button data-account-mode="signup" class="${state.accountMode==="signup"?"active":""}">Crear cuenta</button>
+          </div>
+          ${state.accountMode==="signup"?`
+            <label><span>Nombre</span><input id="accountName" type="text" autocomplete="name" maxlength="80" placeholder="Tu nombre"></label>
+          `:""}
+          <label><span>Correo</span><input id="accountEmail" type="email" autocomplete="email" placeholder="tu@email.com" value="${esc(getSyncConfig().email||"")}"></label>
+          <label><span>Contraseña</span><input id="accountPassword" type="password" autocomplete="${state.accountMode==="signup"?"new-password":"current-password"}" minlength="8" placeholder="Mínimo 8 caracteres"></label>
+          ${state.accountMode==="signup"?`
+            <label class="consent-row"><input id="accountConsent" type="checkbox"><span>Acepto que GymOS almacene mis datos de entrenamiento y salud en mi cuenta.</span></label>
+          `:""}
+          <button id="accountSubmit" class="primary full">${state.accountMode==="signup"?"Crear mi cuenta":"Iniciar sesión"}</button>
+          <button id="accountGoogle" class="secondary full">Continuar con Google</button>
+          ${state.accountMode==="login"?`<button id="accountResetPassword" class="text-button full">He olvidado mi contraseña</button>`:""}
+        </section>
+
+        <section class="card privacy-summary-card">
+          <h2>Cómo se protegen tus datos</h2>
+          <p>La base de datos usa políticas por usuario. La aplicación nunca debe incluir una clave administrativa y ningún usuario debería poder consultar filas de otra cuenta.</p>
+        </section>
+      `}
+    </main>
+  </div>`;
+
+  document.getElementById("backAccount").onclick=()=>{state.screen="settings";renderSettings();};
+
+  if(user){
+    const migrateButton=document.getElementById("migrateLocalData");
+    if(migrateButton) migrateButton.onclick=async()=>{
+      migrateButton.disabled=true;
+      migrateButton.textContent="Asociando datos…";
+      try{
+        await migrateLocalDataToAccount();
+        toast("Datos asociados a tu cuenta");
+        renderAccount();
+      }catch(error){
+        alert(error.message);
+        migrateButton.disabled=false;
+        migrateButton.textContent="Asociar mis datos a esta cuenta";
+      }
+    };
+    document.getElementById("saveAccountProfile").onclick=async()=>{
+      try{
+        await updateAccountProfile(document.getElementById("accountFullName").value);
+        toast("Perfil actualizado");
+        renderAccount();
+      }catch(error){alert(error.message);}
+    };
+    document.getElementById("accountSyncNow").onclick=async()=>{
+      try{await syncNow();toast("Sincronización completada");renderAccount();}
+      catch(error){alert(error.message);}
+    };
+    document.getElementById("accountExport").onclick=()=>exportBackup();
+    document.getElementById("deleteCloudData").onclick=async()=>{
+      if(!confirm("¿Borrar la copia de tus datos alojada en la nube? Los datos del dispositivo no se borrarán.")) return;
+      try{await deleteCloudData();toast("Datos de la nube eliminados");}
+      catch(error){alert(error.message);}
+    };
+    document.getElementById("requestAccountDeletion").onclick=async()=>{
+      if(!confirm("¿Registrar una solicitud de eliminación completa de tu cuenta?")) return;
+      try{
+        await requestAccountDeletion();
+        toast("Solicitud registrada");
+      }catch(error){alert(error.message);}
+    };
+    document.getElementById("accountSignOut").onclick=async()=>{
+      await signOutSync();
+      state.accountMode="login";
+      renderAccount();
+    };
+  }else{
+    document.querySelectorAll("[data-account-mode]").forEach(button=>button.onclick=()=>{
+      state.accountMode=button.dataset.accountMode;
+      renderAccount();
+    });
+    document.getElementById("accountSubmit").onclick=async()=>{
+      const email=document.getElementById("accountEmail").value.trim();
+      const password=document.getElementById("accountPassword").value;
+      if(!email) return alert("Introduce tu correo.");
+      if(password.length<8) return alert("La contraseña debe tener al menos 8 caracteres.");
+      try{
+        saveSyncConfig({...getSyncConfig(),email});
+        if(state.accountMode==="signup"){
+          const consent=document.getElementById("accountConsent");
+          if(!consent.checked) return alert("Debes aceptar el almacenamiento de tus datos para crear la cuenta.");
+          const name=document.getElementById("accountName").value.trim();
+          if(!name) return alert("Introduce tu nombre.");
+          const result=await signUpWithPassword(email,password,name);
+          if(result.session){
+            await refreshSyncSession();
+            toast("Cuenta creada");
+          }else{
+            alert("Cuenta creada. Revisa tu correo para verificarla.");
+          }
+        }else{
+          await signInWithPassword(email,password);
+          toast("Sesión iniciada");
+        }
+        renderAccount();
+      }catch(error){alert(error.message);}
+    };
+    document.getElementById("accountGoogle").onclick=async()=>{
+      try{await signInWithGoogle();}catch(error){alert(error.message);}
+    };
+    const resetButton=document.getElementById("accountResetPassword");
+    if(resetButton) resetButton.onclick=async()=>{
+      const email=document.getElementById("accountEmail").value.trim();
+      if(!email) return alert("Introduce primero tu correo.");
+      try{
+        await requestPasswordReset(email);
+        alert("Te hemos enviado un correo para restablecer la contraseña.");
+      }catch(error){alert(error.message);}
+    };
+  }
+}
+
 function renderSettings(){
   app.innerHTML=`<div class="app-shell">
-    <header class="topbar"><div><div class="brand">Ajustes</div><div class="subtle">GymOS v3.6.0 · Salud, recuperación y relojes</div></div></header>
+    <header class="topbar"><div><div class="brand">Ajustes</div><div class="subtle">GymOS v3.7.0 · Cuentas y aislamiento de usuarios</div></div></header>
     <main class="screen">
+      <section class="card account-entry-card">
+        <div class="account-entry-main">
+          <div class="account-avatar">${state.syncUser?esc(accountDisplayName().slice(0,1).toUpperCase()):"○"}</div>
+          <div>
+            <span class="section-kicker">CUENTA GYMOS</span>
+            <h2>${state.syncUser?`Hola, ${esc(accountDisplayName())}`:"Tus datos, solo para ti"}</h2>
+            <p class="subtle">${state.syncUser
+              ?`Sesión iniciada como ${esc(state.syncUser.email||"usuario")}.`
+              :"Crea una cuenta para mantener entrenamientos, nutrición y salud separados de otros usuarios."}</p>
+          </div>
+        </div>
+        <button id="openAccount" class="primary full">${state.syncUser?"Gestionar cuenta":"Crear cuenta o iniciar sesión"}</button>
+      </section>
+
       <section class="card experience-card">
         <div class="card-heading-row">
           <div><span class="section-kicker">EXPERIENCIA</span><h2>Aspecto y modo de uso</h2><p class="subtle">Adapta GymOS para entrenar sin distracciones o acceder a herramientas técnicas.</p></div>
@@ -5349,7 +5690,7 @@ function renderSettings(){
         ${developerModeEnabled()?`<button id="openDeveloperMode" class="secondary full">Abrir centro de desarrollador</button>`:""}
       </section>
 
-      <section class="card sync-card developer-only">
+      <section class="card sync-card developer-only"><span class="section-kicker">CONFIGURACIÓN TÉCNICA</span>
         <div class="card-heading-row">
           <div><h2>Sincronización automática</h2><p class="subtle" data-sync-label>${syncStatusLabel()}</p></div>
           <span class="sync-dot ${state.syncStatus}" data-sync-dot></span>
@@ -5362,14 +5703,14 @@ function renderSettings(){
         <div class="sync-fields">
           <label><span>Supabase Project URL</span><input id="syncUrl" type="url" value="${getSyncConfig().url}" placeholder="https://xxxxx.supabase.co"></label>
           <label><span>Anon public key</span><input id="syncKey" type="password" value="${getSyncConfig().key}" placeholder="eyJ..."></label>
-          <label><span>Correo</span><input id="syncEmail" type="email" value="${getSyncConfig().email}" placeholder="tu@email.com"></label>
+          
           <label><span>Nombre de este dispositivo</span><input id="deviceName" type="text" value="${getDeviceName()}" placeholder="Mi móvil"></label>
         </div>
         <div class="settings-actions">
           <button id="saveSyncConfig" class="secondary">Guardar configuración</button>
           ${state.syncUser
-            ?`<button id="syncNow" class="primary">Sincronizar ahora</button><button id="signOutSync" class="secondary">Cerrar sesión</button>`
-            :`<button id="sendMagicLink" class="primary">Enviar enlace de acceso</button>`}
+            ?`<button id="syncNow" class="primary">Sincronizar ahora</button>`
+            :`<button id="openAccountFromSync" class="primary">Abrir cuenta</button>`}
         </div>
         ${state.syncUser?`<div class="sync-user">Conectado como <strong>${state.syncUser.email||"usuario"}</strong></div>`:""}
         <details class="sync-help">
@@ -5495,6 +5836,9 @@ function renderSettings(){
       </section>
     </main>${nav("settings")}
   </div>`;
+  document.getElementById("openAccount").onclick=()=>{state.screen="account";renderAccount();};
+  const openAccountFromSync=document.getElementById("openAccountFromSync");
+  if(openAccountFromSync) openAccountFromSync.onclick=()=>{state.screen="account";renderAccount();};
   document.querySelectorAll("[data-app-mode]").forEach(button=>button.onclick=()=>{
     const mode=button.dataset.appMode;
     if(mode==="developer"&&!confirm("El modo desarrollador muestra opciones técnicas y acciones avanzadas. ¿Activarlo?")) return;
@@ -5552,155 +5896,6 @@ function renderSettings(){
     toast("Configuración guardada");
     renderSettings();
   };
-  const magicButton=document.getElementById("sendMagicLink");
-  if(magicButton) magicButton.onclick=async()=>{
-    try{
-      const email=document.getElementById("syncEmail").value.trim();
-      if(!email){alert("Introduce tu correo.");return;}
-      saveSyncConfig({
-        url:document.getElementById("syncUrl").value,
-        key:document.getElementById("syncKey").value,
-        email
-      });
-      saveDeviceName(document.getElementById("deviceName").value);
-      await sendMagicLink(email);
-      alert("Enlace enviado. Ábrelo desde este dispositivo. Debe volver automáticamente a GymOS.");
-    }catch(error){
-      alert("No se pudo enviar el enlace: "+error.message);
-    }
-  };
-  const syncButton=document.getElementById("syncNow");
-  if(syncButton) syncButton.onclick=async()=>{
-    syncButton.disabled=true;
-    syncButton.textContent="Sincronizando…";
-    try{
-      const result=await syncNow();
-      toast(result==="downloaded"?"Datos remotos descargados":"Datos sincronizados");
-      renderSettings();
-    }catch(error){
-      alert("No se pudo sincronizar: "+error.message);
-      syncButton.disabled=false;
-      syncButton.textContent="Sincronizar ahora";
-    }
-  };
-  const signOutButton=document.getElementById("signOutSync");
-  if(signOutButton) signOutButton.onclick=async()=>{
-    await signOutSync();
-    toast("Sesión cerrada");
-    renderSettings();
-  };
-  document.getElementById("openPlanSettings").onclick=()=>{state.screen="plan";renderPlan();};
-  document.getElementById("openBlocksSettings").onclick=()=>{state.screen="blocks";renderBlocks();};
-  document.getElementById("openGlobalAnalytics").onclick=()=>{state.screen="globalAnalytics";renderGlobalAnalytics();};
-  document.getElementById("openExerciseLibrary").onclick=()=>{state.screen="exerciseLibrary";renderExerciseLibrary();};
-  document.getElementById("openSubstitutionHistory").onclick=()=>{state.screen="substitutionHistory";renderSubstitutionHistory();};
-  document.getElementById("openNutrition").onclick=()=>{state.screen="nutrition";renderNutrition();};
-  document.getElementById("openHealth").onclick=()=>{state.screen="health";renderHealth();};
-  document.getElementById("openProgressDashboard").onclick=()=>{state.screen="progressDashboard";renderProgressDashboard();};
-  document.getElementById("openCoach").onclick=()=>{state.screen="coach";renderCoach();};
-  document.getElementById("openFavoriteExercises").onclick=()=>{state.screen="favoriteExercises";renderFavoriteExercises();};
-  document.getElementById("openBackupRestore").onclick=()=>{state.screen="backupRestore";renderBackupRestore();};
-
-  document.querySelectorAll("[data-rest-setting]").forEach(button=>button.onclick=()=>{
-    saveRestSeconds(Number(button.dataset.restSetting));
-    toast("Descanso actualizado");
-    renderSettings();
-  });
-  document.getElementById("openBodySettings").onclick=()=>{state.screen="body";renderBody();};
-  document.getElementById("openRoutineEditor").onclick=()=>{state.screen="routineEditor";renderRoutineEditor();};
-  document.getElementById("importRoutine").onclick=()=>{
-    if(typeof XLSX==="undefined"){
-      alert("No se ha podido cargar el lector de Excel. Abre GymOS con conexión a Internet y vuelve a intentarlo.");
-      return;
-    }
-    routineFile.click();
-  };
-  document.getElementById("exportRoutine").onclick=exportRoutine;
-  document.getElementById("exportData").onclick=exportData;
-  document.getElementById("importData").onclick=()=>importFile.click();
-  document.getElementById("deleteData").onclick=()=>{
-    if(!confirm("¿Borrar todo el historial y las sesiones guardadas?"))return;
-    Object.keys(localStorage).filter(k=>k.startsWith("gymos:")).forEach(k=>localStorage.removeItem(k));
-    state.selectedSession="A";toast("Datos eliminados");renderSettings();
-  };
-  bindNav();
-}
-
-
-function normalizeHeader(value){
-  return String(value||"").trim().toLowerCase()
-    .normalize("NFD").replace(/[\u0300-\u036f]/g,"")
-    .replace(/\s+/g," ");
-}
-function parseRoutineRows(rows){
-  const routine={A:[],B:[],C:[]};
-  const errors=[];
-  rows.forEach((row,index)=>{
-    const line=index+2;
-    const normalized={};
-    Object.entries(row).forEach(([key,value])=>normalized[normalizeHeader(key)]=value);
-    const session=String(normalized["sesion"]||"").trim().toUpperCase();
-    const name=String(normalized["ejercicio"]||"").trim();
-    if(!session&&!name) return;
-    if(!["A","B","C"].includes(session)){errors.push(`Fila ${line}: sesión no válida.`);return;}
-    if(!name){errors.push(`Fila ${line}: falta el ejercicio.`);return;}
-    const order=Number(normalized["orden"]);
-    const sets=Number(normalized["series"]);
-    const min=Number(normalized["reps min."]??normalized["reps min"]??normalized["reps minima"]);
-    const max=Number(normalized["reps max."]??normalized["reps max"]??normalized["reps maxima"]);
-    const increment=Number(normalized["incremento kg"]||0);
-    const type=String(normalized["tipo"]||"peso").trim().toLowerCase();
-    if(!Number.isFinite(order)){errors.push(`Fila ${line}: orden no válido.`);return;}
-    if(!Number.isFinite(sets)||sets<1||sets>10){errors.push(`Fila ${line}: series debe estar entre 1 y 10.`);return;}
-    if(!Number.isFinite(min)||!Number.isFinite(max)||max<min){errors.push(`Fila ${line}: rango objetivo no válido.`);return;}
-    if(!["peso","tiempo","repeticiones","distancia"].includes(type)){errors.push(`Fila ${line}: tipo no válido.`);return;}
-    const unit=type==="tiempo"?"s":"reps";
-    routine[session].push({name,target:min===max?`${min} ${unit}`:`${min}–${max} ${unit}`,sets,increment:Number.isFinite(increment)?increment:0,type,order});
-  });
-  Object.keys(routine).forEach(s=>routine[s].sort((a,b)=>a.order-b.order).forEach(x=>delete x.order));
-  if(Object.values(routine).every(items=>items.length===0)) errors.push("El archivo no contiene ejercicios válidos.");
-  return {routine,errors};
-}
-function showRoutinePreview(routine,fileName){
-  const preview=document.getElementById("routinePreview");
-  preview.innerHTML=`<div class="routine-preview">
-    <strong>Vista previa: ${fileName}</strong>
-    ${["A","B","C"].map(s=>`<div class="preview-session"><span>Sesión ${s}</span><strong>${routine[s].length} ejercicios</strong></div>`).join("")}
-    <div class="import-mode">
-      <label><input type="radio" name="routineMode" value="all" checked> Sustituir toda la rutina</label>
-      <label><input type="radio" name="routineMode" value="A"> Solo sesión A</label>
-      <label><input type="radio" name="routineMode" value="B"> Solo sesión B</label>
-      <label><input type="radio" name="routineMode" value="C"> Solo sesión C</label>
-    </div>
-    <button id="confirmRoutineImport" class="primary full">Confirmar importación</button>
-  </div>`;
-  document.getElementById("confirmRoutineImport").onclick=()=>{
-    const mode=document.querySelector('input[name="routineMode"]:checked').value;
-    const current=getRoutine();
-    if(mode==="all"){
-      ["A","B","C"].forEach(s=>{
-        if(routine[s].length) current[s]=routine[s];
-      });
-    }else{
-      if(!routine[mode].length){
-        alert(`El Excel no contiene ejercicios para la sesión ${mode}.`);
-        return;
-      }
-      current[mode]=routine[mode];
-    }
-    saveRoutine(current);
-    sessions=getRoutine();
-    ["A","B","C"].forEach(clearDraft);
-    state.selectedStatsExercise=null;
-    toast("Rutina actualizada");
-    renderSettings();
-  };
-}
-function exportRoutine(){
-  if(typeof XLSX==="undefined"){
-    alert("No se ha podido cargar el generador de Excel.");
-    return;
-  }
   const rows=[];
   const routine=getRoutine();
   ["A","B","C"].forEach(session=>{

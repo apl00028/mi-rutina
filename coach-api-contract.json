@@ -29,7 +29,7 @@
       }
     ]
   },
-  "version": "3.6.0",
+  "version": "3.7.0",
   "health": {
     "endpoint": "GET /health"
   },
@@ -62,5 +62,16 @@
     "recovery": "non-medical readiness score",
     "weeklySummary": "7-day averages",
     "imports": "recent CSV imports"
+  },
+  "authentication": {
+    "status": "client account foundation",
+    "provider": "Supabase Auth",
+    "supported": [
+      "email_password",
+      "google_oauth",
+      "password_reset"
+    ],
+    "data_isolation": "PostgreSQL Row Level Security by auth.uid()",
+    "production_note": "Coach backend authentication and rate limiting remain required before public launch"
   }
 }

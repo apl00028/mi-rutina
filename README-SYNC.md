@@ -1,4 +1,4 @@
-# GymOS v3.6.0 — Salud, recuperación y relojes
+# GymOS v3.7.0 — Cuentas y aislamiento de usuarios
 
 GymOS sigue funcionando completamente en modo local.
 
@@ -292,3 +292,30 @@ La resolución de conflictos conserva la copia con la fecha `updatedAt` más rec
 - Datos de salud integrados en GymOS Coach.
 - Datos y configuración incluidos en copias de seguridad.
 - Advertencias de uso responsable y ausencia de diagnóstico médico.
+
+
+## Novedades de la versión 3.7.0
+
+- Pantalla específica de cuenta.
+- Registro mediante correo y contraseña.
+- Inicio de sesión mediante correo y contraseña.
+- Inicio de sesión con Google preparado mediante Supabase OAuth.
+- Recuperación de contraseña.
+- Perfil con nombre visible.
+- Detección y migración de datos locales a la cuenta.
+- Sincronización ampliada para entrenamiento, nutrición, salud y preferencias.
+- Separación de datos mediante UUID de usuario.
+- Nuevo esquema SQL con Row Level Security para lectura, escritura y borrado.
+- Tabla de perfiles.
+- Solicitudes de eliminación de cuenta.
+- Borrado de la copia de datos alojada en la nube.
+- Exportación de datos desde la cuenta.
+- Documento SECURITY.md con pruebas obligatorias de aislamiento.
+- La app cliente utiliza únicamente una clave pública; las claves administrativas quedan fuera.
+
+## Importante
+
+Esta versión crea la base multiusuario, pero aún no es la versión final para
+Google Play. Antes de una publicación pública deben añadirse autenticación del
+backend Coach, límites de uso, política de privacidad, página web de eliminación
+de cuenta y pruebas automáticas con dos usuarios independientes.

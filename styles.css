@@ -1382,3 +1382,7 @@ body.large-tap-targets .quick-action-card{min-height:122px}
   .onboarding-final-actions{display:grid;grid-template-columns:1fr;gap:7px}
   .onboarding-final-actions button{width:100%}
 }
+
+#cancelOnboarding{
+  white-space:nowrap;
+}

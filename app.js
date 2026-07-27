@@ -568,7 +568,7 @@ function updateExerciseTechnicalNotes(id,notes){
   return true;
 }
 
-const GYMOS_BACKUP_VERSION="4.0.3";
+const GYMOS_BACKUP_VERSION="4.0.4";
 const GYMOS_BACKUP_KEYS=[
   "gymos:routine",
   "gymos:history",
@@ -3204,7 +3204,7 @@ function renderOnboarding(){
   app.innerHTML=`<div class="onboarding-shell">
     <header class="onboarding-header">
       <div class="onboarding-brand"><span class="onboarding-logo">G</span><div><div class="brand">GymOS</div><div class="subtle">Tu entrenamiento, bien planteado</div></div></div>
-      <button id="cancelOnboarding" class="text-button">Salir</button>
+      <button id="cancelOnboarding" class="text-button">Ya lo he realizado</button>
     </header>
     <div class="onboarding-stepper" aria-label="Paso ${step} de 5">
       ${[1,2,3,4,5].map(n=>`<span class="${n<step?"done":n===step?"active":""}">${n<step?"✓":n}</span>`).join("")}
@@ -3227,7 +3227,22 @@ function renderOnboarding(){
   </div>`;
 
   const cancel=document.getElementById("cancelOnboarding");
-  if(cancel) cancel.onclick=()=>{state.onboardingDraft=null;state.onboardingStep=1;state.screen="home";renderHome();};
+  if(cancel) cancel.onclick=()=>{
+    const existing=getOnboardingProfile()||{};
+    const now=new Date().toISOString();
+    saveOnboardingProfile({
+      ...existing,
+      onboardingDismissed:true,
+      onboardingCompletedManually:true,
+      updatedAt:now
+    });
+    state.onboardingDraft=null;
+    state.onboardingStep=1;
+    state.screen="home";
+    toast("Cuestionario marcado como realizado.");
+    renderHome();
+    setTimeout(()=>autoSync("cuestionario marcado como realizado"),400);
+  };
 
   const persistStep=()=>{
     if(step===1){
@@ -3271,6 +3286,8 @@ function renderOnboarding(){
     }
     const now=new Date().toISOString();
     p.completedAt=now;
+    p.onboardingDismissed=false;
+    p.onboardingCompletedManually=false;
     p.updatedAt=now;
     saveOnboardingProfile(p);
     state.onboardingDraft=null;
@@ -3300,6 +3317,8 @@ function renderOnboarding(){
     }
     const now=new Date().toISOString();
     p.completedAt=now;
+    p.onboardingDismissed=false;
+    p.onboardingCompletedManually=false;
     p.updatedAt=now;
     const routine=buildRecommendedRoutine(p);
     saveOnboardingProfile(p);
@@ -6376,7 +6395,7 @@ function renderAccount(){
 
 function renderSettings(){
   app.innerHTML=`<div class="app-shell">
-    <header class="topbar"><div><div class="brand">Ajustes</div><div class="subtle">GymOS v4.0.3 · Perfil sin sustituir rutina</div></div></header>
+    <header class="topbar"><div><div class="brand">Ajustes</div><div class="subtle">GymOS v4.0.4 · Onboarding no bloqueante</div></div></header>
     <main class="screen">
       <section class="card account-entry-card">
         <div class="account-entry-main">

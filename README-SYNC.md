@@ -1,4 +1,4 @@
-# GymOS v3.1.0 — Periodización, fatiga y dashboard
+# GymOS v3.2.0 — Coach IA conectado
 
 GymOS sigue funcionando completamente en modo local.
 
@@ -212,3 +212,21 @@ La resolución de conflictos conserva la copia con la fecha `updatedAt` más rec
 - Recomendación de fase: acumulación, progresión, consolidación o descarga.
 - Descarga automática propuesta por el Coach cuando la fatiga es alta.
 - Mejor integración de la periodización con las propuestas del Coach.
+
+
+## Novedades de la versión 3.2.0
+
+- Chat integrado con GymOS Coach.
+- Contexto automático de rutina, entrenamientos, fatiga, periodización y peso.
+- Propuestas estructuradas generadas desde el chat.
+- Confirmación manual antes de aplicar cualquier modificación.
+- Prueba de conexión con el backend desde GymOS.
+- Estado de conexión visible.
+- Historial local de conversación.
+- Accesos rápidos para revisar fatiga, cargas y equilibrio muscular.
+- Manejo de errores y tiempo máximo de espera.
+- Backend FastAPI incluido en la carpeta `backend`.
+- Endpoints `/health`, `/coach/chat` y `/coach/review`.
+- Configuración segura mediante variables de entorno.
+- Restricción CORS configurable.
+- La clave de OpenAI nunca se guarda en el frontend.

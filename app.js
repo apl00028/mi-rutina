@@ -580,7 +580,9 @@ const GYMOS_BACKUP_KEYS=[
   "gymos:favoriteSubstitutions",
   "gymos:coachSettings",
   "gymos:coachProposals",
-  "gymos:coachSnapshots"
+  "gymos:coachSnapshots",
+  "gymos:coachChat",
+  "gymos:coachConnection"
 ];
 
 function getFavoriteExercises(){
@@ -920,7 +922,7 @@ function undoLastCoachChange(){
 }
 function coachContextPayload(){
   return {
-    version:"3.1.0",
+    version:"3.2.0",
     generatedAt:new Date().toISOString(),
     settings:getCoachSettings(),
     routine:getRoutine(),
@@ -1085,16 +1087,163 @@ function personalRecords(){
   return records.sort((a,b)=>b.best1RM-a.best1RM).slice(0,8);
 }
 
+
+const COACH_CHAT_KEY="gymos:coachChat";
+const COACH_CONNECTION_KEY="gymos:coachConnection";
+
+function getCoachConnection(){
+  try{
+    return {
+      status:"unknown",
+      checkedAt:null,
+      model:null,
+      backendVersion:null,
+      ...JSON.parse(localStorage.getItem(COACH_CONNECTION_KEY)||"{}")
+    };
+  }catch(error){
+    return {status:"unknown",checkedAt:null,model:null,backendVersion:null};
+  }
+}
+function saveCoachConnection(value){
+  localStorage.setItem(COACH_CONNECTION_KEY,JSON.stringify(value));
+}
+function getCoachChatMessages(){
+  try{
+    const data=JSON.parse(localStorage.getItem(COACH_CHAT_KEY)||"[]");
+    return Array.isArray(data)?data:[];
+  }catch(error){return [];}
+}
+function saveCoachChatMessages(messages){
+  localStorage.setItem(COACH_CHAT_KEY,JSON.stringify(messages.slice(-100)));
+}
+function coachBackendBaseUrl(){
+  const url=String(getCoachSettings().backendUrl||"").trim();
+  if(!url) throw new Error("Configura primero la URL del backend Coach.");
+  return url.replace(/\/$/,"");
+}
+async function coachBackendFetch(path,options={}){
+  const controller=new AbortController();
+  const timeout=setTimeout(()=>controller.abort(),20000);
+  try{
+    const response=await fetch(coachBackendBaseUrl()+path,{
+      ...options,
+      signal:controller.signal,
+      headers:{
+        "Content-Type":"application/json",
+        ...(options.headers||{})
+      }
+    });
+    let data=null;
+    try{data=await response.json();}catch(error){}
+    if(!response.ok){
+      throw new Error(data?.detail||data?.message||`Error del backend (${response.status}).`);
+    }
+    return data||{};
+  }catch(error){
+    if(error.name==="AbortError") throw new Error("El backend ha tardado demasiado en responder.");
+    throw error;
+  }finally{
+    clearTimeout(timeout);
+  }
+}
+async function testCoachConnection(){
+  try{
+    const data=await coachBackendFetch("/health",{method:"GET"});
+    const connection={
+      status:"connected",
+      checkedAt:new Date().toISOString(),
+      model:data.model||null,
+      backendVersion:data.version||null
+    };
+    saveCoachConnection(connection);
+    return connection;
+  }catch(error){
+    saveCoachConnection({
+      status:"error",
+      checkedAt:new Date().toISOString(),
+      error:error.message
+    });
+    throw error;
+  }
+}
+function coachChatContext(){
+  const summaries=coachExerciseSummary();
+  return {
+    version:"3.2.0",
+    generatedAt:new Date().toISOString(),
+    goal:getCoachSettings().goal,
+    routine:getRoutine(),
+    recentWorkouts:lastCompletedWorkouts(8),
+    exerciseSummary:summaries,
+    fatigue:fatigueAssessment(),
+    periodization:periodizationRecommendation(),
+    bodyWeight:bodyWeightTrend(),
+    activeBlock:typeof getActiveTrainingBlock==="function"?getActiveTrainingBlock():null
+  };
+}
+async function sendCoachChatMessage(message){
+  const trimmed=String(message||"").trim();
+  if(!trimmed) throw new Error("Escribe un mensaje.");
+  const messages=getCoachChatMessages();
+  const userMessage={
+    id:`chat-${Date.now().toString(36)}-u`,
+    role:"user",
+    content:trimmed,
+    createdAt:new Date().toISOString()
+  };
+  messages.push(userMessage);
+  saveCoachChatMessages(messages);
+
+  const data=await coachBackendFetch("/coach/chat",{
+    method:"POST",
+    body:JSON.stringify({
+      message:trimmed,
+      history:messages.slice(-12),
+      context:coachChatContext()
+    })
+  });
+
+  const assistantMessage={
+    id:`chat-${Date.now().toString(36)}-a`,
+    role:"assistant",
+    content:String(data.message||data.reply||"No se recibió respuesta."),
+    createdAt:new Date().toISOString(),
+    actions:Array.isArray(data.actions)?data.actions:[],
+    proposal:data.proposal||null
+  };
+  messages.push(assistantMessage);
+  saveCoachChatMessages(messages);
+
+  if(data.proposal&&Array.isArray(data.proposal.changes)){
+    const proposal={
+      id:data.proposal.id||`coach-${Date.now().toString(36)}`,
+      createdAt:new Date().toISOString(),
+      source:"remote-chat",
+      goal:getCoachSettings().goal,
+      status:"pending",
+      summary:data.proposal.summary||"Propuesta generada desde el chat.",
+      notes:Array.isArray(data.proposal.notes)?data.proposal.notes:[],
+      changes:data.proposal.changes
+    };
+    const proposals=getCoachProposals();
+    proposals.unshift(proposal);
+    saveCoachProposals(proposals.slice(0,50));
+    assistantMessage.proposalId=proposal.id;
+    saveCoachChatMessages(messages);
+  }
+  return assistantMessage;
+}
+function clearCoachChat(){
+  localStorage.removeItem(COACH_CHAT_KEY);
+}
+
 async function requestRemoteCoachProposal(){
   const settings=getCoachSettings();
   if(!settings.backendUrl) throw new Error("Configura primero la URL del backend Coach.");
-  const response=await fetch(settings.backendUrl.replace(/\/$/,"")+"/coach/review",{
+  const data=await coachBackendFetch("/coach/review",{
     method:"POST",
-    headers:{"Content-Type":"application/json"},
     body:JSON.stringify(coachContextPayload())
   });
-  if(!response.ok) throw new Error(`El backend respondió con error ${response.status}.`);
-  const data=await response.json();
   const proposal={
     id:data.id||`coach-${Date.now().toString(36)}`,
     createdAt:new Date().toISOString(),
@@ -1212,7 +1361,8 @@ let state = {
   selectedLibraryExerciseId: null,
   favoritesSort: "name",
   coachSessionId: null,
-  progressRangeWeeks: 8
+  progressRangeWeeks: 8,
+  coachChatMessages: []
 };
 
 function getHistory(){ return JSON.parse(localStorage.getItem("gymos:history") || "[]"); }
@@ -2015,6 +2165,7 @@ function render(){
   else if(state.screen==="coach") renderCoach();
   else if(state.screen==="coachProposal") renderCoachProposal();
   else if(state.screen==="progressDashboard") renderProgressDashboard();
+  else if(state.screen==="coachChat") renderCoachChat();
   else renderSettings();
 }
 
@@ -3807,6 +3958,89 @@ function renderProgressDashboard(){
   };
 }
 
+
+function renderCoachChat(){
+  const messages=getCoachChatMessages();
+  const connection=getCoachConnection();
+
+  app.innerHTML=`<div class="app-shell coach-chat-shell">
+    <header class="topbar">
+      <button id="backCoachChat" class="back-button">←</button>
+      <div><div class="brand">Chat con GymOS Coach</div><div class="subtle">${connection.status==="connected"?"Backend conectado":"Conexión no verificada"}</div></div>
+      <button id="clearCoachChat" class="header-action">Limpiar</button>
+    </header>
+    <main class="screen coach-chat-screen">
+      <section id="coachChatMessages" class="coach-chat-messages">
+        ${messages.length?messages.map(message=>`<article class="coach-chat-message ${esc(message.role)}">
+          <div class="coach-chat-role">${message.role==="user"?"Tú":"Coach"}</div>
+          <p>${esc(message.content).replace(/\n/g,"<br>")}</p>
+          ${message.proposalId?`<button class="secondary" data-open-chat-proposal="${message.proposalId}">Ver propuesta generada</button>`:""}
+          <small>${new Date(message.createdAt).toLocaleTimeString("es-ES",{hour:"2-digit",minute:"2-digit"})}</small>
+        </article>`).join(""):`<section class="card coach-chat-empty">
+          <h2>¿Qué quieres revisar?</h2>
+          <p class="subtle">Ejemplos: “¿Debo subir peso en press banca?”, “Estoy muy cansado esta semana” o “Cambia un ejercicio que me molesta en el hombro”.</p>
+        </section>`}
+      </section>
+
+      <section class="coach-quick-prompts">
+        <button data-coach-prompt="Revisa mi fatiga y dime si debería hacer una descarga.">Revisar fatiga</button>
+        <button data-coach-prompt="Analiza mis progresiones y dime qué ejercicios puedo subir.">Revisar cargas</button>
+        <button data-coach-prompt="Revisa si mi rutina está equilibrada por grupos musculares.">Revisar equilibrio</button>
+      </section>
+
+      <section class="coach-chat-composer">
+        <textarea id="coachChatInput" rows="3" placeholder="Escribe tu pregunta al Coach..."></textarea>
+        <button id="sendCoachChat" class="primary">Enviar</button>
+      </section>
+    </main>
+  </div>`;
+
+  const messagesElement=document.getElementById("coachChatMessages");
+  messagesElement.scrollTop=messagesElement.scrollHeight;
+
+  document.getElementById("backCoachChat").onclick=()=>{state.screen="coach";renderCoach();};
+  document.getElementById("clearCoachChat").onclick=()=>{
+    if(!messages.length||confirm("¿Borrar la conversación con el Coach?")){
+      clearCoachChat();
+      renderCoachChat();
+    }
+  };
+
+  document.querySelectorAll("[data-coach-prompt]").forEach(button=>button.onclick=()=>{
+    document.getElementById("coachChatInput").value=button.dataset.coachPrompt;
+    document.getElementById("coachChatInput").focus();
+  });
+
+  document.querySelectorAll("[data-open-chat-proposal]").forEach(button=>button.onclick=()=>{
+    state.coachSessionId=button.dataset.openChatProposal;
+    state.screen="coachProposal";
+    renderCoachProposal();
+  });
+
+  const send=async()=>{
+    const input=document.getElementById("coachChatInput");
+    const button=document.getElementById("sendCoachChat");
+    const value=input.value.trim();
+    if(!value) return;
+    button.disabled=true;
+    button.textContent="Pensando...";
+    input.disabled=true;
+    try{
+      await sendCoachChatMessage(value);
+      renderCoachChat();
+    }catch(error){
+      alert(error.message||"No se pudo enviar el mensaje.");
+      button.disabled=false;
+      button.textContent="Enviar";
+      input.disabled=false;
+    }
+  };
+  document.getElementById("sendCoachChat").onclick=send;
+  document.getElementById("coachChatInput").onkeydown=e=>{
+    if(e.key==="Enter"&&(e.ctrlKey||e.metaKey)) send();
+  };
+}
+
 function renderCoach(){
   const settings=getCoachSettings();
   const proposals=getCoachProposals();
@@ -3831,6 +4065,20 @@ function renderCoach(){
           <article><span>Con historial</span><strong>${tracked}</strong></article>
           <article><span>Propuestas</span><strong>${proposals.length}</strong></article>
         </div>
+      </section>
+
+      <section class="card">
+        <div class="card-heading-row">
+          <div><h2>Conexión con IA</h2><p class="subtle">Comprueba que el backend seguro está disponible.</p></div>
+          <span id="coachConnectionBadge" class="connection-badge ${getCoachConnection().status}">${getCoachConnection().status==="connected"?"Conectado":getCoachConnection().status==="error"?"Error":"Sin comprobar"}</span>
+        </div>
+        <button id="testCoachConnection" class="secondary full">Probar conexión</button>
+      </section>
+
+      <section class="card coach-chat-entry">
+        <h2>Hablar con el Coach</h2>
+        <p class="subtle">Pregunta por cargas, fatiga, sustituciones o cambios en tu rutina. Las modificaciones seguirán necesitando confirmación.</p>
+        <button id="openCoachChat" class="primary full">Abrir chat</button>
       </section>
 
       <section class="card">
@@ -3872,6 +4120,20 @@ function renderCoach(){
   </div>`;
 
   document.getElementById("backCoach").onclick=()=>{state.screen="settings";renderSettings();};
+  document.getElementById("openCoachChat").onclick=()=>{state.screen="coachChat";renderCoachChat();};
+  document.getElementById("testCoachConnection").onclick=async()=>{
+    const button=document.getElementById("testCoachConnection");
+    button.disabled=true;
+    button.textContent="Comprobando...";
+    try{
+      const connection=await testCoachConnection();
+      toast(`Conectado${connection.model?` · ${connection.model}`:""}`);
+      renderCoach();
+    }catch(error){
+      alert(error.message||"No se pudo conectar.");
+      renderCoach();
+    }
+  };
   document.getElementById("runLocalCoach").onclick=()=>{
     const proposal=createLocalCoachProposal();
     state.screen="coachProposal";
@@ -4143,7 +4405,7 @@ function renderBackupRestore(){
 
 function renderSettings(){
   app.innerHTML=`<div class="app-shell">
-    <header class="topbar"><div><div class="brand">Ajustes</div><div class="subtle">GymOS v3.1.0 · Periodización y fatiga</div></div></header>
+    <header class="topbar"><div><div class="brand">Ajustes</div><div class="subtle">GymOS v3.2.0 · Coach IA conectado</div></div></header>
     <main class="screen">
       <section class="card sync-card">
         <div class="card-heading-row">

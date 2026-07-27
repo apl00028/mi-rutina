@@ -28,5 +28,24 @@
         "reason": "string"
       }
     ]
+  },
+  "version": "3.2.0",
+  "health": {
+    "endpoint": "GET /health"
+  },
+  "chat": {
+    "endpoint": "POST /coach/chat",
+    "request": {
+      "message": "string",
+      "history": "recent chat messages",
+      "context": "GymOS training context"
+    },
+    "response": {
+      "message": "string",
+      "actions": [
+        "string"
+      ],
+      "proposal": "optional structured routine proposal"
+    }
   }
 }

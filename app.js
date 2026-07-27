@@ -17,10 +17,18 @@ function updateAppearanceButton(value=getAppearancePreference()){
 function applyAppearancePreference(value=getAppearancePreference()){
   const allowed=["light","dark","system"];
   const next=allowed.includes(value)?value:"light";
+  const resolved=next==="system"
+    ?(window.matchMedia?.("(prefers-color-scheme: dark)").matches?"dark":"light")
+    :next;
   document.documentElement.dataset.appearance=next;
+  document.documentElement.dataset.theme=resolved;
   document.documentElement.classList.remove("theme-light","theme-dark","theme-system");
   document.documentElement.classList.add(`theme-${next}`);
   localStorage.setItem(GYMOS_APPEARANCE_KEY,next);
+  try{
+    const current=JSON.parse(localStorage.getItem("gymos:appPreferences")||"{}");
+    localStorage.setItem("gymos:appPreferences",JSON.stringify({...current,theme:next}));
+  }catch(_){}
   updateAppearanceButton(next);
 }
 function cycleAppearancePreference(){
@@ -41,10 +49,21 @@ function updateFontScaleButton(value=getFontScalePreference()){
   button.title=`Tamaño de letra ${position}/${GYMOS_FONT_SCALES.length}`;
 }
 function applyFontScalePreference(value=getFontScalePreference()){
+  const scaleMap={
+    "font-scale-sm":"small",
+    "font-scale-md":"normal",
+    "font-scale-lg":"large",
+    "font-scale-xl":"xlarge"
+  };
   GYMOS_FONT_SCALES.forEach(cls=>document.documentElement.classList.remove(cls));
   const next=GYMOS_FONT_SCALES.includes(value)?value:"font-scale-md";
   document.documentElement.classList.add(next);
+  document.documentElement.dataset.fontScale=scaleMap[next];
   localStorage.setItem(GYMOS_FONT_SCALE_KEY,next);
+  try{
+    const current=JSON.parse(localStorage.getItem("gymos:appPreferences")||"{}");
+    localStorage.setItem("gymos:appPreferences",JSON.stringify({...current,fontScale:scaleMap[next]}));
+  }catch(_){}
   updateFontScaleButton(next);
 }
 function cycleFontScalePreference(){
@@ -640,7 +659,7 @@ function updateExerciseTechnicalNotes(id,notes){
   return true;
 }
 
-const GYMOS_BACKUP_VERSION="4.0.7";
+const GYMOS_BACKUP_VERSION="4.0.8";
 const GYMOS_BACKUP_KEYS=[
   "gymos:routine",
   "gymos:history",
@@ -6468,7 +6487,7 @@ function renderAccount(){
 
 function renderSettings(){
   app.innerHTML=`<div class="app-shell">
-    <header class="topbar"><div><div class="brand">Ajustes</div><div class="subtle">GymOS v4.0.7 · Controles de apariencia corregidos</div></div></header>
+    <header class="topbar"><div><div class="brand">Ajustes</div><div class="subtle">GymOS v4.0.8 · Tema claro y tamaño corregidos</div></div></header>
     <main class="screen">
       <section class="card account-entry-card">
         <div class="account-entry-main">
@@ -6916,4 +6935,8 @@ document.addEventListener("DOMContentLoaded",()=>{
   applyAppearancePreference();
   applyFontScalePreference();
   bindGlobalAppearanceControls();
+});
+
+window.matchMedia?.("(prefers-color-scheme: dark)")?.addEventListener?.("change",()=>{
+  if(getAppearancePreference()==="system") applyAppearancePreference("system");
 });

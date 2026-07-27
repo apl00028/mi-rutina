@@ -1389,14 +1389,7 @@ body.large-tap-targets .quick-action-card{min-height:122px}
 
 
 /* v4.0.6: appearance and text-size controls available before login */
-:root{
-  --gymos-font-scale:1;
-}
-html.font-scale-sm{--gymos-font-scale:.92}
-html.font-scale-md{--gymos-font-scale:1}
-html.font-scale-lg{--gymos-font-scale:1.10}
-html.font-scale-xl{--gymos-font-scale:1.22}
-html{font-size:calc(16px * var(--gymos-font-scale))}
+
 
 .global-accessibility-controls{
   position:fixed;
@@ -1514,4 +1507,69 @@ html.theme-system{color-scheme:light dark}
   .appearance-control span:last-child{
     display:none;
   }
+}
+
+
+/* v4.0.8: coherent light mode across login and account screens */
+:root[data-theme="light"]{
+  --app-bg:#f4f6fa;
+  --background:#f4f6fa;
+  --bg:#f4f6fa;
+  --surface:#ffffff;
+  --surface-soft:#f8fafc;
+  --surface-elevated:#ffffff;
+  --text:#111827;
+  --muted:#64748b;
+  --border:#dfe4ec;
+}
+html[data-theme="light"] body{background:var(--app-bg)!important;color:var(--text)!important}
+html[data-theme="light"] .topbar{
+  background:#ffffff!important;
+  color:#111827!important;
+  border-bottom:1px solid var(--border);
+}
+html[data-theme="light"] .topbar .subtle{color:#64748b!important}
+html[data-theme="light"] .card,
+html[data-theme="light"] .auth-gate-card,
+html[data-theme="light"] .auth-panel,
+html[data-theme="light"] .security-card{
+  background:#ffffff!important;
+  color:#111827!important;
+  border-color:var(--border)!important;
+}
+html[data-theme="light"] .auth-tabs,
+html[data-theme="light"] .auth-tab{
+  background:#f1f5f9;
+  color:#475569;
+}
+html[data-theme="light"] .auth-tab.active{
+  background:#ffffff;
+  color:#6d28d9;
+}
+html[data-theme="light"] input,
+html[data-theme="light"] select,
+html[data-theme="light"] textarea{
+  background:#ffffff!important;
+  color:#111827!important;
+  border-color:#cfd6e2!important;
+}
+html[data-theme="light"] .global-accessibility-controls button{
+  background:rgba(255,255,255,.96);
+  color:#111827;
+  border-color:rgba(15,23,42,.16);
+}
+
+/* Make the four font steps visibly distinct, including legacy pixel-sized text. */
+:root[data-font-scale="small"]{font-size:14px}
+:root[data-font-scale="normal"]{font-size:16px}
+:root[data-font-scale="large"]{font-size:18px}
+:root[data-font-scale="xlarge"]{font-size:20px}
+:root[data-font-scale="small"] body{--legacy-text-multiplier:.90}
+:root[data-font-scale="normal"] body{--legacy-text-multiplier:1}
+:root[data-font-scale="large"] body{--legacy-text-multiplier:1.12}
+:root[data-font-scale="xlarge"] body{--legacy-text-multiplier:1.25}
+:root[data-font-scale] .auth-shell,
+:root[data-font-scale] .app-shell,
+:root[data-font-scale] .onboarding-shell{
+  font-size:calc(1rem * var(--legacy-text-multiplier));
 }

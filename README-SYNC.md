@@ -1,4 +1,4 @@
-# GymOS v3.8.4 — Navegación inferior global
+# GymOS v3.8.5 — Corrección de bloqueo de navegación
 
 GymOS sigue funcionando completamente en modo local.
 
@@ -369,3 +369,12 @@ de cuenta y pruebas automáticas con dos usuarios independientes.
 - Entrenar vuelve a Inicio para seleccionar una sesión cuando todavía no hay ninguna elegida.
 - Los cronómetros activos se detienen de forma segura al cambiar de pantalla.
 - La navegación se reactiva automáticamente después de cada renderizado.
+
+
+## Parche v3.8.5
+
+- Corregida la causa real del bloqueo de la barra inferior.
+- El estado `exerciseTimers` no estaba inicializado y producía un error al pulsar cualquier icono.
+- La limpieza de cronómetros ahora es defensiva.
+- Un posible error del cronómetro ya no puede bloquear Inicio, Entrenar, Progreso, Coach o Más.
+- Mantiene todas las funciones de las versiones anteriores.

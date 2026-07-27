@@ -936,7 +936,7 @@ function undoLastCoachChange(){
 }
 function coachContextPayload(){
   return {
-    version:"3.8.4",
+    version:"3.8.5",
     generatedAt:new Date().toISOString(),
     settings:getCoachSettings(),
     routine:getRoutine(),
@@ -1849,7 +1849,8 @@ let state = {
   nutritionDate: new Date().toISOString().slice(0,10),
   developerLogFilter: "all",
   healthDate: new Date().toISOString().slice(0,10),
-  accountMode: "login"
+  accountMode: "login",
+  exerciseTimers: {}
 };
 
 function getHistory(){ return JSON.parse(localStorage.getItem("gymos:history") || "[]"); }
@@ -2771,7 +2772,12 @@ function nav(active){
 let globalNavigationBound=false;
 
 function navigateToScreen(screen){
-  stopAllExerciseTimers();
+  try{
+    stopAllExerciseTimers();
+  }catch(error){
+    console.error("Timer cleanup failed during navigation",error);
+    state.exerciseTimers={};
+  }
 
   if(screen==="workout"){
     const selected=state.selectedSession||localStorage.getItem("gymos:selectedSession");
@@ -3048,6 +3054,10 @@ function resetExerciseTimer(session,exerciseIndex,setIndex){
   if(input) input.value="";
 }
 function stopAllExerciseTimers(){
+  if(!state.exerciseTimers || typeof state.exerciseTimers!=="object"){
+    state.exerciseTimers={};
+    return;
+  }
   Object.values(state.exerciseTimers).forEach(timer=>{
     if(timer?.intervalId) clearInterval(timer.intervalId);
     if(timer?.running){
@@ -5830,7 +5840,7 @@ function renderAccount(){
 
 function renderSettings(){
   app.innerHTML=`<div class="app-shell">
-    <header class="topbar"><div><div class="brand">Ajustes</div><div class="subtle">GymOS v3.8.4 · Navegación inferior global</div></div></header>
+    <header class="topbar"><div><div class="brand">Ajustes</div><div class="subtle">GymOS v3.8.5 · Corrección de bloqueo de navegación</div></div></header>
     <main class="screen">
       <section class="card account-entry-card">
         <div class="account-entry-main">

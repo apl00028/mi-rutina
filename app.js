@@ -567,6 +567,136 @@ function updateExerciseTechnicalNotes(id,notes){
   saveExerciseLibrary(library);
   return true;
 }
+
+const GYMOS_BACKUP_VERSION="2.5.3";
+const GYMOS_BACKUP_KEYS=[
+  "gymos:routine",
+  "gymos:history",
+  "gymos:bodyWeight",
+  "gymos:trainingBlocks",
+  "gymos:activeBlockId",
+  "gymos:exerciseLibrary",
+  "gymos:exerciseSubstitutions",
+  "gymos:favoriteSubstitutions"
+];
+
+function getFavoriteExercises(){
+  return getExerciseLibrary().filter(item=>Boolean(item.favorite));
+}
+function setExerciseFavorite(id,value){
+  const library=getExerciseLibrary();
+  const item=library.find(exercise=>exercise.id===id);
+  if(!item) return false;
+  item.favorite=Boolean(value);
+  saveExerciseLibrary(library);
+  return true;
+}
+function favoriteExerciseUsage(name){
+  const key=normalizeExerciseName(name);
+  const routine=getRoutine();
+  const sessionsUsed=["A","B","C"].filter(session=>(routine[session]||[]).some(item=>normalizeExerciseName(item.name)===key));
+  const historyRows=exerciseTrainingHistory(name);
+  return {
+    sessions:sessionsUsed,
+    setCount:historyRows.length,
+    lastDate:historyRows[0]?.date||null
+  };
+}
+function buildGymOSBackup(){
+  const storage={};
+  GYMOS_BACKUP_KEYS.forEach(key=>{
+    const value=localStorage.getItem(key);
+    if(value!==null) storage[key]=value;
+  });
+  return {
+    app:"GymOS",
+    backupVersion:GYMOS_BACKUP_VERSION,
+    exportedAt:new Date().toISOString(),
+    storage
+  };
+}
+function downloadGymOSBackup(){
+  const backup=buildGymOSBackup();
+  const blob=new Blob([JSON.stringify(backup,null,2)],{type:"application/json"});
+  const url=URL.createObjectURL(blob);
+  const link=document.createElement("a");
+  const stamp=new Date().toISOString().slice(0,10);
+  link.href=url;
+  link.download=`GymOS-backup-${stamp}.json`;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
+function validateGymOSBackup(payload){
+  if(!payload||payload.app!=="GymOS"||!payload.storage||typeof payload.storage!=="object"){
+    throw new Error("El archivo no es una copia válida de GymOS.");
+  }
+  return payload;
+}
+function importGymOSBackup(payload,mode="merge"){
+  const backup=validateGymOSBackup(payload);
+  if(mode==="replace"){
+    GYMOS_BACKUP_KEYS.forEach(key=>localStorage.removeItem(key));
+  }
+  Object.entries(backup.storage).forEach(([key,value])=>{
+    if(!GYMOS_BACKUP_KEYS.includes(key)) return;
+    if(mode==="merge"&&localStorage.getItem(key)!==null){
+      if(key===EXERCISE_LIBRARY_KEY){
+        try{
+          const current=getExerciseLibrary();
+          const incoming=JSON.parse(value);
+          const byId=new Map(current.map(item=>[item.id,item]));
+          (Array.isArray(incoming)?incoming:[]).forEach(item=>byId.set(item.id,item));
+          saveExerciseLibrary([...byId.values()]);
+          return;
+        }catch(error){}
+      }
+      if(key===EXERCISE_SUBSTITUTIONS_KEY){
+        try{
+          const current=getExerciseSubstitutions();
+          const incoming=JSON.parse(value);
+          const byId=new Map(current.map(item=>[item.id,item]));
+          (Array.isArray(incoming)?incoming:[]).forEach(item=>byId.set(item.id,item));
+          saveExerciseSubstitutions([...byId.values()].sort((a,b)=>new Date(b.date)-new Date(a.date)));
+          return;
+        }catch(error){}
+      }
+      if(key===FAVORITE_SUBSTITUTIONS_KEY){
+        try{
+          const current=getFavoriteSubstitutions();
+          const incoming=JSON.parse(value);
+          saveFavoriteSubstitutions([...new Set([...current,...(Array.isArray(incoming)?incoming:[])])]);
+          return;
+        }catch(error){}
+      }
+    }
+    localStorage.setItem(key,String(value));
+  });
+  sessions=getRoutine();
+}
+function readJsonFile(file){
+  return new Promise((resolve,reject)=>{
+    const reader=new FileReader();
+    reader.onload=()=>{
+      try{resolve(JSON.parse(String(reader.result||"")));}catch(error){reject(new Error("El archivo JSON no es válido."));}
+    };
+    reader.onerror=()=>reject(new Error("No se pudo leer el archivo."));
+    reader.readAsText(file);
+  });
+}
+function syncCoverageSummary(){
+  const payload=buildSyncPayload();
+  return {
+    routine:Boolean(payload.routine),
+    history:Array.isArray(payload.history),
+    bodyWeight:Array.isArray(payload.bodyWeight),
+    blocks:Array.isArray(payload.blocks),
+    exerciseLibrary:Array.isArray(payload.exerciseLibrary),
+    substitutions:Array.isArray(payload.exerciseSubstitutions),
+    favoriteSubstitutions:Array.isArray(payload.favoriteSubstitutions)
+  };
+}
 function suggestedSubstitutes(currentName,query="",equipment="Todos",favoritesOnly=false){
   const current=exerciseLibraryItemByName(currentName);
   const q=String(query||"").trim().toLowerCase();
@@ -665,7 +795,8 @@ let state = {
   libraryEquipment: "Todos",
   libraryFavoritesOnly: false,
   editingLibraryExerciseId: null,
-  selectedLibraryExerciseId: null
+  selectedLibraryExerciseId: null,
+  favoritesSort: "name"
 };
 
 function getHistory(){ return JSON.parse(localStorage.getItem("gymos:history") || "[]"); }
@@ -801,7 +932,7 @@ function formatSyncDate(value){
 }
 function buildSyncPayload(){
   return {
-    version:"2.5.2",
+    version:"2.5.3",
     updatedAt:getLocalUpdatedAt(),
     deviceId:getDeviceId(),
     deviceName:getDeviceName(),
@@ -1463,6 +1594,8 @@ function render(){
   else if(state.screen==="exerciseLibraryEditor") renderExerciseLibraryEditor();
   else if(state.screen==="substitutionHistory") renderSubstitutionHistory();
   else if(state.screen==="exerciseDetail") renderExerciseDetail();
+  else if(state.screen==="favoriteExercises") renderFavoriteExercises();
+  else if(state.screen==="backupRestore") renderBackupRestore();
   else renderSettings();
 }
 
@@ -3153,9 +3286,177 @@ function renderSubstitutionHistory(){
   };
 }
 
+
+function renderFavoriteExercises(){
+  let favorites=getFavoriteExercises();
+  if(state.favoritesSort==="recent"){
+    favorites=favorites.sort((a,b)=>{
+      const aDate=favoriteExerciseUsage(a.name).lastDate||"";
+      const bDate=favoriteExerciseUsage(b.name).lastDate||"";
+      return new Date(bDate)-new Date(aDate);
+    });
+  }else if(state.favoritesSort==="used"){
+    favorites=favorites.sort((a,b)=>favoriteExerciseUsage(b.name).setCount-favoriteExerciseUsage(a.name).setCount);
+  }else{
+    favorites=favorites.sort((a,b)=>a.name.localeCompare(b.name,"es"));
+  }
+
+  app.innerHTML=`<div class="app-shell">
+    <header class="topbar">
+      <button id="backFavoriteExercises" class="back-button">←</button>
+      <div><div class="brand">Favoritos</div><div class="subtle">${favorites.length} ejercicios</div></div>
+      <span></span>
+    </header>
+    <main class="screen">
+      <section class="card favorite-toolbar">
+        <label><span>Ordenar por</span><select id="favoriteSort">
+          <option value="name" ${state.favoritesSort==="name"?"selected":""}>Nombre</option>
+          <option value="used" ${state.favoritesSort==="used"?"selected":""}>Más utilizados</option>
+          <option value="recent" ${state.favoritesSort==="recent"?"selected":""}>Uso más reciente</option>
+        </select></label>
+      </section>
+      <section class="exercise-library-list">
+        ${favorites.length?favorites.map(item=>{
+          const usage=favoriteExerciseUsage(item.name);
+          return `<article class="card favorite-exercise-card">
+            <div class="exercise-library-card-top">
+              <div>
+                <h2>${esc(item.name)}</h2>
+                <p class="subtle">${esc(item.muscle)} · ${esc(item.equipment)} · ${esc(item.type)}</p>
+              </div>
+              <button class="favorite-button active" data-remove-favorite="${item.id}" aria-label="Quitar favorito">★</button>
+            </div>
+            <div class="favorite-usage-row">
+              <span>${usage.setCount} series registradas</span>
+              <span>${usage.sessions.length?`En sesiones ${usage.sessions.join(", ")}`:"No está en la rutina"}</span>
+              <span>${usage.lastDate?`Último uso: ${new Date(usage.lastDate).toLocaleDateString("es-ES")}`:"Sin uso registrado"}</span>
+            </div>
+            <div class="library-session-actions">
+              ${["A","B","C"].map(session=>`<button class="secondary" data-favorite-add="${item.id}" data-target-session="${session}">Añadir a ${session}</button>`).join("")}
+            </div>
+            <button class="secondary full" data-favorite-detail="${item.id}">Ver ficha</button>
+          </article>`;
+        }).join(""):`<section class="card empty-library-state"><h2>Sin favoritos</h2><p class="subtle">Marca ejercicios con la estrella desde la biblioteca.</p></section>`}
+      </section>
+    </main>
+  </div>`;
+
+  document.getElementById("backFavoriteExercises").onclick=()=>{state.screen="settings";renderSettings();};
+  document.getElementById("favoriteSort").onchange=e=>{state.favoritesSort=e.target.value;renderFavoriteExercises();};
+  document.querySelectorAll("[data-remove-favorite]").forEach(button=>button.onclick=()=>{
+    setExerciseFavorite(button.dataset.removeFavorite,false);
+    toast("Eliminado de favoritos");
+    renderFavoriteExercises();
+  });
+  document.querySelectorAll("[data-favorite-add]").forEach(button=>button.onclick=()=>{
+    const item=getExerciseLibrary().find(exercise=>exercise.id===button.dataset.favoriteAdd);
+    if(!item) return;
+    addExerciseToRoutine(button.dataset.targetSession,item);
+    toast(`${item.name} añadido a la sesión ${button.dataset.targetSession}`);
+  });
+  document.querySelectorAll("[data-favorite-detail]").forEach(button=>button.onclick=()=>{
+    state.selectedLibraryExerciseId=button.dataset.favoriteDetail;
+    state.screen="exerciseDetail";
+    renderExerciseDetail();
+  });
+}
+
+function renderBackupRestore(){
+  const coverage=syncCoverageSummary();
+  const syncItems=[
+    ["Rutina",coverage.routine],
+    ["Historial",coverage.history],
+    ["Peso corporal",coverage.bodyWeight],
+    ["Bloques",coverage.blocks],
+    ["Biblioteca",coverage.exerciseLibrary],
+    ["Sustituciones",coverage.substitutions],
+    ["Favoritos de sustitución",coverage.favoriteSubstitutions]
+  ];
+
+  app.innerHTML=`<div class="app-shell">
+    <header class="topbar">
+      <button id="backBackupRestore" class="back-button">←</button>
+      <div><div class="brand">Copia y restauración</div><div class="subtle">Protección de datos GymOS</div></div>
+      <span></span>
+    </header>
+    <main class="screen">
+      <section class="card">
+        <h2>Exportar copia completa</h2>
+        <p class="subtle">Genera un archivo JSON con tu rutina, historial, peso, bloques, biblioteca, sustituciones y favoritos.</p>
+        <button id="downloadGymOSBackup" class="primary full">Descargar copia de seguridad</button>
+      </section>
+
+      <section class="card">
+        <h2>Restaurar una copia</h2>
+        <p class="subtle">Selecciona un archivo creado por GymOS. Puedes combinarlo con tus datos actuales o reemplazarlos.</p>
+        <input id="backupFileInput" type="file" accept="application/json,.json">
+        <div class="backup-mode-grid">
+          <button id="mergeBackup" class="secondary" disabled>Combinar datos</button>
+          <button id="replaceBackup" class="danger-soft" disabled>Reemplazar todo</button>
+        </div>
+        <p id="backupFileStatus" class="subtle">Ningún archivo seleccionado.</p>
+      </section>
+
+      <section class="card">
+        <h2>Cobertura de sincronización</h2>
+        <p class="subtle">Estos apartados forman parte del paquete que GymOS prepara para Supabase.</p>
+        <div class="sync-coverage-list">
+          ${syncItems.map(([label,ok])=>`<div><span>${esc(label)}</span><strong class="${ok?"ok":"warn"}">${ok?"Incluido":"Pendiente"}</strong></div>`).join("")}
+        </div>
+      </section>
+
+      <section class="card warning-card">
+        <h2>Antes de actualizar</h2>
+        <p>Descarga una copia y comprueba que la sincronización se ha completado. Así podrás restaurar tus datos aunque borres la caché o cambies de dispositivo.</p>
+      </section>
+    </main>
+  </div>`;
+
+  let selectedPayload=null;
+  const fileInput=document.getElementById("backupFileInput");
+  const status=document.getElementById("backupFileStatus");
+  const mergeButton=document.getElementById("mergeBackup");
+  const replaceButton=document.getElementById("replaceBackup");
+
+  document.getElementById("backBackupRestore").onclick=()=>{state.screen="settings";renderSettings();};
+  document.getElementById("downloadGymOSBackup").onclick=()=>{
+    downloadGymOSBackup();
+    toast("Copia de seguridad descargada");
+  };
+
+  fileInput.onchange=async()=>{
+    selectedPayload=null;
+    mergeButton.disabled=true;
+    replaceButton.disabled=true;
+    const file=fileInput.files?.[0];
+    if(!file){status.textContent="Ningún archivo seleccionado.";return;}
+    try{
+      selectedPayload=validateGymOSBackup(await readJsonFile(file));
+      status.textContent=`Copia válida: ${file.name}${selectedPayload.exportedAt?` · ${new Date(selectedPayload.exportedAt).toLocaleString("es-ES")}`:""}`;
+      mergeButton.disabled=false;
+      replaceButton.disabled=false;
+    }catch(error){
+      status.textContent=error.message||"No se pudo validar la copia.";
+    }
+  };
+
+  mergeButton.onclick=()=>{
+    if(!selectedPayload) return;
+    importGymOSBackup(selectedPayload,"merge");
+    toast("Copia combinada correctamente");
+    renderBackupRestore();
+  };
+  replaceButton.onclick=()=>{
+    if(!selectedPayload||!confirm("Esto reemplazará los datos actuales de GymOS. ¿Continuar?")) return;
+    importGymOSBackup(selectedPayload,"replace");
+    toast("Copia restaurada correctamente");
+    renderBackupRestore();
+  };
+}
+
 function renderSettings(){
   app.innerHTML=`<div class="app-shell">
-    <header class="topbar"><div><div class="brand">Ajustes</div><div class="subtle">GymOS v2.5.2 · Fichas técnicas e historial</div></div></header>
+    <header class="topbar"><div><div class="brand">Ajustes</div><div class="subtle">GymOS v2.5.3 · Favoritos, copias y sincronización</div></div></header>
     <main class="screen">
       <section class="card sync-card">
         <div class="card-heading-row">
@@ -3185,6 +3486,18 @@ function renderSettings(){
           <p>Ejecuta <strong>supabase-schema.sql</strong> y añade <strong>https://apl00028.github.io/mi-rutina/</strong> en Authentication → URL Configuration → Redirect URLs. Usa la clave <strong>Publishable</strong> o <strong>anon public</strong>, nunca una secret/service role.</p>
         </details>
       </section>
+      <section class="card">
+        <h2>Ejercicios favoritos</h2>
+        <p class="subtle">${getFavoriteExercises().length} ejercicios marcados. Ordénalos y añádelos rápidamente a tu rutina.</p>
+        <button id="openFavoriteExercises" class="secondary full">Gestionar favoritos</button>
+      </section>
+
+      <section class="card">
+        <h2>Copia de seguridad</h2>
+        <p class="subtle">Exporta todos tus datos o restaura una copia sin depender del navegador.</p>
+        <button id="openBackupRestore" class="secondary full">Exportar o restaurar</button>
+      </section>
+
       <section class="card">
         <h2>Sustituciones recientes</h2>
         <p class="subtle">${getExerciseSubstitutions().length} cambios guardados. Las sustituciones conservan la configuración de la sesión.</p>
@@ -3305,6 +3618,9 @@ function renderSettings(){
   document.getElementById("openGlobalAnalytics").onclick=()=>{state.screen="globalAnalytics";renderGlobalAnalytics();};
   document.getElementById("openExerciseLibrary").onclick=()=>{state.screen="exerciseLibrary";renderExerciseLibrary();};
   document.getElementById("openSubstitutionHistory").onclick=()=>{state.screen="substitutionHistory";renderSubstitutionHistory();};
+  document.getElementById("openFavoriteExercises").onclick=()=>{state.screen="favoriteExercises";renderFavoriteExercises();};
+  document.getElementById("openBackupRestore").onclick=()=>{state.screen="backupRestore";renderBackupRestore();};
+
   document.querySelectorAll("[data-rest-setting]").forEach(button=>button.onclick=()=>{
     saveRestSeconds(Number(button.dataset.restSetting));
     toast("Descanso actualizado");

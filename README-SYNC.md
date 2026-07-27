@@ -1,4 +1,4 @@
-# GymOS v2.5.2 — Fichas técnicas e historial
+# GymOS v2.5.3 — Favoritos, copias y sincronización completa
 
 GymOS sigue funcionando completamente en modo local.
 
@@ -168,3 +168,16 @@ La resolución de conflictos conserva la copia con la fecha `updatedAt` más rec
 - Historial reciente de cargas, repeticiones, volumen, RIR y RPE.
 - Acceso directo desde la biblioteca.
 - Adición del ejercicio a las sesiones A, B o C desde su ficha.
+
+
+## Novedades de la versión 2.5.3
+
+- Pantalla específica para ejercicios favoritos.
+- Ordenación por nombre, uso o fecha reciente.
+- Información de uso por ejercicio favorito.
+- Adición rápida a las sesiones A, B o C.
+- Exportación completa de datos en JSON.
+- Restauración combinada o reemplazo completo.
+- Validación del archivo antes de restaurarlo.
+- Cobertura visible del paquete de sincronización.
+- Inclusión de rutina, historial, peso, bloques, biblioteca, sustituciones y favoritos.

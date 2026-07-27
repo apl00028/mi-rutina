@@ -772,3 +772,32 @@ select{
 .warning-card{border:1px solid #fde68a;background:#fffbeb}
 .warning-card p{color:#78350f;line-height:1.45}
 @media(max-width:420px){.backup-mode-grid{grid-template-columns:1fr}}
+
+.coach-entry-card{border:1px solid #c4b5fd;background:linear-gradient(180deg,#faf5ff,#ffffff)}
+.coach-card-heading{display:flex;justify-content:space-between;gap:12px}
+.coach-badge{display:inline-block;padding:4px 7px;border-radius:999px;background:#6d28d9;color:#fff;font-size:.58rem;font-weight:900;letter-spacing:.04em}
+.coach-hero{background:linear-gradient(160deg,#4c1d95,#7c3aed);color:#fff}
+.coach-hero h1{margin:10px 0 6px;font-size:1.45rem}
+.coach-hero p{line-height:1.45;opacity:.9}
+.coach-summary-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:16px}
+.coach-summary-grid article{background:rgba(255,255,255,.13);padding:10px;border-radius:12px}
+.coach-summary-grid span,.coach-summary-grid strong{display:block}
+.coach-summary-grid span{font-size:.6rem;opacity:.82}
+.coach-summary-grid strong{font-size:1.2rem;margin-top:4px}
+.coach-secondary-action{margin-top:8px}
+.proposal-status{padding:5px 8px;border-radius:999px;font-size:.6rem;font-weight:900;text-transform:uppercase}
+.proposal-status.pending{background:#fef3c7;color:#92400e}
+.proposal-status.applied{background:#dcfce7;color:#166534}
+.proposal-status.rejected,.proposal-status.undone{background:#fee2e2;color:#991b1b}
+.coach-notes{margin-top:12px;padding:10px;border-radius:10px;background:#f3f4f6}
+.coach-notes p{margin:4px 0;font-size:.72rem}
+.coach-change-list{display:flex;flex-direction:column;gap:10px}
+.coach-change-card{display:flex;flex-direction:column;gap:10px}
+.coach-change-heading{display:flex;justify-content:space-between;gap:10px}
+.coach-change-heading strong,.coach-change-heading span{display:block}
+.coach-change-heading span{font-size:.66rem;color:#6b7280;margin-top:3px}
+.coach-change-type{padding:5px 7px;border-radius:999px;background:#ede9fe;color:#5b21b6!important;font-size:.58rem!important;font-weight:850}
+.coach-change-values{padding:10px;border-radius:10px;background:#f9fafb;font-size:.78rem}
+.coach-change-card p{margin:0;color:#4b5563;font-size:.72rem;line-height:1.4}
+.coach-decision-card{display:flex;flex-direction:column;gap:8px}
+@media(max-width:420px){.coach-summary-grid{grid-template-columns:1fr}}

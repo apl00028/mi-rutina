@@ -1,6 +1,6 @@
 {
-  "name": "GymOS 2.5.3",
-  "short_name": "GymOS",
+  "name": "GymOS 3.0.0",
+  "short_name": "GymOS Coach",
   "start_url": "./",
   "display": "standalone",
   "background_color": "#f3f4f6",

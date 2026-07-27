@@ -577,7 +577,10 @@ const GYMOS_BACKUP_KEYS=[
   "gymos:activeBlockId",
   "gymos:exerciseLibrary",
   "gymos:exerciseSubstitutions",
-  "gymos:favoriteSubstitutions"
+  "gymos:favoriteSubstitutions",
+  "gymos:coachSettings",
+  "gymos:coachProposals",
+  "gymos:coachSnapshots"
 ];
 
 function getFavoriteExercises(){
@@ -697,6 +700,243 @@ function syncCoverageSummary(){
     favoriteSubstitutions:Array.isArray(payload.favoriteSubstitutions)
   };
 }
+
+const COACH_SETTINGS_KEY="gymos:coachSettings";
+const COACH_PROPOSALS_KEY="gymos:coachProposals";
+const COACH_SNAPSHOTS_KEY="gymos:coachSnapshots";
+
+function getCoachSettings(){
+  try{
+    return {
+      backendUrl:"",
+      autoWeeklyReview:false,
+      requireApproval:true,
+      goal:"Mantenerme definido",
+      sessionDuration:60,
+      ...JSON.parse(localStorage.getItem(COACH_SETTINGS_KEY)||"{}")
+    };
+  }catch(error){
+    return {backendUrl:"",autoWeeklyReview:false,requireApproval:true,goal:"Mantenerme definido",sessionDuration:60};
+  }
+}
+function saveCoachSettings(settings){
+  localStorage.setItem(COACH_SETTINGS_KEY,JSON.stringify(settings));
+}
+function getCoachProposals(){
+  try{
+    const data=JSON.parse(localStorage.getItem(COACH_PROPOSALS_KEY)||"[]");
+    return Array.isArray(data)?data:[];
+  }catch(error){return [];}
+}
+function saveCoachProposals(items){
+  localStorage.setItem(COACH_PROPOSALS_KEY,JSON.stringify(items));
+}
+function getCoachSnapshots(){
+  try{
+    const data=JSON.parse(localStorage.getItem(COACH_SNAPSHOTS_KEY)||"[]");
+    return Array.isArray(data)?data:[];
+  }catch(error){return [];}
+}
+function saveCoachSnapshots(items){
+  localStorage.setItem(COACH_SNAPSHOTS_KEY,JSON.stringify(items));
+}
+function lastCompletedWorkouts(limit=12){
+  return [...getHistory()]
+    .filter(item=>item&&item.date)
+    .sort((a,b)=>new Date(b.date)-new Date(a.date))
+    .slice(0,limit);
+}
+function coachExerciseSummary(){
+  const routine=getRoutine();
+  const rows=[];
+  ["A","B","C"].forEach(session=>{
+    (routine[session]||[]).forEach((item,index)=>{
+      const history=exerciseTrainingHistory(item.name);
+      const recent=history.slice(0,6);
+      const avgRir=recent.filter(row=>row.rir!==null&&row.rir!=="").length
+        ? recent.filter(row=>row.rir!==null&&row.rir!=="").reduce((sum,row)=>sum+Number(row.rir),0)/recent.filter(row=>row.rir!==null&&row.rir!=="").length
+        : null;
+      const bestRecent=Math.max(0,...recent.map(row=>row.estimated1RM||0));
+      const older=history.slice(6,12);
+      const bestOlder=Math.max(0,...older.map(row=>row.estimated1RM||0));
+      rows.push({
+        session,index,name:item.name,sets:Number(item.sets||0),target:item.target||item.reps||"",
+        increment:Number(item.increment||0),avgRir,bestRecent,bestOlder,
+        trend:bestOlder>0?(bestRecent-bestOlder)/bestOlder:null,
+        historyCount:history.length,
+        substitutionOf:item.substitutionOf||null
+      });
+    });
+  });
+  return rows;
+}
+function createLocalCoachProposal(){
+  const settings=getCoachSettings();
+  const summaries=coachExerciseSummary();
+  const changes=[];
+  const notes=[];
+  const workouts=lastCompletedWorkouts(12);
+
+  summaries.forEach(item=>{
+    if(item.historyCount>=4&&item.avgRir!==null){
+      if(item.avgRir>=3.5){
+        changes.push({
+          type:"progression",
+          session:item.session,
+          index:item.index,
+          exercise:item.name,
+          field:"increment",
+          from:item.increment,
+          to:item.increment>0?item.increment:2.5,
+          reason:`RIR medio alto (${item.avgRir.toFixed(1)}): hay margen para progresar.`
+        });
+      }else if(item.avgRir<=0.5){
+        changes.push({
+          type:"fatigue",
+          session:item.session,
+          index:item.index,
+          exercise:item.name,
+          field:"sets",
+          from:item.sets,
+          to:Math.max(2,item.sets-1),
+          reason:`RIR medio muy bajo (${item.avgRir.toFixed(1)}): reducir temporalmente una serie.`
+        });
+      }
+    }
+    if(item.trend!==null&&item.trend<-0.05){
+      changes.push({
+        type:"stagnation",
+        session:item.session,
+        index:item.index,
+        exercise:item.name,
+        field:"increment",
+        from:item.increment,
+        to:0,
+        reason:"El rendimiento estimado reciente ha bajado más de un 5 %."
+      });
+    }
+  });
+
+  if(workouts.length<3){
+    notes.push("Hay pocos entrenamientos recientes. La propuesta es conservadora.");
+  }
+  if(!changes.length){
+    notes.push("No se detectan cambios claros. Mantener la rutina y seguir registrando RIR/RPE.");
+  }
+
+  const proposal={
+    id:`coach-${Date.now().toString(36)}`,
+    createdAt:new Date().toISOString(),
+    source:"local",
+    goal:settings.goal,
+    status:"pending",
+    summary:changes.length
+      ? `${changes.length} ajustes propuestos según tu evolución reciente.`
+      : "Mantener la rutina actual.",
+    notes,
+    changes
+  };
+  const proposals=getCoachProposals();
+  proposals.unshift(proposal);
+  saveCoachProposals(proposals.slice(0,50));
+  state.coachSessionId=proposal.id;
+  return proposal;
+}
+function applyCoachProposal(proposal){
+  if(!proposal||proposal.status!=="pending") return false;
+  const routine=JSON.parse(JSON.stringify(getRoutine()));
+  const snapshot={
+    id:`snapshot-${Date.now().toString(36)}`,
+    proposalId:proposal.id,
+    createdAt:new Date().toISOString(),
+    routine
+  };
+  const snapshots=getCoachSnapshots();
+  snapshots.unshift(snapshot);
+  saveCoachSnapshots(snapshots.slice(0,20));
+
+  proposal.changes.forEach(change=>{
+    const item=routine[change.session]?.[change.index];
+    if(!item||normalizeExerciseName(item.name)!==normalizeExerciseName(change.exercise)) return;
+    item[change.field]=change.to;
+    item.coachAdjustedAt=new Date().toISOString();
+    item.coachReason=change.reason;
+  });
+  saveRoutine(routine);
+  sessions=getRoutine();
+
+  const proposals=getCoachProposals();
+  const found=proposals.find(item=>item.id===proposal.id);
+  if(found){
+    found.status="applied";
+    found.appliedAt=new Date().toISOString();
+    saveCoachProposals(proposals);
+  }
+  return true;
+}
+function rejectCoachProposal(proposalId){
+  const proposals=getCoachProposals();
+  const found=proposals.find(item=>item.id===proposalId);
+  if(!found) return false;
+  found.status="rejected";
+  found.rejectedAt=new Date().toISOString();
+  saveCoachProposals(proposals);
+  return true;
+}
+function undoLastCoachChange(){
+  const snapshots=getCoachSnapshots();
+  const latest=snapshots[0];
+  if(!latest?.routine) return false;
+  saveRoutine(latest.routine);
+  sessions=getRoutine();
+  saveCoachSnapshots(snapshots.slice(1));
+  const proposals=getCoachProposals();
+  const proposal=proposals.find(item=>item.id===latest.proposalId);
+  if(proposal){
+    proposal.status="undone";
+    proposal.undoneAt=new Date().toISOString();
+    saveCoachProposals(proposals);
+  }
+  return true;
+}
+function coachContextPayload(){
+  return {
+    version:"3.0.0",
+    generatedAt:new Date().toISOString(),
+    settings:getCoachSettings(),
+    routine:getRoutine(),
+    recentWorkouts:lastCompletedWorkouts(12),
+    exerciseSummary:coachExerciseSummary(),
+    bodyWeight:getBodyWeightEntries?.()||[],
+    activeBlock:getActiveTrainingBlock?.()||null
+  };
+}
+async function requestRemoteCoachProposal(){
+  const settings=getCoachSettings();
+  if(!settings.backendUrl) throw new Error("Configura primero la URL del backend Coach.");
+  const response=await fetch(settings.backendUrl.replace(/\/$/,"")+"/coach/review",{
+    method:"POST",
+    headers:{"Content-Type":"application/json"},
+    body:JSON.stringify(coachContextPayload())
+  });
+  if(!response.ok) throw new Error(`El backend respondió con error ${response.status}.`);
+  const data=await response.json();
+  const proposal={
+    id:data.id||`coach-${Date.now().toString(36)}`,
+    createdAt:new Date().toISOString(),
+    source:"remote",
+    goal:settings.goal,
+    status:"pending",
+    summary:data.summary||"Propuesta recibida del Coach.",
+    notes:Array.isArray(data.notes)?data.notes:[],
+    changes:Array.isArray(data.changes)?data.changes:[]
+  };
+  const proposals=getCoachProposals();
+  proposals.unshift(proposal);
+  saveCoachProposals(proposals.slice(0,50));
+  state.coachSessionId=proposal.id;
+  return proposal;
+}
 function suggestedSubstitutes(currentName,query="",equipment="Todos",favoritesOnly=false){
   const current=exerciseLibraryItemByName(currentName);
   const q=String(query||"").trim().toLowerCase();
@@ -796,7 +1036,8 @@ let state = {
   libraryFavoritesOnly: false,
   editingLibraryExerciseId: null,
   selectedLibraryExerciseId: null,
-  favoritesSort: "name"
+  favoritesSort: "name",
+  coachSessionId: null
 };
 
 function getHistory(){ return JSON.parse(localStorage.getItem("gymos:history") || "[]"); }
@@ -932,7 +1173,7 @@ function formatSyncDate(value){
 }
 function buildSyncPayload(){
   return {
-    version:"2.5.3",
+    version:"3.0.0",
     updatedAt:getLocalUpdatedAt(),
     deviceId:getDeviceId(),
     deviceName:getDeviceName(),
@@ -1596,6 +1837,8 @@ function render(){
   else if(state.screen==="exerciseDetail") renderExerciseDetail();
   else if(state.screen==="favoriteExercises") renderFavoriteExercises();
   else if(state.screen==="backupRestore") renderBackupRestore();
+  else if(state.screen==="coach") renderCoach();
+  else if(state.screen==="coachProposal") renderCoachProposal();
   else renderSettings();
 }
 
@@ -3287,6 +3530,174 @@ function renderSubstitutionHistory(){
 }
 
 
+
+function renderCoach(){
+  const settings=getCoachSettings();
+  const proposals=getCoachProposals();
+  const latest=proposals[0]||null;
+  const snapshots=getCoachSnapshots();
+  const summaries=coachExerciseSummary();
+  const tracked=summaries.filter(item=>item.historyCount>0).length;
+
+  app.innerHTML=`<div class="app-shell">
+    <header class="topbar">
+      <button id="backCoach" class="back-button">←</button>
+      <div><div class="brand">GymOS Coach</div><div class="subtle">Revisión y adaptación de rutina</div></div>
+      <span></span>
+    </header>
+    <main class="screen">
+      <section class="card coach-hero">
+        <span class="coach-badge">v3.0</span>
+        <h1>Tu rutina, revisada con datos</h1>
+        <p>El Coach analiza cargas, repeticiones, RIR, RPE e historial. Ningún cambio se aplica sin tu confirmación.</p>
+        <div class="coach-summary-grid">
+          <article><span>Ejercicios analizados</span><strong>${summaries.length}</strong></article>
+          <article><span>Con historial</span><strong>${tracked}</strong></article>
+          <article><span>Propuestas</span><strong>${proposals.length}</strong></article>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>Nueva revisión</h2>
+        <p class="subtle">La revisión local funciona sin enviar datos fuera del dispositivo.</p>
+        <button id="runLocalCoach" class="primary full">Analizar mi evolución</button>
+        <button id="runRemoteCoach" class="secondary full coach-secondary-action">Consultar backend de IA</button>
+      </section>
+
+      ${latest?`<section class="card">
+        <div class="card-heading-row">
+          <div><h2>Última propuesta</h2><p class="subtle">${new Date(latest.createdAt).toLocaleString("es-ES")} · ${latest.source==="remote"?"IA remota":"Análisis local"}</p></div>
+          <span class="proposal-status ${esc(latest.status)}">${esc(latest.status)}</span>
+        </div>
+        <p>${esc(latest.summary)}</p>
+        <button id="openLatestProposal" class="secondary full">Ver propuesta</button>
+      </section>`:""}
+
+      <section class="card">
+        <h2>Configuración del Coach</h2>
+        <label><span>Objetivo actual</span><input id="coachGoal" value="${esc(settings.goal)}"></label>
+        <label><span>Duración máxima de sesión (min)</span><input id="coachDuration" type="number" min="20" max="180" value="${Number(settings.sessionDuration||60)}"></label>
+        <label><span>URL del backend seguro</span><input id="coachBackendUrl" type="url" placeholder="https://tu-backend.example.com" value="${esc(settings.backendUrl||"")}"></label>
+        <label class="favorite-filter"><input id="coachRequireApproval" type="checkbox" ${settings.requireApproval?"checked":""}><span>Exigir siempre confirmación antes de cambiar la rutina</span></label>
+        <button id="saveCoachSettings" class="secondary full">Guardar configuración</button>
+      </section>
+
+      <section class="card">
+        <h2>Seguridad</h2>
+        <p class="subtle">Los cambios aplicados guardan una copia de la rutina anterior.</p>
+        <button id="undoCoachChange" class="danger-soft full" ${snapshots.length?"":"disabled"}>Deshacer último cambio del Coach</button>
+      </section>
+
+      <section class="card warning-card">
+        <h2>Conexión con ChatGPT</h2>
+        <p>Esta versión prepara la integración, pero no guarda claves de OpenAI en GitHub Pages. Para usar IA real necesitas un backend seguro configurado en esta pantalla.</p>
+      </section>
+    </main>
+  </div>`;
+
+  document.getElementById("backCoach").onclick=()=>{state.screen="settings";renderSettings();};
+  document.getElementById("runLocalCoach").onclick=()=>{
+    const proposal=createLocalCoachProposal();
+    state.screen="coachProposal";
+    renderCoachProposal();
+  };
+  document.getElementById("runRemoteCoach").onclick=async()=>{
+    try{
+      toast("Consultando Coach...");
+      await requestRemoteCoachProposal();
+      state.screen="coachProposal";
+      renderCoachProposal();
+    }catch(error){
+      alert(error.message||"No se pudo consultar el backend.");
+    }
+  };
+  const latestButton=document.getElementById("openLatestProposal");
+  if(latestButton) latestButton.onclick=()=>{
+    state.coachSessionId=latest.id;
+    state.screen="coachProposal";
+    renderCoachProposal();
+  };
+  document.getElementById("saveCoachSettings").onclick=()=>{
+    saveCoachSettings({
+      ...settings,
+      goal:document.getElementById("coachGoal").value.trim()||"Mantenerme definido",
+      sessionDuration:Number(document.getElementById("coachDuration").value||60),
+      backendUrl:document.getElementById("coachBackendUrl").value.trim(),
+      requireApproval:document.getElementById("coachRequireApproval").checked
+    });
+    toast("Configuración guardada");
+    renderCoach();
+  };
+  document.getElementById("undoCoachChange").onclick=()=>{
+    if(!confirm("¿Restaurar la rutina anterior al último cambio del Coach?")) return;
+    if(undoLastCoachChange()){
+      toast("Último cambio deshecho");
+      renderCoach();
+    }
+  };
+}
+
+function renderCoachProposal(){
+  const proposals=getCoachProposals();
+  const proposal=proposals.find(item=>item.id===state.coachSessionId)||proposals[0];
+  if(!proposal){
+    state.screen="coach";
+    renderCoach();
+    return;
+  }
+
+  app.innerHTML=`<div class="app-shell">
+    <header class="topbar">
+      <button id="backCoachProposal" class="back-button">←</button>
+      <div><div class="brand">Propuesta del Coach</div><div class="subtle">${proposal.source==="remote"?"IA remota":"Análisis local"}</div></div>
+      <span></span>
+    </header>
+    <main class="screen">
+      <section class="card">
+        <div class="card-heading-row">
+          <div><h2>${esc(proposal.summary)}</h2><p class="subtle">${new Date(proposal.createdAt).toLocaleString("es-ES")}</p></div>
+          <span class="proposal-status ${esc(proposal.status)}">${esc(proposal.status)}</span>
+        </div>
+        ${proposal.notes?.length?`<div class="coach-notes">${proposal.notes.map(note=>`<p>${esc(note)}</p>`).join("")}</div>`:""}
+      </section>
+
+      <section class="coach-change-list">
+        ${proposal.changes.length?proposal.changes.map(change=>`<article class="card coach-change-card">
+          <div class="coach-change-heading">
+            <div><strong>${esc(change.exercise)}</strong><span>Sesión ${esc(change.session)}</span></div>
+            <span class="coach-change-type">${esc(change.type)}</span>
+          </div>
+          <div class="coach-change-values">
+            <span>${esc(change.field)}: <del>${esc(change.from)}</del> → <strong>${esc(change.to)}</strong></span>
+          </div>
+          <p>${esc(change.reason)}</p>
+        </article>`).join(""):`<article class="card routine-empty"><strong>Sin cambios necesarios</strong><p>La recomendación actual es mantener la rutina.</p></article>`}
+      </section>
+
+      ${proposal.status==="pending"?`<section class="card coach-decision-card">
+        <button id="applyCoachProposal" class="primary full" ${proposal.changes.length?"":"disabled"}>Aceptar y aplicar cambios</button>
+        <button id="rejectCoachProposal" class="danger-soft full">Rechazar propuesta</button>
+      </section>`:""}
+    </main>
+  </div>`;
+
+  document.getElementById("backCoachProposal").onclick=()=>{state.screen="coach";renderCoach();};
+  const apply=document.getElementById("applyCoachProposal");
+  if(apply) apply.onclick=()=>{
+    if(!confirm("¿Aplicar estos cambios a tu rutina? Se guardará una copia para poder deshacerlos.")) return;
+    if(applyCoachProposal(proposal)){
+      toast("Cambios aplicados");
+      renderCoachProposal();
+    }
+  };
+  const reject=document.getElementById("rejectCoachProposal");
+  if(reject) reject.onclick=()=>{
+    rejectCoachProposal(proposal.id);
+    toast("Propuesta rechazada");
+    renderCoachProposal();
+  };
+}
+
 function renderFavoriteExercises(){
   let favorites=getFavoriteExercises();
   if(state.favoritesSort==="recent"){
@@ -3456,7 +3867,7 @@ function renderBackupRestore(){
 
 function renderSettings(){
   app.innerHTML=`<div class="app-shell">
-    <header class="topbar"><div><div class="brand">Ajustes</div><div class="subtle">GymOS v2.5.3 · Favoritos, copias y sincronización</div></div></header>
+    <header class="topbar"><div><div class="brand">Ajustes</div><div class="subtle">GymOS v3.0.0 · Coach adaptativo</div></div></header>
     <main class="screen">
       <section class="card sync-card">
         <div class="card-heading-row">
@@ -3486,6 +3897,17 @@ function renderSettings(){
           <p>Ejecuta <strong>supabase-schema.sql</strong> y añade <strong>https://apl00028.github.io/mi-rutina/</strong> en Authentication → URL Configuration → Redirect URLs. Usa la clave <strong>Publishable</strong> o <strong>anon public</strong>, nunca una secret/service role.</p>
         </details>
       </section>
+      <section class="card coach-entry-card">
+        <div class="coach-card-heading">
+          <div>
+            <span class="coach-badge">NUEVO</span>
+            <h2>GymOS Coach</h2>
+            <p class="subtle">Analiza tu evolución y propone cambios que tú puedes aceptar, rechazar o deshacer.</p>
+          </div>
+        </div>
+        <button id="openCoach" class="primary full">Abrir Coach</button>
+      </section>
+
       <section class="card">
         <h2>Ejercicios favoritos</h2>
         <p class="subtle">${getFavoriteExercises().length} ejercicios marcados. Ordénalos y añádelos rápidamente a tu rutina.</p>
@@ -3618,6 +4040,7 @@ function renderSettings(){
   document.getElementById("openGlobalAnalytics").onclick=()=>{state.screen="globalAnalytics";renderGlobalAnalytics();};
   document.getElementById("openExerciseLibrary").onclick=()=>{state.screen="exerciseLibrary";renderExerciseLibrary();};
   document.getElementById("openSubstitutionHistory").onclick=()=>{state.screen="substitutionHistory";renderSubstitutionHistory();};
+  document.getElementById("openCoach").onclick=()=>{state.screen="coach";renderCoach();};
   document.getElementById("openFavoriteExercises").onclick=()=>{state.screen="favoriteExercises";renderFavoriteExercises();};
   document.getElementById("openBackupRestore").onclick=()=>{state.screen="backupRestore";renderBackupRestore();};
 

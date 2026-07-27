@@ -1,4 +1,4 @@
-# GymOS v2.5.3 — Favoritos, copias y sincronización completa
+# GymOS v3.0.0 — Coach adaptativo
 
 GymOS sigue funcionando completamente en modo local.
 
@@ -181,3 +181,20 @@ La resolución de conflictos conserva la copia con la fecha `updatedAt` más rec
 - Validación del archivo antes de restaurarlo.
 - Cobertura visible del paquete de sincronización.
 - Inclusión de rutina, historial, peso, bloques, biblioteca, sustituciones y favoritos.
+
+
+## Novedades de la versión 3.0.0
+
+- Nueva pantalla GymOS Coach.
+- Análisis local de evolución sin enviar datos fuera del dispositivo.
+- Propuestas de progresión, reducción de fatiga y mantenimiento.
+- Uso de cargas, repeticiones, historial y RIR.
+- Vista comparativa antes de aplicar cambios.
+- Aprobación o rechazo manual de cada propuesta.
+- Copia automática de la rutina antes de modificarla.
+- Botón para deshacer el último cambio del Coach.
+- Historial de propuestas y estados.
+- Configuración del objetivo y duración máxima de las sesiones.
+- Preparación para conectar un backend seguro de IA.
+- Endpoint esperado: POST /coach/review.
+- Las claves de OpenAI no se almacenan en el frontend público.

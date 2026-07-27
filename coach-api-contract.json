@@ -1,0 +1,32 @@
+{
+  "endpoint": "POST /coach/review",
+  "request": {
+    "version": "3.0.0",
+    "generatedAt": "ISO-8601",
+    "settings": "Coach settings",
+    "routine": "Current A/B/C routine",
+    "recentWorkouts": "Recent completed workouts",
+    "exerciseSummary": "Aggregated performance by exercise",
+    "bodyWeight": "Weight history",
+    "activeBlock": "Current training block"
+  },
+  "response": {
+    "id": "optional string",
+    "summary": "string",
+    "notes": [
+      "string"
+    ],
+    "changes": [
+      {
+        "type": "progression|fatigue|stagnation|substitution",
+        "session": "A|B|C",
+        "index": 0,
+        "exercise": "Exercise name",
+        "field": "sets|increment|target|name",
+        "from": "old value",
+        "to": "new value",
+        "reason": "string"
+      }
+    ]
+  }
+}

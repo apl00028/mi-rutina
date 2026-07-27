@@ -2199,6 +2199,7 @@ let state = {
   accountProfileStatus: "idle",
   accountIdentityDirty: false,
   accountPasswordEditorOpen: false,
+  accountPasswordMessage: null,
   accountManagementMessage: null,
   passwordRecoveryMode: hasPasswordRecoveryUrl(),
   passwordRecoveryMessage: null,
@@ -2510,6 +2511,7 @@ function scheduleAccountProfileLoad(userId){
     state.accountManagementMessage=null;
     state.accountIdentityDirty=false;
     state.accountPasswordEditorOpen=false;
+    state.accountPasswordMessage=null;
   }
   state.accountProfileUserId=userId;
   state.accountProfileStatus="loading";
@@ -2586,6 +2588,7 @@ function resolveAuthenticatedAppState(session,pendingUser=null){
     state.accountIdentityDirty=false;
     state.accountManagementMessage=null;
     state.accountPasswordEditorOpen=false;
+    state.accountPasswordMessage=null;
   }
   if(user&&!isEmailConfirmed(user)) return "email-verification";
   return "signed-out";
@@ -6702,6 +6705,7 @@ function renderAccount(){
           <div id="accountPasswordForm" class="account-password-form" ${state.accountPasswordEditorOpen?"":"hidden"}>
             <label><span>Nueva contraseña</span><input id="accountNewPassword" type="password" autocomplete="new-password" minlength="8"></label>
             <label><span>Confirmar nueva contraseña</span><input id="accountConfirmPassword" type="password" autocomplete="new-password" minlength="8"></label>
+            <div id="accountPasswordMessage" class="verification-message account-password-message ${state.accountPasswordMessage?.type||""}" role="${state.accountPasswordMessage?.type==="error"?"alert":"status"}" ${state.accountPasswordMessage?"":"hidden"}>${state.accountPasswordMessage?esc(state.accountPasswordMessage.text):""}</div>
             <div class="settings-actions">
               <button type="button" id="cancelAccountPassword" class="secondary">Cancelar</button>
               <button type="button" id="saveAccountPassword" class="primary">Guardar contraseña</button>
@@ -6847,43 +6851,80 @@ function renderAccount(){
     const passwordForm=document.getElementById("accountPasswordForm");
     openPasswordButton.onclick=()=>{
       state.accountPasswordEditorOpen=true;
+      state.accountPasswordMessage=null;
       openPasswordButton.hidden=true;
       passwordForm.hidden=false;
+      document.getElementById("accountPasswordMessage").hidden=true;
       document.getElementById("accountNewPassword").focus();
     };
     document.getElementById("cancelAccountPassword").onclick=()=>{
       state.accountPasswordEditorOpen=false;
+      state.accountPasswordMessage=null;
       document.getElementById("accountNewPassword").value="";
       document.getElementById("accountConfirmPassword").value="";
+      document.getElementById("accountPasswordMessage").hidden=true;
       passwordForm.hidden=true;
       openPasswordButton.hidden=false;
     };
     document.getElementById("saveAccountPassword").onclick=async()=>{
-      const password=document.getElementById("accountNewPassword").value;
-      const confirmation=document.getElementById("accountConfirmPassword").value;
-      if(password.length<8){
-        showAccountManagementMessage("error","La nueva contraseña debe tener al menos 8 caracteres.");
-        return;
-      }
-      if(password!==confirmation){
-        showAccountManagementMessage("error","Las contraseñas no coinciden.");
-        return;
-      }
+      const newPasswordInput=document.getElementById("accountNewPassword");
+      const confirmationInput=document.getElementById("accountConfirmPassword");
+      const messageElement=document.getElementById("accountPasswordMessage");
       const button=document.getElementById("saveAccountPassword");
+      const showPasswordMessage=(type,text)=>{
+        state.accountPasswordMessage={type,text};
+        const visibleMessage=document.getElementById("accountPasswordMessage")||messageElement;
+        visibleMessage.className=`verification-message account-password-message ${type}`;
+        visibleMessage.setAttribute("role",type==="error"?"alert":"status");
+        visibleMessage.textContent=text;
+        visibleMessage.hidden=false;
+      };
+      const newPassword=newPasswordInput.value;
+      const confirmation=confirmationInput.value;
+
+      if(!newPassword||!confirmation){
+        showPasswordMessage("error","Completa ambos campos de contraseña.");
+        return;
+      }
+      if(newPassword.length<8){
+        showPasswordMessage("error","La contraseña debe tener al menos 8 caracteres.");
+        return;
+      }
+      if(newPassword!==confirmation){
+        showPasswordMessage("error","Las contraseñas no coinciden.");
+        return;
+      }
+      if(button.disabled) return;
+      state.accountPasswordMessage=null;
+      messageElement.hidden=true;
       button.disabled=true;
       button.textContent="Guardando…";
       try{
-        await updateAccountPassword(password);
-        state.accountPasswordEditorOpen=false;
-        document.getElementById("accountNewPassword").value="";
-        document.getElementById("accountConfirmPassword").value="";
-        passwordForm.hidden=true;
-        openPasswordButton.hidden=false;
-        button.disabled=false;
-        button.textContent="Guardar contraseña";
-        showAccountManagementMessage("success","Contraseña actualizada correctamente. Tu sesión continúa abierta.");
+        await updateAccountPassword(newPassword);
+        const visibleNewPassword=document.getElementById("accountNewPassword")||newPasswordInput;
+        const visibleConfirmation=document.getElementById("accountConfirmPassword")||confirmationInput;
+        visibleNewPassword.value="";
+        visibleConfirmation.value="";
+        showPasswordMessage("success","Contraseña actualizada correctamente.");
       }catch(error){
-        showAccountManagementMessage("error",friendlyAuthError(error,"No se pudo cambiar la contraseña."));
+        const code=String(error?.code||"").toLowerCase();
+        const message=String(error?.message||"").toLowerCase();
+        if(code==="same_password"||message.includes("same password")){
+          showPasswordMessage("error","La nueva contraseña debe ser diferente de la actual.");
+        }else if(
+          ["session_not_found","refresh_token_not_found","refresh_token_already_used","user_not_found","bad_jwt","no_authorization"].includes(code)||
+          message.includes("auth session missing")||
+          message.includes("session expired")||
+          message.includes("not authenticated")||
+          message.includes("invalid refresh token")||
+          message.includes("jwt expired")||
+          message.includes("invalid jwt")
+        ){
+          showPasswordMessage("error","Tu sesión ha caducado. Vuelve a iniciar sesión.");
+        }else{
+          showPasswordMessage("error","No se pudo cambiar la contraseña. Inténtalo de nuevo.");
+        }
+      }finally{
         button.disabled=false;
         button.textContent="Guardar contraseña";
       }

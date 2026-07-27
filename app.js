@@ -215,6 +215,277 @@ function reopenTrainingBlock(id){
   block.updatedAt=new Date().toISOString();
   saveTrainingBlocks(blocks);
 }
+
+function workoutDurationMinutes(workout){
+  const start=new Date(workout.startedAt||workout.date||0);
+  const end=new Date(workout.finishedAt||workout.date||0);
+  if(Number.isNaN(start.getTime())||Number.isNaN(end.getTime())||end<=start) return 0;
+  return Math.round((end-start)/60000);
+}
+function workoutVolume(workout){
+  const exercises=Array.isArray(workout.exercises)?workout.exercises:[];
+  return exercises.reduce((total,exercise)=>{
+    const sets=Array.isArray(exercise.sets)?exercise.sets:[];
+    return total+sets.reduce((sum,set)=>{
+      const weight=Number(set.weight)||0;
+      const reps=Number(set.reps)||0;
+      return sum+(weight*reps);
+    },0);
+  },0);
+}
+function workoutBestSet(workout){
+  let best=null;
+  const exercises=Array.isArray(workout.exercises)?workout.exercises:[];
+  exercises.forEach(exercise=>{
+    (exercise.sets||[]).forEach(set=>{
+      const weight=Number(set.weight)||0;
+      const reps=Number(set.reps)||0;
+      const score=weight*reps;
+      if(score>0&&(!best||score>best.score)){
+        best={exercise:exercise.name||"Ejercicio",weight,reps,score};
+      }
+    });
+  });
+  return best;
+}
+function blockWorkoutRows(block){
+  const start=dateOnly(block.startDate);
+  if(!start) return [];
+  const end=addDays(start,Number(block.weeks||4)*7);
+  return getHistory()
+    .filter(workout=>{
+      const d=new Date(workout.date||workout.finishedAt||workout.startedAt);
+      return d>=start&&d<end;
+    })
+    .sort((a,b)=>new Date(a.date||a.finishedAt)-new Date(b.date||b.finishedAt));
+}
+function blockAnalytics(block){
+  const workouts=blockWorkoutRows(block);
+  const completion=blockCompletionSummary(block);
+  const totalVolume=Math.round(workouts.reduce((sum,w)=>sum+workoutVolume(w),0));
+  const totalMinutes=workouts.reduce((sum,w)=>sum+workoutDurationMinutes(w),0);
+  const avgMinutes=workouts.length?Math.round(totalMinutes/workouts.length):0;
+  const bySession=["A","B","C"].map(session=>({
+    session,
+    count:workouts.filter(w=>w.session===session).length
+  }));
+  const bestSets=workouts.map(workoutBestSet).filter(Boolean).sort((a,b)=>b.score-a.score);
+  const weekly=Array.from({length:Number(block.weeks||4)},(_,i)=>{
+    const week=i+1;
+    const rows=blockWeekWorkoutRows(block,week);
+    return {
+      week,
+      workouts:rows.length,
+      volume:Math.round(rows.reduce((sum,w)=>sum+workoutVolume(w),0)),
+      minutes:rows.reduce((sum,w)=>sum+workoutDurationMinutes(w),0),
+      adherence:blockWeekSessionSummary(block,week).adherence
+    };
+  });
+  return {
+    ...completion,
+    workouts:workouts.length,
+    totalVolume,
+    totalMinutes,
+    avgMinutes,
+    bySession,
+    bestSets,
+    weekly
+  };
+}
+function formatVolume(value){
+  const n=Number(value)||0;
+  return n>=1000?`${(n/1000).toLocaleString("es-ES",{maximumFractionDigits:1})} t`:`${n.toLocaleString("es-ES")} kg`;
+}
+
+function normalizeExerciseName(name){
+  return String(name||"Ejercicio").trim().toLowerCase();
+}
+function displayExerciseName(name){
+  const text=String(name||"Ejercicio").trim();
+  return text||"Ejercicio";
+}
+function estimatedOneRepMax(weight,reps){
+  const w=Number(weight)||0;
+  const r=Number(reps)||0;
+  if(w<=0||r<=0) return 0;
+  if(r===1) return w;
+  return w*(1+r/30);
+}
+function exerciseRecords(){
+  const rows=[];
+  getHistory().forEach(workout=>{
+    const date=new Date(workout.date||workout.finishedAt||workout.startedAt);
+    (workout.exercises||[]).forEach(exercise=>{
+      const name=displayExerciseName(exercise.name);
+      const type=exercise.type||"Sin categoría";
+      (exercise.sets||[]).forEach(set=>{
+        const weight=Number(set.weight)||0;
+        const reps=Number(set.reps)||0;
+        if(weight<=0&&reps<=0) return;
+        rows.push({
+          name,
+          key:normalizeExerciseName(name),
+          type,
+          session:workout.session||"",
+          date,
+          weight,
+          reps,
+          volume:weight*reps,
+          e1rm:estimatedOneRepMax(weight,reps),
+          rir:Number(set.rir),
+          rpe:Number(set.rpe)
+        });
+      });
+    });
+  });
+  return rows.sort((a,b)=>a.date-b.date);
+}
+function exerciseAnalytics(){
+  const groups=new Map();
+  exerciseRecords().forEach(row=>{
+    if(!groups.has(row.key)){
+      groups.set(row.key,{
+        key:row.key,
+        name:row.name,
+        type:row.type,
+        rows:[]
+      });
+    }
+    groups.get(row.key).rows.push(row);
+  });
+
+  return [...groups.values()].map(group=>{
+    const rows=group.rows;
+    const dates=[...new Set(rows.map(r=>r.date.toISOString().slice(0,10)))];
+    const totalVolume=Math.round(rows.reduce((sum,r)=>sum+r.volume,0));
+    const bestWeight=Math.max(0,...rows.map(r=>r.weight));
+    const bestE1rm=Math.max(0,...rows.map(r=>r.e1rm));
+    const lastRows=rows.slice(-6);
+    const previousRows=rows.slice(-12,-6);
+    const recentBest=Math.max(0,...lastRows.map(r=>r.e1rm));
+    const previousBest=Math.max(0,...previousRows.map(r=>r.e1rm));
+    const change=previousBest>0?((recentBest-previousBest)/previousBest)*100:null;
+    const lastDate=rows.length?rows[rows.length-1].date:null;
+    const daysSince=lastDate?Math.floor((new Date()-lastDate)/86400000):null;
+    let status="Sin datos suficientes";
+    if(rows.length>=8&&change!==null){
+      if(change>=2) status="Progresando";
+      else if(change<=-3) status="Retroceso";
+      else status="Estable";
+    }else if(rows.length>=4){
+      status="En seguimiento";
+    }
+    const stagnating=rows.length>=10&&change!==null&&Math.abs(change)<1.5;
+    return {
+      ...group,
+      sessions:dates.length,
+      sets:rows.length,
+      totalVolume,
+      bestWeight,
+      bestE1rm,
+      recentChange:change,
+      status,
+      stagnating,
+      daysSince
+    };
+  }).sort((a,b)=>b.totalVolume-a.totalVolume);
+}
+function globalTrainingAnalytics(){
+  const workouts=getHistory();
+  const exercises=exerciseAnalytics();
+  const rows=exerciseRecords();
+  const totalVolume=Math.round(rows.reduce((sum,r)=>sum+r.volume,0));
+  const totalSets=rows.length;
+  const activeExercises=exercises.length;
+  const progressing=exercises.filter(x=>x.status==="Progresando").length;
+  const stagnating=exercises.filter(x=>x.stagnating).length;
+  const categoryMap=new Map();
+  exercises.forEach(exercise=>{
+    const key=exercise.type||"Sin categoría";
+    if(!categoryMap.has(key)) categoryMap.set(key,{name:key,volume:0,sets:0,exercises:0});
+    const item=categoryMap.get(key);
+    item.volume+=exercise.totalVolume;
+    item.sets+=exercise.sets;
+    item.exercises+=1;
+  });
+  return {
+    workouts:workouts.length,
+    totalVolume,
+    totalSets,
+    activeExercises,
+    progressing,
+    stagnating,
+    exercises,
+    categories:[...categoryMap.values()].sort((a,b)=>b.volume-a.volume)
+  };
+}
+function trendLabel(value){
+  if(value===null||Number.isNaN(value)) return "—";
+  const rounded=Math.round(value*10)/10;
+  return `${rounded>0?"+":""}${rounded.toLocaleString("es-ES")}%`;
+}
+
+const EXERCISE_LIBRARY_KEY="gymos:exerciseLibrary";
+
+function defaultExerciseLibrary(){
+  return [
+    {id:"bench-press",name:"Press de banca",muscle:"Pecho",equipment:"Barra",type:"Fuerza",favorite:true,custom:false,notes:"Escápulas retraídas y pies firmes."},
+    {id:"incline-db-press",name:"Press inclinado con mancuernas",muscle:"Pecho",equipment:"Mancuernas",type:"Hipertrofia",favorite:false,custom:false,notes:"Controla la bajada."},
+    {id:"lat-pulldown",name:"Jalón al pecho",muscle:"Espalda",equipment:"Polea",type:"Hipertrofia",favorite:false,custom:false,notes:"Lleva los codos hacia abajo."},
+    {id:"barbell-row",name:"Remo con barra",muscle:"Espalda",equipment:"Barra",type:"Fuerza",favorite:false,custom:false,notes:"Mantén la espalda neutra."},
+    {id:"back-squat",name:"Sentadilla trasera",muscle:"Piernas",equipment:"Barra",type:"Fuerza",favorite:true,custom:false,notes:"Rodillas alineadas con los pies."},
+    {id:"leg-press",name:"Prensa de piernas",muscle:"Piernas",equipment:"Máquina",type:"Hipertrofia",favorite:false,custom:false,notes:"No bloquees las rodillas."},
+    {id:"romanian-deadlift",name:"Peso muerto rumano",muscle:"Isquios",equipment:"Barra",type:"Fuerza",favorite:false,custom:false,notes:"Desplaza la cadera atrás."},
+    {id:"leg-curl",name:"Curl femoral",muscle:"Isquios",equipment:"Máquina",type:"Hipertrofia",favorite:false,custom:false,notes:"Evita levantar la cadera."},
+    {id:"overhead-press",name:"Press militar",muscle:"Hombros",equipment:"Barra",type:"Fuerza",favorite:false,custom:false,notes:"Aprieta glúteos y abdomen."},
+    {id:"lateral-raise",name:"Elevaciones laterales",muscle:"Hombros",equipment:"Mancuernas",type:"Hipertrofia",favorite:true,custom:false,notes:"Sube con control."},
+    {id:"biceps-curl",name:"Curl de bíceps",muscle:"Bíceps",equipment:"Mancuernas",type:"Hipertrofia",favorite:false,custom:false,notes:"Evita balancear el tronco."},
+    {id:"triceps-pushdown",name:"Extensión de tríceps en polea",muscle:"Tríceps",equipment:"Polea",type:"Hipertrofia",favorite:false,custom:false,notes:"Mantén los codos pegados."},
+    {id:"calf-raise",name:"Elevación de gemelos",muscle:"Gemelos",equipment:"Máquina",type:"Hipertrofia",favorite:false,custom:false,notes:"Busca recorrido completo."},
+    {id:"plank",name:"Plancha",muscle:"Core",equipment:"Peso corporal",type:"Core",favorite:false,custom:false,notes:"Mantén la pelvis neutra."}
+  ];
+}
+function getExerciseLibrary(){
+  try{
+    const saved=JSON.parse(localStorage.getItem(EXERCISE_LIBRARY_KEY)||"null");
+    if(Array.isArray(saved)&&saved.length) return saved;
+  }catch(error){}
+  const defaults=defaultExerciseLibrary();
+  localStorage.setItem(EXERCISE_LIBRARY_KEY,JSON.stringify(defaults));
+  return defaults;
+}
+function saveExerciseLibrary(items){
+  localStorage.setItem(EXERCISE_LIBRARY_KEY,JSON.stringify(items));
+}
+function makeExerciseId(name){
+  const base=String(name||"ejercicio").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"")
+    .replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"")||"ejercicio";
+  return `${base}-${Date.now().toString(36)}`;
+}
+function exerciseLibraryFilters(items,query,muscle,equipment,favoritesOnly){
+  const q=String(query||"").trim().toLowerCase();
+  return items.filter(item=>{
+    const matchesQuery=!q||[item.name,item.muscle,item.equipment,item.type,item.notes].join(" ").toLowerCase().includes(q);
+    const matchesMuscle=!muscle||muscle==="Todos"||item.muscle===muscle;
+    const matchesEquipment=!equipment||equipment==="Todos"||item.equipment===equipment;
+    const matchesFavorite=!favoritesOnly||Boolean(item.favorite);
+    return matchesQuery&&matchesMuscle&&matchesEquipment&&matchesFavorite;
+  });
+}
+function addExerciseToRoutine(sessionKey,exercise){
+  const routine=getRoutine();
+  const key=["A","B","C"].includes(sessionKey)?sessionKey:"A";
+  if(!Array.isArray(routine[key])) routine[key]=[];
+  routine[key].push({
+    name:exercise.name,
+    sets:3,
+    reps:"8-12",
+    type:exercise.type||"Hipertrofia",
+    increment:2.5,
+    notes:exercise.notes||""
+  });
+  saveRoutine(routine);
+}
 function formatBlockDate(value){
   const d=dateOnly(value);
   return d?d.toLocaleDateString("es-ES",{day:"2-digit",month:"short",year:"numeric"}):"—";
@@ -241,7 +512,14 @@ let state = {
   syncInProgress: false,
   applyingRemote: false,
   editingSession: "A",
-  editingBlockId: null
+  editingBlockId: null,
+  analyticsBlockId: null,
+  selectedAnalysisExercise: null,
+  libraryQuery: "",
+  libraryMuscle: "Todos",
+  libraryEquipment: "Todos",
+  libraryFavoritesOnly: false,
+  editingLibraryExerciseId: null
 };
 
 function getHistory(){ return JSON.parse(localStorage.getItem("gymos:history") || "[]"); }
@@ -377,7 +655,7 @@ function formatSyncDate(value){
 }
 function buildSyncPayload(){
   return {
-    version:"2.3.2",
+    version:"2.5.0",
     updatedAt:getLocalUpdatedAt(),
     deviceId:getDeviceId(),
     deviceName:getDeviceName(),
@@ -389,6 +667,7 @@ function buildSyncPayload(){
     weeklyGoal:getWeeklyGoal(),
     blocks:getTrainingBlocks(),
     activeBlockId:localStorage.getItem("gymos:activeBlockId"),
+    exerciseLibrary:getExerciseLibrary(),
     updatedAt:getLocalUpdatedAt()
   };
 }
@@ -1029,6 +1308,11 @@ function render(){
   else if(state.screen==="routineEditor") renderRoutineEditor();
   else if(state.screen==="blocks") renderBlocks();
   else if(state.screen==="blockEditor") renderBlockEditor();
+  else if(state.screen==="blockAnalytics") renderBlockAnalytics();
+  else if(state.screen==="globalAnalytics") renderGlobalAnalytics();
+  else if(state.screen==="exerciseAnalytics") renderExerciseAnalytics();
+  else if(state.screen==="exerciseLibrary") renderExerciseLibrary();
+  else if(state.screen==="exerciseLibraryEditor") renderExerciseLibraryEditor();
   else renderSettings();
 }
 
@@ -1900,6 +2184,7 @@ function renderBlocks(){
           <div class="block-progress-track"><div style="width:${currentSummary.adherence}%"></div></div>
           <p class="subtle block-adherence-label">Adherencia de la semana actual: ${currentSummary.adherence}%</p>
           <div class="settings-actions compact-actions">
+            <button class="secondary" data-analytics-block="${block.id}">Estadísticas</button>
             ${!finished&&!isActive?`<button class="primary" data-activate-block="${block.id}">Activar</button>`:""}
             ${finished?`<button class="secondary" data-reopen-block="${block.id}">Reabrir</button>`:`<button class="secondary" data-complete-block="${block.id}">Finalizar</button>`}
             <button class="secondary" data-duplicate-block="${block.id}">Duplicar</button>
@@ -1933,6 +2218,11 @@ function renderBlocks(){
     saveTrainingBlocks([...blocks,copy]);
     toast("Bloque duplicado");
     renderBlocks();
+  });
+  document.querySelectorAll("[data-analytics-block]").forEach(button=>button.onclick=()=>{
+    state.analyticsBlockId=button.dataset.analyticsBlock;
+    state.screen="blockAnalytics";
+    renderBlockAnalytics();
   });
   document.querySelectorAll("[data-complete-block]").forEach(button=>button.onclick=()=>{
     const block=blocks.find(x=>x.id===button.dataset.completeBlock);
@@ -2011,7 +2301,8 @@ function renderBlockEditor(){
         </div>
         <label><span>Notas</span><textarea id="blockNotes" rows="4" placeholder="Objetivo, indicaciones o recordatorios">${esc(block.notes||"")}</textarea></label>
         <button id="saveBlockBottom" class="primary full">Guardar bloque</button>
-        ${existing?`<button id="finishBlockFromEditor" class="${block.status==="completed"?"secondary":"danger-soft"} full block-finish-button">
+        ${existing?`<button id="openBlockAnalytics" class="secondary full block-finish-button">Ver estadísticas</button>
+        <button id="finishBlockFromEditor" class="${block.status==="completed"?"secondary":"danger-soft"} full block-finish-button">
           ${block.status==="completed"?"Reabrir bloque":"Finalizar bloque"}
         </button>`:""}
       </section>
@@ -2090,6 +2381,12 @@ function renderBlockEditor(){
   };
   document.getElementById("saveBlockTop").onclick=save;
   document.getElementById("saveBlockBottom").onclick=save;
+  const analyticsButton=document.getElementById("openBlockAnalytics");
+  if(analyticsButton) analyticsButton.onclick=()=>{
+    state.analyticsBlockId=block.id;
+    state.screen="blockAnalytics";
+    renderBlockAnalytics();
+  };
   const finishButton=document.getElementById("finishBlockFromEditor");
   if(finishButton) finishButton.onclick=()=>{
     if(block.status==="completed"){
@@ -2106,9 +2403,371 @@ function renderBlockEditor(){
   };
 }
 
+
+function renderBlockAnalytics(){
+  const block=getTrainingBlocks().find(item=>item.id===state.analyticsBlockId);
+  if(!block){
+    state.screen="blocks";
+    renderBlocks();
+    return;
+  }
+  const data=blockAnalytics(block);
+  const maxVolume=Math.max(1,...data.weekly.map(w=>w.volume));
+  const maxWorkouts=Math.max(1,...data.weekly.map(w=>w.workouts));
+
+  app.innerHTML=`<div class="app-shell">
+    <header class="topbar">
+      <button id="backBlockAnalytics" class="back-button">←</button>
+      <div><div class="brand">Estadísticas</div><div class="subtle">${esc(block.name)}</div></div>
+      <button id="exportBlockSummary" class="header-action">⇩</button>
+    </header>
+    <main class="screen">
+      <section class="card analytics-hero">
+        <div>
+          <span class="analytics-label">Adherencia total</span>
+          <strong class="analytics-main-score">${data.adherence}%</strong>
+        </div>
+        <div class="block-progress-track"><div style="width:${data.adherence}%"></div></div>
+        <p class="subtle">${data.totalCompleted} de ${data.totalPlanned} sesiones previstas</p>
+      </section>
+
+      <section class="analytics-grid">
+        <article class="card analytics-kpi"><span>Entrenamientos</span><strong>${data.workouts}</strong></article>
+        <article class="card analytics-kpi"><span>Volumen</span><strong>${formatVolume(data.totalVolume)}</strong></article>
+        <article class="card analytics-kpi"><span>Tiempo total</span><strong>${data.totalMinutes} min</strong></article>
+        <article class="card analytics-kpi"><span>Duración media</span><strong>${data.avgMinutes} min</strong></article>
+      </section>
+
+      <section class="card">
+        <div class="card-heading-row">
+          <div><h2>Adherencia semanal</h2><p class="subtle">Sesiones realizadas frente a las previstas</p></div>
+        </div>
+        <div class="weekly-bars">
+          ${data.weekly.map(week=>`<div class="weekly-bar-row">
+            <span>S${week.week}${isDeloadWeek(block,week.week)?" · descarga":""}</span>
+            <div class="weekly-bar-track"><div style="width:${week.adherence}%"></div></div>
+            <strong>${week.adherence}%</strong>
+          </div>`).join("")}
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>Volumen semanal</h2>
+        <div class="mini-chart">
+          ${data.weekly.map(week=>`<div class="mini-chart-column">
+            <div class="mini-chart-value">${week.volume?formatVolume(week.volume):"—"}</div>
+            <div class="mini-chart-bar-wrap"><div class="mini-chart-bar" style="height:${Math.max(4,Math.round((week.volume/maxVolume)*100))}%"></div></div>
+            <span>S${week.week}</span>
+          </div>`).join("")}
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>Entrenamientos por sesión</h2>
+        <div class="session-stat-list">
+          ${data.bySession.map(item=>`<div>
+            <span>Sesión ${item.session}</span>
+            <div class="weekly-bar-track"><div style="width:${Math.round((item.count/maxWorkouts)*100)}%"></div></div>
+            <strong>${item.count}</strong>
+          </div>`).join("")}
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>Mejores series registradas</h2>
+        ${data.bestSets.length?`<div class="best-set-list">
+          ${data.bestSets.slice(0,5).map((set,index)=>`<div>
+            <span>${index+1}</span>
+            <div><strong>${esc(set.exercise)}</strong><small>${set.weight.toLocaleString("es-ES")} kg × ${set.reps} reps</small></div>
+          </div>`).join("")}
+        </div>`:`<p class="subtle">Todavía no hay series con peso y repeticiones registradas.</p>`}
+      </section>
+    </main>
+  </div>`;
+
+  document.getElementById("backBlockAnalytics").onclick=()=>{state.screen="blocks";renderBlocks();};
+  document.getElementById("exportBlockSummary").onclick=()=>{
+    const exportData={
+      gymosVersion:"2.3.3",
+      exportedAt:new Date().toISOString(),
+      block,
+      analytics:data
+    };
+    const blob=new Blob([JSON.stringify(exportData,null,2)],{type:"application/json"});
+    const url=URL.createObjectURL(blob);
+    const link=document.createElement("a");
+    link.href=url;
+    link.download=`gymos-bloque-${block.name.toLowerCase().replace(/[^a-z0-9]+/gi,"-")}.json`;
+    link.click();
+    URL.revokeObjectURL(url);
+    toast("Resumen exportado");
+  };
+}
+
+
+function renderGlobalAnalytics(){
+  const data=globalTrainingAnalytics();
+  const maxCategory=Math.max(1,...data.categories.map(x=>x.volume));
+
+  app.innerHTML=`<div class="app-shell">
+    <header class="topbar">
+      <button id="backGlobalAnalytics" class="back-button">←</button>
+      <div><div class="brand">Análisis global</div><div class="subtle">Volumen, progreso y estancamientos</div></div>
+      <span></span>
+    </header>
+    <main class="screen">
+      <section class="analytics-grid">
+        <article class="card analytics-kpi"><span>Entrenamientos</span><strong>${data.workouts}</strong></article>
+        <article class="card analytics-kpi"><span>Volumen total</span><strong>${formatVolume(data.totalVolume)}</strong></article>
+        <article class="card analytics-kpi"><span>Series registradas</span><strong>${data.totalSets}</strong></article>
+        <article class="card analytics-kpi"><span>Ejercicios activos</span><strong>${data.activeExercises}</strong></article>
+      </section>
+
+      <section class="card">
+        <div class="card-heading-row">
+          <div><h2>Estado del progreso</h2><p class="subtle">Comparación de las últimas series con las anteriores</p></div>
+        </div>
+        <div class="progress-status-grid">
+          <div><span>Progresando</span><strong>${data.progressing}</strong></div>
+          <div><span>Estancados</span><strong>${data.stagnating}</strong></div>
+          <div><span>Con datos</span><strong>${data.exercises.filter(x=>x.sets>=4).length}</strong></div>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>Volumen por categoría</h2>
+        ${data.categories.length?`<div class="category-volume-list">
+          ${data.categories.map(item=>`<div>
+            <div class="category-volume-header"><span>${esc(item.name)}</span><strong>${formatVolume(item.volume)}</strong></div>
+            <div class="weekly-bar-track"><div style="width:${Math.round((item.volume/maxCategory)*100)}%"></div></div>
+            <small>${item.sets} series · ${item.exercises} ejercicios</small>
+          </div>`).join("")}
+        </div>`:`<p class="subtle">Registra entrenamientos para generar el análisis.</p>`}
+      </section>
+
+      <section class="card">
+        <div class="card-heading-row">
+          <div><h2>Ejercicios</h2><p class="subtle">Ordenados por volumen acumulado</p></div>
+        </div>
+        ${data.exercises.length?`<div class="exercise-analysis-list">
+          ${data.exercises.map(exercise=>`<button data-analysis-exercise="${esc(exercise.key)}" class="exercise-analysis-row">
+            <div>
+              <strong>${esc(exercise.name)}</strong>
+              <span>${esc(exercise.type)} · ${exercise.sessions} sesiones · ${exercise.sets} series</span>
+            </div>
+            <div class="exercise-analysis-right">
+              <strong>${formatVolume(exercise.totalVolume)}</strong>
+              <span class="analysis-status ${exercise.stagnating?"warning":exercise.status==="Progresando"?"positive":""}">
+                ${exercise.stagnating?"Posible estancamiento":exercise.status}
+              </span>
+            </div>
+          </button>`).join("")}
+        </div>`:`<p class="subtle">Todavía no hay ejercicios con datos suficientes.</p>`}
+      </section>
+    </main>${nav("settings")}
+  </div>`;
+
+  document.getElementById("backGlobalAnalytics").onclick=()=>{state.screen="settings";renderSettings();};
+  document.querySelectorAll("[data-analysis-exercise]").forEach(button=>button.onclick=()=>{
+    state.selectedAnalysisExercise=button.dataset.analysisExercise;
+    state.screen="exerciseAnalytics";
+    renderExerciseAnalytics();
+  });
+  bindNav();
+}
+function renderExerciseAnalytics(){
+  const exercise=exerciseAnalytics().find(item=>item.key===state.selectedAnalysisExercise);
+  if(!exercise){
+    state.screen="globalAnalytics";
+    renderGlobalAnalytics();
+    return;
+  }
+  const rows=exercise.rows;
+  const maxE1rm=Math.max(1,...rows.map(r=>r.e1rm));
+  const recent=rows.slice(-12);
+
+  app.innerHTML=`<div class="app-shell">
+    <header class="topbar">
+      <button id="backExerciseAnalytics" class="back-button">←</button>
+      <div><div class="brand">${esc(exercise.name)}</div><div class="subtle">${esc(exercise.type)}</div></div>
+      <span></span>
+    </header>
+    <main class="screen">
+      <section class="analytics-grid">
+        <article class="card analytics-kpi"><span>Mejor peso</span><strong>${exercise.bestWeight.toLocaleString("es-ES")} kg</strong></article>
+        <article class="card analytics-kpi"><span>1RM estimado</span><strong>${Math.round(exercise.bestE1rm*10)/10} kg</strong></article>
+        <article class="card analytics-kpi"><span>Volumen total</span><strong>${formatVolume(exercise.totalVolume)}</strong></article>
+        <article class="card analytics-kpi"><span>Cambio reciente</span><strong>${trendLabel(exercise.recentChange)}</strong></article>
+      </section>
+
+      <section class="card">
+        <div class="card-heading-row">
+          <div><h2>Evaluación</h2><p class="subtle">Señal orientativa basada en las últimas series</p></div>
+          <span class="analysis-status ${exercise.stagnating?"warning":exercise.status==="Progresando"?"positive":""}">
+            ${exercise.stagnating?"Posible estancamiento":exercise.status}
+          </span>
+        </div>
+        <p class="analysis-explanation">${
+          exercise.stagnating
+            ?"El rendimiento estimado apenas ha cambiado en las últimas series. Revisa técnica, recuperación, repeticiones objetivo y progresión de carga antes de modificar la rutina."
+            :exercise.status==="Progresando"
+              ?"Las últimas series muestran una mejora respecto al periodo anterior."
+              :"Todavía no hay una señal clara de progreso o retroceso."
+        }</p>
+      </section>
+
+      <section class="card">
+        <h2>Tendencia de fuerza estimada</h2>
+        <div class="strength-chart">
+          ${recent.map(row=>`<div class="strength-chart-column">
+            <div class="strength-chart-value">${Math.round(row.e1rm)} kg</div>
+            <div class="strength-chart-bar-wrap"><div class="strength-chart-bar" style="height:${Math.max(5,Math.round((row.e1rm/maxE1rm)*100))}%"></div></div>
+            <span>${row.date.toLocaleDateString("es-ES",{day:"2-digit",month:"2-digit"})}</span>
+          </div>`).join("")}
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>Últimas series</h2>
+        <div class="recent-set-list">
+          ${rows.slice(-10).reverse().map(row=>`<div>
+            <div><strong>${row.weight.toLocaleString("es-ES")} kg × ${row.reps}</strong><span>${row.date.toLocaleDateString("es-ES")}</span></div>
+            <span>1RM est. ${Math.round(row.e1rm*10)/10} kg</span>
+          </div>`).join("")}
+        </div>
+      </section>
+    </main>
+  </div>`;
+
+  document.getElementById("backExerciseAnalytics").onclick=()=>{state.screen="globalAnalytics";renderGlobalAnalytics();};
+}
+
+
+function renderExerciseLibrary(){
+  const items=getExerciseLibrary();
+  const muscles=["Todos",...new Set(items.map(item=>item.muscle).filter(Boolean))];
+  const equipment=["Todos",...new Set(items.map(item=>item.equipment).filter(Boolean))];
+  const filtered=exerciseLibraryFilters(items,state.libraryQuery,state.libraryMuscle,state.libraryEquipment,state.libraryFavoritesOnly);
+
+  app.innerHTML=`<div class="app-shell">
+    <header class="topbar">
+      <button id="backExerciseLibrary" class="back-button">←</button>
+      <div><div class="brand">Biblioteca</div><div class="subtle">${items.length} ejercicios disponibles</div></div>
+      <button id="newLibraryExercise" class="header-action">＋</button>
+    </header>
+    <main class="screen">
+      <section class="card library-filter-card">
+        <label class="library-search"><span>Buscar</span><input id="librarySearch" type="search" value="${esc(state.libraryQuery)}" placeholder="Ejercicio, músculo o material"></label>
+        <div class="library-filter-grid">
+          <label><span>Grupo muscular</span><select id="libraryMuscle">${muscles.map(value=>`<option value="${esc(value)}" ${state.libraryMuscle===value?"selected":""}>${esc(value)}</option>`).join("")}</select></label>
+          <label><span>Equipamiento</span><select id="libraryEquipment">${equipment.map(value=>`<option value="${esc(value)}" ${state.libraryEquipment===value?"selected":""}>${esc(value)}</option>`).join("")}</select></label>
+        </div>
+        <label class="favorite-filter"><input id="libraryFavoritesOnly" type="checkbox" ${state.libraryFavoritesOnly?"checked":""}><span>Mostrar solo favoritos</span></label>
+      </section>
+
+      <section class="library-results-header"><strong>${filtered.length} resultados</strong><button id="resetLibraryFilters" class="text-button">Limpiar filtros</button></section>
+
+      <section class="exercise-library-list">
+        ${filtered.length?filtered.map(item=>`<article class="card exercise-library-card">
+          <div class="exercise-library-card-top">
+            <div><div class="exercise-library-title-row"><h2>${esc(item.name)}</h2>${item.custom?'<span class="custom-pill">Propio</span>':""}</div>
+            <p class="subtle">${esc(item.muscle)} · ${esc(item.equipment)} · ${esc(item.type)}</p></div>
+            <button class="favorite-button ${item.favorite?"active":""}" data-favorite-exercise="${item.id}" aria-label="Favorito">★</button>
+          </div>
+          ${item.notes?`<p class="exercise-library-notes">${esc(item.notes)}</p>`:""}
+          <div class="library-session-actions">${["A","B","C"].map(session=>`<button class="secondary" data-add-library-exercise="${item.id}" data-target-session="${session}">Añadir a ${session}</button>`).join("")}</div>
+          <div class="settings-actions compact-actions"><button class="secondary" data-edit-library-exercise="${item.id}">Editar</button>${item.custom?`<button class="danger-soft" data-delete-library-exercise="${item.id}">Eliminar</button>`:""}</div>
+        </article>`).join(""):`<section class="card empty-library-state"><h2>Sin resultados</h2><p class="subtle">Prueba con otros filtros o crea un ejercicio personalizado.</p></section>`}
+      </section>
+    </main>${nav("settings")}
+  </div>`;
+
+  const rerender=()=>{
+    state.libraryQuery=document.getElementById("librarySearch")?.value||"";
+    state.libraryMuscle=document.getElementById("libraryMuscle")?.value||"Todos";
+    state.libraryEquipment=document.getElementById("libraryEquipment")?.value||"Todos";
+    state.libraryFavoritesOnly=Boolean(document.getElementById("libraryFavoritesOnly")?.checked);
+    renderExerciseLibrary();
+  };
+  document.getElementById("backExerciseLibrary").onclick=()=>{state.screen="settings";renderSettings();};
+  document.getElementById("newLibraryExercise").onclick=()=>{state.editingLibraryExerciseId=null;state.screen="exerciseLibraryEditor";renderExerciseLibraryEditor();};
+  document.getElementById("librarySearch").oninput=rerender;
+  document.getElementById("libraryMuscle").onchange=rerender;
+  document.getElementById("libraryEquipment").onchange=rerender;
+  document.getElementById("libraryFavoritesOnly").onchange=rerender;
+  document.getElementById("resetLibraryFilters").onclick=()=>{state.libraryQuery="";state.libraryMuscle="Todos";state.libraryEquipment="Todos";state.libraryFavoritesOnly=false;renderExerciseLibrary();};
+  document.querySelectorAll("[data-favorite-exercise]").forEach(button=>button.onclick=()=>{
+    const library=getExerciseLibrary(); const item=library.find(x=>x.id===button.dataset.favoriteExercise);
+    if(item) item.favorite=!item.favorite;
+    saveExerciseLibrary(library); renderExerciseLibrary();
+  });
+  document.querySelectorAll("[data-add-library-exercise]").forEach(button=>button.onclick=()=>{
+    const item=getExerciseLibrary().find(x=>x.id===button.dataset.addLibraryExercise);
+    if(!item) return;
+    addExerciseToRoutine(button.dataset.targetSession,item);
+    toast(`${item.name} añadido a la sesión ${button.dataset.targetSession}`);
+  });
+  document.querySelectorAll("[data-edit-library-exercise]").forEach(button=>button.onclick=()=>{
+    state.editingLibraryExerciseId=button.dataset.editLibraryExercise;state.screen="exerciseLibraryEditor";renderExerciseLibraryEditor();
+  });
+  document.querySelectorAll("[data-delete-library-exercise]").forEach(button=>button.onclick=()=>{
+    const library=getExerciseLibrary(); const item=library.find(x=>x.id===button.dataset.deleteLibraryExercise);
+    if(!item||!item.custom||!confirm(`¿Eliminar "${item.name}" de la biblioteca?`)) return;
+    saveExerciseLibrary(library.filter(x=>x.id!==item.id));toast("Ejercicio eliminado");renderExerciseLibrary();
+  });
+  bindNav();
+}
+
+function renderExerciseLibraryEditor(){
+  const library=getExerciseLibrary();
+  const existing=library.find(item=>item.id===state.editingLibraryExerciseId);
+  const exercise=existing||{name:"",muscle:"Pecho",equipment:"Mancuernas",type:"Hipertrofia",favorite:false,custom:true,notes:""};
+
+  app.innerHTML=`<div class="app-shell">
+    <header class="topbar">
+      <button id="backLibraryEditor" class="back-button">←</button>
+      <div><div class="brand">${existing?"Editar ejercicio":"Nuevo ejercicio"}</div><div class="subtle">Biblioteca GymOS</div></div>
+      <button id="saveLibraryExerciseTop" class="header-action">Guardar</button>
+    </header>
+    <main class="screen">
+      <section class="card library-editor-form">
+        <label><span>Nombre</span><input id="libraryExerciseName" value="${esc(exercise.name)}" placeholder="Ej. Press en máquina"></label>
+        <div class="routine-editor-grid">
+          <label><span>Grupo muscular</span><input id="libraryExerciseMuscle" value="${esc(exercise.muscle)}" placeholder="Pecho"></label>
+          <label><span>Equipamiento</span><input id="libraryExerciseEquipment" value="${esc(exercise.equipment)}" placeholder="Máquina"></label>
+        </div>
+        <label><span>Tipo</span><select id="libraryExerciseType">${["Fuerza","Hipertrofia","Core","Cardio","Movilidad","Otro"].map(value=>`<option value="${value}" ${exercise.type===value?"selected":""}>${value}</option>`).join("")}</select></label>
+        <label><span>Notas técnicas</span><textarea id="libraryExerciseNotes" rows="5" placeholder="Recordatorios de ejecución">${esc(exercise.notes||"")}</textarea></label>
+        <label class="favorite-filter"><input id="libraryExerciseFavorite" type="checkbox" ${exercise.favorite?"checked":""}><span>Marcar como favorito</span></label>
+        <button id="saveLibraryExerciseBottom" class="primary full">${existing?"Guardar cambios":"Crear ejercicio"}</button>
+      </section>
+    </main>
+  </div>`;
+
+  const save=()=>{
+    const name=document.getElementById("libraryExerciseName").value.trim();
+    if(!name){toast("Escribe un nombre para el ejercicio");return;}
+    const updated={
+      id:existing?.id||makeExerciseId(name),name,
+      muscle:document.getElementById("libraryExerciseMuscle").value.trim()||"Sin categoría",
+      equipment:document.getElementById("libraryExerciseEquipment").value.trim()||"Sin material",
+      type:document.getElementById("libraryExerciseType").value,
+      notes:document.getElementById("libraryExerciseNotes").value.trim(),
+      favorite:Boolean(document.getElementById("libraryExerciseFavorite").checked),
+      custom:existing?Boolean(existing.custom):true
+    };
+    saveExerciseLibrary(existing?library.map(item=>item.id===existing.id?updated:item):[...library,updated]);
+    toast(existing?"Ejercicio actualizado":"Ejercicio creado");
+    state.screen="exerciseLibrary";renderExerciseLibrary();
+  };
+  document.getElementById("backLibraryEditor").onclick=()=>{state.screen="exerciseLibrary";renderExerciseLibrary();};
+  document.getElementById("saveLibraryExerciseTop").onclick=save;
+  document.getElementById("saveLibraryExerciseBottom").onclick=save;
+}
+
 function renderSettings(){
   app.innerHTML=`<div class="app-shell">
-    <header class="topbar"><div><div class="brand">Ajustes</div><div class="subtle">GymOS v2.3.2 · Descarga y cierre</div></div></header>
+    <header class="topbar"><div><div class="brand">Ajustes</div><div class="subtle">GymOS v2.5.0 · Biblioteca de ejercicios</div></div></header>
     <main class="screen">
       <section class="card sync-card">
         <div class="card-heading-row">
@@ -2137,6 +2796,16 @@ function renderSettings(){
           <summary>Cómo configurarlo</summary>
           <p>Ejecuta <strong>supabase-schema.sql</strong> y añade <strong>https://apl00028.github.io/mi-rutina/</strong> en Authentication → URL Configuration → Redirect URLs. Usa la clave <strong>Publishable</strong> o <strong>anon public</strong>, nunca una secret/service role.</p>
         </details>
+      </section>
+      <section class="card">
+        <h2>Biblioteca de ejercicios</h2>
+        <p class="subtle">Busca ejercicios, marca favoritos y añade ejercicios propios a tus sesiones.</p>
+        <button id="openExerciseLibrary" class="primary full">Abrir biblioteca</button>
+      </section>
+      <section class="card">
+        <h2>Análisis global</h2>
+        <p class="subtle">Revisa volumen, progreso por ejercicio y posibles estancamientos.</p>
+        <button id="openGlobalAnalytics" class="primary full">Abrir análisis</button>
       </section>
       <section class="card">
         <h2>Bloques de entrenamiento</h2>
@@ -2240,6 +2909,8 @@ function renderSettings(){
   };
   document.getElementById("openPlanSettings").onclick=()=>{state.screen="plan";renderPlan();};
   document.getElementById("openBlocksSettings").onclick=()=>{state.screen="blocks";renderBlocks();};
+  document.getElementById("openGlobalAnalytics").onclick=()=>{state.screen="globalAnalytics";renderGlobalAnalytics();};
+  document.getElementById("openExerciseLibrary").onclick=()=>{state.screen="exerciseLibrary";renderExerciseLibrary();};
   document.querySelectorAll("[data-rest-setting]").forEach(button=>button.onclick=()=>{
     saveRestSeconds(Number(button.dataset.restSetting));
     toast("Descanso actualizado");

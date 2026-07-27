@@ -1,4 +1,4 @@
-# GymOS v2.3.2 — Descarga y finalización de bloques
+# GymOS v2.5.0 — Biblioteca de ejercicios
 
 GymOS sigue funcionando completamente en modo local.
 
@@ -104,3 +104,40 @@ La resolución de conflictos conserva la copia con la fecha `updatedAt` más rec
 - Posibilidad de reabrir un bloque finalizado.
 - Estado visual de bloques terminados.
 - El bloque finalizado deja de mostrarse como activo.
+
+
+## Novedades de la versión 2.3.3
+
+- Panel de estadísticas para cada bloque.
+- Adherencia total y semanal.
+- Total de entrenamientos, volumen y minutos acumulados.
+- Duración media de las sesiones.
+- Distribución de entrenamientos A, B y C.
+- Gráfico semanal de volumen.
+- Mejores series registradas.
+- Exportación del resumen del bloque en JSON.
+
+
+## Novedades de la versión 2.4.0
+
+- Panel de análisis global desde Ajustes.
+- Volumen total y por categoría de ejercicio.
+- Seguimiento individual de cada ejercicio.
+- Mejor peso y 1RM estimado.
+- Tendencia reciente de fuerza.
+- Detección orientativa de posibles estancamientos.
+- Historial visual de las últimas series.
+- Estado de progreso por ejercicio.
+
+
+## Novedades de la versión 2.5.0
+
+- Biblioteca inicial de ejercicios.
+- Buscador por nombre, músculo, material, tipo o notas.
+- Filtros por grupo muscular y equipamiento.
+- Ejercicios favoritos.
+- Creación y edición de ejercicios personalizados.
+- Eliminación segura de ejercicios propios.
+- Notas técnicas.
+- Adición directa a las sesiones A, B o C.
+- Biblioteca incluida en la sincronización.

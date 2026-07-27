@@ -1,4 +1,4 @@
-# GymOS v3.4.0 — Rediseño visual y modos Usuario/Desarrollador
+# GymOS v3.5.0 — Personalización visual y accesibilidad
 
 GymOS sigue funcionando completamente en modo local.
 
@@ -262,3 +262,17 @@ La resolución de conflictos conserva la copia con la fecha `updatedAt` más rec
 - Posibilidad de desactivar animaciones.
 - Preferencias visuales incluidas en copias de seguridad.
 - Compatibilidad mantenida con entrenamiento, nutrición, progreso, Coach y backend.
+
+
+## Novedades de la versión 3.5.0
+
+- Cuatro colores principales: violeta, azul, verde azulado y naranja.
+- Temas claro, oscuro y automático.
+- Tamaño de texto pequeño, normal, grande y muy grande.
+- Densidad compacta, cómoda y amplia.
+- Presets Equilibrado, Entrenamiento, Accesible e Intenso.
+- Alto contraste.
+- Botones y controles táctiles más grandes.
+- Animaciones configurables.
+- Preferencias persistentes e incluidas en las copias de seguridad.
+- Compatibilidad mantenida con los modos Usuario y Desarrollador.

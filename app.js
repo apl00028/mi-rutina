@@ -926,7 +926,7 @@ function undoLastCoachChange(){
 }
 function coachContextPayload(){
   return {
-    version:"3.4.0",
+    version:"3.5.0",
     generatedAt:new Date().toISOString(),
     settings:getCoachSettings(),
     routine:getRoutine(),
@@ -1103,12 +1103,17 @@ function getAppPreferences(){
     return {
       mode:"user",
       theme:"system",
+      accent:"violet",
+      density:"comfortable",
+      fontScale:"normal",
+      highContrast:false,
+      largeTapTargets:false,
       compact:false,
       animations:true,
       ...JSON.parse(localStorage.getItem(APP_PREFERENCES_KEY)||"{}")
     };
   }catch(error){
-    return {mode:"user",theme:"system",compact:false,animations:true};
+    return {mode:"user",theme:"system",accent:"violet",density:"comfortable",fontScale:"normal",highContrast:false,largeTapTargets:false,compact:false,animations:true};
   }
 }
 function saveAppPreferences(value){
@@ -1123,10 +1128,42 @@ function resolvedTheme(){
 function applyAppPreferences(){
   const preferences=getAppPreferences();
   document.documentElement.dataset.theme=resolvedTheme();
+  document.documentElement.dataset.accent=preferences.accent||"violet";
+  document.documentElement.dataset.fontScale=preferences.fontScale||"normal";
   document.body.dataset.mode=preferences.mode;
+  document.body.dataset.density=preferences.density||"comfortable";
   document.body.classList.toggle("compact-ui",Boolean(preferences.compact));
   document.body.classList.toggle("reduce-motion",!preferences.animations);
+  document.body.classList.toggle("high-contrast",Boolean(preferences.highContrast));
+  document.body.classList.toggle("large-tap-targets",Boolean(preferences.largeTapTargets));
 }
+
+function appPreferencePresets(){
+  return {
+    balanced:{
+      theme:"system",accent:"violet",density:"comfortable",fontScale:"normal",
+      highContrast:false,largeTapTargets:false,compact:false,animations:true
+    },
+    focus:{
+      theme:"dark",accent:"blue",density:"compact",fontScale:"normal",
+      highContrast:false,largeTapTargets:false,compact:true,animations:false
+    },
+    accessible:{
+      theme:"light",accent:"teal",density:"comfortable",fontScale:"large",
+      highContrast:true,largeTapTargets:true,compact:false,animations:false
+    },
+    bold:{
+      theme:"dark",accent:"orange",density:"comfortable",fontScale:"normal",
+      highContrast:true,largeTapTargets:false,compact:false,animations:true
+    }
+  };
+}
+function applyPreferencePreset(name){
+  const preset=appPreferencePresets()[name];
+  if(!preset) return;
+  saveAppPreferences(preset);
+}
+
 function developerModeEnabled(){
   return getAppPreferences().mode==="developer";
 }
@@ -4895,7 +4932,7 @@ async function renderDeveloperMode(){
   };
   document.getElementById("resetUiPreferences").onclick=()=>{
     if(!confirm("¿Restablecer el aspecto y volver al modo usuario?")) return;
-    saveAppPreferences({mode:"user",theme:"system",compact:false,animations:true});
+    saveAppPreferences({mode:"user",theme:"system",accent:"violet",density:"comfortable",fontScale:"normal",highContrast:false,largeTapTargets:false,compact:false,animations:true});
     state.screen="settings";
     renderSettings();
   };
@@ -4903,7 +4940,7 @@ async function renderDeveloperMode(){
 
 function renderSettings(){
   app.innerHTML=`<div class="app-shell">
-    <header class="topbar"><div><div class="brand">Ajustes</div><div class="subtle">GymOS v3.4.0 · Nueva experiencia visual</div></div></header>
+    <header class="topbar"><div><div class="brand">Ajustes</div><div class="subtle">GymOS v3.5.0 · Personalización y accesibilidad</div></div></header>
     <main class="screen">
       <section class="card experience-card">
         <div class="card-heading-row">
@@ -4914,16 +4951,51 @@ function renderSettings(){
           <button data-app-mode="user" class="${!developerModeEnabled()?"active":""}">Modo usuario</button>
           <button data-app-mode="developer" class="${developerModeEnabled()?"active":""}">Modo desarrollador</button>
         </div>
-        <label><span>Tema</span>
-          <select id="appTheme">
-            <option value="system" ${getAppPreferences().theme==="system"?"selected":""}>Automático</option>
-            <option value="light" ${getAppPreferences().theme==="light"?"selected":""}>Claro</option>
-            <option value="dark" ${getAppPreferences().theme==="dark"?"selected":""}>Oscuro</option>
-          </select>
-        </label>
+        <div class="appearance-grid">
+          <label><span>Tema</span>
+            <select id="appTheme">
+              <option value="system" ${getAppPreferences().theme==="system"?"selected":""}>Automático</option>
+              <option value="light" ${getAppPreferences().theme==="light"?"selected":""}>Claro</option>
+              <option value="dark" ${getAppPreferences().theme==="dark"?"selected":""}>Oscuro</option>
+            </select>
+          </label>
+          <label><span>Color principal</span>
+            <select id="appAccent">
+              <option value="violet" ${getAppPreferences().accent==="violet"?"selected":""}>Violeta</option>
+              <option value="blue" ${getAppPreferences().accent==="blue"?"selected":""}>Azul</option>
+              <option value="teal" ${getAppPreferences().accent==="teal"?"selected":""}>Verde azulado</option>
+              <option value="orange" ${getAppPreferences().accent==="orange"?"selected":""}>Naranja</option>
+            </select>
+          </label>
+          <label><span>Tamaño de texto</span>
+            <select id="appFontScale">
+              <option value="small" ${getAppPreferences().fontScale==="small"?"selected":""}>Pequeño</option>
+              <option value="normal" ${getAppPreferences().fontScale==="normal"?"selected":""}>Normal</option>
+              <option value="large" ${getAppPreferences().fontScale==="large"?"selected":""}>Grande</option>
+              <option value="xlarge" ${getAppPreferences().fontScale==="xlarge"?"selected":""}>Muy grande</option>
+            </select>
+          </label>
+          <label><span>Densidad</span>
+            <select id="appDensity">
+              <option value="compact" ${getAppPreferences().density==="compact"?"selected":""}>Compacta</option>
+              <option value="comfortable" ${getAppPreferences().density==="comfortable"?"selected":""}>Cómoda</option>
+              <option value="spacious" ${getAppPreferences().density==="spacious"?"selected":""}>Amplia</option>
+            </select>
+          </label>
+        </div>
+
+        <div class="preset-grid">
+          <button data-ui-preset="balanced"><strong>Equilibrado</strong><small>Automático y limpio</small></button>
+          <button data-ui-preset="focus"><strong>Entrenamiento</strong><small>Oscuro y compacto</small></button>
+          <button data-ui-preset="accessible"><strong>Accesible</strong><small>Texto grande y contraste</small></button>
+          <button data-ui-preset="bold"><strong>Intenso</strong><small>Alto contraste</small></button>
+        </div>
+
         <div class="preference-switches">
           <label><input id="compactUi" type="checkbox" ${getAppPreferences().compact?"checked":""}><span>Diseño compacto</span></label>
           <label><input id="animationsUi" type="checkbox" ${getAppPreferences().animations?"checked":""}><span>Animaciones</span></label>
+          <label><input id="highContrastUi" type="checkbox" ${getAppPreferences().highContrast?"checked":""}><span>Alto contraste</span></label>
+          <label><input id="largeTapTargetsUi" type="checkbox" ${getAppPreferences().largeTapTargets?"checked":""}><span>Botones más grandes</span></label>
         </div>
         ${developerModeEnabled()?`<button id="openDeveloperMode" class="secondary full">Abrir centro de desarrollador</button>`:""}
       </section>
@@ -5074,12 +5146,37 @@ function renderSettings(){
     saveAppPreferences({theme:e.target.value});
     renderSettings();
   };
+  document.getElementById("appAccent").onchange=e=>{
+    saveAppPreferences({accent:e.target.value});
+    renderSettings();
+  };
+  document.getElementById("appFontScale").onchange=e=>{
+    saveAppPreferences({fontScale:e.target.value});
+    renderSettings();
+  };
+  document.getElementById("appDensity").onchange=e=>{
+    saveAppPreferences({density:e.target.value});
+    renderSettings();
+  };
+  document.querySelectorAll("[data-ui-preset]").forEach(button=>button.onclick=()=>{
+    applyPreferencePreset(button.dataset.uiPreset);
+    addDeveloperLog("info",`Preset visual ${button.dataset.uiPreset} aplicado`);
+    renderSettings();
+  });
   document.getElementById("compactUi").onchange=e=>{
     saveAppPreferences({compact:e.target.checked});
     renderSettings();
   };
   document.getElementById("animationsUi").onchange=e=>{
     saveAppPreferences({animations:e.target.checked});
+    renderSettings();
+  };
+  document.getElementById("highContrastUi").onchange=e=>{
+    saveAppPreferences({highContrast:e.target.checked});
+    renderSettings();
+  };
+  document.getElementById("largeTapTargetsUi").onchange=e=>{
+    saveAppPreferences({largeTapTargets:e.target.checked});
     renderSettings();
   };
   const openDeveloperMode=document.getElementById("openDeveloperMode");

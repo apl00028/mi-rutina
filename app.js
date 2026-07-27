@@ -936,7 +936,7 @@ function undoLastCoachChange(){
 }
 function coachContextPayload(){
   return {
-    version:"3.9.0",
+    version:"3.9.1",
     generatedAt:new Date().toISOString(),
     settings:getCoachSettings(),
     routine:getRoutine(),
@@ -2858,7 +2858,6 @@ function miniBars(rows){
 function nav(active){
   const items=[
     ["home","⌂","Inicio"],
-    ["workout","＋","Entrenar"],
     ["progressDashboard","↗","Progreso"],
     ["coach","✦","Coach"],
     ["settings","☰","Más"]
@@ -5982,7 +5981,7 @@ function renderAccount(){
 
 function renderSettings(){
   app.innerHTML=`<div class="app-shell">
-    <header class="topbar"><div><div class="brand">Ajustes</div><div class="subtle">GymOS v3.9.0 · Acceso privado y cuentas</div></div></header>
+    <header class="topbar"><div><div class="brand">Ajustes</div><div class="subtle">GymOS v3.9.1 · Más corregido y navegación simplificada</div></div></header>
     <main class="screen">
       <section class="card account-entry-card">
         <div class="account-entry-main">
@@ -6276,7 +6275,7 @@ function renderSettings(){
   bindScreen("openCoach","coach",renderCoach);
   bindScreen("openBackupRestore","backupRestore",renderBackupRestore);
   bindScreen("openRoutineEditor","routineEditor",renderRoutineEditor);
-  bindScreen("openTrainingBlocks","blocks",renderTrainingBlocks);
+  bindScreen("openTrainingBlocks","blocks",renderBlocks);
   bindScreen("openGlobalAnalytics","globalAnalytics",renderGlobalAnalytics);
   bindScreen("openExerciseLibrary","exerciseLibrary",renderExerciseLibrary);
   bindScreen("openFavoriteExercises","favoriteExercises",renderFavoriteExercises);

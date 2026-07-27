@@ -1,4 +1,4 @@
-# GymOS v3.9.0 — Acceso privado y cuentas
+# GymOS v3.9.1 — Más corregido y navegación simplificada
 
 GymOS sigue funcionando completamente en modo local.
 
@@ -401,3 +401,12 @@ de cuenta y pruebas automáticas con dos usuarios independientes.
 - Migración de datos locales a la cuenta.
 - Row Level Security mediante `supabase-schema.sql`.
 - Guía completa en `SETUP-AUTH.md`.
+
+
+## Parche v3.9.1
+
+- Corregido el error `renderTrainingBlocks is not defined` al abrir Más.
+- La sección Bloques usa ahora el renderizador existente `renderBlocks`.
+- Eliminado Entrenar de la barra inferior.
+- La barra inferior queda en Inicio, Progreso, Coach y Más.
+- El entrenamiento se inicia desde Inicio mediante “Comenzar entrenamiento”.

@@ -87,7 +87,7 @@ input,textarea{
 textarea{min-height:58px;resize:vertical;margin-top:4px}
 .bottom-nav{
   position:fixed;left:0;right:0;bottom:0;z-index:30;
-  display:grid;grid-template-columns:repeat(5,1fr);
+  display:grid;grid-template-columns:repeat(4,1fr);
   background:rgba(255,255,255,.97);border-top:1px solid #e5e7eb;
   padding:8px 10px calc(8px + env(safe-area-inset-bottom))
 }

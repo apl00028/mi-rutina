@@ -1,4 +1,4 @@
-# GymOS v3.8.3 — Corrección completa de navegación
+# GymOS v3.8.4 — Navegación inferior global
 
 GymOS sigue funcionando completamente en modo local.
 
@@ -359,3 +359,13 @@ de cuenta y pruebas automáticas con dos usuarios independientes.
 - Corregidos también Entrenar, Progreso, Coach y Más.
 - Restaurados los accesos a Progreso, Bloques, Plan semanal y Seguimiento corporal.
 - Se conserva el cronómetro por serie de la versión 3.8.2.
+
+
+## Parche v3.8.4
+
+- La barra inferior usa ahora un controlador global que sobrevive a todos los cambios de pantalla.
+- Inicio, Entrenar, Progreso, Coach y Más funcionan desde cualquier sección.
+- Se mantienen también bindings directos para accesibilidad.
+- Entrenar vuelve a Inicio para seleccionar una sesión cuando todavía no hay ninguna elegida.
+- Los cronómetros activos se detienen de forma segura al cambiar de pantalla.
+- La navegación se reactiva automáticamente después de cada renderizado.

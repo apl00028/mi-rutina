@@ -29,7 +29,7 @@
       }
     ]
   },
-  "version": "3.8.3",
+  "version": "3.8.4",
   "health": {
     "endpoint": "GET /health"
   },

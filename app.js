@@ -936,7 +936,7 @@ function undoLastCoachChange(){
 }
 function coachContextPayload(){
   return {
-    version:"3.8.3",
+    version:"3.8.4",
     generatedAt:new Date().toISOString(),
     settings:getCoachSettings(),
     routine:getRoutine(),
@@ -2768,9 +2768,44 @@ function nav(active){
     </button>`).join("")}
   </nav>`;
 }
+let globalNavigationBound=false;
+
+function navigateToScreen(screen){
+  stopAllExerciseTimers();
+
+  if(screen==="workout"){
+    const selected=state.selectedSession||localStorage.getItem("gymos:selectedSession");
+    if(!selected){
+      state.screen="home";
+      renderHome();
+      toast("Selecciona primero una sesión para entrenar");
+      return;
+    }
+    state.selectedSession=selected;
+  }
+
+  state.screen=screen;
+  render();
+}
+
 function bindNav(){
-  document.querySelectorAll("[data-nav]").forEach(b=>b.onclick=()=>{
-    state.screen=b.dataset.nav; render();
+  // Direct bindings remain useful for keyboard/accessibility.
+  document.querySelectorAll("[data-nav]").forEach(button=>{
+    button.onclick=event=>{
+      event.preventDefault();
+      event.stopPropagation();
+      navigateToScreen(button.dataset.nav);
+    };
+  });
+
+  // One delegated listener makes navigation survive every re-render.
+  if(globalNavigationBound) return;
+  globalNavigationBound=true;
+  document.addEventListener("click",event=>{
+    const button=event.target.closest?.("[data-nav]");
+    if(!button) return;
+    event.preventDefault();
+    navigateToScreen(button.dataset.nav);
   });
 }
 function toast(msg){
@@ -2809,6 +2844,7 @@ function render(){
   else if(state.screen==="health") renderHealth();
   else if(state.screen==="account") renderAccount();
   else renderSettings();
+  queueMicrotask(()=>bindNav());
 }
 
 function renderHome(){
@@ -5794,7 +5830,7 @@ function renderAccount(){
 
 function renderSettings(){
   app.innerHTML=`<div class="app-shell">
-    <header class="topbar"><div><div class="brand">Ajustes</div><div class="subtle">GymOS v3.8.3 · Corrección completa de navegación</div></div></header>
+    <header class="topbar"><div><div class="brand">Ajustes</div><div class="subtle">GymOS v3.8.4 · Navegación inferior global</div></div></header>
     <main class="screen">
       <section class="card account-entry-card">
         <div class="account-entry-main">
@@ -6214,3 +6250,5 @@ refreshSyncSession().then(user=>{
 }).catch(()=>render());
 
 applyAppPreferences();
+
+window.addEventListener("DOMContentLoaded",()=>bindNav());

@@ -1,6 +1,4 @@
 window.GYMOS_AUTH_CONFIG = {
-  // Supabase Dashboard → Project Settings → API
-  supabaseUrl: "PEGA_AQUI_TU_PROJECT_URL",
-  // Usa únicamente la clave pública "anon". Nunca service_role.
-  supabaseAnonKey: "PEGA_AQUI_TU_ANON_PUBLIC_KEY"
+  supabaseUrl: "https://rvgzgueoriulirofzlmc.supabase.co",
+  supabaseAnonKey: "sb_publishable_rBZ-_xeoTl5Dy18DwV4-GA_dB_89ieS"
 };

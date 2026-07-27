@@ -18,7 +18,7 @@ ALLOWED_ORIGINS = [
     if origin.strip()
 ]
 
-app = FastAPI(title="GymOS Coach API", version="3.2.0")
+app = FastAPI(title="GymOS Coach API", version="3.3.0")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=ALLOWED_ORIGINS,
@@ -64,7 +64,7 @@ Priorities:
 2. Sustainable adherence.
 3. Maintain or improve performance.
 4. Match the user's stated goal.
-5. Prefer small changes over complete routine redesigns.
+5. Prefer small changes over complete routine redesigns.\n6. Nutrition advice must be conservative, based only on supplied logs, and avoid medical claims.
 
 For exercise changes, use exact session names A, B, or C and exact zero-based
 exercise indexes from the supplied routine.
@@ -109,7 +109,7 @@ def parse_json_response(raw: str) -> dict[str, Any]:
 def health() -> dict[str, Any]:
     return {
         "status": "ok",
-        "version": "3.2.0",
+        "version": "3.3.0",
         "model": MODEL,
         "openaiConfigured": bool(API_KEY),
     }

@@ -11,21 +11,19 @@
 </head>
 <body>
 
-<div class="global-accessibility-controls" aria-label="Apariencia y accesibilidad">
-  <button id="appearanceCycleButton" class="appearance-control" type="button" aria-label="Cambiar tema">
-    <span aria-hidden="true">☀</span><span>Claro</span>
-  </button>
-  <button id="fontScaleCycleButton" class="font-scale-control" type="button" aria-label="Cambiar tamaño de letra" title="Cambiar tamaño de letra">
-    <span class="aaa-symbol" aria-hidden="true"><span>A</span><span>A</span><span>A</span></span>
-  </button>
-</div>
-
   <div id="app"></div>
   <input id="importFile" type="file" accept="application/json" hidden>
   <input id="routineFile" type="file" accept=".xlsx,.xls" hidden>
+  <input id="professionalNutritionFile" type="file" accept=".json,.xlsx,.xls,.csv" hidden>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="auth-config.js"></script>
+  <script src="daily-thoughts.js"></script>
+  <script src="assets/heroes/manifest.js"></script>
+  <script src="recovery-center.js"></script>
+  <script src="professional-nutrition.js"></script>
+  <script src="nutrition-engine.js"></script>
+  <script src="workout-analysis.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

@@ -42,11 +42,11 @@ function getFontScalePreference(){
   return GYMOS_FONT_SCALES.includes(stored)?stored:"font-scale-md";
 }
 function updateFontScaleButton(value=getFontScalePreference()){
-  const button=document.getElementById("fontScaleCycleButton");
-  if(!button) return;
   const position=GYMOS_FONT_SCALES.indexOf(value)+1;
-  button.setAttribute("aria-label",`Tamaño de letra ${position} de ${GYMOS_FONT_SCALES.length}. Pulsa para cambiar.`);
-  button.title=`Tamaño de letra ${position}/${GYMOS_FONT_SCALES.length}`;
+  document.querySelectorAll("#fontScaleCycleButton,#homeFontScaleToggle").forEach(button=>{
+    button.setAttribute("aria-label",`Tamaño de letra ${position} de ${GYMOS_FONT_SCALES.length}. Pulsa para cambiar.`);
+    button.title=`Tamaño de letra ${position}/${GYMOS_FONT_SCALES.length}`;
+  });
 }
 function applyFontScalePreference(value=getFontScalePreference()){
   const scaleMap={
@@ -664,6 +664,8 @@ const GYMOS_BACKUP_KEYS=[
   "gymos:routine",
   "gymos:history",
   "gymos:bodyWeight",
+  "gymos:body",
+  "gymos:bodySummaryMetrics",
   "gymos:trainingBlocks",
   "gymos:activeBlockId",
   "gymos:exerciseLibrary",
@@ -672,15 +674,20 @@ const GYMOS_BACKUP_KEYS=[
   "gymos:coachSettings",
   "gymos:coachProposals",
   "gymos:coachSnapshots",
+  "gymos:workoutAnalyses",
   "gymos:coachChat",
   "gymos:coachConnection",
   "gymos:nutritionSettings",
   "gymos:nutritionEntries",
+  "gymos:professionalNutritionPlans",
   "gymos:appPreferences",
+  "gymos:quickActions",
   "gymos:developerLogs",
   "gymos:healthSettings",
   "gymos:healthEntries",
   "gymos:healthImports",
+  "gymos:dailyRecovery",
+  "gymos:recoveryCheckins",
   "gymos:accountMigrationStatus",
   "gymos:accountMigrationAt",
   "gymos:syncAudit",
@@ -817,6 +824,7 @@ function getCoachSettings(){
   try{
     return {
       backendUrl:"",
+      aiEnabled:false,
       autoWeeklyReview:false,
       requireApproval:true,
       goal:"Mantenerme definido",
@@ -824,7 +832,7 @@ function getCoachSettings(){
       ...JSON.parse(localStorage.getItem(COACH_SETTINGS_KEY)||"{}")
     };
   }catch(error){
-    return {backendUrl:"",autoWeeklyReview:false,requireApproval:true,goal:"Mantenerme definido",sessionDuration:60};
+    return {backendUrl:"",aiEnabled:false,autoWeeklyReview:false,requireApproval:true,goal:"Mantenerme definido",sessionDuration:60};
   }
 }
 function saveCoachSettings(settings){
@@ -1037,6 +1045,10 @@ function coachContextPayload(){
     bodyWeight:getBodyWeightEntries?.()||[],
     nutrition:nutritionCoachContext(),
     health:healthCoachContext(),
+    recovery:{
+      recentEntries:window.GymOSRecovery?.getEntries?.().slice(-14)||[],
+      pendingCheckin:window.GymOSRecovery?.dueCheckin?.()||null
+    },
     activeBlock:getActiveTrainingBlock?.()||null
   };
 }
@@ -1140,6 +1152,13 @@ function fatigueAssessment(){
   const declining=summaries.filter(item=>item.trend!==null&&item.trend<-0.05).length;
   if(declining>=2){
     score+=2; reasons.push(`${declining} ejercicios con rendimiento descendente`);
+  }
+  const recoveryEntries=window.GymOSRecovery?.getEntries?.().slice(-3)||[];
+  if(recoveryEntries.length>=2){
+    const averageRecovery=recoveryEntries.reduce((sum,item)=>sum+Number(item.recoveryScore||0),0)/recoveryEntries.length;
+    if(averageRecovery<55){score+=2;reasons.push("Recovery Score reciente bajo");}
+    if(recoveryEntries.filter(item=>Number(item.fatigue)>=3).length>=2){score+=2;reasons.push("Fatiga muscular alta en varios check-ins");}
+    if(recoveryEntries.filter(item=>Number(item.motivation)<=2).length>=2){score+=1;reasons.push("Motivación baja durante varios días");}
   }
   let level="baja";
   if(score>=6) level="alta";
@@ -1407,6 +1426,48 @@ function parseHealthCsv(text,filename="health.csv"){
 
 const APP_PREFERENCES_KEY="gymos:appPreferences";
 const APP_LOGS_KEY="gymos:developerLogs";
+const QUICK_ACTIONS_KEY="gymos:quickActions";
+const QUICK_ACTION_KEYS=[
+  "recovery","nutrition","register_food","scan_food","recipes","weight",
+  "body_measurements","progress","coach","workout_history","change_session",
+  "timer","sports_profile","account","appearance","sync"
+];
+const RECOMMENDED_QUICK_ACTIONS=["recovery","scan_food","weight","coach"];
+
+function normalizeQuickActionItems(items){
+  const source=Array.isArray(items)?items:[];
+  const keys=[];
+  source
+    .slice()
+    .sort((a,b)=>Number(a?.position||0)-Number(b?.position||0))
+    .forEach(item=>{
+      const key=typeof item==="string"?item:item?.key;
+      if(QUICK_ACTION_KEYS.includes(key)&&!keys.includes(key)&&keys.length<4) keys.push(key);
+    });
+  const selected=keys.length>=2?keys:RECOMMENDED_QUICK_ACTIONS.slice();
+  return selected.map((key,index)=>({key,position:index+1}));
+}
+function getQuickActionPreferences(){
+  try{
+    const stored=JSON.parse(localStorage.getItem(QUICK_ACTIONS_KEY)||"null");
+    return {
+      quickActions:normalizeQuickActionItems(stored?.quickActions||stored?.quick_actions||stored),
+      hidden:Boolean(stored?.hidden)
+    };
+  }catch(error){
+    return {quickActions:normalizeQuickActionItems(RECOMMENDED_QUICK_ACTIONS),hidden:false};
+  }
+}
+function saveQuickActionPreferences(value,{markUpdated=true}={}){
+  const current=getQuickActionPreferences();
+  const next={
+    quickActions:normalizeQuickActionItems(value?.quickActions||current.quickActions),
+    hidden:value?.hidden===undefined?current.hidden:Boolean(value.hidden)
+  };
+  localStorage.setItem(QUICK_ACTIONS_KEY,JSON.stringify(next));
+  if(markUpdated) markLocalUpdated();
+  return next;
+}
 
 function getAppPreferences(){
   try{
@@ -1420,16 +1481,128 @@ function getAppPreferences(){
       largeTapTargets:false,
       compact:false,
       animations:true,
+      dailyThought:"automatic",
       ...JSON.parse(localStorage.getItem(APP_PREFERENCES_KEY)||"{}")
     };
   }catch(error){
-    return {mode:"user",theme:"system",accent:"violet",density:"comfortable",fontScale:"normal",highContrast:false,largeTapTargets:false,compact:false,animations:true};
+    return {mode:"user",theme:"system",accent:"violet",density:"comfortable",fontScale:"normal",highContrast:false,largeTapTargets:false,compact:false,animations:true,dailyThought:"automatic"};
   }
 }
 function saveAppPreferences(value){
   localStorage.setItem(APP_PREFERENCES_KEY,JSON.stringify({...getAppPreferences(),...value}));
   applyAppPreferences();
 }
+
+const DAILY_THOUGHT_STORAGE_KEY="gymos:dailyThought";
+const DAILY_THOUGHT_SOURCE={
+  getEntries(){
+    return Array.isArray(window.GymOSDailyThoughts?.entries)
+      ?window.GymOSDailyThoughts.entries
+      :[];
+  }
+};
+
+function dailyThoughtDateKey(value=new Date()){
+  const date=new Date(value);
+  return `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,"0")}-${String(date.getDate()).padStart(2,"0")}`;
+}
+function dailyThoughtHash(value){
+  let hash=2166136261;
+  for(let index=0;index<value.length;index++){
+    hash^=value.charCodeAt(index);
+    hash=Math.imul(hash,16777619);
+  }
+  return hash>>>0;
+}
+function dailyThoughtContext(now=new Date()){
+  const history=getHistory()
+    .filter(workout=>workout?.date&&!Number.isNaN(new Date(workout.date).getTime()))
+    .sort((a,b)=>new Date(b.date)-new Date(a.date));
+  const latest=history[0]||null;
+  const today=dailyThoughtDateKey(now);
+  const latestIsToday=Boolean(latest&&dailyThoughtDateKey(latest.date)===today);
+  let improved=false;
+  if(latestIsToday){
+    try{
+      improved=recordsForWorkout(latest).length>0;
+    }catch(error){
+      console.error("Daily thought record context",error);
+    }
+  }
+  const lastDate=latest?new Date(latest.date):null;
+  const daysSinceLast=lastDate
+    ?Math.max(0,Math.floor((new Date(now.getFullYear(),now.getMonth(),now.getDate())-new Date(lastDate.getFullYear(),lastDate.getMonth(),lastDate.getDate()))/86400000))
+    :null;
+  const onboardingGoal=String(getOnboardingProfile()?.goal||"").toLocaleLowerCase("es");
+  const hasNutritionGoal=Boolean(localStorage.getItem(NUTRITION_SETTINGS_KEY));
+  const nutritionGoal=hasNutritionGoal
+    ?String(getNutritionSettings()?.goal||"").toLocaleLowerCase("es")
+    :"";
+  const inDefinition=onboardingGoal==="fat_loss"||/defin|fat|lose|pérdida|perdida/.test(nutritionGoal);
+  const tags=[];
+  if(improved) tags.push("record");
+  if(latestIsToday) tags.push("completed");
+  if(daysSinceLast!==null&&daysSinceLast>=4) tags.push("return");
+  if(completedWeekStreak()>=2) tags.push("streak");
+  if(inDefinition) tags.push("definition");
+  if(now.getDay()===1) tags.push("monday");
+  if(now.getDay()===5) tags.push("friday");
+  tags.push("training");
+  return {tags,today,latestIsToday,daysSinceLast};
+}
+function readStoredDailyThought(){
+  try{
+    const stored=JSON.parse(localStorage.getItem(DAILY_THOUGHT_STORAGE_KEY)||"null");
+    return stored&&typeof stored==="object"?stored:null;
+  }catch(error){
+    return null;
+  }
+}
+function getDailyThought(now=new Date()){
+  const preference=getAppPreferences().dailyThought||"automatic";
+  if(preference==="disabled") return null;
+  const entries=DAILY_THOUGHT_SOURCE.getEntries();
+  if(!entries.length) return null;
+  const context=dailyThoughtContext(now);
+  const stored=readStoredDailyThought();
+  if(stored?.date===context.today){
+    const selected=entries.find(entry=>entry.id===stored.id);
+    if(selected) return selected;
+  }
+  const available=preference==="automatic"
+    ?entries
+    :entries.filter(entry=>entry.category===preference);
+  if(!available.length) return null;
+  const matching=available
+    .map(entry=>{
+      const firstMatch=context.tags.findIndex(tag=>entry.tags?.includes(tag));
+      return {entry,score:firstMatch===-1?0:context.tags.length-firstMatch};
+    });
+  const bestScore=Math.max(...matching.map(candidate=>candidate.score));
+  let candidates=matching
+    .filter(candidate=>candidate.score===bestScore)
+    .map(candidate=>candidate.entry);
+  if(candidates.length>1&&stored?.id){
+    candidates=candidates.filter(entry=>entry.id!==stored.id);
+  }
+  if(!candidates.length) candidates=available;
+  const identity=state.syncUser?.id||state.syncUser?.email||"local";
+  const selected=candidates[dailyThoughtHash(`${context.today}:${identity}:${context.tags.join(",")}:${preference}`)%candidates.length];
+  localStorage.setItem(DAILY_THOUGHT_STORAGE_KEY,JSON.stringify({
+    date:context.today,
+    id:selected.id
+  }));
+  return selected;
+}
+function renderDailyThought(){
+  const thought=getDailyThought();
+  if(!thought) return "";
+  return `<aside class="daily-thought-card" aria-label="Pensamiento del día">
+    <div class="daily-thought-label">Pensamiento del día</div>
+    <p>“${esc(thought.text).replace(/\n/g,"<br>")}”</p>
+  </aside>`;
+}
+
 function resolvedTheme(){
   const preference=getAppPreferences().theme;
   if(preference!=="system") return preference;
@@ -1561,21 +1734,27 @@ const NUTRITION_ENTRIES_KEY="gymos:nutritionEntries";
 
 function getNutritionSettings(){
   try{
+    const stored=JSON.parse(localStorage.getItem(NUTRITION_SETTINGS_KEY)||"null");
+    if(!stored||typeof stored!=="object"){
+      return {calculated:false,source:null,goal:"",weeklyTarget:null,calories:null,protein:null,carbs:null,fat:null,fiber:null};
+    }
+    const hasTargets=["calories","protein","carbs","fat"].every(field=>Number(stored[field])>0);
     return {
-      calories:2200,
-      protein:160,
-      carbs:230,
-      fat:65,
-      goal:"Definición",
-      weeklyTarget:-0.3,
-      ...JSON.parse(localStorage.getItem(NUTRITION_SETTINGS_KEY)||"{}")
+      calculated:stored.calculated??hasTargets,
+      source:stored.source||(hasTargets?"manual":null),
+      goal:"",weeklyTarget:null,calories:null,protein:null,carbs:null,fat:null,fiber:null,
+      ...stored
     };
   }catch(error){
-    return {calories:2200,protein:160,carbs:230,fat:65,goal:"Definición",weeklyTarget:-0.3};
+    return {calculated:false,source:null,goal:"",weeklyTarget:null,calories:null,protein:null,carbs:null,fat:null,fiber:null};
   }
 }
 function saveNutritionSettings(value){
-  localStorage.setItem(NUTRITION_SETTINGS_KEY,JSON.stringify(value));
+  localStorage.setItem(NUTRITION_SETTINGS_KEY,JSON.stringify({...value,calculated:["calories","protein","carbs","fat"].every(field=>Number(value[field])>0)}));
+  markLocalUpdated();
+}
+function hasNutritionTargets(settings=getNutritionSettings()){
+  return Boolean(settings.calculated&&["calories","protein","carbs","fat"].every(field=>Number(settings[field])>0));
 }
 function getNutritionEntries(){
   try{
@@ -1627,6 +1806,9 @@ function nutritionWeeklySummary(){
 function bodyCompositionAssessment(){
   const trend=bodyWeightTrend();
   const settings=getNutritionSettings();
+  if(!hasNutritionTargets(settings)){
+    return {status:"Sin calcular",message:"Calcula tus necesidades antes de comparar la tendencia de peso."};
+  }
   if(trend.weeklyRate===null){
     return {
       status:"Sin datos",
@@ -1656,6 +1838,10 @@ function nutritionCoachContext(){
   return {
     settings:getNutritionSettings(),
     recentEntries:getNutritionEntries().slice(-14),
+    professionalPlans:(window.GymOSProfessionalNutrition?.getPlans?.()||[]).map(plan=>({
+      id:plan.id,title:plan.title,planDate:plan.planDate,professional:plan.professional,
+      meals:plan.meals,savedAdaptations:plan.savedAdaptations||[]
+    })),
     weeklySummary:nutritionWeeklySummary(),
     weightTrend:bodyWeightTrend(),
     bodyCompositionAssessment:bodyCompositionAssessment()
@@ -1671,11 +1857,14 @@ function getCoachConnection(){
       status:"unknown",
       checkedAt:null,
       model:null,
+      provider:"rules",
+      aiStatus:"unknown",
+      aiCheckedAt:null,
       backendVersion:null,
       ...JSON.parse(localStorage.getItem(COACH_CONNECTION_KEY)||"{}")
     };
   }catch(error){
-    return {status:"unknown",checkedAt:null,model:null,backendVersion:null};
+    return {status:"unknown",checkedAt:null,model:null,provider:"rules",aiStatus:"unknown",aiCheckedAt:null,backendVersion:null};
   }
 }
 function saveCoachConnection(value){
@@ -1704,6 +1893,7 @@ async function coachBackendFetch(path,options={}){
       signal:controller.signal,
       headers:{
         "Content-Type":"application/json",
+        ...(state.syncSession?.access_token?{"Authorization":`Bearer ${state.syncSession.access_token}`}:{ }),
         ...(options.headers||{})
       }
     });
@@ -2225,8 +2415,35 @@ let state = {
   progressRangeWeeks: 8,
   coachChatMessages: [],
   nutritionDate: new Date().toISOString().slice(0,10),
+  nutritionCalculatorOpen: false,
+  nutritionPreview: null,
+  nutritionCalculationExpanded: false,
+  nutritionRecipeType: "comida",
+  nutritionRecipeSuggestions: [],
+  professionalNutritionDraft: null,
+  professionalNutritionPlanId: null,
+  professionalNutritionMealId: null,
+  professionalNutritionDayType: "rest",
+  professionalNutritionIncludePreWorkout: false,
+  quickActionsDraft: null,
+  quickActionsDesiredCount: 4,
+  quickActionsEditorMessage: null,
+  quickActionDragKey: null,
+  bodyEntryOpen: false,
+  bodySummaryEditorOpen: false,
+  bodySummaryDraft: null,
+  selectedBodyMetric: null,
+  bodyMetricPeriod: "3m",
+  bodyFormMessage: null,
   developerLogFilter: "all",
   healthDate: new Date().toISOString().slice(0,10),
+  recoveryView: "overview",
+  recoveryDraft: null,
+  recoveryResultDate: null,
+  recoveryCheckinId: null,
+  completedWorkoutSummary: null,
+  workoutAnalysisId: null,
+  aiSettingsMessage: null,
   accountMode: "login",
   onboardingStep: 1,
   onboardingDraft: null,
@@ -2234,18 +2451,163 @@ let state = {
 };
 
 function getHistory(){ return JSON.parse(localStorage.getItem("gymos:history") || "[]"); }
-function getBodyHistory(){
-  return JSON.parse(localStorage.getItem("gymos:body")||"[]")
-    .sort((a,b)=>new Date(a.date)-new Date(b.date));
+const BODY_SUMMARY_METRICS_KEY="gymos:bodySummaryMetrics";
+const DEFAULT_BODY_SUMMARY_METRICS=["weight","waist","chest","hips"];
+const BODY_METRICS=Object.freeze({
+  weight:{label:"Peso",shortLabel:"Peso",unit:"kg",category:"General",tier:"Imprescindible",db:"weight_kg",help:"Por la mañana, en ayunas, después de ir al baño y antes de comer o beber."},
+  bodyFat:{label:"Grasa corporal estimada",shortLabel:"Grasa corporal",unit:"%",category:"General",tier:"Opcional",db:"body_fat_percent",help:"Valor aproximado. Utiliza siempre el mismo método para comparar."},
+  neck:{label:"Cuello",shortLabel:"Cuello",unit:"cm",category:"Tronco",tier:"Opcional",db:"neck_cm",help:"Medir horizontalmente por debajo de la nuez."},
+  chest:{label:"Pecho",shortLabel:"Pecho",unit:"cm",category:"Tronco",tier:"Imprescindible",db:"chest_cm",help:"Medir horizontalmente por la línea de los pezones, sin expandir forzadamente el pecho."},
+  shoulders:{label:"Cintura escapular / hombros",shortLabel:"Hombros",unit:"cm",category:"Tronco",tier:"Recomendada",db:"shoulder_girth_cm",help:"Medir el contorno más amplio alrededor de hombros y parte superior del torso."},
+  waist:{label:"Cintura",shortLabel:"Cintura",unit:"cm",category:"Tronco",tier:"Imprescindible",db:"waist_cm",help:"Medir horizontalmente al nivel del ombligo, sin contraer el abdomen."},
+  hips:{label:"Cadera",shortLabel:"Cadera",unit:"cm",category:"Tronco",tier:"Imprescindible",db:"hips_cm",help:"Medir la mayor circunferencia horizontal de las caderas."},
+  rightArm:{label:"Brazo derecho flexionado",shortLabel:"Brazo derecho",unit:"cm",category:"Brazos",tier:"Recomendada",db:"right_flexed_arm_cm",help:"Medir la zona más gruesa del brazo con el bíceps contraído.",pair:"leftArm"},
+  leftArm:{label:"Brazo izquierdo flexionado",shortLabel:"Brazo izquierdo",unit:"cm",category:"Brazos",tier:"Recomendada",db:"left_flexed_arm_cm",help:"Medir la zona más gruesa del brazo con el bíceps contraído.",pair:"rightArm"},
+  rightThigh:{label:"Pierna derecha contraída",shortLabel:"Pierna derecha",unit:"cm",category:"Piernas",tier:"Recomendada",db:"right_flexed_thigh_cm",help:"Medir la zona más gruesa del muslo con la musculatura contraída.",pair:"leftThigh"},
+  leftThigh:{label:"Pierna izquierda contraída",shortLabel:"Pierna izquierda",unit:"cm",category:"Piernas",tier:"Recomendada",db:"left_flexed_thigh_cm",help:"Medir la zona más gruesa del muslo con la musculatura contraída.",pair:"rightThigh"}
+});
+const BODY_METRIC_KEYS=Object.keys(BODY_METRICS);
+
+function bodyMeasurementId(){
+  return crypto.randomUUID?crypto.randomUUID():`body-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
 }
-function saveBodyHistory(rows){
-  localStorage.setItem("gymos:body",JSON.stringify(rows));
-  markLocalUpdated();
+function normalizeBodyMeasurement(row,index=0){
+  const date=String(row?.date||row?.measured_at||"").slice(0,10);
+  const valueFor=(key,...aliases)=>{
+    const values=[row?.[key],...aliases.map(alias=>row?.[alias])];
+    const value=values.find(item=>numericValue(item)!==null);
+    return value===undefined?null:numericValue(value);
+  };
+  return {
+    id:String(row?.id||`legacy-${date||"unknown"}-${index+1}`),
+    date,
+    weight:valueFor("weight","weight_kg"),
+    neck:valueFor("neck","neck_cm"),
+    chest:valueFor("chest","chest_cm"),
+    shoulders:valueFor("shoulders","shoulder_girth_cm"),
+    rightArm:valueFor("rightArm","right_flexed_arm_cm"),
+    leftArm:valueFor("leftArm","left_flexed_arm_cm"),
+    waist:valueFor("waist","waist_cm"),
+    hips:valueFor("hips","hips_cm"),
+    rightThigh:valueFor("rightThigh","right_flexed_thigh_cm"),
+    leftThigh:valueFor("leftThigh","left_flexed_thigh_cm"),
+    bodyFat:valueFor("bodyFat","bodyFatPercentage","fatPercentage","fat","body_fat_percent"),
+    notes:String(row?.notes??row?.note??"").trim(),
+    createdAt:row?.createdAt||row?.created_at||(date?`${date}T12:00:00.000Z`:new Date().toISOString()),
+    updatedAt:row?.updatedAt||row?.updated_at||row?.createdAt||row?.created_at||(date?`${date}T12:00:00.000Z`:new Date().toISOString())
+  };
+}
+function getBodyHistory(){
+  let source=[];
+  try{
+    const parsed=JSON.parse(localStorage.getItem("gymos:body")||"[]");
+    source=Array.isArray(parsed)?parsed:[];
+  }catch(error){source=[];}
+  const normalized=source
+    .map(normalizeBodyMeasurement)
+    .filter(row=>row.date)
+    .sort((a,b)=>new Date(a.date)-new Date(b.date));
+  if(JSON.stringify(source)!==JSON.stringify(normalized)){
+    localStorage.setItem("gymos:body",JSON.stringify(normalized));
+  }
+  return normalized;
+}
+function saveBodyHistory(rows,{markUpdated=true}={}){
+  const normalized=(Array.isArray(rows)?rows:[])
+    .map(normalizeBodyMeasurement)
+    .filter(row=>row.date)
+    .sort((a,b)=>new Date(a.date)-new Date(b.date));
+  localStorage.setItem("gymos:body",JSON.stringify(normalized));
+  if(markUpdated) markLocalUpdated();
+}
+function getBodySummaryMetrics(){
+  try{
+    const stored=JSON.parse(localStorage.getItem(BODY_SUMMARY_METRICS_KEY)||"[]");
+    const valid=(Array.isArray(stored)?stored:[]).filter((key,index,array)=>BODY_METRICS[key]&&array.indexOf(key)===index).slice(0,4);
+    return valid.length===4?valid:DEFAULT_BODY_SUMMARY_METRICS.slice();
+  }catch(error){return DEFAULT_BODY_SUMMARY_METRICS.slice();}
+}
+function saveBodySummaryMetrics(keys,{markUpdated=true}={}){
+  const valid=(Array.isArray(keys)?keys:[]).filter((key,index,array)=>BODY_METRICS[key]&&array.indexOf(key)===index).slice(0,4);
+  const next=valid.length===4?valid:DEFAULT_BODY_SUMMARY_METRICS.slice();
+  localStorage.setItem(BODY_SUMMARY_METRICS_KEY,JSON.stringify(next));
+  if(markUpdated) markLocalUpdated();
+  return next;
 }
 function bodyChange(field){
   const rows=getBodyHistory().filter(r=>numericValue(r[field])!==null);
   if(rows.length<2) return null;
   return numericValue(rows.at(-1)[field])-numericValue(rows[0][field]);
+}
+function bodyMetricStats(field,rows=getBodyHistory()){
+  const entries=rows
+    .filter(row=>numericValue(row[field])!==null)
+    .map(row=>({date:row.date,value:numericValue(row[field]),id:row.id}));
+  if(!entries.length) return null;
+  const latest=entries.at(-1);
+  const previous=entries.at(-2)||null;
+  const first=entries[0];
+  const delta=previous?latest.value-previous.value:null;
+  const percent=previous&&previous.value!==0?(delta/previous.value)*100:null;
+  const totalDelta=entries.length>1?latest.value-first.value:null;
+  const totalPercent=entries.length>1&&first.value!==0?(totalDelta/first.value)*100:null;
+  const monthlyReference=[...entries].reverse().find(item=>new Date(latest.date)-new Date(item.date)>=28*86400000)||null;
+  return {
+    entries,latest,previous,first,delta,percent,totalDelta,totalPercent,
+    monthlyDelta:monthlyReference?latest.value-monthlyReference.value:null
+  };
+}
+function bodyMetricSummary(fields,unit){
+  const fieldNames=Array.isArray(fields)?fields:[fields];
+  const field=fieldNames.find(name=>bodyMetricStats(name));
+  if(!field) return null;
+  const stats=bodyMetricStats(field);
+  return {
+    value:stats.latest.value,
+    unit,
+    date:stats.latest.date,
+    change:stats.delta,
+    percent:stats.percent,
+    totalChange:stats.totalDelta,
+    totalPercent:stats.totalPercent
+  };
+}
+function formatBodyNumber(value){
+  return formatWeight(Math.round(Number(value)*10)/10);
+}
+function signedBodyValue(value,unit){
+  if(value===null||value===undefined) return "";
+  if(Math.abs(value)<.05) return `0,0 ${unit}`;
+  return `${value>0?"+":"−"}${formatBodyNumber(Math.abs(value))} ${unit}`;
+}
+function bodyMetricChangeLabel(metric){
+  if(metric.change===null) return "Primer registro";
+  if(Math.abs(metric.change)<.05) return "Sin cambios";
+  return `${metric.change>0?"Subió":"Bajó"} ${formatBodyNumber(Math.abs(metric.change))} ${metric.unit}`;
+}
+function renderHomeBodyMetric(key){
+  const definition=BODY_METRICS[key];
+  const stats=bodyMetricStats(key);
+  const metric=stats?{
+    value:stats.latest.value,unit:definition.unit,date:stats.latest.date,
+    change:stats.delta,percent:stats.percent
+  }:null;
+  const label=definition.shortLabel;
+  if(!metric){
+    return `<button type="button" class="body-home-metric body-home-metric-empty" data-open-body>
+      <span>${esc(label)}</span>
+      <strong>Sin registrar</strong>
+      <small>Añadir primera medida →</small>
+    </button>`;
+  }
+  const numberKey=`body-${String(label).normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase().replace(/\s+/g,"-")}`;
+  const decimals=Math.abs(metric.value-Math.round(metric.value))>.001?1:0;
+  return `<article class="body-home-metric">
+    <span>${esc(label)}</span>
+    <strong><span data-home-number data-home-number-key="${numberKey}" data-home-number-value="${metric.value}" data-home-number-decimals="${decimals}">${formatBodyNumber(metric.value)}</span> ${metric.unit}</strong>
+    <div class="body-home-change">${metric.change===null?"Primer registro":signedBodyValue(metric.change,metric.unit)}${metric.percent!==null?` <small>· ${metric.percent>0?"+":metric.percent<0?"−":""}${formatBodyNumber(Math.abs(metric.percent))} %</small>`:""}</div>
+    <small class="body-home-date">${formatDate(metric.date)}</small>
+  </article>`;
 }
 function latestBodyEntry(){
   return getBodyHistory().at(-1)||null;
@@ -2279,6 +2641,12 @@ function normalizeSeries(series){
     weight:series?.weight??"",
     reps:series?.reps??"",
     rir:series?.rir??"",
+    seconds:series?.seconds??"",
+    distance:series?.distance??"",
+    technique:series?.technique??"",
+    dropset:Boolean(series?.dropset),
+    restPause:Boolean(series?.restPause),
+    unilateral:Boolean(series?.unilateral),
     warmup:Boolean(series?.warmup),
     done:Boolean(series?.done)
   };
@@ -2374,6 +2742,7 @@ function buildSyncPayload(){
     history:getHistory(),
     routine:getRoutine(),
     body:getBodyHistory(),
+    body_summary_metrics:getBodySummaryMetrics(),
     selectedSession:localStorage.getItem("gymos:selectedSession")||"A",
     restSeconds:getRestSeconds(),
     weeklyGoal:getWeeklyGoal(),
@@ -2383,10 +2752,17 @@ function buildSyncPayload(){
     exerciseSubstitutions:getExerciseSubstitutions(),
     nutritionSettings:getNutritionSettings(),
     nutritionEntries:getNutritionEntries(),
+    professionalNutritionPlans:window.GymOSProfessionalNutrition?.getPlans?.()||[],
     healthSettings:getHealthSettings(),
     healthEntries:getHealthEntries(),
     healthImports:getHealthImports(),
+    recoveryEntries:window.GymOSRecovery?.getEntries?.()||[],
+    recoveryCheckins:window.GymOSRecovery?.getCheckins?.()||[],
+    workoutAnalyses:window.GymOSWorkoutAnalysis?.getAnalyses?.()||[],
     appPreferences:getAppPreferences(),
+    ai_messages_enabled:Boolean(getCoachSettings().aiEnabled),
+    quick_actions:getQuickActionPreferences().quickActions,
+    quick_actions_hidden:getQuickActionPreferences().hidden,
     favoriteSubstitutions:getFavoriteSubstitutions(),
     updatedAt:getLocalUpdatedAt()
   };
@@ -2398,12 +2774,26 @@ function applySyncPayload(payload){
   if(Array.isArray(payload.history)) saveHistory(payload.history);
   if(payload.routine){saveRoutine(payload.routine);sessions=getRoutine();}
   if(Array.isArray(payload.body)) saveBodyHistory(payload.body);
+  if(Array.isArray(payload.body_summary_metrics)) saveBodySummaryMetrics(payload.body_summary_metrics,{markUpdated:false});
   if(payload.nutritionSettings) saveNutritionSettings(payload.nutritionSettings);
   if(Array.isArray(payload.nutritionEntries)) saveNutritionEntries(payload.nutritionEntries);
+  if(Array.isArray(payload.professionalNutritionPlans)) window.GymOSProfessionalNutrition?.mergePlans?.(payload.professionalNutritionPlans,false);
   if(payload.healthSettings) saveHealthSettings(payload.healthSettings);
   if(Array.isArray(payload.healthEntries)) saveHealthEntries(payload.healthEntries);
   if(Array.isArray(payload.healthImports)) saveHealthImports(payload.healthImports);
+  if(Array.isArray(payload.recoveryEntries)) window.GymOSRecovery?.saveEntries?.(payload.recoveryEntries,false);
+  if(Array.isArray(payload.recoveryCheckins)) window.GymOSRecovery?.mergeCheckins?.(payload.recoveryCheckins,false);
+  if(Array.isArray(payload.workoutAnalyses)) window.GymOSWorkoutAnalysis?.mergeAnalyses?.(payload.workoutAnalyses,false);
   if(payload.appPreferences) saveAppPreferences(payload.appPreferences);
+  if(typeof payload.ai_messages_enabled==="boolean"){
+    saveCoachSettings({...getCoachSettings(),aiEnabled:payload.ai_messages_enabled});
+  }
+  if(Array.isArray(payload.quick_actions)){
+    saveQuickActionPreferences({
+      quickActions:payload.quick_actions,
+      hidden:Boolean(payload.quick_actions_hidden)
+    },{markUpdated:false});
+  }
   if(["A","B","C"].includes(payload.selectedSession)){
     localStorage.setItem("gymos:selectedSession",payload.selectedSession);
     state.selectedSession=payload.selectedSession;
@@ -2708,6 +3098,38 @@ function getSupabaseClient(){
     return null;
   }
 }
+async function fetchAiConfigurationStatus(check=false){
+  try{
+    const data=await coachBackendFetch(`/ai/status${check?"?check=true":""}`,{method:"GET"});
+    const connection={
+      ...getCoachConnection(),
+      aiEnabled:Boolean(data.enabled),
+      provider:String(data.provider||"rules"),
+      model:data.model||null,
+      aiStatus:String(data.status||"not_configured"),
+      aiCheckedAt:new Date().toISOString(),
+      aiError:null
+    };
+    saveCoachConnection(connection);
+    return connection;
+  }catch(error){
+    const connection={
+      ...getCoachConnection(),
+      aiStatus:"error",
+      aiCheckedAt:new Date().toISOString(),
+      aiError:error.message
+    };
+    saveCoachConnection(connection);
+    throw error;
+  }
+}
+function aiProviderLabel(provider){
+  return {rules:"Reglas de GymOS",gemini:"Gemini",openai:"OpenAI",ollama:"Ollama local"}[provider]||"No configurado";
+}
+function aiStatusLabel(status,userEnabled=getCoachSettings().aiEnabled){
+  if(!userEnabled) return "Desactivado";
+  return {connected:"Conectado",error:"Error",not_configured:"No configurado",disabled:"Desactivado",unknown:"No comprobado"}[status]||"No comprobado";
+}
 function ensureAuthStateListener(client){
   if(authStateSubscription) return;
   const {data:listener}=client.auth.onAuthStateChange((event,session)=>{
@@ -2790,11 +3212,73 @@ async function signOutSync(){
   if(client) await client.auth.signOut();
   resolveAuthenticatedAppState(null);
 }
+function bodyMeasurementToDatabase(row){
+  const normalized=normalizeBodyMeasurement(row);
+  const record={
+    id:normalized.id,
+    user_id:state.syncUser?.id,
+    measured_at:normalized.date,
+    notes:normalized.notes||null,
+    created_at:normalized.createdAt,
+    updated_at:normalized.updatedAt
+  };
+  BODY_METRIC_KEYS.forEach(key=>{record[BODY_METRICS[key].db]=normalized[key];});
+  return record;
+}
+function bodyMeasurementFromDatabase(row,index=0){
+  const local={
+    id:row.id,date:row.measured_at,notes:row.notes,
+    createdAt:row.created_at,updatedAt:row.updated_at
+  };
+  BODY_METRIC_KEYS.forEach(key=>{local[key]=row[BODY_METRICS[key].db];});
+  return normalizeBodyMeasurement(local,index);
+}
+function bodyMeasurementsTableMissing(error){
+  return ["42P01","PGRST205"].includes(error?.code);
+}
+async function syncBodyMeasurementsWithSupabase(){
+  const client=getSupabaseClient();
+  if(!client||!isAppAuthenticated()) return;
+  const {data,error}=await client.from("body_measurements").select("*").eq("user_id",state.syncUser.id);
+  if(error){
+    if(bodyMeasurementsTableMissing(error)){
+      console.warn("Body measurements table is not installed; using encrypted user sync payload.");
+      return;
+    }
+    throw error;
+  }
+  const merged=new Map();
+  getBodyHistory().forEach(row=>merged.set(String(row.id),row));
+  (data||[]).map(bodyMeasurementFromDatabase).forEach(remote=>{
+    const local=merged.get(String(remote.id));
+    if(!local||new Date(remote.updatedAt)>=new Date(local.updatedAt)) merged.set(String(remote.id),remote);
+  });
+  const rows=[...merged.values()].sort((a,b)=>new Date(a.date)-new Date(b.date));
+  saveBodyHistory(rows,{markUpdated:false});
+  if(!rows.length) return;
+  const {error:writeError}=await client.from("body_measurements").upsert(rows.map(bodyMeasurementToDatabase),{onConflict:"id,user_id"});
+  if(writeError&&!bodyMeasurementsTableMissing(writeError)) throw writeError;
+}
+async function deleteBodyMeasurementRemote(id){
+  const client=getSupabaseClient();
+  if(!client||!isAppAuthenticated()) return;
+  try{
+    const {error}=await client.from("body_measurements").delete().eq("id",String(id)).eq("user_id",state.syncUser.id);
+    if(error&&!bodyMeasurementsTableMissing(error)) throw error;
+  }catch(error){
+    console.error("Body measurement deletion",error);
+    toast("El registro se eliminó localmente; la nube se actualizará después.");
+  }
+}
 async function syncNow(options={}){
   const client=getSupabaseClient();
   if(!client||!isAppAuthenticated()) throw new Error("Confirma tu correo antes de sincronizar.");
   state.syncStatus="syncing";updateSyncIndicators();addSyncAudit("sync","started");
   try{
+    await window.GymOSRecovery?.syncWithSupabase?.();
+    await window.GymOSProfessionalNutrition?.syncWithSupabase?.();
+    await syncBodyMeasurementsWithSupabase();
+    await window.GymOSWorkoutAnalysis?.syncWithSupabase?.();
     const {data:remote,error:readError}=await client.from("gymos_sync").select("payload,revision,device_id,updated_at,checksum").eq("user_id",state.syncUser.id).maybeSingle();
     if(readError) throw readError;
     const remoteRevision=Number(remote?.revision||0);
@@ -2821,7 +3305,10 @@ async function syncNow(options={}){
 
 async function autoSync(reason="automática"){
   if(!isAppAuthenticated()||!navigator.onLine||state.syncInProgress) return;
+  const recoveryBefore=window.GymOSRecovery?.dueCheckin?.()?.id||"";
   await syncNow({silent:true});
+  const recoveryAfter=window.GymOSRecovery?.dueCheckin?.()?.id||"";
+  if(state.screen==="home"&&recoveryBefore!==recoveryAfter) renderHome();
 }
 function updateSyncIndicators(){
   document.querySelectorAll("[data-sync-label]").forEach(el=>el.textContent=syncStatusLabel());
@@ -2966,6 +3453,9 @@ function emptyDraft(s){
       sets:item.sets,
       increment:item.increment,
       type:item.type,
+      equipment:item.equipment||"",
+      variant:item.variant||"",
+      targetRir:item.targetRir||"3-4",
       series:Array.from({length:item.sets},(_,seriesIndex)=>({
         weight:last?.exercises?.[exerciseIndex]?.series?.[seriesIndex]?.weight || "",
         reps:"",
@@ -2973,13 +3463,18 @@ function emptyDraft(s){
         warmup:false,
         done:false
       })),
-      notes:""
+      notes:"",
+      discomfort:""
     }))
   };
 }
 function getDraft(s){
   const draft=JSON.parse(localStorage.getItem(draftKey(s))||"null")||emptyDraft(s);
-  draft.exercises.forEach(ex=>ex.series=ex.series.map(normalizeSeries));
+  draft.exercises.forEach(ex=>{
+    ex.series=ex.series.map(normalizeSeries);
+    if(ex.targetRir===undefined) ex.targetRir="3-4";
+    if(ex.discomfort===undefined) ex.discomfort="";
+  });
   return draft;
 }
 function saveDraft(d){ localStorage.setItem(draftKey(d.session), JSON.stringify(d)); }
@@ -3294,10 +3789,11 @@ function nav(active){
     ["home","⌂","Inicio"],
     ["progressDashboard","↗","Progreso"],
     ["coach","✦","Coach"],
+    ["nutrition","◉","Nutrición"],
     ["settings","☰","Más"]
   ];
-  return `<nav class="bottom-nav modern-bottom-nav">
-    ${items.map(([screen,icon,label])=>`<button type="button" data-nav="${screen}" class="${active===screen?"active":""}">
+  return `<nav class="bottom-nav modern-bottom-nav" aria-label="Navegación principal">
+    ${items.map(([screen,icon,label])=>`<button type="button" data-nav="${screen}" aria-label="${label}" ${active===screen?'aria-current="page"':""} class="${active===screen?"active":""}">
       <span class="nav-icon">${icon}</span><span class="nav-label">${label}</span>
     </button>`).join("")}
   </nav>`;
@@ -3814,6 +4310,8 @@ function render(){
   if(state.screen==="onboarding") renderOnboarding();
   else if(state.screen==="home") renderHome();
   else if(state.screen==="workout") renderWorkout();
+  else if(state.screen==="workoutComplete") renderWorkoutComplete();
+  else if(state.screen==="recovery") renderRecoveryCenter();
   else if(state.screen==="history") renderHistory();
   else if(state.screen==="stats") renderStats();
   else if(state.screen==="records") renderRecords();
@@ -3834,9 +4332,16 @@ function render(){
   else if(state.screen==="backupRestore") renderBackupRestore();
   else if(state.screen==="coach") renderCoach();
   else if(state.screen==="coachProposal") renderCoachProposal();
+  else if(state.screen==="workoutAnalysis") renderWorkoutAnalysisDetail();
+  else if(state.screen==="aiSettings") renderAiSettings();
   else if(state.screen==="progressDashboard") renderProgressDashboard();
   else if(state.screen==="coachChat") renderCoachChat();
   else if(state.screen==="nutrition") renderNutrition();
+  else if(state.screen==="quickActions") renderQuickActionsEditor();
+  else if(state.screen==="professionalNutrition") renderProfessionalNutritionLibrary();
+  else if(state.screen==="professionalNutritionImport") renderProfessionalNutritionImport();
+  else if(state.screen==="professionalNutritionPlan") renderProfessionalNutritionPlan();
+  else if(state.screen==="professionalNutritionAdapt") renderProfessionalNutritionAdaptation();
   else if(state.screen==="developer") renderDeveloperMode();
   else if(state.screen==="health") renderHealth();
   else if(state.screen==="account") renderAccount();
@@ -3844,126 +4349,805 @@ function render(){
   queueMicrotask(()=>bindNav());
 }
 
-function renderHome(){
-  const h=getHistory(), last=h[0];
+function homeGreeting(now=new Date()){
+  const hour=now.getHours();
+  if(hour<13) return "Buenos días";
+  if(hour<21) return "Buenas tardes";
+  return "Buenas noches";
+}
+function homeGreetingName(){
+  return String(accountDisplayName()||"").trim().split(/\s+/)[0]||"";
+}
+function homeDateLabel(now=new Date()){
+  const parts=new Intl.DateTimeFormat("es-ES",{
+    weekday:"long",
+    day:"numeric",
+    month:"long"
+  }).formatToParts(now);
+  const values=Object.fromEntries(parts.map(part=>[part.type,part.value]));
+  const weekday=values.weekday
+    ?values.weekday.charAt(0).toLocaleUpperCase("es")+values.weekday.slice(1)
+    :"";
+  return `${weekday} · ${values.day} ${values.month}`;
+}
+const HOME_HERO_IMAGE_SOURCE={
+  getImages(){
+    return Array.isArray(window.GymOSHeroImages?.images)
+      ?window.GymOSHeroImages.images
+      :[];
+  },
+  findByType(type){
+    const images=this.getImages();
+    const aliases={strength:"push",hypertrophy:"back",mobility:"rest",recovery:"rest"};
+    const resolved=aliases[type]||type;
+    return images.find(image=>image.type===resolved)
+      ||images.find(image=>image.type==="rest")
+      ||null;
+  }
+};
+function homeSessionProfile(sessionKey=state.selectedSession){
+  const names=(sessions[sessionKey]||[])
+    .map(exercise=>String(exercise.name||"").normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase());
+  if(!names.length){
+    return {focus:"Recuperación y movilidad",heroType:"rest"};
+  }
+  const countMatches=terms=>names.reduce((score,name)=>score+terms.reduce((total,term)=>total+(name.includes(term)?1:0),0),0);
+  const posterior=countMatches(["remo","jalon","dominada","peso muerto","femoral","hip thrust","glute"]);
+  const lower=countMatches(["sentadilla","prensa","zancada","split squat","gemelo","cuadriceps"]);
+  const push=countMatches(["press banca","pecho","press inclinado","press hombro","press militar","triceps","elevaciones laterales"]);
+  const cardio=countMatches(["correr","cinta","bicic","eliptica","cardio","intervalos","caminar","senderismo","comba"]);
+  if(cardio>0) return {focus:"Resistencia y ritmo",heroType:"cardio"};
+  if(lower>=2&&push>=1) return {focus:"Pierna y torso",heroType:"legs"};
+  if(posterior>=2) return {focus:"Espalda y cadena posterior",heroType:"back"};
+  if(push>=2&&posterior>=1) return {focus:"Tren superior y fuerza",heroType:"push"};
+  if(lower>=2) return {focus:"Pierna y estabilidad",heroType:"legs"};
+  if(posterior>=1) return {focus:"Espalda y tirón",heroType:"back"};
+  if(push>=1) return {focus:"Empuje y tren superior",heroType:"push"};
+  return {focus:"Cuerpo completo y técnica",heroType:"push"};
+}
+function homeTrainingObjective(sessionProfile){
+  const goal=String(getOnboardingProfile()?.goal||"");
+  if(goal==="muscle") return `Hipertrofia · ${sessionProfile.focus}`;
+  if(goal==="strength") return `Fuerza · ${sessionProfile.focus}`;
+  if(goal==="fat_loss") return `Composición corporal · ${sessionProfile.focus}`;
+  if(goal==="health") return `Salud y capacidad · ${sessionProfile.focus}`;
+  return sessionProfile.focus;
+}
+function homeHeroContextType(dashboard,sessionProfile){
+  if(dashboard.mode==="recovery"||dashboard.trainedToday) return "recovery";
+  if(sessionProfile.heroType==="cardio") return "cardio";
+  if(/movilidad|técnica/.test(sessionProfile.focus.toLocaleLowerCase("es"))) return "mobility";
+  const goal=String(getOnboardingProfile()?.goal||"");
+  if(goal==="strength") return "strength";
+  if(goal==="muscle") return "hypertrophy";
+  return sessionProfile.heroType;
+}
+function homeTodayDescription(dashboard,sessionProfile){
+  if(window.GymOSRecovery?.dueCheckin?.()) return "Cuéntanos cómo has recuperado de la sesión de ayer.";
+  if(dashboard.trainedToday) return "La sesión de hoy está completada.";
+  const focus=sessionProfile.focus.toLocaleLowerCase("es");
+  return `Hoy tienes una sesión centrada en ${focus}.`;
+}
+const WEEKLY_GOAL_CELEBRATION_KEY="gymos:weeklyGoalCelebrated";
+const HOME_NUMBER_CACHE=new Map();
+function claimWeeklyGoalCelebration(week){
+  if(week.count<week.goal) return false;
+  const weekKey=dateKey(week.start);
+  if(localStorage.getItem(WEEKLY_GOAL_CELEBRATION_KEY)===weekKey) return false;
+  localStorage.setItem(WEEKLY_GOAL_CELEBRATION_KEY,weekKey);
+  return true;
+}
+function formatHomeAnimatedNumber(value,decimals=0,suffix=""){
+  return `${Number(value).toLocaleString("es-ES",{
+    minimumFractionDigits:decimals,
+    maximumFractionDigits:decimals
+  })}${suffix}`;
+}
+function animateHomeNumbers(){
+  document.querySelectorAll("[data-home-number]").forEach(element=>{
+    const key=element.dataset.homeNumberKey;
+    const target=Number(element.dataset.homeNumberValue);
+    const decimals=Math.max(0,Number(element.dataset.homeNumberDecimals)||0);
+    const suffix=element.dataset.homeNumberSuffix||"";
+    const previous=HOME_NUMBER_CACHE.has(key)?HOME_NUMBER_CACHE.get(key):target;
+    HOME_NUMBER_CACHE.set(key,target);
+    if(!Number.isFinite(target)||previous===target||document.body.classList.contains("reduce-motion")){
+      element.textContent=formatHomeAnimatedNumber(target,decimals,suffix);
+      return;
+    }
+    const startedAt=performance.now();
+    const duration=220;
+    const draw=timestamp=>{
+      const progress=Math.min(1,(timestamp-startedAt)/duration);
+      const eased=1-Math.pow(1-progress,3);
+      const value=previous+(target-previous)*eased;
+      element.textContent=formatHomeAnimatedNumber(value,decimals,suffix);
+      if(progress<1) requestAnimationFrame(draw);
+    };
+    requestAnimationFrame(draw);
+  });
+}
+function homeDashboardState(now,week){
+  const history=lastCompletedWorkouts();
+  const latestWorkout=history[0]||null;
+  const today=dateKey(now);
+  const trainedToday=Boolean(latestWorkout&&dateKey(latestWorkout.date)===today);
+  const latestDate=latestWorkout?new Date(latestWorkout.date):null;
+  const startOfToday=new Date(now.getFullYear(),now.getMonth(),now.getDate());
+  const startOfLatest=latestDate
+    ?new Date(latestDate.getFullYear(),latestDate.getMonth(),latestDate.getDate())
+    :null;
+  const daysSinceTraining=startOfLatest
+    ?Math.max(0,Math.floor((startOfToday-startOfLatest)/86400000))
+    :null;
+  const pendingCoach=getCoachProposals().find(proposal=>proposal?.status==="pending")||null;
+  const weight=bodyMetricSummary("weight","kg");
+  let mode="training";
+  if(pendingCoach) mode="coach";
+  else if(trainedToday) mode="recovery";
+  else if(daysSinceTraining!==null&&daysSinceTraining>=4) mode="return";
+  return {
+    mode,
+    week,
+    latestWorkout,
+    trainedToday,
+    daysSinceTraining,
+    pendingCoach,
+    bodyPriority:!weight
+  };
+}
+function homeDashboardHero(dashboard,sessionProfile,plannedDuration,plannedExercises){
+  let kicker="HOY";
+  let title=`Sesión ${state.selectedSession}`;
+  let purposeLabel="OBJETIVO";
+  let purpose=homeTrainingObjective(sessionProfile);
+  let meta=`<span>${plannedDuration} min</span><i aria-hidden="true">·</i><span>${plannedExercises} ${plannedExercises===1?"ejercicio":"ejercicios"}</span>`;
+  let primary="Comenzar entrenamiento";
+  let secondary="Cambiar sesión →";
+
+  if(dashboard.mode==="coach"){
+    kicker="Coach";
+    title="Revisión pendiente";
+    purposeLabel="RECOMENDACIÓN";
+    purpose=dashboard.pendingCoach?.summary||"Revisa el próximo ajuste antes de continuar.";
+    meta="<span>Antes de la siguiente sesión</span>";
+    primary="Revisar consejo";
+    secondary=dashboard.trainedToday?"Ver entrenamiento →":"Entrenar ahora →";
+  }else if(dashboard.mode==="recovery"){
+    const hour=new Date().getHours();
+    kicker="Sesión completada";
+    title="Ahora toca recuperar";
+    purposeLabel="AHORA";
+    purpose=hour>=20?"Prioriza una buena noche de sueño.":"Repón energía e hidrátate.";
+    meta=`<span>Come bien, hidrátate y prioriza el descanso.</span><i aria-hidden="true">·</i><span>Sesión ${esc(dashboard.latestWorkout?.session||"")} completada hoy</span>`;
+    primary="Revisar recuperación";
+    secondary="Ver entrenamiento →";
+  }else if(dashboard.mode==="return"){
+    kicker="HOY";
+    title=`Sesión ${state.selectedSession}`;
+    purposeLabel="ENFOQUE";
+    purpose=sessionProfile.focus;
+    meta=`<span>${dashboard.daysSinceTraining} días desde la última sesión</span><i aria-hidden="true">·</i><span>${plannedDuration} min</span>`;
+    primary="Retomar entrenamiento";
+    secondary="Cambiar sesión →";
+  }
+
+  return `<section class="hero home-focus home-focus-${dashboard.mode}" data-dashboard-mode="${dashboard.mode}">
+    <div class="home-focus-kicker">${esc(kicker)}</div>
+    <h1>${esc(title)}</h1>
+    <div class="home-focus-purpose">
+      ${purposeLabel?`<span>${esc(purposeLabel)}</span>`:""}
+      <strong>${esc(purpose)}</strong>
+    </div>
+    <div class="home-focus-meta">${meta}</div>
+    <button id="homePrimaryAction" class="primary" type="button">${esc(primary)}</button>
+    ${secondary?`<button id="homeSecondaryAction" class="text-button home-change-session" type="button">${esc(secondary)}</button>`:""}
+  </section>`;
+}
+function homeWeeklyNextStep(week,dashboard,projectedPercentage){
+  if(week.remaining===0){
+    return dashboard.mode==="recovery"
+      ?"Siguiente meta: recuperarte bien y mantener la continuidad."
+      :"Siguiente meta: mantener la continuidad en la próxima sesión.";
+  }
+  if(dashboard.trainedToday) return `Tu próxima sesión te llevará al ${projectedPercentage} %.`;
+  if(dashboard.mode==="return") return `Una sesión hoy te llevará al ${projectedPercentage} %.`;
+  return `Si entrenas hoy alcanzarás el ${projectedPercentage} %.`;
+}
+function renderHomeWeeklyCard(week,dashboard,projectedPercentage){
+  return `<section class="card weekly-home-card ${week.remaining===0?"weekly-goal-complete":""}">
+    <div class="card-heading-row">
+      <h2>${week.remaining===0?"Siguiente meta":"Objetivo semanal"}</h2>
+      <button id="openPlan" class="text-button">Ver plan</button>
+    </div>
+    <div class="weekly-progress-summary">
+      <strong><span data-home-number data-home-number-key="weekly-count" data-home-number-value="${week.count}" data-home-number-decimals="0">${week.count}</span> de ${week.goal} entrenamientos</strong>
+      <span data-home-number data-home-number-key="weekly-percentage" data-home-number-value="${week.percentage}" data-home-number-decimals="0" data-home-number-suffix=" %">${week.percentage} %</span>
+    </div>
+    <div class="weekly-progress-track" role="progressbar" aria-label="Progreso del objetivo semanal" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${week.percentage}">
+      <div class="weekly-progress-fill" data-weekly-progress="${week.percentage}"></div>
+    </div>
+    <p class="weekly-progress-projection">${esc(homeWeeklyNextStep(week,dashboard,projectedPercentage))}</p>
+    ${week.remaining===0?'<div class="weekly-goal-achieved" role="status">Objetivo completado. El progreso continúa con una buena recuperación.</div>':""}
+  </section>`;
+}
+function renderHomeBodyCard(){
+  const selected=getBodySummaryMetrics();
+  const hasAnyMetric=selected.some(key=>bodyMetricStats(key));
+  return `<section class="card body-home-card ${bodyMetricStats("weight")?"":"body-home-priority"}">
+    <div class="card-heading-row">
+      <div><h2>Seguimiento corporal</h2><p class="subtle">${hasAnyMetric?"Tus últimas medidas":"Tu siguiente dato útil"}</p></div>
+      <button type="button" class="quick-actions-edit" data-edit-body-summary aria-label="Editar métricas del resumen" title="Editar métricas">✎</button>
+    </div>
+    <div class="body-home-values">
+      ${selected.map(renderHomeBodyMetric).join("")}
+    </div>
+    <button type="button" class="text-button body-home-all" data-open-body>Ver todas las medidas →</button>
+  </section>`;
+}
+function renderBodySummaryEditor(){
+  document.querySelector(".body-summary-editor-backdrop")?.remove();
+  const selected=Array.isArray(state.bodySummaryDraft)?state.bodySummaryDraft:getBodySummaryMetrics();
+  state.bodySummaryDraft=selected.slice();
+  const modal=document.createElement("div");
+  modal.className="body-summary-editor-backdrop";
+  modal.innerHTML=`<section class="body-summary-editor" role="dialog" aria-modal="true" aria-labelledby="bodySummaryEditorTitle">
+    <div class="card-heading-row">
+      <div><span class="section-kicker">INICIO</span><h2 id="bodySummaryEditorTitle">Editar resumen corporal</h2><p class="subtle">Elige exactamente cuatro métricas.</p></div>
+      <button type="button" class="icon-button" data-close-body-summary aria-label="Cerrar">×</button>
+    </div>
+    <div class="body-summary-picker">
+      ${BODY_METRIC_KEYS.map(key=>`<label class="${selected.includes(key)?"selected":""}">
+        <input type="checkbox" data-body-summary-choice="${esc(key)}" ${selected.includes(key)?"checked":""} ${!selected.includes(key)&&selected.length>=4?"disabled":""}>
+        <span>${esc(BODY_METRICS[key].shortLabel)}</span>
+      </label>`).join("")}
+    </div>
+    <p class="body-summary-editor-count" role="status">${selected.length} de 4 seleccionadas</p>
+    <button type="button" class="primary full" data-save-body-summary ${selected.length===4?"":"disabled"}>Guardar resumen</button>
+  </section>`;
+  document.body.appendChild(modal);
+  modal.querySelector("[data-close-body-summary]").onclick=()=>{state.bodySummaryDraft=null;modal.remove();};
+  modal.onclick=event=>{if(event.target===modal){state.bodySummaryDraft=null;modal.remove();}};
+  modal.querySelectorAll("[data-body-summary-choice]").forEach(input=>input.onchange=()=>{
+    const key=input.dataset.bodySummaryChoice;
+    if(input.checked&&state.bodySummaryDraft.length<4) state.bodySummaryDraft.push(key);
+    if(!input.checked) state.bodySummaryDraft=state.bodySummaryDraft.filter(item=>item!==key);
+    renderBodySummaryEditor();
+  });
+  modal.querySelector("[data-save-body-summary]").onclick=()=>{
+    if(state.bodySummaryDraft.length!==4) return;
+    saveBodySummaryMetrics(state.bodySummaryDraft);
+    state.bodySummaryDraft=null;
+    modal.remove();
+    renderHome();
+    toast("Resumen corporal actualizado.");
+  };
+  modal.querySelector("[data-close-body-summary]").focus();
+}
+
+function quickActionNutritionContext(){
+  const settings=getNutritionSettings();
+  if(!hasNutritionTargets(settings)) return "Configura tus objetivos";
+  const remaining=nutritionRemaining(settings,nutritionEntryForDate(dateKey(new Date())));
+  return remaining.protein>0?`Te quedan ${Math.round(remaining.protein)} g de proteína`:"Objetivo de proteína completo";
+}
+function quickActionRecoveryContext(){
+  return window.GymOSRecovery?.dueCheckin?.()?"Pendiente de ayer":"Ver estado";
+}
+function quickActionWeightContext(){
+  const weight=bodyMetricSummary("weight","kg");
+  return weight?`${formatWeight(weight.value)} kg`:"Sin registrar";
+}
+function quickActionCoachContext(){
+  return getCoachProposals().some(item=>item.status==="pending")?"Consejo pendiente":"Abrir Coach";
+}
+function scrollToQuickActionTarget(selector){
+  requestAnimationFrame(()=>requestAnimationFrame(()=>{
+    const target=document.querySelector(selector);
+    if(target) target.scrollIntoView({behavior:getAppPreferences().animations?"smooth":"auto",block:"start"});
+  }));
+}
+function openQuickActionScreen(screen,selector=null){
+  navigateToScreen(screen);
+  if(selector) scrollToQuickActionTarget(selector);
+}
+function changeQuickActionSession(){
+  const available=["A","B","C"];
+  state.selectedSession=available[(available.indexOf(state.selectedSession)+1)%available.length];
+  localStorage.setItem("gymos:selectedSession",state.selectedSession);
+  markLocalUpdated();
+  renderHome();
+  toast(`Sesión ${state.selectedSession} seleccionada`);
+}
+function openQuickActionTimer(){
+  openQuickActionScreen("workout");
+  requestAnimationFrame(()=>startTimer(getRestSeconds()));
+}
+async function runQuickActionSync(){
+  try{
+    await syncNow();
+    toast("Sincronización completada");
+  }catch(error){
+    console.error("Quick action sync",error);
+    toast("No se pudo sincronizar ahora");
+  }
+}
+function openBarcodeQuickAction(){
+  if(typeof window.openBarcodeScanner==="function"){
+    window.openBarcodeScanner();
+    return;
+  }
+  state.nutritionDate=dateKey(new Date());
+  openQuickActionScreen("nutrition","#nutritionDailyRecord");
+  toast("El escáner se gestiona desde Nutrición");
+}
+
+const QUICK_ACTIONS_REGISTRY=Object.freeze({
+  recovery:{label:"Recuperación",icon:"♥",context:quickActionRecoveryContext,action:()=>{state.recoveryView="overview";openQuickActionScreen("recovery");}},
+  nutrition:{label:"Nutrición",icon:"◉",context:quickActionNutritionContext,action:()=>openQuickActionScreen("nutrition")},
+  register_food:{label:"Registrar alimento",icon:"+",context:quickActionNutritionContext,action:()=>openQuickActionScreen("nutrition","#nutritionDailyRecord")},
+  scan_food:{label:"Escanear alimento",pickerLabel:"Escanear código de barras",icon:"⌗",action:openBarcodeQuickAction},
+  recipes:{label:"Crear receta",icon:"≡",action:()=>openQuickActionScreen("nutrition",".smart-recipes")},
+  weight:{label:"Peso",icon:"◌",context:quickActionWeightContext,action:()=>openQuickActionScreen("body")},
+  body_measurements:{label:"Medidas",pickerLabel:"Medidas corporales",icon:"↔",action:()=>openQuickActionScreen("body")},
+  progress:{label:"Progreso",icon:"↗",action:()=>openQuickActionScreen("progressDashboard")},
+  coach:{label:"Coach",icon:"✦",context:quickActionCoachContext,action:()=>openQuickActionScreen("coach")},
+  workout_history:{label:"Historial",pickerLabel:"Historial de entrenamientos",icon:"↶",action:()=>openQuickActionScreen("history")},
+  change_session:{label:"Cambiar sesión",icon:"⇄",context:()=>`Sesión ${state.selectedSession}`,action:changeQuickActionSession},
+  timer:{label:"Temporizador",icon:"◷",action:openQuickActionTimer},
+  sports_profile:{label:"Perfil deportivo",icon:"◇",action:()=>{state.onboardingDraft=newOnboardingDraft();state.onboardingStep=1;openQuickActionScreen("onboarding");}},
+  account:{label:"Cuenta",icon:"○",action:()=>openQuickActionScreen("account")},
+  appearance:{label:"Apariencia",icon:"◐",action:()=>openQuickActionScreen("settings",".experience-card")},
+  sync:{label:"Sincronización",icon:"↻",context:()=>syncStatusLabel(),action:runQuickActionSync}
+});
+
+function executeQuickAction(key){
+  const action=QUICK_ACTIONS_REGISTRY[key];
+  if(!action) return;
+  try{
+    const result=action.action?.();
+    if(result?.catch) result.catch(error=>{
+      console.error(`Quick action ${key}`,error);
+      toast("No se pudo abrir este acceso");
+    });
+  }catch(error){
+    console.error(`Quick action ${key}`,error);
+    toast("No se pudo abrir este acceso");
+  }
+}
+function renderHomeQuickActions(dashboard){
+  const preferences=getQuickActionPreferences();
+  if(preferences.hidden) return "";
+  const actions=preferences.quickActions
+    .map(item=>({key:item.key,...QUICK_ACTIONS_REGISTRY[item.key]}))
+    .filter(item=>item.label);
+  return `<section class="card home-quick-section">
+    <div class="quick-actions-heading">
+      <h2>Accesos rápidos</h2>
+      <button id="editQuickActions" class="quick-actions-edit" type="button" aria-label="Editar accesos rápidos" title="Editar accesos rápidos">✎</button>
+    </div>
+    <div class="home-quick-grid quick-actions-count-${actions.length}">
+      ${actions.map(action=>{
+        const context=typeof action.context==="function"?action.context():"";
+        return `<button data-quick-action="${esc(action.key)}" class="quick-action-card" type="button" aria-label="${esc(action.label)}${context?`. ${context}`:""}">
+          <span aria-hidden="true">${action.icon}</span>
+          <strong>${esc(action.label)}</strong>
+          ${context?`<small>${esc(context)}</small>`:""}
+        </button>`;
+      }).join("")}
+    </div>
+  </section>`;
+}
+
+function quickActionsEditorDraft(){
+  if(!Array.isArray(state.quickActionsDraft)){
+    state.quickActionsDraft=getQuickActionPreferences().quickActions.map(item=>item.key);
+    state.quickActionsDesiredCount=state.quickActionsDraft.length;
+  }
+  return state.quickActionsDraft;
+}
+function setQuickActionsEditorMessage(type,text){
+  state.quickActionsEditorMessage={type,text};
+}
+function moveQuickActionDraft(key,direction){
+  const draft=quickActionsEditorDraft();
+  const index=draft.indexOf(key);
+  const target=index+direction;
+  if(index<0||target<0||target>=draft.length) return;
+  [draft[index],draft[target]]=[draft[target],draft[index]];
+  state.quickActionsEditorMessage=null;
+  renderQuickActionsEditor();
+}
+function renderQuickActionsEditor(){
+  const draft=quickActionsEditorDraft();
+  const desired=Math.min(4,Math.max(2,Number(state.quickActionsDesiredCount)||4));
+  const message=state.quickActionsEditorMessage;
   app.innerHTML=`<div class="app-shell">
-    <header class="topbar home-topbar"><div><div class="eyebrow">TU ENTRENAMIENTO</div><div class="brand">GymOS</div><div class="subtle">Hola, <span data-account-display-name>${esc(accountDisplayName())}</span></div></div><div class="home-header-actions"><button id="homeThemeToggle" class="icon-button" aria-label="Cambiar tema">${resolvedTheme()==="dark"?"☀":"◐"}</button>${syncBadge()}</div></header>
-    <main class="screen">
-      <section class="hero">
-        <div class="hero-label">Hoy toca</div>
-        <h1>Sesión ${state.selectedSession}</h1>
-        <p>${sessions[state.selectedSession].length} ejercicios · RIR 3–4</p>
-        <button id="startWorkout" class="primary">Comenzar entrenamiento</button>
+    <header class="topbar quick-actions-editor-header">
+      <button id="closeQuickActionsEditor" class="text-button" type="button">← Inicio</button>
+      <div><div class="brand">Personalizar accesos rápidos</div><div class="subtle">Elige entre dos y cuatro acciones para Inicio.</div></div>
+    </header>
+    <main class="screen quick-actions-editor-screen">
+      <section class="card quick-actions-count-card">
+        <div><span class="section-kicker">CANTIDAD</span><h2>¿Cuántos accesos quieres?</h2></div>
+        <div class="segmented-control" aria-label="Cantidad de accesos rápidos">
+          ${[2,3,4].map(count=>`<button type="button" data-quick-count="${count}" class="${desired===count?"active":""}" aria-pressed="${desired===count}">${count}</button>`).join("")}
+        </div>
       </section>
-      <section class="home-quick-grid health-home-grid">
-        <button id="homeProgress" class="quick-action-card"><span>↗</span><strong>Progreso</strong><small>Tu evolución</small></button>
-        <button id="homeCoach" class="quick-action-card"><span>✦</span><strong>Coach</strong><small>Revisión inteligente</small></button>
-        <button id="homeNutrition" class="quick-action-card"><span>◎</span><strong>Nutrición</strong><small>Macros y peso</small></button>
-        <button id="homeHealth" class="quick-action-card"><span>♥</span><strong>Recuperación</strong><small>Sueño y reloj</small></button>
-      </section>
-      <div class="session-picker modern-session-picker">
-        ${["A","B","C"].map(s=>`<button data-session="${s}" class="${s===state.selectedSession?"active":""}">Sesión ${s}</button>`).join("")}
-      </div>
       <section class="card">
-        <h2>Resumen</h2>
-        <div class="info-row"><span>Último entrenamiento</span><strong>${last?`Sesión ${last.session}`:"—"}</strong></div>
-        <div class="info-row"><span>Duración</span><strong>${last?formatDuration(last.durationMs):"—"}</strong></div>
-        <div class="info-row"><span>Entrenamientos guardados</span><strong>${h.length}</strong></div>
+        <div class="card-heading-row">
+          <div><span class="section-kicker">ORDEN</span><h2>Accesos seleccionados</h2><p class="subtle">Arrastra cada fila o utiliza los botones de subir y bajar.</p></div>
+          <strong>${draft.length} / ${desired}</strong>
+        </div>
+        <div class="quick-actions-order-list">
+          ${draft.map((key,index)=>{
+            const action=QUICK_ACTIONS_REGISTRY[key];
+            return `<article class="quick-actions-order-item" draggable="true" data-quick-order="${esc(key)}">
+              <span class="quick-actions-drag" aria-hidden="true">⋮⋮</span>
+              <span class="quick-actions-order-icon" aria-hidden="true">${action.icon}</span>
+              <strong>${esc(action.label)}</strong>
+              <div>
+                <button type="button" data-quick-up="${esc(key)}" aria-label="Subir ${esc(action.label)}" ${index===0?"disabled":""}>↑</button>
+                <button type="button" data-quick-down="${esc(key)}" aria-label="Bajar ${esc(action.label)}" ${index===draft.length-1?"disabled":""}>↓</button>
+              </div>
+            </article>`;
+          }).join("")}
+        </div>
       </section>
-      ${(()=>{
-        const block=getActiveBlock();
-        if(!block) return `<section class="card block-home-card">
-          <div class="card-heading-row"><div><h2>Bloque de entrenamiento</h2><p class="subtle">Todavía no has creado uno</p></div><button id="openBlocksHome" class="text-button">Crear</button></div>
-          <p class="subtle">Planifica tu rutina durante 4, 6 u 8 semanas.</p>
-        </section>`;
-        const status=blockStatus(block);
-        const summary=blockWeekSessionSummary(block,status.week);
-        const next=nextPlannedSession(block,status.week);
-        const deload=isDeloadWeek(block,status.week);
-        const deloadCfg=deloadSettings(block);
-        const finished=block.status==="completed"||Boolean(block.completedAt);
-        return `<section class="card block-home-card ${deload?"deload-card":""}">
-          <div class="card-heading-row">
-            <div><h2>${esc(block.name)}</h2><p class="subtle">Semana ${status.week} de ${status.total}</p></div>
-            <button id="openBlocksHome" class="text-button">Abrir</button>
-          </div>
-          ${deload?`<div class="deload-banner">
-            <strong>Semana de descarga</strong>
-            <span>${deloadCfg.volumePercent}% del volumen · ${deloadCfg.intensityPercent}% de intensidad</span>
-          </div>`:""}
-          ${finished?`<div class="completed-banner"><strong>Bloque finalizado</strong><span>Consulta el resumen completo desde Bloques.</span></div>`:""}
-          <div class="block-session-strip">
-            ${summary.plan.map((session,index)=>{
-              const completed=index<summary.matched.length;
-              return `<span class="${completed?"done":session===next?"next":""}">${completed?"✓ ":""}${session}</span>`;
-            }).join("")}
-          </div>
-          <div class="block-progress-track"><div style="width:${summary.adherence}%"></div></div>
-          <div class="weekly-home-footer">
-            <strong>${summary.completed} de ${summary.plan.length} sesiones · ${summary.adherence}%</strong>
-            <span>${next?`Siguiente: ${next}`:status.status==="planned"?"Pendiente":"Semana completada"}</span>
-          </div>
-          ${next?`<button id="startNextPlannedSession" class="secondary full block-next-button">Preparar sesión ${next}</button>`:""}
-        </section>`;
-      })()}
-      ${(()=>{
-        const week=weeklyProgress();
-        return `<section class="card weekly-home-card">
-          <div class="card-heading-row">
-            <div><h2>Objetivo semanal</h2><p class="subtle">${week.count} de ${week.goal} sesiones</p></div>
-            <button id="openPlan" class="text-button">Ver plan</button>
-          </div>
-          <div class="weekly-progress-track"><div style="width:${week.percentage}%"></div></div>
-          <div class="weekly-home-footer">
-            <strong>${week.remaining===0?"Objetivo cumplido":`${week.remaining} ${week.remaining===1?"sesión pendiente":"sesiones pendientes"}`}</strong>
-            <span>${completedWeekStreak()} semanas de racha</span>
-          </div>
-        </section>`;
-      })()}
-      ${(()=>{
-        const body=latestBodyEntry();
-        return `<section class="card body-home-card">
-          <div class="card-heading-row"><div><h2>Seguimiento corporal</h2><p class="subtle">Peso y cintura</p></div><button id="openBody" class="text-button">Abrir</button></div>
-          <div class="body-home-values">
-            <div><span>Peso</span><strong>${body&&numericValue(body.weight)!==null?`${formatWeight(body.weight)} kg`:"—"}</strong></div>
-            <div><span>Cintura</span><strong>${body&&numericValue(body.waist)!==null?`${formatWeight(body.waist)} cm`:"—"}</strong></div>
-          </div>
-        </section>`;
-      })()}
+      <section class="card">
+        <span class="section-kicker">DISPONIBLES</span>
+        <h2>Elige tus acciones</h2>
+        <div class="quick-actions-picker">
+          ${QUICK_ACTION_KEYS.map(key=>{
+            const action=QUICK_ACTIONS_REGISTRY[key];
+            const selected=draft.includes(key);
+            const disabled=!selected&&draft.length>=desired;
+            return `<label class="${selected?"selected":""} ${disabled?"disabled":""}">
+              <input type="checkbox" data-quick-choice="${esc(key)}" ${selected?"checked":""} ${disabled?"disabled":""}>
+              <span aria-hidden="true">${action.icon}</span>
+              <strong>${esc(action.pickerLabel||action.label)}</strong>
+            </label>`;
+          }).join("")}
+        </div>
+      </section>
+      <p class="inline-message ${message?.type||""} ${message?"":"hidden"}" role="${message?.type==="error"?"alert":"status"}">${message?esc(message.text):""}</p>
+      <div class="quick-actions-editor-actions">
+        <button id="saveQuickActions" class="primary" type="button" ${draft.length!==desired?"disabled":""}>Guardar cambios</button>
+        <button id="restoreQuickActions" class="secondary" type="button">Restaurar accesos recomendados</button>
+        <button id="hideQuickActions" class="text-button" type="button">Ocultar accesos rápidos</button>
+      </div>
     </main>${nav("home")}
   </div>`;
-  document.querySelectorAll("[data-session]").forEach(b=>b.onclick=()=>{
-    state.selectedSession=b.dataset.session;
+
+  document.getElementById("closeQuickActionsEditor").onclick=()=>{
+    state.quickActionsDraft=null;
+    state.quickActionsEditorMessage=null;
+    state.screen="home";
+    renderHome();
+  };
+  document.querySelectorAll("[data-quick-count]").forEach(button=>button.onclick=()=>{
+    const count=Number(button.dataset.quickCount);
+    state.quickActionsDesiredCount=count;
+    if(state.quickActionsDraft.length>count) state.quickActionsDraft=state.quickActionsDraft.slice(0,count);
+    state.quickActionsEditorMessage=state.quickActionsDraft.length<count
+      ?{type:"info",text:`Selecciona ${count-state.quickActionsDraft.length} acceso${count-state.quickActionsDraft.length===1?"":"s"} más.`}
+      :null;
+    renderQuickActionsEditor();
+  });
+  document.querySelectorAll("[data-quick-choice]").forEach(input=>input.onchange=()=>{
+    const key=input.dataset.quickChoice;
+    if(input.checked){
+      if(state.quickActionsDraft.length>=state.quickActionsDesiredCount){
+        setQuickActionsEditorMessage("error",`Puedes seleccionar un máximo de ${state.quickActionsDesiredCount} accesos.`);
+      }else{
+        state.quickActionsDraft.push(key);
+        state.quickActionsEditorMessage=null;
+      }
+    }else{
+      state.quickActionsDraft=state.quickActionsDraft.filter(item=>item!==key);
+      setQuickActionsEditorMessage("info",`Selecciona ${state.quickActionsDesiredCount-state.quickActionsDraft.length} acceso${state.quickActionsDesiredCount-state.quickActionsDraft.length===1?"":"s"} más.`);
+    }
+    renderQuickActionsEditor();
+  });
+  document.querySelectorAll("[data-quick-up]").forEach(button=>button.onclick=()=>moveQuickActionDraft(button.dataset.quickUp,-1));
+  document.querySelectorAll("[data-quick-down]").forEach(button=>button.onclick=()=>moveQuickActionDraft(button.dataset.quickDown,1));
+  document.querySelectorAll("[data-quick-order]").forEach(item=>{
+    item.ondragstart=event=>{
+      state.quickActionDragKey=item.dataset.quickOrder;
+      event.dataTransfer.effectAllowed="move";
+      event.dataTransfer.setData("text/plain",state.quickActionDragKey);
+      item.classList.add("dragging");
+    };
+    item.ondragend=()=>{state.quickActionDragKey=null;item.classList.remove("dragging");};
+    item.ondragover=event=>{event.preventDefault();event.dataTransfer.dropEffect="move";};
+    item.ondrop=event=>{
+      event.preventDefault();
+      const source=state.quickActionDragKey||event.dataTransfer.getData("text/plain");
+      const target=item.dataset.quickOrder;
+      if(!source||source===target) return;
+      const sourceIndex=state.quickActionsDraft.indexOf(source);
+      const targetIndex=state.quickActionsDraft.indexOf(target);
+      state.quickActionsDraft.splice(sourceIndex,1);
+      state.quickActionsDraft.splice(targetIndex,0,source);
+      state.quickActionDragKey=null;
+      renderQuickActionsEditor();
+    };
+  });
+  document.getElementById("saveQuickActions").onclick=()=>{
+    if(state.quickActionsDraft.length!==state.quickActionsDesiredCount){
+      setQuickActionsEditorMessage("error","Completa la selección antes de guardar.");
+      renderQuickActionsEditor();
+      return;
+    }
+    saveQuickActionPreferences({quickActions:state.quickActionsDraft,hidden:false});
+    state.quickActionsDraft=null;
+    state.quickActionsEditorMessage=null;
+    state.screen="home";
+    renderHome();
+    toast("Accesos rápidos actualizados.");
+  };
+  document.getElementById("restoreQuickActions").onclick=()=>{
+    state.quickActionsDraft=RECOMMENDED_QUICK_ACTIONS.slice();
+    state.quickActionsDesiredCount=4;
+    setQuickActionsEditorMessage("success","Se ha restaurado la selección recomendada. Guarda para aplicarla.");
+    renderQuickActionsEditor();
+  };
+  document.getElementById("hideQuickActions").onclick=()=>{
+    saveQuickActionPreferences({quickActions:state.quickActionsDraft,hidden:true});
+    state.quickActionsDraft=null;
+    state.quickActionsEditorMessage=null;
+    state.screen="home";
+    renderHome();
+    toast("Accesos rápidos ocultos.");
+  };
+  bindNav();
+}
+function homeCoachInsight(dashboard){
+  if(dashboard.pendingCoach){
+    return {
+      title:"Tienes una recomendación pendiente.",
+      text:dashboard.pendingCoach.summary||"Revisa el análisis antes de la siguiente sesión.",
+      proposalId:dashboard.pendingCoach.id
+    };
+  }
+  if(dashboard.mode==="recovery"){
+    return {
+      title:"El trabajo de hoy ya está hecho.",
+      text:"Prioriza descanso, nutrición y una recuperación suficiente antes de volver a cargar.",
+      proposalId:null
+    };
+  }
+  if(dashboard.mode==="return"){
+    return {
+      title:"Hoy no necesitas recuperar el tiempo perdido.",
+      text:"Vuelve con margen y utiliza la primera serie para ajustar la carga.",
+      proposalId:null
+    };
+  }
+  try{
+    const today=dateKey(new Date());
+    const recovery=window.GymOSRecovery?.entryForDate?.(today)||null;
+    const recentRecovery=window.GymOSRecovery?.getEntries?.().slice(-3)||[];
+    if(recentRecovery.length===3&&recentRecovery.every(item=>Number(item.sleepHours)<6)){
+      return {
+        title:"Has dormido poco tres días seguidos.",
+        text:"Considera reducir una serie por ejercicio y evita llegar al fallo.",
+        proposalId:null
+      };
+    }
+    if(recentRecovery.length>=2&&recentRecovery.filter(item=>Number(item.fatigue)>=3).length>=2){
+      return {
+        title:"La fatiga se mantiene alta.",
+        text:"Mantén cargas cómodas y prioriza una ejecución estable.",
+        proposalId:null
+      };
+    }
+    const candidate=coachExerciseSummary()
+      .filter(item=>item.historyCount>=2&&item.avgRir!==null&&item.avgRir>=3)
+      .sort((a,b)=>b.avgRir-a.avgRir)[0]||null;
+    if(candidate){
+      return {
+        title:recovery?.recoveryScore>=85?"Hoy estás descansado.":"Hay margen para progresar.",
+        text:`Puedes intentar subir ligeramente la carga en ${candidate.name.toLocaleLowerCase("es")}.`,
+        proposalId:null
+      };
+    }
+    const recommendation=periodizationRecommendation();
+    return {
+      title:`Fase de ${recommendation.phase.toLocaleLowerCase("es")}.`,
+      text:recommendation.action,
+      proposalId:null
+    };
+  }catch(error){
+    console.error("Home Coach insight",error);
+    return {
+      title:"Mantén el plan.",
+      text:"Completa la próxima sesión con una técnica estable y registra el esfuerzo.",
+      proposalId:null
+    };
+  }
+}
+function renderHomeCoachInsight(dashboard){
+  const insight=homeCoachInsight(dashboard);
+  return `<section class="home-coach-insight">
+    <h2>Coach</h2>
+    <strong>${esc(insight.title)}</strong>
+    <p>${esc(insight.text)}</p>
+    <button id="openHomeCoachInsight" class="text-button" type="button" ${insight.proposalId?`data-proposal-id="${esc(insight.proposalId)}"`:""}>Abrir Coach →</button>
+  </section>`;
+}
+
+function renderHomeRecoveryStatus(dashboard){
+  const pending=window.GymOSRecovery?.dueCheckin?.();
+  if(pending){
+    const dismissed=window.GymOSRecovery.reminderDismissed(pending);
+    if(dismissed){
+      return `<section class="home-recovery-status recovery-reminder-compact">
+        <div><span class="section-kicker">RECUPERACIÓN PENDIENTE</span><strong>Sesión ${esc(pending.session)}</strong><small>Disponible durante todo el día.</small></div>
+        <button class="text-button" type="button" data-open-recovery-checkin="${esc(pending.id)}">Revisar →</button>
+      </section>`;
+    }
+    return `<section class="home-recovery-priority">
+      <span class="section-kicker">PENDIENTE REGISTRAR RECUPERACIÓN · SESIÓN ${esc(pending.session)}</span>
+      <h2>¿Cómo has recuperado de la sesión de ayer?</h2>
+      <p>Completa un check-in de 20–30 segundos.</p>
+      <div><button class="primary" type="button" data-open-recovery-checkin="${esc(pending.id)}">Revisar recuperación</button><button class="text-button" type="button" data-dismiss-recovery-checkin="${esc(pending.id)}">Ahora no</button></div>
+    </section>`;
+  }
+  const entry=window.GymOSRecovery?.entryForDate?.(dateKey(new Date()));
+  if(!entry||dashboard?.trainedToday) return "";
+  const label=window.GymOSRecovery.scoreLabel(entry.recoveryScore);
+  return `<section class="home-recovery-status recorded">
+    <div>
+      <span class="section-kicker">RECUPERACIÓN</span>
+      <strong>${entry.recoveryScore} · ${esc(label)}</strong>
+    </div>
+    <button class="text-button" type="button" data-open-recovery>Revisar →</button>
+  </section>`;
+}
+
+function renderHome(){
+  const plannedDuration=Math.max(1,Number(getOnboardingProfile()?.duration)||45);
+  const plannedExercises=sessions[state.selectedSession].length;
+  const now=new Date();
+  const sessionProfile=homeSessionProfile();
+  const greetingName=homeGreetingName();
+  const week=weeklyProgress(now);
+  const dashboard=homeDashboardState(now,week);
+  const heroType=homeHeroContextType(dashboard,sessionProfile);
+  const heroImage=HOME_HERO_IMAGE_SOURCE.findByType(heroType);
+  const projectedPercentage=Math.min(100,Math.round(((week.count+1)/week.goal)*100));
+  const celebrateWeeklyGoal=claimWeeklyGoalCelebration(week);
+  app.innerHTML=`<div class="app-shell">
+    <header class="topbar home-topbar">
+      <div class="home-greeting">
+        <h1>${homeGreeting(now)}${greetingName?`, ${esc(greetingName)}`:""}</h1>
+        <div class="home-current-date">${esc(homeDateLabel(now))}</div>
+        <p class="home-today-description">${esc(homeTodayDescription(dashboard,sessionProfile))}</p>
+      </div>
+      <div class="home-header-actions"><button id="homeThemeToggle" class="icon-button" aria-label="Cambiar tema">${resolvedTheme()==="dark"?"☀":"◐"}</button><button id="homeFontScaleToggle" class="icon-button header-font-scale" type="button" aria-label="Cambiar tamaño de letra"><span class="aaa-symbol" aria-hidden="true"><span>A</span><span>A</span><span>A</span></span></button>${syncBadge()}</div>
+    </header>
+    <main class="screen home-screen">
+      ${renderDailyThought()}
+      ${renderHomeRecoveryStatus(dashboard)}
+      ${homeDashboardHero(dashboard,sessionProfile,plannedDuration,plannedExercises)}
+      ${dashboard.bodyPriority?renderHomeBodyCard():""}
+      ${renderHomeWeeklyCard(week,dashboard,projectedPercentage)}
+      ${renderHomeCoachInsight(dashboard)}
+      ${renderHomeQuickActions(dashboard)}
+      ${dashboard.bodyPriority?"":renderHomeBodyCard()}
+    </main>${nav("home")}
+  </div>`;
+  animateHomeNumbers();
+  const homeHero=document.querySelector(".home-focus");
+  if(homeHero&&heroImage?.file){
+    homeHero.classList.add("has-hero-image");
+    homeHero.style.setProperty("--home-hero-image",`url("${heroImage.file}")`);
+    homeHero.dataset.heroName=heroImage.name;
+  }
+  const weeklyProgressFill=document.querySelector("[data-weekly-progress]");
+  if(weeklyProgressFill){
+    requestAnimationFrame(()=>requestAnimationFrame(()=>{
+      weeklyProgressFill.style.width=`${weeklyProgressFill.dataset.weeklyProgress}%`;
+      if(celebrateWeeklyGoal){
+        document.querySelector(".weekly-home-card")?.classList.add("weekly-goal-celebrate");
+      }
+    }));
+  }
+  const cycleHomeSession=()=>{
+    const availableSessions=["A","B","C"];
+    state.selectedSession=availableSessions[(availableSessions.indexOf(state.selectedSession)+1)%availableSessions.length];
     localStorage.setItem("gymos:selectedSession",state.selectedSession);
     renderHome();
-  });
+  };
+  document.getElementById("homePrimaryAction").onclick=()=>{
+    if(dashboard.mode==="coach"){
+      state.coachSessionId=dashboard.pendingCoach.id;
+      state.screen="coachProposal";
+      renderCoachProposal();
+      return;
+    }
+    if(dashboard.mode==="recovery"){
+      state.recoveryView="overview";
+      state.screen="recovery";
+      renderRecoveryCenter();
+      return;
+    }
+    state.screen="workout";
+    renderWorkout();
+  };
+  const homeSecondaryAction=document.getElementById("homeSecondaryAction");
+  if(homeSecondaryAction) homeSecondaryAction.onclick=()=>{
+    if(dashboard.mode==="coach"){
+      if(dashboard.trainedToday){
+        state.expandedHistoryId=dashboard.latestWorkout?.id||null;
+        state.screen="history";
+        renderHistory();
+      }else{
+        state.screen="workout";
+        renderWorkout();
+      }
+      return;
+    }
+    if(dashboard.mode==="recovery"){
+      state.screen="history";
+      renderHistory();
+      return;
+    }
+    cycleHomeSession();
+  };
   const openSyncSettings=document.getElementById("openSyncSettings");
   if(openSyncSettings) openSyncSettings.onclick=()=>{state.screen="settings";renderSettings();};
   document.getElementById("homeThemeToggle").onclick=()=>{
     saveAppPreferences({theme:resolvedTheme()==="dark"?"light":"dark"});
     renderHome();
   };
-  document.getElementById("homeProgress").onclick=()=>{state.screen="progressDashboard";renderProgressDashboard();};
-  document.getElementById("homeCoach").onclick=()=>{state.screen="coach";renderCoach();};
-  document.getElementById("homeNutrition").onclick=()=>{state.screen="nutrition";renderNutrition();};
-  document.getElementById("homeHealth").onclick=()=>{state.screen="health";renderHealth();};
-  document.getElementById("startWorkout").onclick=()=>{state.screen="workout";renderWorkout();};
-  document.getElementById("openPlan").onclick=()=>{state.screen="plan";renderPlan();};
-  const openBlocksHome=document.getElementById("openBlocksHome");
-  if(openBlocksHome) openBlocksHome.onclick=()=>{state.screen="blocks";renderBlocks();};
-  const startNextPlannedSession=document.getElementById("startNextPlannedSession");
-  if(startNextPlannedSession) startNextPlannedSession.onclick=()=>{
-    const block=getActiveBlock();
-    if(!block) return;
-    const status=blockStatus(block);
-    const next=nextPlannedSession(block,status.week);
-    if(!next) return;
-    state.selectedSession=next;
-    localStorage.setItem("gymos:selectedSession",next);
-    toast(`Sesión ${next} preparada`);
-    renderHome();
+  document.getElementById("homeFontScaleToggle").onclick=()=>{
+    cycleFontScalePreference();
+    updateFontScaleButton();
   };
-  document.getElementById("openBody").onclick=()=>{state.screen="body";renderBody();};
+  updateFontScaleButton();
+  const editQuickActions=document.getElementById("editQuickActions");
+  if(editQuickActions) editQuickActions.onclick=()=>{
+    state.quickActionsDraft=null;
+    state.quickActionsEditorMessage=null;
+    state.screen="quickActions";
+    renderQuickActionsEditor();
+  };
+  document.querySelectorAll("[data-quick-action]").forEach(button=>button.onclick=()=>executeQuickAction(button.dataset.quickAction));
+  document.querySelectorAll("[data-open-recovery]").forEach(button=>{
+    button.onclick=()=>{state.recoveryView="overview";state.screen="recovery";renderRecoveryCenter();};
+  });
+  document.querySelectorAll("[data-open-recovery-checkin]").forEach(button=>{
+    button.onclick=()=>{
+      const checkin=window.GymOSRecovery.getCheckins().find(item=>item.id===button.dataset.openRecoveryCheckin);
+      window.GymOSRecovery.startCheckin(checkin);
+    };
+  });
+  document.querySelectorAll("[data-dismiss-recovery-checkin]").forEach(button=>{
+    button.onclick=()=>{
+      const checkin=window.GymOSRecovery.getCheckins().find(item=>item.id===button.dataset.dismissRecoveryCheckin);
+      window.GymOSRecovery.dismissReminder(checkin);
+      renderHome();
+    };
+  });
+  document.getElementById("openHomeCoachInsight").onclick=event=>{
+    const proposalId=event.currentTarget.dataset.proposalId;
+    if(proposalId){
+      state.coachSessionId=proposalId;
+      state.screen="coachProposal";
+      renderCoachProposal();
+    }else{
+      state.screen="coach";
+      renderCoach();
+    }
+  };
+  document.getElementById("openPlan").onclick=()=>{state.screen="plan";renderPlan();};
+  document.querySelectorAll("[data-open-body]").forEach(button=>button.onclick=()=>{state.screen="body";renderBody();});
+  document.querySelectorAll("[data-edit-body-summary]").forEach(button=>button.onclick=()=>{
+    state.bodySummaryDraft=getBodySummaryMetrics();
+    renderBodySummaryEditor();
+  });
   bindNav();
 }
 
@@ -4083,7 +5267,7 @@ function renderWorkout(){
         return `
         <section class="exercise-card ${timed?"timed-exercise-card":""}" data-exercise="${i}">
           <h2>${ex.name}</h2>
-          <div class="target">Objetivo: ${ex.target} · RIR 3–4</div>
+          <div class="target">Objetivo: ${ex.target} · RIR ${esc(ex.targetRir||"sin definir")}</div>
           ${timed?`<div class="timed-exercise-note">Ejercicio por tiempo: inicia y detén el cronómetro en cada serie.</div>`:""}
           ${last?.exercises?.[i]?`<div class="last-session"><strong>Última vez:</strong> ${last.exercises[i].series.map(x=>{
             const normalized=normalizeSeries(x);
@@ -4137,6 +5321,7 @@ function renderWorkout(){
               <button class="complete-btn ${x.done?"done":""}" data-done="${j}">${x.done?"✓":""}</button>
             </div>`).join("")}
           <textarea data-notes="${i}" placeholder="Notas">${ex.notes||""}</textarea>
+          <label class="workout-discomfort-field"><span>Molestias durante el ejercicio</span><input data-discomfort="${i}" value="${esc(ex.discomfort||"")}" placeholder="Déjalo vacío si no hubo molestias"></label>
         </section>`;
       }).join("")}
     </main>
@@ -4191,6 +5376,9 @@ function renderWorkout(){
   document.querySelectorAll("[data-notes]").forEach(a=>a.oninput=()=>{
     const draft=getDraft(s); draft.exercises[Number(a.dataset.notes)].notes=a.value; saveDraft(draft);
   });
+  document.querySelectorAll("[data-discomfort]").forEach(input=>input.oninput=()=>{
+    const draft=getDraft(s);draft.exercises[Number(input.dataset.discomfort)].discomfort=input.value;saveDraft(draft);
+  });
   const clearPrefilledWeights=document.getElementById("clearPrefilledWeights");
   if(clearPrefilledWeights) clearPrefilledWeights.onclick=()=>{
     const draft=getDraft(s);
@@ -4227,10 +5415,16 @@ function finishWorkout(){
   const workout={id:Date.now(),date:new Date().toISOString(),session:s,
     durationMs:Date.now()-(d.startedAt||Date.now()),completedSeries:completed,exercises:d.exercises};
   const h=getHistory();h.unshift(workout);saveHistory(h);clearDraft(s);
+  const workoutAnalysis=window.GymOSWorkoutAnalysis?.analyzeAndSave?.(workout,{force:true});
+  if(workoutAnalysis) window.GymOSWorkoutAnalysis?.maybeGenerateAiNarrative?.(workoutAnalysis);
   const newRecords=recordsForWorkout(workout);
   state.selectedSession=s==="A"?"B":s==="B"?"C":"A";
   localStorage.setItem("gymos:selectedSession",state.selectedSession);
-  clearInterval(state.timerInterval);state.timerSeconds=0;state.screen="home";renderHome();
+  clearInterval(state.timerInterval);state.timerSeconds=0;
+  window.GymOSRecovery?.createPendingCheckin?.(workout);
+  state.completedWorkoutSummary=workout;
+  state.screen="workoutComplete";
+  renderWorkoutComplete();
   autoSync("entrenamiento finalizado");
   if(newRecords.length){
     showRecordsCelebration(newRecords);
@@ -4295,6 +5489,7 @@ function renderHistory(){
     const id=Number(button.dataset.deleteWorkout);
     if(!confirm("¿Eliminar definitivamente este entrenamiento?")) return;
     saveHistory(getHistory().filter(w=>w.id!==id));
+    window.GymOSWorkoutAnalysis?.deleteForWorkout?.(id);
     state.expandedHistoryId=null;
     toast("Entrenamiento eliminado");
     renderHistory();
@@ -4317,6 +5512,7 @@ function renderEditWorkout(){
       ${workout.exercises.map((ex,i)=>`
         <section class="exercise-card" data-edit-exercise="${i}">
           <h2>${ex.name}</h2>
+          <div class="target">Objetivo: ${esc(ex.target||"Sin rango")} · RIR ${esc(ex.targetRir||"sin registrar")}</div>
           <div class="series-header series-header-v18"><span></span><span>Peso</span><span>Reps</span><span>RIR</span><span>Cal.</span><span></span></div>
           ${ex.series.map((x,j)=>`
             <div class="series-row series-row-v18 ${x.warmup?"warmup-row":""}">
@@ -4331,6 +5527,7 @@ function renderEditWorkout(){
               <button class="complete-btn ${x.done?"done":""}" data-edit-done="${j}">${x.done?"✓":""}</button>
             </div>`).join("")}
           <textarea data-edit-notes="${i}" placeholder="Notas">${ex.notes||""}</textarea>
+          <label class="workout-discomfort-field"><span>Molestias durante el ejercicio</span><input data-edit-discomfort="${i}" value="${esc(ex.discomfort||"")}" placeholder="Déjalo vacío si no hubo molestias"></label>
         </section>`).join("")}
     </main>
     <footer class="sticky-actions"><div class="sticky-actions-inner"><button id="cancelEditWorkout" class="secondary">Cancelar</button><button id="saveEditedWorkout" class="primary">Guardar cambios</button></div></footer>
@@ -4356,6 +5553,9 @@ function renderEditWorkout(){
   document.querySelectorAll("[data-edit-notes]").forEach(area=>area.oninput=()=>{
     edited.exercises[Number(area.dataset.editNotes)].notes=area.value;
   });
+  document.querySelectorAll("[data-edit-discomfort]").forEach(input=>input.oninput=()=>{
+    edited.exercises[Number(input.dataset.editDiscomfort)].discomfort=input.value;
+  });
   document.getElementById("cancelEditWorkout").onclick=()=>{state.screen="history";renderHistory();};
   document.getElementById("saveEditedWorkout").onclick=()=>{
     const dateValue=document.getElementById("editWorkoutDate").value;
@@ -4364,6 +5564,8 @@ function renderEditWorkout(){
     edited.completedSeries=edited.exercises.reduce((sum,e)=>sum+workingSeries(e.series).filter(s=>s.done).length,0);
     const history=getHistory().map(w=>w.id===edited.id?edited:w);
     saveHistory(history);
+    const workoutAnalysis=window.GymOSWorkoutAnalysis?.analyzeAndSave?.(edited,{force:true});
+    if(workoutAnalysis) window.GymOSWorkoutAnalysis?.maybeGenerateAiNarrative?.(workoutAnalysis);
     state.screen="history";
     state.expandedHistoryId=edited.id;
     toast("Entrenamiento actualizado");
@@ -4507,78 +5709,135 @@ function renderRecords(){
   bindNav();
 }
 
-function renderBody(){
-  const rows=getBodyHistory();
-  const latest=rows.at(-1);
-  const weightChange=bodyChange("weight");
-  const waistChange=bodyChange("waist");
-  const today=new Date().toISOString().slice(0,10);
-
-  app.innerHTML=`<div class="app-shell">
-    <header class="topbar"><div><div class="brand">Seguimiento corporal</div><div class="subtle">Peso, cintura y tendencia</div></div></header>
-    <main class="screen">
-      <section class="card">
-        <h2>Nuevo registro</h2>
-        <div class="body-form-grid">
-          <label><span>Fecha</span><input id="bodyDate" type="date" value="${today}"></label>
-          <label><span>Peso (kg)</span><input id="bodyWeight" inputmode="decimal" placeholder="79,5"></label>
-          <label><span>Cintura (cm)</span><input id="bodyWaist" inputmode="decimal" placeholder="88"></label>
-          <label class="body-note"><span>Nota opcional</span><input id="bodyNote" type="text" placeholder="En ayunas, después de entrenar…"></label>
-        </div>
-        <button id="saveBody" class="primary full">Guardar registro</button>
-      </section>
-
-      <section class="body-summary-grid">
-        <div class="metric-card"><span>Último peso</span><strong>${latest&&numericValue(latest.weight)!==null?`${formatWeight(latest.weight)} kg`:"—"}</strong><small>${weightChange===null?"Sin tendencia":`${weightChange>0?"+":""}${formatWeight(weightChange)} kg desde el inicio`}</small></div>
-        <div class="metric-card"><span>Última cintura</span><strong>${latest&&numericValue(latest.waist)!==null?`${formatWeight(latest.waist)} cm`:"—"}</strong><small>${waistChange===null?"Sin tendencia":`${waistChange>0?"+":""}${formatWeight(waistChange)} cm desde el inicio`}</small></div>
-      </section>
-
-      <section class="card">
-        <div class="stats-card-title"><div><h2>Evolución del peso</h2><p class="subtle">Últimos 12 registros</p></div></div>
-        ${bodyTrendSvg(rows,"weight","Evolución del peso")}
-      </section>
-
-      <section class="card">
-        <div class="stats-card-title"><div><h2>Evolución de cintura</h2><p class="subtle">Últimos 12 registros</p></div></div>
-        ${bodyTrendSvg(rows,"waist","Evolución de cintura")}
-      </section>
-
-      <section class="card">
-        <h2>Historial corporal</h2>
-        ${rows.length?rows.slice().reverse().map(row=>`
-          <div class="body-history-row">
-            <div><strong>${formatDate(row.date)}</strong><small>${row.note||"Sin nota"}</small></div>
-            <div class="body-history-values">
-              <span>${numericValue(row.weight)!==null?`${formatWeight(row.weight)} kg`:"—"}</span>
-              <span>${numericValue(row.waist)!==null?`${formatWeight(row.waist)} cm`:"—"}</span>
-              <button data-delete-body="${row.id}" class="body-delete" aria-label="Eliminar registro">×</button>
-            </div>
-          </div>
-        `).join(""):`<div class="empty">Todavía no hay registros corporales.</div>`}
-      </section>
-    </main>${nav("")}
-  </div>`;
-
-  document.getElementById("saveBody").onclick=()=>{
-    const date=document.getElementById("bodyDate").value;
-    const weight=numericValue(document.getElementById("bodyWeight").value.replace(",","."));
-    const waist=numericValue(document.getElementById("bodyWaist").value.replace(",","."));
-    const note=document.getElementById("bodyNote").value.trim();
-    if(!date){alert("Selecciona una fecha.");return;}
-    if(weight===null&&waist===null){alert("Introduce el peso, la cintura o ambos.");return;}
-    if(weight!==null&&(weight<30||weight>300)){alert("Revisa el peso introducido.");return;}
-    if(waist!==null&&(waist<40||waist>250)){alert("Revisa la cintura introducida.");return;}
-    const current=getBodyHistory().filter(row=>row.date!==date);
-    current.push({id:Date.now(),date,weight,waist,note});
-    saveBodyHistory(current);
-    toast("Registro corporal guardado");
-    renderBody();
+function bodyRowsForPeriod(rows,period){
+  const days={weeks4:28,"3m":92,"6m":184}[period];
+  if(!days) return rows;
+  const cutoff=Date.now()-days*86400000;
+  return rows.filter(row=>new Date(`${row.date}T12:00:00`).getTime()>=cutoff);
+}
+function bodyMetricChart(rows,keys){
+  const series=keys.map(key=>({
+    key,label:BODY_METRICS[key].shortLabel,
+    points:rows.filter(row=>numericValue(row[key])!==null).map(row=>({date:row.date,value:numericValue(row[key])}))
+  })).filter(item=>item.points.length);
+  const values=series.flatMap(item=>item.points.map(point=>point.value));
+  const dates=series.flatMap(item=>item.points.map(point=>new Date(`${point.date}T12:00:00`).getTime()));
+  if(values.length<2) return `<div class="body-empty-chart">Añade al menos dos registros para ver la tendencia.</div>`;
+  const min=Math.min(...values),max=Math.max(...values),range=Math.max(max-min,.5);
+  const minDate=Math.min(...dates),maxDate=Math.max(...dates),dateRange=Math.max(maxDate-minDate,86400000);
+  const width=640,height=230,pad=28;
+  const colors=["var(--brand)","var(--body-chart-secondary,#0f766e)"];
+  const position=point=>{
+    const time=new Date(`${point.date}T12:00:00`).getTime();
+    return {x:pad+((time-minDate)/dateRange)*(width-pad*2),y:height-pad-((point.value-min)/range)*(height-pad*2)};
   };
-  document.querySelectorAll("[data-delete-body]").forEach(button=>button.onclick=()=>{
-    if(!confirm("¿Eliminar este registro corporal?")) return;
-    saveBodyHistory(getBodyHistory().filter(row=>row.id!==Number(button.dataset.deleteBody)));
-    renderBody();
-  });
+  return `<div class="body-detail-chart"><svg viewBox="0 0 ${width} ${height}" role="img" aria-label="Evolución de ${keys.map(key=>BODY_METRICS[key].shortLabel).join(" y ")}">
+    ${series.map((item,index)=>{
+      const points=item.points.map(point=>{const p=position(point);return `${p.x.toFixed(1)},${p.y.toFixed(1)}`;}).join(" ");
+      return `<polyline points="${points}" fill="none" stroke="${colors[index]}" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"></polyline>${item.points.map(point=>{const p=position(point);return `<circle cx="${p.x}" cy="${p.y}" r="4" fill="${colors[index]}"><title>${item.label}: ${formatWeight(point.value)} · ${formatDate(point.date)}</title></circle>`;}).join("")}`;
+    }).join("")}</svg>
+    ${series.length>1?`<div class="body-chart-legend">${series.map((item,index)=>`<span style="--legend-color:${colors[index]}">${esc(item.label)}</span>`).join("")}</div>`:""}
+  </div>`;
+}
+function bodyMetricNeutralTrend(stats,unit){
+  if(!stats?.previous) return "Primer registro";
+  if(Math.abs(stats.delta)<.05) return "Sin cambios";
+  return `${stats.delta>0?"Subió":"Bajó"} ${formatBodyNumber(Math.abs(stats.delta))} ${unit}`;
+}
+function bodyMetricGoalContext(key,stats){
+  if(!stats?.previous) return "Este registro servirá como referencia para próximas mediciones.";
+  const goal=String(getNutritionSettings()?.goal||getOnboardingProfile()?.goal||"").toLocaleLowerCase("es");
+  if(goal.includes("defin")||goal==="fat_loss"){
+    if(key==="waist"&&stats.delta<0) return "En definición, una reducción de cintura puede ser coherente con el objetivo.";
+    if(key==="weight") return "Interpreta el peso junto con cintura, rendimiento y media semanal.";
+    if(["chest","rightArm","leftArm","rightThigh","leftThigh"].includes(key)&&Math.abs(stats.delta)<.3) return "Mantener perímetros musculares puede ser una referencia útil durante la definición.";
+  }
+  if(goal.includes("volumen")||goal==="muscle"){
+    if(key==="waist"&&stats.delta>1) return "En volumen, conviene revisar la cintura junto con el ritmo de ganancia.";
+    if(["weight","chest","shoulders","rightArm","leftArm","rightThigh","leftThigh"].includes(key)&&stats.delta>0) return "La subida puede ser coherente con una fase de volumen; compárala con fuerza y cintura.";
+  }
+  return "La variación se muestra de forma neutral. Interprétala junto con tu objetivo y el resto de métricas.";
+}
+function bodyAsymmetrySummary(rightKey,leftKey,label){
+  const right=bodyMetricStats(rightKey),left=bodyMetricStats(leftKey);
+  if(!right||!left) return "";
+  const difference=Math.abs(right.latest.value-left.latest.value);
+  const previous=right.previous&&left.previous?Math.abs(right.previous.value-left.previous.value):null;
+  const stable=previous!==null&&Math.abs(difference-previous)<=.3;
+  return `<article class="body-asymmetry-card"><div><span class="section-kicker">${esc(label.toLocaleUpperCase("es"))}</span><h3>${stable?"Diferencia estable":"Asimetría registrada"}</h3></div><dl>
+    <div><dt>${esc(BODY_METRICS[rightKey].shortLabel)}</dt><dd>${formatBodyNumber(right.latest.value)} cm</dd></div>
+    <div><dt>${esc(BODY_METRICS[leftKey].shortLabel)}</dt><dd>${formatBodyNumber(left.latest.value)} cm</dd></div>
+    <div><dt>Diferencia absoluta</dt><dd>${formatBodyNumber(difference)} cm</dd></div>
+  </dl><small>Dato descriptivo; no constituye un diagnóstico.</small></article>`;
+}
+function renderBodyMetricCard(key){
+  const definition=BODY_METRICS[key],stats=bodyMetricStats(key);
+  if(!stats) return `<button type="button" class="body-overview-metric empty" data-body-metric="${esc(key)}"><span>${esc(definition.shortLabel)}</span><strong>Sin registrar</strong><small>Añadir primera medida →</small></button>`;
+  return `<button type="button" class="body-overview-metric" data-body-metric="${esc(key)}"><span>${esc(definition.shortLabel)}</span><strong>${formatBodyNumber(stats.latest.value)} ${definition.unit}</strong><b>${esc(bodyMetricNeutralTrend(stats,definition.unit))}${stats.percent!==null?` · ${stats.percent>0?"+":stats.percent<0?"−":""}${formatBodyNumber(Math.abs(stats.percent))} %`:""}</b><small>${formatDate(stats.latest.date)}</small></button>`;
+}
+function renderBodyMetricDetail(key){
+  const definition=BODY_METRICS[key];
+  if(!definition){state.selectedBodyMetric=null;renderBody();return;}
+  const rows=getBodyHistory(),stats=bodyMetricStats(key,rows);
+  const chartKeys=definition.pair?[key,definition.pair]:[key];
+  const history=stats?.entries.slice().reverse()||[];
+  const weekly=key==="weight"&&stats?stats.entries.filter(item=>Date.now()-new Date(`${item.date}T12:00:00`).getTime()<=7*86400000):[];
+  app.innerHTML=`<div class="app-shell"><header class="topbar"><button id="backBodyOverview" class="text-button" type="button">← Medidas</button><div><div class="brand">${esc(definition.label)}</div><div class="subtle">Histórico y tendencia</div></div></header>
+    <main class="screen body-detail-screen">
+      ${stats?`<section class="body-detail-hero"><span>Último valor · ${formatDate(stats.latest.date)}</span><strong>${formatBodyNumber(stats.latest.value)} ${definition.unit}</strong><p>${esc(bodyMetricNeutralTrend(stats,definition.unit))}${stats.percent!==null?` · ${stats.percent>0?"+":stats.percent<0?"−":""}${formatBodyNumber(Math.abs(stats.percent))} %`:""}</p></section>`:`<section class="body-detail-hero empty"><span>${esc(definition.shortLabel)}</span><strong>Sin registrar</strong><button id="addFirstBodyMetric" class="primary">Añadir primera medida</button></section>`}
+      <section class="card"><div class="body-period-control" aria-label="Periodo del gráfico">${[["weeks4","4 semanas"],["3m","3 meses"],["6m","6 meses"],["all","Todo"]].map(([value,label])=>`<button type="button" data-body-period="${value}" class="${state.bodyMetricPeriod===value?"active":""}" aria-pressed="${state.bodyMetricPeriod===value}">${label}</button>`).join("")}</div>${bodyMetricChart(bodyRowsForPeriod(rows,state.bodyMetricPeriod),chartKeys)}</section>
+      ${stats?`<section class="body-detail-stats"><article><span>Cambio anterior</span><strong>${stats.delta===null?"Primer registro":signedBodyValue(stats.delta,definition.unit)}</strong></article><article><span>Cambio mensual</span><strong>${stats.monthlyDelta===null?"Sin datos":signedBodyValue(stats.monthlyDelta,definition.unit)}</strong></article><article><span>Cambio total</span><strong>${stats.totalDelta===null?"Primer registro":signedBodyValue(stats.totalDelta,definition.unit)}</strong><small>${stats.totalPercent!==null?`${stats.totalPercent>0?"+":stats.totalPercent<0?"−":""}${formatBodyNumber(Math.abs(stats.totalPercent))} %`:""}</small></article>${weekly.length?`<article><span>Media últimos 7 días</span><strong>${formatBodyNumber(weekly.reduce((sum,item)=>sum+item.value,0)/weekly.length)} kg</strong></article>`:""}</section><section class="card body-goal-context"><h2>Interpretación</h2><p>${esc(bodyMetricGoalContext(key,stats))}</p></section>`:""}
+      <section class="card"><h2>Historial</h2>${history.length?history.map(item=>`<div class="body-history-row"><div><strong>${formatDate(item.date)}</strong><small>${esc(rows.find(row=>row.id===item.id)?.notes||"Sin notas")}</small></div><strong>${formatBodyNumber(item.value)} ${definition.unit}</strong></div>`).join(""):`<div class="empty">Todavía no hay registros para esta métrica.</div>`}</section>
+    </main>${nav("")}</div>`;
+  document.getElementById("backBodyOverview").onclick=()=>{state.selectedBodyMetric=null;renderBody();};
+  const addFirst=document.getElementById("addFirstBodyMetric");
+  if(addFirst) addFirst.onclick=()=>{state.selectedBodyMetric=null;state.bodyEntryOpen=true;renderBody();};
+  document.querySelectorAll("[data-body-period]").forEach(button=>button.onclick=()=>{state.bodyMetricPeriod=button.dataset.bodyPeriod;renderBodyMetricDetail(key);});
+  bindNav();
+}
+function renderBody(){
+  if(state.selectedBodyMetric){renderBodyMetricDetail(state.selectedBodyMetric);return;}
+  const rows=getBodyHistory(),today=new Date().toISOString().slice(0,10);
+  const categories=["General","Tronco","Brazos","Piernas"],message=state.bodyFormMessage;
+  const lastDate=rows.at(-1)?.date;
+  const daysSince=lastDate?Math.floor((Date.now()-new Date(`${lastDate}T12:00:00`).getTime())/86400000):null;
+  const asymmetries=`${bodyAsymmetrySummary("rightArm","leftArm","Brazos")}${bodyAsymmetrySummary("rightThigh","leftThigh","Piernas")}`;
+  app.innerHTML=`<div class="app-shell"><header class="topbar"><div><div class="brand">Seguimiento corporal</div><div class="subtle">Medidas, evolución y asimetrías</div></div><button id="toggleBodyEntry" class="primary" type="button">${state.bodyEntryOpen?"Cerrar":"Añadir medidas"}</button></header>
+    <main class="screen body-screen-v2">
+      ${daysSince!==null&&daysSince<14?`<aside class="body-frequency-note">Los perímetros suelen ser más útiles cada 2–4 semanas. El peso sí puede registrarse varias veces por semana.</aside>`:""}
+      ${state.bodyEntryOpen?`<section class="card body-entry-card"><div><span class="section-kicker">REGISTRO RÁPIDO</span><h2>Añadir medidas</h2><p class="subtle">Guarda únicamente las medidas que hayas realizado hoy.</p></div><div class="body-form-grid body-form-complete">
+        <label class="body-date-field"><span>Fecha</span><input id="bodyDate" type="date" value="${today}"></label>
+        ${BODY_METRIC_KEYS.map(key=>{const metric=BODY_METRICS[key];return `<label class="body-measure-field"><span>${esc(metric.label)} <em>${esc(metric.tier)}</em></span><input id="bodyMetric-${esc(key)}" inputmode="decimal" placeholder="${metric.unit==="%"?"18,5":metric.unit==="kg"?"78,4":"—"}" aria-describedby="bodyHelp-${esc(key)}"><small id="bodyHelp-${esc(key)}">${esc(metric.help)}</small></label>`;}).join("")}
+        <label class="body-note"><span>Notas</span><textarea id="bodyNotes" rows="3" placeholder="Condiciones de medición, método utilizado…"></textarea></label></div>
+        <p id="bodyFormMessage" class="verification-message ${message?.type||""}" role="${message?.type==="error"?"alert":"status"}" ${message?"":"hidden"}>${message?esc(message.text):""}</p><button id="saveBody" class="primary full" type="button">Guardar medidas</button></section>`:""}
+      ${categories.map(category=>`<section class="body-category"><div class="body-category-heading"><span class="section-kicker">${esc(category.toLocaleUpperCase("es"))}</span><h2>${esc(category)}</h2></div><div class="body-overview-grid">${BODY_METRIC_KEYS.filter(key=>BODY_METRICS[key].category===category).map(renderBodyMetricCard).join("")}</div></section>`).join("")}
+      ${asymmetries?`<section class="body-asymmetry-section"><div class="body-category-heading"><span class="section-kicker">COMPARACIÓN</span><h2>Asimetrías registradas</h2></div><div class="body-asymmetry-grid">${asymmetries}</div></section>`:""}
+      <section class="card"><h2>Registros</h2>${rows.length?rows.slice().reverse().map(row=>{const values=BODY_METRIC_KEYS.filter(key=>numericValue(row[key])!==null);return `<div class="body-history-row"><div><strong>${formatDate(row.date)}</strong><small>${esc(row.notes||`${values.length} ${values.length===1?"medida":"medidas"}`)}</small></div><div class="body-history-values"><span>${values.slice(0,2).map(key=>`${BODY_METRICS[key].shortLabel}: ${formatWeight(row[key])}`).join(" · ")}</span><button data-delete-body="${esc(row.id)}" class="body-delete" aria-label="Eliminar registro del ${formatDate(row.date)}">×</button></div></div>`;}).join(""):`<div class="empty">Todavía no hay registros. Añade tu primera medida cuando estés preparado.</div>`}</section>
+    </main>${nav("")}</div>`;
+  document.getElementById("toggleBodyEntry").onclick=()=>{state.bodyEntryOpen=!state.bodyEntryOpen;state.bodyFormMessage=null;renderBody();};
+  document.querySelectorAll("[data-body-metric]").forEach(button=>button.onclick=()=>{state.selectedBodyMetric=button.dataset.bodyMetric;renderBodyMetricDetail(state.selectedBodyMetric);});
+  const saveButton=document.getElementById("saveBody");
+  if(saveButton) saveButton.onclick=()=>{
+    const date=document.getElementById("bodyDate").value,values={};
+    const showBodyError=text=>{
+      state.bodyFormMessage={type:"error",text};
+      const element=document.getElementById("bodyFormMessage");
+      element.textContent=text;element.className="verification-message error";
+      element.setAttribute("role","alert");element.hidden=false;
+    };
+    BODY_METRIC_KEYS.forEach(key=>{const raw=document.getElementById(`bodyMetric-${key}`).value.trim().replace(",",".");values[key]=raw===""?null:numericValue(raw);});
+    if(!date){showBodyError("Selecciona una fecha.");return;}
+    if(!BODY_METRIC_KEYS.some(key=>values[key]!==null)){showBodyError("Introduce al menos una medida.");return;}
+    const invalid=BODY_METRIC_KEYS.find(key=>{const value=values[key];if(value===null)return false;if(key==="weight")return value<30||value>300;if(key==="bodyFat")return value<1||value>80;return value<10||value>300;});
+    if(invalid){showBodyError(`Revisa el valor de ${BODY_METRICS[invalid].shortLabel}.`);return;}
+    const current=getBodyHistory(),existing=current.find(row=>row.date===date),now=new Date().toISOString();
+    const next=existing?{...existing}:{id:bodyMeasurementId(),date,createdAt:now};
+    BODY_METRIC_KEYS.forEach(key=>{if(values[key]!==null)next[key]=values[key];});
+    next.notes=document.getElementById("bodyNotes").value.trim()||existing?.notes||"";next.updatedAt=now;
+    saveBodyHistory([...current.filter(row=>row.id!==next.id),next]);
+    state.bodyEntryOpen=false;state.bodyFormMessage=null;toast("Medidas corporales guardadas.");renderBody();
+  };
+  document.querySelectorAll("[data-delete-body]").forEach(button=>button.onclick=()=>{if(!confirm("¿Eliminar este registro corporal?"))return;const id=button.dataset.deleteBody;saveBodyHistory(getBodyHistory().filter(row=>String(row.id)!==String(id)));deleteBodyMeasurementRemote(id);renderBody();});
   bindNav();
 }
 
@@ -5829,11 +7088,12 @@ function renderHealth(){
   };
 }
 
-function renderNutrition(){
+function renderNutritionLegacy(){
   const settings=getNutritionSettings();
   const entry=nutritionEntryForDate(state.nutritionDate);
   const weekly=nutritionWeeklySummary();
   const assessment=bodyCompositionAssessment();
+  const professionalPlans=window.GymOSProfessionalNutrition?.getPlans?.()||[];
 
   app.innerHTML=`<div class="app-shell">
     <header class="topbar">
@@ -5892,7 +7152,7 @@ function renderNutrition(){
         </div>
       </section>
 
-      <section class="card">
+      <section class="card" id="nutritionDailyRecord">
         <h2>Configurar objetivo</h2>
         <label><span>Fase actual</span>
           <select id="nutritionGoal">
@@ -5907,6 +7167,15 @@ function renderNutrition(){
           <label><span>Objetivo kg/semana</span><input id="nutritionWeeklyTarget" type="number" step="0.05" value="${Number(settings.weeklyTarget)}"></label>
         </div>
         <button id="saveNutritionSettings" class="secondary full">Guardar objetivos</button>
+      </section>
+
+      <section class="card professional-history-entry">
+        <div class="card-heading-row">
+          <div><span class="section-kicker">ARCHIVO HISTÓRICO</span><h2>Planificaciones profesionales</h2>
+          <p>Conserva planes anteriores y adapta cantidades sin modificar tu objetivo actual.</p></div>
+          <strong>${professionalPlans.length}</strong>
+        </div>
+        <button id="openProfessionalNutrition" class="secondary full">${professionalPlans.length?"Ver planificaciones":"Importar planificación"}</button>
       </section>
 
       <section class="card warning-card">
@@ -5947,6 +7216,201 @@ function renderNutrition(){
     toast("Objetivos nutricionales guardados");
     renderNutrition();
   };
+  document.getElementById("openProfessionalNutrition").onclick=()=>{
+    state.screen="professionalNutrition";
+    renderProfessionalNutritionLibrary();
+  };
+  const professionalFile=document.getElementById("professionalNutritionFile");
+  professionalFile.onchange=async event=>{
+    const file=event.target.files?.[0];
+    event.target.value="";
+    if(!file) return;
+    try{
+      await window.GymOSProfessionalNutrition.handleFileSelection(file);
+    }catch(error){
+      console.error("Professional nutrition import",error);
+      toast(error.message||"No se pudo importar la planificación.");
+    }
+  };
+}
+
+function nutritionCalculatorDefaults(){
+  const profile=getOnboardingProfile()||{};
+  const current=getNutritionSettings();
+  const latestWeight=bodyMetricSummary("weight","kg")?.value;
+  const days=Number(profile.days||3);
+  const activity=days>=5?"high":days>=3?"moderate":"light";
+  return {
+    sex:current.inputs?.sex||profile.sex||"",
+    age:current.inputs?.age||profile.age||"",
+    height:current.inputs?.height||profile.height||"",
+    weight:latestWeight||current.inputs?.weight||profile.weight||"",
+    activity:current.inputs?.activity||activity,
+    trainingDays:current.inputs?.trainingDays??days,
+    goal:current.goal||"Mantenimiento",
+    weeklyRate:Math.abs(Number(current.weeklyTarget||0))||0
+  };
+}
+function nutritionRateOptions(goal,current=0){
+  const values=goal==="Definición"?[.25,.5,.75]:goal==="Volumen"?[.1,.25,.5]:[0];
+  return values.map(value=>`<option value="${value}" ${Number(current)===value?"selected":""}>${goal==="Definición"?"Perder":goal==="Volumen"?"Ganar":"Mantener"} ${value?String(value).replace(".",",")+" kg":"peso"}</option>`).join("");
+}
+function nutritionRemaining(settings,entry){
+  return {
+    calories:Math.max(0,Number(settings.calories||0)-Number(entry.calories||0)),
+    protein:Math.max(0,Number(settings.protein||0)-Number(entry.protein||0)),
+    carbs:Math.max(0,Number(settings.carbs||0)-Number(entry.carbs||0)),
+    fat:Math.max(0,Number(settings.fat||0)-Number(entry.fat||0))
+  };
+}
+function renderNutritionCalculation(settings){
+  if(!hasNutritionTargets(settings)||settings.source!=="gymos") return "";
+  const inputs=settings.inputs||{};
+  const date=settings.calculatedAt?new Date(settings.calculatedAt).toLocaleDateString("es-ES",{day:"numeric",month:"long",year:"numeric"}):"Sin fecha";
+  return `<section class="card nutrition-transparency">
+    <div class="card-heading-row"><div><span class="section-kicker">CALCULADO POR GYMOS</span><h2>Cómo se ha calculado</h2><p>${esc(date)}</p></div><button id="toggleNutritionCalculation" class="text-button">${state.nutritionCalculationExpanded?"Ocultar":"Ver cálculo"} →</button></div>
+    ${state.nutritionCalculationExpanded?`<div class="nutrition-calculation-detail">
+      <dl>
+        <div><dt>Datos utilizados</dt><dd>${inputs.weight} kg · ${inputs.height} cm · ${inputs.age} años · ${esc(inputs.activityLabel||inputs.activity)} · ${inputs.trainingDays} entrenamientos</dd></div>
+        <div><dt>BMR</dt><dd>${settings.bmr.toLocaleString("es-ES")} kcal · metabolismo basal con Mifflin-St Jeor</dd></div>
+        <div><dt>TDEE</dt><dd>${settings.tdee.toLocaleString("es-ES")} kcal · BMR × factor de actividad ${inputs.effectiveFactor}</dd></div>
+        <div><dt>${settings.dailyAdjustment<0?"Déficit":settings.dailyAdjustment>0?"Superávit":"Ajuste"}</dt><dd>${settings.dailyAdjustment>0?"+":""}${settings.dailyAdjustment} kcal/día según el ritmo semanal</dd></div>
+        <div><dt>Macros</dt><dd>Proteína por kg, grasa mínima y carbohidratos con las calorías restantes.</dd></div>
+      </dl>
+    </div>`:""}
+  </section>`;
+}
+function renderNutritionCalculator(){
+  const defaults=state.nutritionPreview?.inputs||nutritionCalculatorDefaults();
+  const preview=state.nutritionPreview;
+  return `<section class="card nutrition-calculator-card">
+    <span class="section-kicker">NECESIDADES PERSONALES</span><h2>Calcular mis necesidades</h2>
+    <p class="subtle">La vista previa no se aplicará hasta que la confirmes.</p>
+    <div class="nutrition-calculator-grid">
+      <label><span>Sexo para la fórmula</span><select id="nutritionCalcSex"><option value="">Seleccionar</option><option value="male" ${defaults.sex==="male"?"selected":""}>Hombre</option><option value="female" ${defaults.sex==="female"?"selected":""}>Mujer</option></select></label>
+      <label><span>Edad</span><input id="nutritionCalcAge" type="number" min="14" max="100" value="${esc(defaults.age)}"></label>
+      <label><span>Altura (cm)</span><input id="nutritionCalcHeight" type="number" min="120" max="230" value="${esc(defaults.height)}"></label>
+      <label><span>Peso (kg)</span><input id="nutritionCalcWeight" type="number" min="35" max="350" step=".1" value="${esc(defaults.weight)}"></label>
+      <label><span>Actividad</span><select id="nutritionCalcActivity">${Object.entries(window.GymOSNutritionEngine.activityFactors).map(([key,item])=>`<option value="${key}" ${defaults.activity===key?"selected":""}>${esc(item.label)}</option>`).join("")}</select></label>
+      <label><span>Entrenamientos semanales</span><input id="nutritionCalcTrainingDays" type="number" min="0" max="7" value="${esc(defaults.trainingDays)}"></label>
+      <label><span>Objetivo</span><select id="nutritionCalcGoal">${["Definición","Mantenimiento","Volumen"].map(goal=>`<option ${defaults.goal===goal?"selected":""}>${goal}</option>`).join("")}</select></label>
+      <label><span>Ritmo semanal</span><select id="nutritionCalcRate">${nutritionRateOptions(defaults.goal,defaults.weeklyRate)}</select></label>
+    </div>
+    <p id="nutritionCalculatorMessage" class="inline-message hidden" role="alert"></p>
+    <button id="previewNutritionNeeds" class="secondary full">Calcular vista previa</button>
+    ${preview?`<div class="nutrition-preview">
+      <div><span>Metabolismo basal</span><strong>${preview.bmr.toLocaleString("es-ES")} kcal</strong></div>
+      <div><span>Gasto energético</span><strong>${preview.tdee.toLocaleString("es-ES")} kcal</strong></div>
+      <div><span>Objetivo</span><strong>${preview.calories.toLocaleString("es-ES")} kcal</strong></div>
+      <div><span>Proteína</span><strong>${preview.protein} g</strong></div>
+      <div><span>Grasa</span><strong>${preview.fat} g</strong></div>
+      <div><span>Carbohidratos</span><strong>${preview.carbs} g</strong></div>
+      <div><span>Fibra</span><strong>${preview.fiber} g</strong></div>
+      <p>${preview.dailyAdjustment<0?"Déficit":preview.dailyAdjustment>0?"Superávit":"Sin ajuste energético"}: ${preview.dailyAdjustment>0?"+":""}${preview.dailyAdjustment} kcal/día.</p>
+      <button id="applyNutritionPreview" class="primary full">Aplicar estos objetivos</button>
+    </div>`:""}
+  </section>`;
+}
+function renderSmartRecipes(settings,entry){
+  if(!hasNutritionTargets(settings)) return "";
+  const remaining=nutritionRemaining(settings,entry);
+  const suggestions=state.nutritionRecipeSuggestions||[];
+  const shopping=window.GymOSNutritionEngine.shoppingList(suggestions);
+  return `<section class="card smart-recipes">
+    <div class="card-heading-row"><div><span class="section-kicker">RECETAS</span><h2>Recetas inteligentes</h2><p>Calculadas con lo que te queda hoy.</p></div></div>
+    <div class="remaining-macros"><span>${remaining.calories} kcal</span><span>P ${remaining.protein} g</span><span>C ${remaining.carbs} g</span><span>G ${remaining.fat} g</span></div>
+    <div class="recipe-controls"><select id="nutritionRecipeType">${["desayuno","comida","cena","snack","preentreno","postentreno"].map(type=>`<option value="${type}" ${state.nutritionRecipeType===type?"selected":""}>${type.charAt(0).toLocaleUpperCase("es")+type.slice(1)}</option>`).join("")}</select><button id="generateNutritionRecipes" class="secondary">Calcular recetas</button></div>
+    ${suggestions.length?`<div class="recipe-results">${suggestions.map(recipe=>`<article>
+      <div><span class="section-kicker">${recipe.time} MIN</span><h3>${esc(recipe.name)}</h3><strong>${recipe.macros.calories} kcal · P ${recipe.macros.protein} · C ${recipe.macros.carbs} · G ${recipe.macros.fat}</strong></div>
+      <ul>${recipe.ingredients.map(item=>`<li><span>${esc(item.name)}</span><strong>${item.quantity} ${esc(item.unit)}</strong></li>`).join("")}</ul>
+      <small>Valores aproximados según las cantidades propuestas.</small>
+    </article>`).join("")}</div>
+    <details class="shopping-list"><summary>Lista de compra</summary>${shopping.map(item=>`<div><span>${esc(item.name)}</span><strong>${item.quantity} ${esc(item.unit)}</strong></div>`).join("")}</details>`:`<p class="subtle">Elige un momento del día para obtener propuestas.</p>`}
+  </section>`;
+}
+function renderNutrition(){
+  const settings=getNutritionSettings();
+  const hasTargets=hasNutritionTargets(settings);
+  const entry=nutritionEntryForDate(state.nutritionDate);
+  const weekly=nutritionWeeklySummary();
+  const assessment=bodyCompositionAssessment();
+  const professionalPlans=window.GymOSProfessionalNutrition?.getPlans?.()||[];
+  const sourceLabel=settings.source==="gymos"?"Calculado por GymOS":settings.source==="manual"?"Manual":"";
+
+  app.innerHTML=`<div class="app-shell">
+    <header class="topbar nutrition-topbar"><div><div class="brand">Nutrición</div><div class="subtle">Objetivos, registro y recetas</div></div><input id="nutritionDate" class="header-date" type="date" value="${esc(state.nutritionDate)}"></header>
+    <main class="screen nutrition-screen-v5">
+      ${hasTargets?`<section class="card nutrition-hero">
+        <div class="card-heading-row"><div><span class="section-kicker">${esc(sourceLabel.toLocaleUpperCase("es"))}</span><h1>${esc(settings.goal)}</h1><p>${esc(assessment.message)}</p></div><span class="nutrition-status">${esc(assessment.status)}</span></div>
+        <div class="nutrition-target-grid">
+          <article><span>Calorías</span><strong>${Number(settings.calories).toLocaleString("es-ES")}</strong></article>
+          <article><span>Proteína</span><strong>${settings.protein} g</strong></article>
+          <article><span>Carbohidratos</span><strong>${settings.carbs} g</strong></article>
+          <article><span>Grasa</span><strong>${settings.fat} g</strong></article>
+          <article><span>Fibra</span><strong>${settings.fiber||"Sin calcular"}${settings.fiber?" g":""}</strong></article>
+        </div>
+        <button id="recalculateNutrition" class="text-button">Recalcular necesidades →</button>
+      </section>`:`<section class="nutrition-needs-empty">
+        <span class="section-kicker">PRIMER PASO</span><h1>Objetivos nutricionales sin calcular</h1><p>GymOS no mostrará calorías ni macros hasta calcularlos con tus datos.</p><button id="calculateNutritionNeeds" class="primary">Calcular mis necesidades</button>
+      </section>`}
+      ${state.nutritionCalculatorOpen||!hasTargets?renderNutritionCalculator():""}
+      ${renderNutritionCalculation(settings)}
+      <section class="card">
+        <h2>Registro diario</h2>
+        <div class="nutrition-input-grid">
+          <label><span>Calorías</span><input id="nutritionCalories" type="number" min="0" value="${esc(entry.calories)}"></label>
+          <label><span>Proteína (g)</span><input id="nutritionProtein" type="number" min="0" value="${esc(entry.protein)}"></label>
+          <label><span>Carbohidratos (g)</span><input id="nutritionCarbs" type="number" min="0" value="${esc(entry.carbs)}"></label>
+          <label><span>Grasa (g)</span><input id="nutritionFat" type="number" min="0" value="${esc(entry.fat)}"></label>
+          <label><span>Agua (L)</span><input id="nutritionWater" type="number" min="0" step="0.1" value="${esc(entry.water)}"></label>
+          <label><span>Pasos</span><input id="nutritionSteps" type="number" min="0" value="${esc(entry.steps)}"></label>
+        </div>
+        <label><span>Notas</span><textarea id="nutritionNotes" rows="3" placeholder="Hambre, energía, comidas libres...">${esc(entry.notes)}</textarea></label>
+        <button id="saveNutritionEntry" class="primary full">Guardar día</button>
+      </section>
+      ${hasTargets?`<section class="card"><h2>Objetivos diarios</h2>${[["Calorías",entry.calories,settings.calories,"kcal"],["Proteína",entry.protein,settings.protein,"g"],["Carbohidratos",entry.carbs,settings.carbs,"g"],["Grasa",entry.fat,settings.fat,"g"]].map(([label,value,target,unit])=>`<div class="nutrition-progress-row"><div><span>${label}</span><strong>${Number(value||0).toLocaleString("es-ES")} / ${Number(target).toLocaleString("es-ES")} ${unit}</strong></div><div class="nutrition-progress"><span style="width:${nutritionProgress(value,target)}%"></span></div></div>`).join("")}</section>`:""}
+      ${renderSmartRecipes(settings,entry)}
+      <section class="card"><h2>Promedio de los últimos 7 días</h2><div class="nutrition-week-grid"><article><span>Días registrados</span><strong>${weekly.days}</strong></article><article><span>Calorías</span><strong>${weekly.calories?Math.round(weekly.calories).toLocaleString("es-ES"):"Sin datos"}</strong></article><article><span>Proteína</span><strong>${weekly.protein?Math.round(weekly.protein)+" g":"Sin datos"}</strong></article><article><span>Pasos</span><strong>${weekly.steps?Math.round(weekly.steps).toLocaleString("es-ES"):"Sin datos"}</strong></article></div></section>
+      <details class="card manual-nutrition-settings"><summary>Objetivo manual</summary><p class="subtle">Los valores manuales se mantienen separados de los calculados por GymOS.</p><div class="nutrition-input-grid">
+        <label><span>Fase</span><select id="nutritionGoal">${["Definición","Mantenimiento","Volumen"].map(goal=>`<option ${settings.goal===goal?"selected":""}>${goal}</option>`).join("")}</select></label>
+        <label><span>Calorías</span><input id="nutritionTargetCalories" type="number" min="1000" value="${settings.source==="manual"?Number(settings.calories||""):""}"></label>
+        <label><span>Proteína (g)</span><input id="nutritionTargetProtein" type="number" min="0" value="${settings.source==="manual"?Number(settings.protein||""):""}"></label>
+        <label><span>Carbohidratos (g)</span><input id="nutritionTargetCarbs" type="number" min="0" value="${settings.source==="manual"?Number(settings.carbs||""):""}"></label>
+        <label><span>Grasa (g)</span><input id="nutritionTargetFat" type="number" min="0" value="${settings.source==="manual"?Number(settings.fat||""):""}"></label>
+        <label><span>Fibra (g)</span><input id="nutritionTargetFiber" type="number" min="0" value="${settings.source==="manual"?Number(settings.fiber||""):""}"></label>
+      </div><button id="saveNutritionSettings" class="secondary full">Guardar objetivo manual</button></details>
+      <section class="card professional-history-entry"><div class="card-heading-row"><div><span class="section-kicker">IMPORTADO</span><h2>Planes profesionales</h2><p>Nunca se sobrescriben automáticamente.</p></div><strong>${professionalPlans.length}</strong></div><button id="openProfessionalNutrition" class="secondary full">${professionalPlans.length?"Ver planes importados":"Importar plan profesional"}</button></section>
+    </main>${nav("nutrition")}
+  </div>`;
+
+  document.getElementById("nutritionDate").onchange=event=>{state.nutritionDate=event.target.value;state.nutritionRecipeSuggestions=[];renderNutrition();};
+  document.getElementById("saveNutritionEntry").onclick=()=>{upsertNutritionEntry({date:state.nutritionDate,calories:document.getElementById("nutritionCalories").value,protein:document.getElementById("nutritionProtein").value,carbs:document.getElementById("nutritionCarbs").value,fat:document.getElementById("nutritionFat").value,water:document.getElementById("nutritionWater").value,steps:document.getElementById("nutritionSteps").value,notes:document.getElementById("nutritionNotes").value.trim()});toast("Registro nutricional guardado");renderNutrition();};
+  const calculate=document.getElementById("calculateNutritionNeeds");
+  if(calculate) calculate.onclick=()=>{state.nutritionCalculatorOpen=true;renderNutrition();};
+  const recalculate=document.getElementById("recalculateNutrition");
+  if(recalculate) recalculate.onclick=()=>{state.nutritionCalculatorOpen=true;state.nutritionPreview=null;renderNutrition();};
+  const goalInput=document.getElementById("nutritionCalcGoal");
+  if(goalInput) goalInput.onchange=()=>{document.getElementById("nutritionCalcRate").innerHTML=nutritionRateOptions(goalInput.value,0);};
+  const previewButton=document.getElementById("previewNutritionNeeds");
+  if(previewButton) previewButton.onclick=()=>{
+    const inputs={sex:document.getElementById("nutritionCalcSex").value,age:document.getElementById("nutritionCalcAge").value,height:document.getElementById("nutritionCalcHeight").value,weight:document.getElementById("nutritionCalcWeight").value,activity:document.getElementById("nutritionCalcActivity").value,trainingDays:document.getElementById("nutritionCalcTrainingDays").value,goal:document.getElementById("nutritionCalcGoal").value,weeklyRate:document.getElementById("nutritionCalcRate").value};
+    try{state.nutritionPreview=window.GymOSNutritionEngine.calculateNutritionNeeds(inputs);renderNutrition();}catch(error){const message=document.getElementById("nutritionCalculatorMessage");message.textContent=error.message;message.classList.remove("hidden");}
+  };
+  const applyPreview=document.getElementById("applyNutritionPreview");
+  if(applyPreview) applyPreview.onclick=()=>{saveNutritionSettings(state.nutritionPreview);state.nutritionPreview=null;state.nutritionCalculatorOpen=false;toast("Objetivos calculados y aplicados");renderNutrition();autoSync("objetivos nutricionales calculados");};
+  const toggleCalculation=document.getElementById("toggleNutritionCalculation");
+  if(toggleCalculation) toggleCalculation.onclick=()=>{state.nutritionCalculationExpanded=!state.nutritionCalculationExpanded;renderNutrition();};
+  document.getElementById("saveNutritionSettings").onclick=()=>{
+    const manual={source:"manual",goal:document.getElementById("nutritionGoal").value,calories:Number(document.getElementById("nutritionTargetCalories").value||0),protein:Number(document.getElementById("nutritionTargetProtein").value||0),carbs:Number(document.getElementById("nutritionTargetCarbs").value||0),fat:Number(document.getElementById("nutritionTargetFat").value||0),fiber:Number(document.getElementById("nutritionTargetFiber").value||0),weeklyTarget:0,calculatedAt:new Date().toISOString()};
+    if(!["calories","protein","carbs","fat"].every(field=>manual[field]>0)){toast("Completa calorías y macros antes de guardar");return;}
+    saveNutritionSettings(manual);toast("Objetivo manual guardado");renderNutrition();
+  };
+  const generateRecipes=document.getElementById("generateNutritionRecipes");
+  if(generateRecipes) generateRecipes.onclick=()=>{state.nutritionRecipeType=document.getElementById("nutritionRecipeType").value;state.nutritionRecipeSuggestions=window.GymOSNutritionEngine.suggestRecipes({type:state.nutritionRecipeType,remaining:nutritionRemaining(settings,entry),goal:settings.goal});renderNutrition();};
+  document.getElementById("openProfessionalNutrition").onclick=()=>{state.screen="professionalNutrition";renderProfessionalNutritionLibrary();};
+  const professionalFile=document.getElementById("professionalNutritionFile");
+  professionalFile.onchange=async event=>{const file=event.target.files?.[0];event.target.value="";if(!file)return;try{await window.GymOSProfessionalNutrition.handleFileSelection(file);}catch(error){console.error("Professional nutrition import",error);toast(error.message||"No se pudo importar la planificación.");}};
+  bindNav();
 }
 
 function renderProgressDashboard(){
@@ -5955,6 +7419,8 @@ function renderProgressDashboard(){
   let adherence={completed:0,possible:0,percent:0};
   let weightTrend={entries:[],change:null,weeklyRate:null};
   let records=[];
+  const recentRecovery=window.GymOSRecovery?.getEntries?.().slice(-7)||[];
+  const averageRecovery=recentRecovery.length?Math.round(recentRecovery.reduce((sum,item)=>sum+Number(item.recoveryScore||0),0)/recentRecovery.length):null;
   try{weeks=weeklyTrainingAnalytics(state.progressRangeWeeks);}catch(error){console.error("Progress weeks",error);}
   try{fatigue=fatigueAssessment();}catch(error){console.error("Progress fatigue",error);}
   try{periodization=periodizationRecommendation();}catch(error){console.error("Progress periodization",error);}
@@ -6001,7 +7467,12 @@ function renderProgressDashboard(){
           <div><h2>Fatiga estimada</h2><p class="subtle">${fatigue.reasons.length?esc(fatigue.reasons.join(" · ")):"Sin señales claras de fatiga acumulada."}</p></div>
           <span class="fatigue-level ${fatigue.level}">${esc(fatigue.level)}</span>
         </div>
-        <div class="fatigue-meter"><span style="width:${Math.min(100,fatigue.score/8*100)}%"></span></div>
+        <div class="fatigue-meter"><span style="width:${Math.min(100,fatigue.score/12*100)}%"></span></div>
+      </section>
+
+      <section class="card recovery-progress-card">
+        <div class="card-heading-row"><div><h2>Recuperación reciente</h2><p class="subtle">${recentRecovery.length?`${recentRecovery.length} evaluaciones en los últimos registros.`:"Completa el check-in del día siguiente para añadir contexto."}</p></div><strong>${averageRecovery===null?"Sin datos":averageRecovery}</strong></div>
+        ${averageRecovery!==null?`<div class="fatigue-meter recovery"><span style="width:${averageRecovery}%"></span></div>`:""}
       </section>
 
       <section class="card">
@@ -6139,11 +7610,15 @@ function renderCoachChat(){
 
 function renderCoach(){
   let settings={backendUrl:"",requireApproval:true,goal:"Mantenerme definido",sessionDuration:60};
-  let proposals=[],snapshots=[],summaries=[];
+  let proposals=[],snapshots=[],summaries=[],workoutAnalyses=[];
+  try{
+    window.GymOSWorkoutAnalysis?.ensureAnalyses?.(getHistory().slice(0,100));
+  }catch(error){console.error("Workout analysis migration",error);}
   try{settings=getCoachSettings();}catch(error){console.error("Coach settings",error);}
   try{proposals=getCoachProposals();}catch(error){console.error("Coach proposals",error);}
   try{snapshots=getCoachSnapshots();}catch(error){console.error("Coach snapshots",error);}
   try{summaries=coachExerciseSummary();}catch(error){console.error("Coach summary",error);}
+  try{workoutAnalyses=window.GymOSWorkoutAnalysis?.getAnalyses?.()||[];}catch(error){console.error("Workout analyses",error);}
   const latest=proposals[0]||null;
   const tracked=summaries.filter(item=>item.historyCount>0).length;
 
@@ -6165,12 +7640,29 @@ function renderCoach(){
         </div>
       </section>
 
+      <section class="coach-workout-analyses">
+        <div class="card-heading-row">
+          <div><span class="section-kicker">ÚLTIMAS SESIONES</span><h2>Valoraciones de entrenamientos</h2><p class="subtle">Análisis objetivo basado en tus series registradas.</p></div>
+          <strong>${workoutAnalyses.length}</strong>
+        </div>
+        ${workoutAnalyses.length?`<div class="coach-workout-analysis-list">${workoutAnalyses.slice(0,6).map(item=>`
+          <article class="card coach-workout-analysis-card">
+            <div class="coach-analysis-card-heading">
+              <span class="coach-analysis-state state-${esc(item.overallStatus)}">${esc(item.overallStatus==="demanding"||item.overallStatus==="below_expected"?"Revisar":item.overallStatus==="limited"?"Limitado":"Progresión")}</span>
+              <small>${formatDate(item.workoutDate)} · ${item.analysisSource==="ai"?"IA":item.analysisSource==="local_fallback"?"Fallback local":"Reglas"}</small>
+            </div>
+            <h3>${esc(item.shortTitle)}</h3>
+            <p>${esc(item.shortMessage)}</p>
+            <button type="button" class="text-button" data-open-workout-analysis="${esc(item.id)}">Ver análisis →</button>
+          </article>`).join("")}</div>`:`<div class="card coach-analysis-empty"><strong>Aún no hay valoraciones</strong><p>Se crearán automáticamente al finalizar el próximo entrenamiento.</p></div>`}
+      </section>
+
       <section class="card">
         <div class="card-heading-row">
-          <div><h2>Conexión con IA</h2><p class="subtle">Comprueba que el backend seguro está disponible.</p></div>
-          <span id="coachConnectionBadge" class="connection-badge ${getCoachConnection().status}">${getCoachConnection().status==="connected"?"Conectado":getCoachConnection().status==="error"?"Error":"Sin comprobar"}</span>
+          <div><h2>Coach IA</h2><p class="subtle">La IA solo redacta; las reglas de GymOS siguen tomando las decisiones.</p></div>
+          <span class="connection-badge ${getCoachSettings().aiEnabled?"connected":"unknown"}">${getCoachSettings().aiEnabled?esc(aiProviderLabel(getCoachConnection().provider||"rules")):"Desactivado"}</span>
         </div>
-        <button id="testCoachConnection" class="secondary full">Probar conexión</button>
+        <button id="openCoachAiSettings" class="secondary full">Abrir configuración de IA</button>
       </section>
 
       <section class="card coach-chat-entry">
@@ -6199,7 +7691,6 @@ function renderCoach(){
         <h2>Configuración del Coach</h2>
         <label><span>Objetivo actual</span><input id="coachGoal" value="${esc(settings.goal)}"></label>
         <label><span>Duración máxima de sesión (min)</span><input id="coachDuration" type="number" min="20" max="180" value="${Number(settings.sessionDuration||60)}"></label>
-        <label><span>URL del backend seguro</span><input id="coachBackendUrl" type="url" placeholder="https://tu-backend.example.com" value="${esc(settings.backendUrl||"")}"></label>
         <label class="favorite-filter"><input id="coachRequireApproval" type="checkbox" ${settings.requireApproval?"checked":""}><span>Exigir siempre confirmación antes de cambiar la rutina</span></label>
         <button id="saveCoachSettings" class="secondary full">Guardar configuración</button>
       </section>
@@ -6211,28 +7702,21 @@ function renderCoach(){
       </section>
 
       <section class="card warning-card">
-        <h2>Conexión con ChatGPT</h2>
-        <p>Esta versión prepara la integración, pero no guarda claves de OpenAI en GitHub Pages. Para usar IA real necesitas un backend seguro configurado en esta pantalla.</p>
+        <h2>Seguridad de la IA</h2>
+        <p>GymOS no guarda claves de Gemini, OpenAI u Ollama en el navegador. Las credenciales permanecen exclusivamente en el servidor.</p>
       </section>
     </main>
     ${nav("coach")}
   </div>`;
 
   document.getElementById("backCoach").onclick=()=>{state.screen="home";renderHome();};
+  document.getElementById("openCoachAiSettings").onclick=()=>{state.aiSettingsMessage=null;state.screen="aiSettings";renderAiSettings();};
+  document.querySelectorAll("[data-open-workout-analysis]").forEach(button=>button.onclick=()=>{
+    state.workoutAnalysisId=button.dataset.openWorkoutAnalysis;
+    state.screen="workoutAnalysis";
+    renderWorkoutAnalysisDetail();
+  });
   document.getElementById("openCoachChat").onclick=()=>{state.screen="coachChat";renderCoachChat();};
-  document.getElementById("testCoachConnection").onclick=async()=>{
-    const button=document.getElementById("testCoachConnection");
-    button.disabled=true;
-    button.textContent="Comprobando...";
-    try{
-      const connection=await testCoachConnection();
-      toast(`Conectado${connection.model?` · ${connection.model}`:""}`);
-      renderCoach();
-    }catch(error){
-      alert(error.message||"No se pudo conectar.");
-      renderCoach();
-    }
-  };
   document.getElementById("runLocalCoach").onclick=()=>{
     const proposal=createLocalCoachProposal();
     state.screen="coachProposal";
@@ -6259,7 +7743,6 @@ function renderCoach(){
       ...settings,
       goal:document.getElementById("coachGoal").value.trim()||"Mantenerme definido",
       sessionDuration:Number(document.getElementById("coachDuration").value||60),
-      backendUrl:document.getElementById("coachBackendUrl").value.trim(),
       requireApproval:document.getElementById("coachRequireApproval").checked
     });
     toast("Configuración guardada");
@@ -6272,6 +7755,100 @@ function renderCoach(){
       renderCoach();
     }
   };
+}
+
+function workoutAnalysisChange(value,suffix=" %"){
+  if(value===null||value===undefined||!Number.isFinite(Number(value))) return "Sin comparación";
+  const rounded=Math.round(Number(value)*10)/10;
+  return `${rounded>0?"+":rounded<0?"−":""}${String(Math.abs(rounded)).replace(".",",")}${suffix}`;
+}
+function renderWorkoutAnalysisDetail(){
+  const analyses=window.GymOSWorkoutAnalysis?.getAnalyses?.()||[];
+  const item=analyses.find(analysis=>analysis.id===state.workoutAnalysisId)||analyses[0];
+  if(!item){state.screen="coach";renderCoach();return;}
+  const analysis=item.structuredAnalysis||{};
+  const workout=getHistory().find(row=>String(row.id)===String(item.workoutId));
+  const exercises=analysis.exercise_results||[];
+  const actions=analysis.next_session_actions||[];
+  const warnings=analysis.warnings||[];
+  const progress=exercises.filter(row=>["clear_progression","moderate_progression"].includes(row.status));
+  const maintain=exercises.filter(row=>row.action==="maintain");
+  const fatigue=exercises.filter(row=>row.status==="excessive_effort");
+  const discomfort=exercises.filter(row=>row.status==="discomfort");
+  app.innerHTML=`<div class="app-shell">
+    <header class="topbar">
+      <button id="backWorkoutAnalysis" class="back-button" aria-label="Volver a Coach">←</button>
+      <div><div class="brand">Análisis de Sesión ${esc(workout?.session||"")}</div><div class="subtle">${formatDate(item.workoutDate)} · ${item.analysisSource==="ai"?"Explicación con IA":item.analysisSource==="local_fallback"?"IA no disponible · fallback local":"Motor de reglas"}</div></div><span></span>
+    </header>
+    <main class="screen workout-analysis-screen">
+      <section class="workout-analysis-hero">
+        <span class="coach-analysis-state state-${esc(item.overallStatus)}">${esc(item.shortTitle)}</span>
+        <h1>${esc(item.shortTitle)}</h1>
+        <p>${esc(item.aiMessage||item.shortMessage)}</p>
+        <div class="workout-analysis-summary">
+          <article><span>Ejercicios</span><strong>${Number(analysis.completed_exercises||0)} de ${Number(analysis.planned_exercises||0)}</strong></article>
+          <article><span>Series</span><strong>${Number(analysis.completed_series||0)} de ${Number(analysis.planned_series||0)}</strong></article>
+          <article><span>Volumen comparable</span><strong>${workoutAnalysisChange(analysis.volume_change_percent)}</strong></article>
+          <article><span>Duración</span><strong>${analysis.duration_ms?formatDuration(analysis.duration_ms):"Sin datos"}</strong></article>
+        </div>
+      </section>
+      ${warnings.length?`<section class="card workout-analysis-warnings"><h2>Contexto del análisis</h2>${warnings.map(warning=>`<p>${esc(warning.message)}</p>`).join("")}</section>`:""}
+      <section class="workout-analysis-exercises">
+        <div><span class="section-kicker">EJERCICIO POR EJERCICIO</span><h2>Qué ocurrió</h2></div>
+        ${exercises.map(result=>`<article class="card workout-exercise-analysis status-${esc(result.status)}">
+          <div class="card-heading-row"><div><h3>${esc(result.exercise)}</h3><p class="subtle">${result.completed_sets} de ${result.planned_sets} series completadas</p></div><span class="exercise-analysis-status">${esc(result.status_label)}</span></div>
+          <div class="exercise-analysis-comparison">
+            <div><span>Ahora</span><strong>${result.current?.max_weight!==null&&result.current?.max_weight!==undefined?`${formatWeight(result.current.max_weight)} kg`:"Carga sin registrar"}${result.current?.total_reps?` · ${result.current.total_reps} rep.`:""}</strong></div>
+            <div><span>Anterior</span><strong>${result.previous?`${result.previous.max_weight!==null&&result.previous.max_weight!==undefined?`${formatWeight(result.previous.max_weight)} kg`:"Sin carga"}${result.previous.total_reps?` · ${result.previous.total_reps} rep.`:""}`:"Sin sesión comparable"}</strong></div>
+            <div><span>Cambio de volumen</span><strong>${workoutAnalysisChange(result.changes?.volume_percent)}</strong></div>
+            <div><span>RIR</span><strong>${result.average_rir!==null&&result.average_rir!==undefined?String(Math.round(result.average_rir*10)/10).replace(".",","):"Sin registrar"}${result.target_rir?` · objetivo ${result.target_rir.min}–${result.target_rir.max}`:" · objetivo sin registrar"}</strong></div>
+          </div>
+          ${result.discomfort?`<p class="exercise-discomfort-alert"><strong>Molestia:</strong> ${esc(result.discomfort)}</p>`:""}
+          <div class="exercise-analysis-recommendation"><span>${esc(result.action_label)}</span><p>${esc(result.recommendation)}</p></div>
+        </article>`).join("")}
+      </section>
+      <section class="card workout-analysis-priorities">
+        <h2>Prioridades para la próxima sesión</h2>
+        ${progress.length?`<div><strong>Pueden progresar</strong><p>${progress.map(row=>esc(row.exercise)).join(" · ")}</p></div>`:""}
+        ${maintain.length?`<div><strong>Conviene mantener</strong><p>${maintain.map(row=>esc(row.exercise)).join(" · ")}</p></div>`:""}
+        ${fatigue.length?`<div><strong>Señales de esfuerzo excesivo</strong><p>${fatigue.map(row=>esc(row.exercise)).join(" · ")}</p></div>`:""}
+        ${discomfort.length?`<div><strong>Molestias registradas</strong><p>${discomfort.map(row=>esc(row.exercise)).join(" · ")}</p></div>`:""}
+        <div class="next-session-action-list">${actions.map(action=>`<article><span>${esc(action.label)}</span><strong>${esc(action.exercise)}</strong><p>${esc(action.recommendation)}</p><small>Requiere tu confirmación; GymOS no modificará la rutina automáticamente.</small></article>`).join("")}</div>
+      </section>
+      <section class="card workout-analysis-actions">
+        <div><h2>Recalcular o redactar</h2><p class="subtle">La IA recibe únicamente el resultado estructurado anterior.</p></div>
+        <button id="recalculateWorkoutAnalysis" class="secondary" type="button" ${workout?"":"disabled"}>Recalcular análisis</button>
+        <button id="writeWorkoutAnalysisWithAi" class="secondary" type="button">${getCoachSettings().aiEnabled?"Regenerar mensaje con IA":"Configurar mensajes de IA"}</button>
+        ${workout?`<button id="viewAnalyzedWorkout" class="text-button" type="button">Ver entrenamiento original →</button>`:""}
+      </section>
+    </main>${nav("coach")}
+  </div>`;
+  document.getElementById("backWorkoutAnalysis").onclick=()=>{state.screen="coach";renderCoach();};
+  const recalculate=document.getElementById("recalculateWorkoutAnalysis");
+  if(recalculate) recalculate.onclick=()=>{
+    const updated=window.GymOSWorkoutAnalysis.analyzeAndSave(workout,{force:true});
+    state.workoutAnalysisId=updated.id;toast("Análisis recalculado.");renderWorkoutAnalysisDetail();
+  };
+  document.getElementById("writeWorkoutAnalysisWithAi").onclick=async event=>{
+    if(!getCoachSettings().aiEnabled){
+      state.aiSettingsMessage=null;state.screen="aiSettings";renderAiSettings();return;
+    }
+    const button=event.currentTarget;button.disabled=true;button.textContent="Redactando…";
+    try{
+      const updated=await window.GymOSWorkoutAnalysis.maybeGenerateAiNarrative(item,{force:true});
+      state.workoutAnalysisId=updated.id;
+      toast(updated.analysisSource==="local_fallback"
+        ?"La IA no está disponible. Se mantiene la explicación local."
+        :"Explicación actualizada.");
+      renderWorkoutAnalysisDetail();
+    }catch(error){
+      console.error("Workout analysis AI",error);toast(error.message||"No se pudo usar la IA; se mantiene el análisis local.");
+      button.disabled=false;button.textContent="Redactar con IA";
+    }
+  };
+  const viewWorkout=document.getElementById("viewAnalyzedWorkout");
+  if(viewWorkout) viewWorkout.onclick=()=>{state.expandedHistoryId=workout.id;state.screen="history";renderHistory();};
+  bindNav();
 }
 
 function renderCoachProposal(){
@@ -7126,6 +8703,133 @@ function renderAccount(){
   }
 }
 
+function renderAiSettings(){
+  const settings=getCoachSettings();
+  const connection=getCoachConnection();
+  const provider=connection.provider||"rules";
+  const status=aiStatusLabel(connection.aiStatus||connection.status,settings.aiEnabled);
+  const message=state.aiSettingsMessage;
+  app.innerHTML=`<div class="app-shell">
+    <header class="topbar">
+      <button id="backAiSettings" class="back-button" aria-label="Volver a Más">←</button>
+      <div><div class="brand">Coach IA</div><div class="subtle">Configuración de inteligencia artificial</div></div><span></span>
+    </header>
+    <main class="screen ai-settings-screen">
+      <section class="card ai-status-card">
+        <div class="card-heading-row">
+          <div><span class="section-kicker">PROVEEDOR ACTUAL</span><h1>${esc(aiProviderLabel(provider))}</h1></div>
+          <span class="ai-connection-status status-${esc((connection.aiStatus||"unknown").replace("_","-"))}">${esc(status)}</span>
+        </div>
+        <dl>
+          <div><dt>Modelo configurado</dt><dd>${esc(connection.model||"No configurado")}</dd></div>
+          <div><dt>Última comprobación</dt><dd>${connection.aiCheckedAt?formatSyncDate(connection.aiCheckedAt):"Todavía no"}</dd></div>
+          <div><dt>Modo del usuario</dt><dd>${settings.aiEnabled?"Mensajes de IA activados":"Reglas de GymOS"}</dd></div>
+        </dl>
+      </section>
+
+      <section class="card ai-user-preferences">
+        <span class="section-kicker">PREFERENCIA PERSONAL</span>
+        <h2>Redacción de mensajes</h2>
+        <label class="ai-enable-control">
+          <input id="aiMessagesEnabled" type="checkbox" ${settings.aiEnabled?"checked":""}>
+          <span><strong>Activar mensajes redactados con IA</strong><small>El análisis y las decisiones seguirán procediendo de las reglas internas.</small></span>
+        </label>
+        <div class="ai-provider-options" aria-label="Proveedores disponibles">
+          ${[
+            ["rules","Sin IA / Reglas de GymOS"],
+            ["gemini","Gemini"],
+            ["openai","OpenAI"],
+            ["ollama","Ollama local"]
+          ].map(([value,label])=>`<article class="${provider===value?"active":""}"><span>${esc(label)}</span><small>${provider===value?"Configurado por el servidor":"Disponible mediante configuración del servidor"}</small></article>`).join("")}
+        </div>
+        ${provider==="ollama"?`<p class="ai-ollama-warning">Ollama requiere que el servidor donde se ejecuta el modelo esté encendido y accesible.</p>`:""}
+      </section>
+
+      <section class="card ai-privacy-card">
+        <span class="section-kicker">PRIVACIDAD</span>
+        <h2>Datos mínimos</h2>
+        <p>Los datos mínimos de la sesión pueden enviarse al proveedor configurado para redactar el comentario del Coach.</p>
+        <ul><li>Ejercicio, carga y repeticiones.</li><li>RIR, estado estructurado y recomendación calculada.</li></ul>
+        <p class="subtle">Nunca se envían correo, nombre completo, fotografías, credenciales ni claves del proveedor.</p>
+      </section>
+
+      ${developerModeEnabled()?`<section class="card ai-admin-card">
+        <span class="section-kicker">ADMINISTRACIÓN DEL SERVIDOR</span>
+        <h2>Backend seguro</h2>
+        <p class="subtle">La URL puede guardarse en este dispositivo. El proveedor, modelo y claves se configuran exclusivamente mediante variables de entorno del servidor.</p>
+        <label><span>URL del backend</span><input id="aiBackendUrl" type="url" value="${esc(settings.backendUrl||"")}" placeholder="https://backend.example.com"></label>
+        <div class="ai-environment-reference">
+          <article><strong>Gemini</strong><code>AI_PROVIDER · GEMINI_API_KEY · GEMINI_MODEL</code></article>
+          <article><strong>OpenAI</strong><code>AI_PROVIDER · OPENAI_API_KEY · OPENAI_MODEL</code></article>
+          <article><strong>Ollama</strong><code>AI_PROVIDER · OLLAMA_BASE_URL · OLLAMA_MODEL</code></article>
+        </div>
+        <p class="subtle">Una suscripción de ChatGPT no incluye automáticamente acceso a la API de OpenAI.</p>
+      </section>`:""}
+
+      <p id="aiSettingsMessage" class="verification-message ${message?.type||""}" role="${message?.type==="error"?"alert":"status"}" ${message?"":"hidden"}>${message?esc(message.text):""}</p>
+      <div class="ai-settings-actions">
+        <button id="testAiConnection" class="secondary" type="button">Probar conexión</button>
+        <button id="saveAiSettings" class="primary" type="button">Guardar</button>
+        <button id="disableAi" class="text-button" type="button">Desactivar IA</button>
+      </div>
+    </main>${nav("settings")}
+  </div>`;
+  document.getElementById("backAiSettings").onclick=()=>{state.aiSettingsMessage=null;state.screen="settings";renderSettings();};
+  document.getElementById("testAiConnection").onclick=async event=>{
+    const button=event.currentTarget;button.disabled=true;button.textContent="Comprobando…";
+    try{
+      const result=await fetchAiConfigurationStatus(true);
+      state.aiSettingsMessage={
+        type:result.aiStatus==="connected"?"success":"error",
+        text:result.aiStatus==="connected"
+          ?`Conexión correcta con ${aiProviderLabel(result.provider)}.`
+          :result.aiStatus==="disabled"
+            ?"El backend está configurado para utilizar las reglas de GymOS."
+            :"El proveedor no está configurado o no responde."
+      };
+    }catch(error){
+      state.aiSettingsMessage={type:"error",text:error.message||"No se pudo comprobar la conexión."};
+    }
+    renderAiSettings();
+  };
+  document.getElementById("saveAiSettings").onclick=async event=>{
+    const button=event.currentTarget;button.disabled=true;button.textContent="Guardando…";
+    const backendInput=document.getElementById("aiBackendUrl");
+    const next={...settings,backendUrl:backendInput?.value.trim()||settings.backendUrl,aiEnabled:document.getElementById("aiMessagesEnabled").checked};
+    saveCoachSettings(next);
+    if(next.aiEnabled){
+      try{
+        const result=await fetchAiConfigurationStatus(true);
+        if(result.aiStatus!=="connected"){
+          saveCoachSettings({...next,aiEnabled:false});
+          state.aiSettingsMessage={
+            type:"error",
+            text:result.provider==="ollama"
+              ?"No se pudo conectar con Ollama. La IA permanece desactivada."
+              :"El proveedor no está conectado. La IA permanece desactivada."
+          };
+        }else{
+          state.aiSettingsMessage={type:"success",text:`Configuración guardada. ${aiProviderLabel(result.provider)} está conectado.`};
+        }
+      }catch(error){
+        saveCoachSettings({...next,aiEnabled:false});
+        state.aiSettingsMessage={type:"error",text:"No se pudo comprobar el backend. La IA permanece desactivada."};
+      }
+    }else{
+      state.aiSettingsMessage={type:"success",text:"Configuración guardada en modo Reglas de GymOS."};
+    }
+    markLocalUpdated();
+    renderAiSettings();
+  };
+  document.getElementById("disableAi").onclick=()=>{
+    saveCoachSettings({...settings,aiEnabled:false});
+    markLocalUpdated();
+    state.aiSettingsMessage={type:"success",text:"Los mensajes de IA se han desactivado. GymOS seguirá usando sus reglas internas."};
+    renderAiSettings();
+  };
+  bindNav();
+}
+
 function renderSettings(){
   app.innerHTML=`<div class="app-shell">
     <header class="topbar"><div><div class="brand">Ajustes</div><div class="subtle">GymOS v4.0.8 · Tema claro y tamaño corregidos</div></div></header>
@@ -7159,9 +8863,17 @@ function renderSettings(){
         <button id="openOnboarding" class="primary full">${onboardingCompleted()?"Revisar objetivo y regenerar rutina":"Configurar mi plan"}</button>
       </section>
 
+      <section class="card ai-settings-entry">
+        <div class="card-heading-row">
+          <div><span class="section-kicker">CONFIGURACIÓN</span><h2>Inteligencia artificial</h2><p class="subtle">Elige si el Coach puede utilizar el proveedor seguro configurado en el servidor para redactar sus mensajes.</p></div>
+          <span class="mode-pill">${esc(aiStatusLabel(getCoachConnection().aiStatus||getCoachConnection().status,getCoachSettings().aiEnabled))}</span>
+        </div>
+        <button id="openAiSettings" class="secondary full" type="button">Configurar Coach IA</button>
+      </section>
+
       <section class="card experience-card">
         <div class="card-heading-row">
-          <div><span class="section-kicker">EXPERIENCIA</span><h2>Aspecto y modo de uso</h2><p class="subtle">Adapta GymOS para entrenar sin distracciones o acceder a herramientas técnicas.</p></div>
+          <div><span class="section-kicker">EXPERIENCIA</span><h2>Apariencia y experiencia</h2><p class="subtle">Adapta GymOS para entrenar sin distracciones o acceder a herramientas técnicas.</p></div>
           <span class="mode-pill">${developerModeEnabled()?"Desarrollador":"Usuario"}</span>
         </div>
         <div class="segmented-control" id="appModeControl">
@@ -7199,6 +8911,23 @@ function renderSettings(){
               <option value="spacious" ${getAppPreferences().density==="spacious"?"selected":""}>Amplia</option>
             </select>
           </label>
+          <fieldset class="daily-thought-preference">
+            <legend>Pensamiento del día</legend>
+            <div class="daily-thought-options">
+              ${[
+                ["automatic","Automático"],
+                ["stoicism","Estoicismo"],
+                ["science","Ciencia"],
+                ["coach","Coach"],
+                ["minimalist","Minimalista"],
+                ["performance","Rendimiento"],
+                ["disabled","Desactivado"]
+              ].map(([value,label])=>`<label>
+                <input type="radio" name="dailyThoughtPreference" value="${value}" ${getAppPreferences().dailyThought===value?"checked":""}>
+                <span>${label}</span>
+              </label>`).join("")}
+            </div>
+          </fieldset>
         </div>
 
         <div class="preset-grid">
@@ -7213,6 +8942,7 @@ function renderSettings(){
           <label><input id="animationsUi" type="checkbox" ${getAppPreferences().animations?"checked":""}><span>Animaciones</span></label>
           <label><input id="highContrastUi" type="checkbox" ${getAppPreferences().highContrast?"checked":""}><span>Alto contraste</span></label>
           <label><input id="largeTapTargetsUi" type="checkbox" ${getAppPreferences().largeTapTargets?"checked":""}><span>Botones más grandes</span></label>
+          <label><input id="quickActionsVisible" type="checkbox" ${getQuickActionPreferences().hidden?"":"checked"}><span>Mostrar accesos rápidos en Inicio</span></label>
         </div>
         ${developerModeEnabled()?`<button id="openDeveloperMode" class="secondary full">Abrir centro de desarrollador</button>`:""}
       </section>
@@ -7242,7 +8972,7 @@ function renderSettings(){
         ${state.syncUser?`<div class="sync-user">Conectado como <strong>${state.syncUser.email||"usuario"}</strong></div>`:""}
         <details class="sync-help">
           <summary>Cómo configurarlo</summary>
-          <p>Ejecuta <strong>supabase-schema.sql</strong> y <strong>supabase-account-profile.sql</strong>, y añade <strong>https://apl00028.github.io/mi-rutina/</strong> en Authentication → URL Configuration → Redirect URLs. Usa la clave <strong>Publishable</strong> o <strong>anon public</strong>, nunca una secret/service role.</p>
+          <p>Ejecuta <strong>supabase-schema.sql</strong>, <strong>supabase-account-profile.sql</strong>, <strong>supabase-body-measurements.sql</strong> y <strong>supabase-workout-analyses.sql</strong>, y añade <strong>https://apl00028.github.io/mi-rutina/</strong> en Authentication → URL Configuration → Redirect URLs. Usa la clave <strong>Publishable</strong> o <strong>anon public</strong>, nunca una secret/service role.</p>
         </details>
       </section>
       <section class="card health-entry-card">
@@ -7256,15 +8986,14 @@ function renderSettings(){
         <button id="openHealth" class="primary full">Abrir salud y recuperación</button>
       </section>
 
-      <section class="card nutrition-entry-card">
+      <section class="card recovery-entry-card">
         <div class="card-heading-row">
           <div>
-            <span class="coach-badge">NUEVO</span>
-            <h2>Nutrición</h2>
-            <p class="subtle">Registra calorías y macros, revisa tu tendencia semanal y compárala con el peso.</p>
+            <h2>Recovery Center</h2>
+            <p class="subtle">Consulta evaluaciones pendientes, Recovery Score e histórico de recuperación.</p>
           </div>
         </div>
-        <button id="openNutrition" class="primary full">Abrir nutrición</button>
+        <button id="openRecoveryCenter" class="primary full">Abrir recuperación</button>
       </section>
 
       <section class="card">
@@ -7368,6 +9097,17 @@ function renderSettings(){
   if(openOnboarding) openOnboarding.onclick=()=>{state.onboardingDraft=newOnboardingDraft();state.onboardingStep=1;state.screen="onboarding";renderOnboarding();};
   const openAccountFromSync=document.getElementById("openAccountFromSync");
   if(openAccountFromSync) openAccountFromSync.onclick=()=>{state.screen="account";renderAccount();};
+  document.getElementById("openAiSettings").onclick=async()=>{
+    state.aiSettingsMessage=null;
+    state.screen="aiSettings";
+    renderAiSettings();
+    try{
+      await fetchAiConfigurationStatus(false);
+    }catch(error){
+      state.aiSettingsMessage={type:"error",text:"No se pudo consultar el estado del backend."};
+    }
+    if(state.screen==="aiSettings") renderAiSettings();
+  };
   document.querySelectorAll("[data-app-mode]").forEach(button=>button.onclick=()=>{
     const mode=button.dataset.appMode;
     if(mode==="developer"&&!confirm("El modo desarrollador muestra opciones técnicas y acciones avanzadas. ¿Activarlo?")) return;
@@ -7391,6 +9131,9 @@ function renderSettings(){
     saveAppPreferences({density:e.target.value});
     renderSettings();
   };
+  document.querySelectorAll('[name="dailyThoughtPreference"]').forEach(input=>input.onchange=e=>{
+    if(e.target.checked) saveAppPreferences({dailyThought:e.target.value});
+  });
   document.querySelectorAll("[data-ui-preset]").forEach(button=>button.onclick=()=>{
     applyPreferencePreset(button.dataset.uiPreset);
     addDeveloperLog("info",`Preset visual ${button.dataset.uiPreset} aplicado`);
@@ -7410,6 +9153,11 @@ function renderSettings(){
   };
   document.getElementById("largeTapTargetsUi").onchange=e=>{
     saveAppPreferences({largeTapTargets:e.target.checked});
+    renderSettings();
+  };
+  document.getElementById("quickActionsVisible").onchange=e=>{
+    saveQuickActionPreferences({hidden:!e.target.checked});
+    toast(e.target.checked?"Accesos rápidos visibles.":"Accesos rápidos ocultos.");
     renderSettings();
   };
   const openDeveloperMode=document.getElementById("openDeveloperMode");
@@ -7435,7 +9183,7 @@ function renderSettings(){
   };
 
   bindScreen("openHealth","health",renderHealth);
-  bindScreen("openNutrition","nutrition",renderNutrition);
+  bindScreen("openRecoveryCenter","recovery",renderRecoveryCenter);
   bindScreen("openCoach","coach",renderCoach);
   bindScreen("openBackupRestore","backupRestore",renderBackupRestore);
   bindScreen("openRoutineEditor","routineEditor",renderRoutineEditor);

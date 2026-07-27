@@ -3,14 +3,22 @@ import os
 from typing import Any, Literal
 
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException
+from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from openai import OpenAI
 from pydantic import BaseModel, Field
 
+from ai_service import (
+    check_connection,
+    configuration_status,
+    generate_coach_message,
+)
+from auth import AuthenticatedUser, require_user
+from rate_limit import ai_daily_rate_limiter, coach_rate_limiter
+
 load_dotenv()
 
-MODEL = os.getenv("OPENAI_MODEL", "gpt-4.1-mini")
+MODEL = os.getenv("OPENAI_MODEL", "")
 API_KEY = os.getenv("OPENAI_API_KEY", "")
 ALLOWED_ORIGINS = [
     origin.strip()
@@ -18,7 +26,7 @@ ALLOWED_ORIGINS = [
     if origin.strip()
 ]
 
-app = FastAPI(title="GymOS Coach API", version="3.9.1")
+app = FastAPI(title="GymOS Coach API", version="4.0.0")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=ALLOWED_ORIGINS,
@@ -48,6 +56,10 @@ class CoachReviewRequest(BaseModel):
     exerciseSummary: list[dict[str, Any]]
     bodyWeight: list[dict[str, Any]] = Field(default_factory=list)
     activeBlock: dict[str, Any] | None = None
+
+
+class WorkoutAnalysisRequest(BaseModel):
+    workout_analysis: dict[str, Any]
 
 
 SYSTEM_PROMPT = """
@@ -87,10 +99,10 @@ Respond only as JSON matching the requested schema.
 
 
 def client() -> OpenAI:
-    if not API_KEY:
+    if not API_KEY or not MODEL:
         raise HTTPException(
             status_code=503,
-            detail="OPENAI_API_KEY is not configured on the backend.",
+            detail="OpenAI chat/review is not configured on the backend.",
         )
     return OpenAI(api_key=API_KEY)
 
@@ -107,16 +119,22 @@ def parse_json_response(raw: str) -> dict[str, Any]:
 
 @app.get("/health")
 def health() -> dict[str, Any]:
+    ai = configuration_status()
     return {
         "status": "ok",
-        "version": "3.9.1",
-        "model": MODEL,
-        "openaiConfigured": bool(API_KEY),
+        "version": "4.0.0",
+        "model": ai["model"],
+        "provider": ai["provider"],
+        "aiStatus": ai["status"],
     }
 
 
 @app.post("/coach/chat")
-def coach_chat(request: CoachChatRequest) -> dict[str, Any]:
+def coach_chat(
+    request: CoachChatRequest,
+    user: AuthenticatedUser = Depends(require_user),
+) -> dict[str, Any]:
+    coach_rate_limiter.check(user.id)
     schema = {
         "message": "A concise Spanish answer grounded in the supplied data.",
         "actions": ["Optional short suggested next actions."],
@@ -159,7 +177,11 @@ def coach_chat(request: CoachChatRequest) -> dict[str, Any]:
 
 
 @app.post("/coach/review")
-def coach_review(request: CoachReviewRequest) -> dict[str, Any]:
+def coach_review(
+    request: CoachReviewRequest,
+    user: AuthenticatedUser = Depends(require_user),
+) -> dict[str, Any]:
+    coach_rate_limiter.check(user.id)
     schema = {
         "summary": "Review summary in Spanish.",
         "notes": ["Grounded observations."],
@@ -194,3 +216,29 @@ def coach_review(request: CoachReviewRequest) -> dict[str, Any]:
     data.setdefault("notes", [])
     data.setdefault("changes", [])
     return data
+
+
+@app.get("/ai/status")
+def ai_status(
+    check: bool = False,
+    user: AuthenticatedUser = Depends(require_user),
+) -> dict[str, Any]:
+    del user
+    return check_connection() if check else configuration_status()
+
+
+@app.post("/workout-analysis")
+def workout_analysis_message(
+    request: WorkoutAnalysisRequest,
+    user: AuthenticatedUser = Depends(require_user),
+) -> dict[str, Any]:
+    coach_rate_limiter.check(user.id)
+    ai_daily_rate_limiter.check(user.id)
+    result = generate_coach_message(request.workout_analysis)
+    return {
+        "message": result.message,
+        "provider": result.provider,
+        "model": result.model,
+        "analysis_source": result.analysis_source,
+        "fallback": result.analysis_source == "local_fallback",
+    }

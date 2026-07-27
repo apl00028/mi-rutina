@@ -936,7 +936,7 @@ function undoLastCoachChange(){
 }
 function coachContextPayload(){
   return {
-    version:"3.8.2",
+    version:"3.8.3",
     generatedAt:new Date().toISOString(),
     settings:getCoachSettings(),
     routine:getRoutine(),
@@ -5794,7 +5794,7 @@ function renderAccount(){
 
 function renderSettings(){
   app.innerHTML=`<div class="app-shell">
-    <header class="topbar"><div><div class="brand">Ajustes</div><div class="subtle">GymOS v3.8.2 · Cronómetro para ejercicios por tiempo</div></div></header>
+    <header class="topbar"><div><div class="brand">Ajustes</div><div class="subtle">GymOS v3.8.3 · Corrección completa de navegación</div></div></header>
     <main class="screen">
       <section class="card account-entry-card">
         <div class="account-entry-main">
@@ -6093,6 +6093,10 @@ function renderSettings(){
   bindScreen("openExerciseLibrary","exerciseLibrary",renderExerciseLibrary);
   bindScreen("openFavoriteExercises","favoriteExercises",renderFavoriteExercises);
   bindScreen("openSubstitutionHistory","substitutionHistory",renderSubstitutionHistory);
+  bindScreen("openProgressDashboard","progressDashboard",renderProgressDashboard);
+  bindScreen("openBlocksSettings","blocks",renderBlocks);
+  bindScreen("openPlanSettings","plan",renderPlan);
+  bindScreen("openBodySettings","body",renderBody);
 
   const importRoutineButton=document.getElementById("importRoutine");
   if(importRoutineButton) importRoutineButton.onclick=()=>routineFile.click();
@@ -6137,6 +6141,8 @@ function renderSettings(){
     state.screen="home";
     render();
   };
+
+  bindNav();
 }
 
 function exportData(){

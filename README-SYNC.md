@@ -1,4 +1,4 @@
-# GymOS v3.8.2 — Cronómetro para ejercicios por tiempo
+# GymOS v3.8.3 — Corrección completa de navegación
 
 GymOS sigue funcionando completamente en modo local.
 
@@ -350,3 +350,12 @@ de cuenta y pruebas automáticas con dos usuarios independientes.
 - Al parar, el tiempo queda registrado automáticamente en segundos.
 - También se puede corregir el número de segundos manualmente.
 - El historial muestra el tiempo realizado en cada serie.
+
+
+## Parche v3.8.3
+
+- Corregido el botón Inicio dentro de la pantalla Más.
+- Restaurada la activación de toda la barra inferior después de cargar Ajustes.
+- Corregidos también Entrenar, Progreso, Coach y Más.
+- Restaurados los accesos a Progreso, Bloques, Plan semanal y Seguimiento corporal.
+- Se conserva el cronómetro por serie de la versión 3.8.2.

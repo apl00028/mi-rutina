@@ -1,4 +1,4 @@
-# GymOS v3.5.0 — Personalización visual y accesibilidad
+# GymOS v3.6.0 — Salud, recuperación y relojes
 
 GymOS sigue funcionando completamente en modo local.
 
@@ -276,3 +276,19 @@ La resolución de conflictos conserva la copia con la fecha `updatedAt` más rec
 - Animaciones configurables.
 - Preferencias persistentes e incluidas en las copias de seguridad.
 - Compatibilidad mantenida con los modos Usuario y Desarrollador.
+
+
+## Novedades de la versión 3.6.0
+
+- Nuevo panel de salud y recuperación.
+- Registro manual de sueño, pasos, frecuencia cardiaca en reposo, HRV y calorías activas.
+- Puntuación diaria de recuperación basada en datos personales y baseline.
+- Resumen de salud de los últimos siete días.
+- Importación universal mediante CSV.
+- Historial de importaciones.
+- Preparación de conectores para Health Connect, Garmin Connect y Apple Health.
+- Objetivos de sueño y pasos configurables.
+- Baselines automáticos o manuales de frecuencia cardiaca y HRV.
+- Datos de salud integrados en GymOS Coach.
+- Datos y configuración incluidos en copias de seguridad.
+- Advertencias de uso responsable y ausencia de diagnóstico médico.

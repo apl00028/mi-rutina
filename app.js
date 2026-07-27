@@ -586,7 +586,10 @@ const GYMOS_BACKUP_KEYS=[
   "gymos:nutritionSettings",
   "gymos:nutritionEntries",
   "gymos:appPreferences",
-  "gymos:developerLogs"
+  "gymos:developerLogs",
+  "gymos:healthSettings",
+  "gymos:healthEntries",
+  "gymos:healthImports"
 ];
 
 function getFavoriteExercises(){
@@ -926,7 +929,7 @@ function undoLastCoachChange(){
 }
 function coachContextPayload(){
   return {
-    version:"3.5.0",
+    version:"3.6.0",
     generatedAt:new Date().toISOString(),
     settings:getCoachSettings(),
     routine:getRoutine(),
@@ -934,6 +937,7 @@ function coachContextPayload(){
     exerciseSummary:coachExerciseSummary(),
     bodyWeight:getBodyWeightEntries?.()||[],
     nutrition:nutritionCoachContext(),
+    health:healthCoachContext(),
     activeBlock:getActiveTrainingBlock?.()||null
   };
 }
@@ -1094,6 +1098,213 @@ function personalRecords(){
 
 
 
+
+
+const HEALTH_SETTINGS_KEY="gymos:healthSettings";
+const HEALTH_ENTRIES_KEY="gymos:healthEntries";
+const HEALTH_IMPORTS_KEY="gymos:healthImports";
+
+function getHealthSettings(){
+  try{
+    return {
+      provider:"manual",
+      sleepTarget:8,
+      stepTarget:8000,
+      restingHrBaseline:"",
+      hrvBaseline:"",
+      enabledMetrics:["steps","sleep","restingHr","hrv","activeCalories"],
+      ...JSON.parse(localStorage.getItem(HEALTH_SETTINGS_KEY)||"{}")
+    };
+  }catch(error){
+    return {provider:"manual",sleepTarget:8,stepTarget:8000,restingHrBaseline:"",hrvBaseline:"",enabledMetrics:["steps","sleep","restingHr","hrv","activeCalories"]};
+  }
+}
+function saveHealthSettings(value){
+  localStorage.setItem(HEALTH_SETTINGS_KEY,JSON.stringify({...getHealthSettings(),...value}));
+}
+function getHealthEntries(){
+  try{
+    const value=JSON.parse(localStorage.getItem(HEALTH_ENTRIES_KEY)||"[]");
+    return Array.isArray(value)?value:[];
+  }catch(error){return [];}
+}
+function saveHealthEntries(entries){
+  localStorage.setItem(HEALTH_ENTRIES_KEY,JSON.stringify(entries.slice(-1000)));
+}
+function getHealthImports(){
+  try{
+    const value=JSON.parse(localStorage.getItem(HEALTH_IMPORTS_KEY)||"[]");
+    return Array.isArray(value)?value:[];
+  }catch(error){return [];}
+}
+function saveHealthImports(value){
+  localStorage.setItem(HEALTH_IMPORTS_KEY,JSON.stringify(value.slice(-100)));
+}
+function healthEntryForDate(date){
+  return getHealthEntries().find(item=>item.date===date)||{
+    date,steps:"",sleepHours:"",sleepScore:"",restingHr:"",hrv:"",activeCalories:"",source:"manual",notes:""
+  };
+}
+function upsertHealthEntry(entry){
+  const entries=getHealthEntries();
+  const index=entries.findIndex(item=>item.date===entry.date);
+  if(index>=0) entries[index]={...entries[index],...entry};
+  else entries.push(entry);
+  entries.sort((a,b)=>a.date.localeCompare(b.date));
+  saveHealthEntries(entries);
+}
+function healthAverage(entries,field){
+  const values=entries.map(item=>Number(item[field]||0)).filter(value=>value>0);
+  return values.length?values.reduce((a,b)=>a+b,0)/values.length:null;
+}
+function recentHealthEntries(days=7){
+  const cutoff=Date.now()-days*86400000;
+  return getHealthEntries().filter(item=>new Date(item.date+"T12:00:00").getTime()>=cutoff);
+}
+function healthBaselines(){
+  const entries=recentHealthEntries(30);
+  const settings=getHealthSettings();
+  return {
+    restingHr:Number(settings.restingHrBaseline)||healthAverage(entries,"restingHr"),
+    hrv:Number(settings.hrvBaseline)||healthAverage(entries,"hrv"),
+    sleep:healthAverage(entries,"sleepHours"),
+    steps:healthAverage(entries,"steps")
+  };
+}
+function recoveryAssessment(date=state.healthDate){
+  const entry=healthEntryForDate(date);
+  const base=healthBaselines();
+  const settings=getHealthSettings();
+  let score=100;
+  const reasons=[];
+  const sleep=Number(entry.sleepHours||0);
+  const restingHr=Number(entry.restingHr||0);
+  const hrv=Number(entry.hrv||0);
+  const steps=Number(entry.steps||0);
+
+  if(sleep){
+    const deficit=Number(settings.sleepTarget||8)-sleep;
+    if(deficit>0){
+      score-=Math.min(35,deficit*12);
+      reasons.push(`Sueño ${sleep.toFixed(1)} h`);
+    }
+  }else{
+    score-=10;
+    reasons.push("Sueño no registrado");
+  }
+
+  if(restingHr&&base.restingHr){
+    const increase=restingHr-base.restingHr;
+    if(increase>0){
+      score-=Math.min(25,increase*4);
+      reasons.push(`FC reposo +${increase.toFixed(0)} bpm`);
+    }
+  }
+
+  if(hrv&&base.hrv){
+    const decrease=(base.hrv-hrv)/base.hrv;
+    if(decrease>0){
+      score-=Math.min(25,decrease*60);
+      reasons.push(`HRV ${Math.round(decrease*100)}% bajo baseline`);
+    }
+  }
+
+  if(steps&&steps<Number(settings.stepTarget||8000)*0.35){
+    score-=5;
+  }
+
+  score=Math.max(0,Math.min(100,Math.round(score)));
+  let status="Alta";
+  let recommendation="Puedes entrenar según lo planificado.";
+  if(score<70){status="Media";recommendation="Mantén la sesión, pero evita forzar el fallo y controla el RIR.";}
+  if(score<45){status="Baja";recommendation="Considera reducir volumen o realizar una sesión ligera de recuperación.";}
+  return {score,status,recommendation,reasons};
+}
+function weeklyHealthSummary(){
+  const entries=recentHealthEntries(7);
+  return {
+    days:entries.length,
+    sleep:healthAverage(entries,"sleepHours"),
+    steps:healthAverage(entries,"steps"),
+    restingHr:healthAverage(entries,"restingHr"),
+    hrv:healthAverage(entries,"hrv"),
+    activeCalories:healthAverage(entries,"activeCalories")
+  };
+}
+function healthCoachContext(){
+  return {
+    settings:getHealthSettings(),
+    recentEntries:getHealthEntries().slice(-21),
+    baselines:healthBaselines(),
+    recovery:recoveryAssessment(),
+    weeklySummary:weeklyHealthSummary(),
+    imports:getHealthImports().slice(-10)
+  };
+}
+function normalizeHealthHeader(value){
+  return String(value||"").trim().toLowerCase().replace(/[áàä]/g,"a").replace(/[éèë]/g,"e").replace(/[íìï]/g,"i").replace(/[óòö]/g,"o").replace(/[úùü]/g,"u").replace(/[^a-z0-9]+/g,"_");
+}
+function parseHealthCsv(text,filename="health.csv"){
+  const lines=String(text||"").split(/\r?\n/).filter(line=>line.trim());
+  if(lines.length<2) throw new Error("El CSV no contiene filas suficientes.");
+  const delimiter=(lines[0].match(/;/g)||[]).length>(lines[0].match(/,/g)||[]).length?";":",";
+  const split=line=>{
+    const out=[];let current="";let quoted=false;
+    for(let i=0;i<line.length;i++){
+      const char=line[i];
+      if(char==='"'&&line[i+1]==='"'){current+='"';i++;continue;}
+      if(char==='"'){quoted=!quoted;continue;}
+      if(char===delimiter&&!quoted){out.push(current.trim());current="";continue;}
+      current+=char;
+    }
+    out.push(current.trim());
+    return out;
+  };
+  const headers=split(lines[0]).map(normalizeHealthHeader);
+  const aliases={
+    date:["date","fecha","day"],
+    steps:["steps","pasos","step_count"],
+    sleepHours:["sleep_hours","sleep","sueno_horas","horas_sueno","sleep_duration"],
+    sleepScore:["sleep_score","puntuacion_sueno"],
+    restingHr:["resting_hr","resting_heart_rate","frecuencia_cardiaca_reposo","fc_reposo"],
+    hrv:["hrv","heart_rate_variability","variabilidad_frecuencia_cardiaca"],
+    activeCalories:["active_calories","calorias_activas","activity_calories"]
+  };
+  const findIndex=names=>headers.findIndex(header=>names.includes(header));
+  const indexes=Object.fromEntries(Object.entries(aliases).map(([key,names])=>[key,findIndex(names)]));
+  if(indexes.date<0) throw new Error("El CSV debe incluir una columna date o fecha.");
+
+  const imported=[];
+  lines.slice(1).forEach(line=>{
+    const values=split(line);
+    const rawDate=values[indexes.date];
+    if(!rawDate) return;
+    const parsedDate=rawDate.includes("/")?rawDate.split("/").reverse().join("-"):rawDate.slice(0,10);
+    const entry={
+      date:parsedDate,
+      source:"csv",
+      sourceFile:filename
+    };
+    Object.entries(indexes).forEach(([key,index])=>{
+      if(key==="date"||index<0) return;
+      const raw=String(values[index]||"").replace(",",".");
+      if(raw!=="") entry[key]=Number(raw);
+    });
+    imported.push(entry);
+  });
+  if(!imported.length) throw new Error("No se encontraron registros válidos.");
+  imported.forEach(upsertHealthEntry);
+  const imports=getHealthImports();
+  imports.push({
+    id:`import-${Date.now().toString(36)}`,
+    createdAt:new Date().toISOString(),
+    filename,
+    rows:imported.length,
+    provider:"csv"
+  });
+  saveHealthImports(imports);
+  return imported.length;
+}
 
 const APP_PREFERENCES_KEY="gymos:appPreferences";
 const APP_LOGS_KEY="gymos:developerLogs";
@@ -1629,7 +1840,8 @@ let state = {
   progressRangeWeeks: 8,
   coachChatMessages: [],
   nutritionDate: new Date().toISOString().slice(0,10),
-  developerLogFilter: "all"
+  developerLogFilter: "all",
+  healthDate: new Date().toISOString().slice(0,10)
 };
 
 function getHistory(){ return JSON.parse(localStorage.getItem("gymos:history") || "[]"); }
@@ -2441,6 +2653,7 @@ function render(){
   else if(state.screen==="coachChat") renderCoachChat();
   else if(state.screen==="nutrition") renderNutrition();
   else if(state.screen==="developer") renderDeveloperMode();
+  else if(state.screen==="health") renderHealth();
   else renderSettings();
 }
 
@@ -2455,10 +2668,11 @@ function renderHome(){
         <p>${sessions[state.selectedSession].length} ejercicios · RIR 3–4</p>
         <button id="startWorkout" class="primary">Comenzar entrenamiento</button>
       </section>
-      <section class="home-quick-grid">
+      <section class="home-quick-grid health-home-grid">
         <button id="homeProgress" class="quick-action-card"><span>↗</span><strong>Progreso</strong><small>Tu evolución</small></button>
         <button id="homeCoach" class="quick-action-card"><span>✦</span><strong>Coach</strong><small>Revisión inteligente</small></button>
         <button id="homeNutrition" class="quick-action-card"><span>◎</span><strong>Nutrición</strong><small>Macros y peso</small></button>
+        <button id="homeHealth" class="quick-action-card"><span>♥</span><strong>Recuperación</strong><small>Sueño y reloj</small></button>
       </section>
       <div class="session-picker modern-session-picker">
         ${["A","B","C"].map(s=>`<button data-session="${s}" class="${s===state.selectedSession?"active":""}">Sesión ${s}</button>`).join("")}
@@ -2545,6 +2759,7 @@ function renderHome(){
   document.getElementById("homeProgress").onclick=()=>{state.screen="progressDashboard";renderProgressDashboard();};
   document.getElementById("homeCoach").onclick=()=>{state.screen="coach";renderCoach();};
   document.getElementById("homeNutrition").onclick=()=>{state.screen="nutrition";renderNutrition();};
+  document.getElementById("homeHealth").onclick=()=>{state.screen="health";renderHealth();};
   document.getElementById("startWorkout").onclick=()=>{state.screen="workout";renderWorkout();};
   document.getElementById("openPlan").onclick=()=>{state.screen="plan";renderPlan();};
   const openBlocksHome=document.getElementById("openBlocksHome");
@@ -4147,6 +4362,140 @@ function renderSubstitutionHistory(){
 
 
 
+
+function renderHealth(){
+  const settings=getHealthSettings();
+  const entry=healthEntryForDate(state.healthDate);
+  const recovery=recoveryAssessment(state.healthDate);
+  const weekly=weeklyHealthSummary();
+  const imports=getHealthImports().slice().reverse().slice(0,5);
+
+  app.innerHTML=`<div class="app-shell">
+    <header class="topbar">
+      <button id="backHealth" class="back-button">←</button>
+      <div><div class="brand">Salud y recuperación</div><div class="subtle">Sueño, actividad y reloj</div></div>
+      <input id="healthDate" class="header-date" type="date" value="${esc(state.healthDate)}">
+    </header>
+    <main class="screen">
+      <section class="card recovery-hero recovery-${recovery.status.toLowerCase()}">
+        <div class="recovery-score-ring" style="--score:${recovery.score}">
+          <strong>${recovery.score}</strong><span>/100</span>
+        </div>
+        <div>
+          <span class="section-kicker">RECUPERACIÓN ${esc(recovery.status.toUpperCase())}</span>
+          <h1>${esc(recovery.recommendation)}</h1>
+          <p>${recovery.reasons.length?recovery.reasons.map(esc).join(" · "):"No se han detectado señales negativas."}</p>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>Registro diario</h2>
+        <div class="health-input-grid">
+          <label><span>Pasos</span><input id="healthSteps" type="number" min="0" value="${esc(entry.steps)}"></label>
+          <label><span>Sueño (horas)</span><input id="healthSleepHours" type="number" min="0" max="24" step="0.1" value="${esc(entry.sleepHours)}"></label>
+          <label><span>Puntuación de sueño</span><input id="healthSleepScore" type="number" min="0" max="100" value="${esc(entry.sleepScore)}"></label>
+          <label><span>FC en reposo (bpm)</span><input id="healthRestingHr" type="number" min="20" max="220" value="${esc(entry.restingHr)}"></label>
+          <label><span>HRV (ms)</span><input id="healthHrv" type="number" min="0" value="${esc(entry.hrv)}"></label>
+          <label><span>Calorías activas</span><input id="healthActiveCalories" type="number" min="0" value="${esc(entry.activeCalories)}"></label>
+        </div>
+        <label><span>Notas</span><textarea id="healthNotes" rows="3" placeholder="Estrés, enfermedad, sensaciones...">${esc(entry.notes)}</textarea></label>
+        <button id="saveHealthEntry" class="primary full">Guardar datos</button>
+      </section>
+
+      <section class="card">
+        <h2>Resumen de los últimos 7 días</h2>
+        <div class="health-week-grid">
+          <article><span>Días</span><strong>${weekly.days}</strong></article>
+          <article><span>Sueño</span><strong>${weekly.sleep?weekly.sleep.toFixed(1)+" h":"—"}</strong></article>
+          <article><span>Pasos</span><strong>${weekly.steps?Math.round(weekly.steps).toLocaleString("es-ES"):"—"}</strong></article>
+          <article><span>FC reposo</span><strong>${weekly.restingHr?Math.round(weekly.restingHr)+" bpm":"—"}</strong></article>
+          <article><span>HRV</span><strong>${weekly.hrv?Math.round(weekly.hrv)+" ms":"—"}</strong></article>
+          <article><span>Cal. activas</span><strong>${weekly.activeCalories?Math.round(weekly.activeCalories):"—"}</strong></article>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="card-heading-row">
+          <div><h2>Importar datos del reloj</h2><p class="subtle">Compatible por ahora con CSV. La conexión directa se añadirá en versiones posteriores.</p></div>
+          <span class="mode-pill">CSV</span>
+        </div>
+        <input id="healthCsvFile" type="file" accept=".csv,text/csv">
+        <div class="health-template-note">
+          Columnas admitidas: fecha/date, pasos/steps, sleep_hours, sleep_score, resting_hr, HRV y active_calories.
+        </div>
+        ${imports.length?`<div class="health-import-list">${imports.map(item=>`<div><span>${esc(item.filename)}</span><strong>${item.rows} filas</strong><small>${new Date(item.createdAt).toLocaleString("es-ES")}</small></div>`).join("")}</div>`:""}
+      </section>
+
+      <section class="card">
+        <h2>Conectores</h2>
+        <div class="connector-grid">
+          <article class="connector-card ready"><strong>CSV universal</strong><span>Disponible</span><small>Exportaciones de Garmin, Fitbit, Samsung Health y otros.</small></article>
+          <article class="connector-card planned"><strong>Health Connect</strong><span>Preparado</span><small>Requerirá una aplicación Android nativa.</small></article>
+          <article class="connector-card planned"><strong>Garmin Connect</strong><span>Planificado</span><small>Requiere acceso a la API y backend.</small></article>
+          <article class="connector-card planned"><strong>Apple Health</strong><span>Planificado</span><small>Requerirá una aplicación iOS.</small></article>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>Objetivos y baseline</h2>
+        <div class="health-input-grid">
+          <label><span>Objetivo de sueño</span><input id="healthSleepTarget" type="number" min="4" max="12" step="0.25" value="${Number(settings.sleepTarget)}"></label>
+          <label><span>Objetivo de pasos</span><input id="healthStepTarget" type="number" min="0" value="${Number(settings.stepTarget)}"></label>
+          <label><span>FC reposo baseline</span><input id="healthRestingBaseline" type="number" min="20" max="220" value="${esc(settings.restingHrBaseline)}" placeholder="Automático"></label>
+          <label><span>HRV baseline</span><input id="healthHrvBaseline" type="number" min="0" value="${esc(settings.hrvBaseline)}" placeholder="Automático"></label>
+        </div>
+        <button id="saveHealthSettings" class="secondary full">Guardar objetivos</button>
+      </section>
+
+      <section class="card warning-card">
+        <h2>Uso responsable</h2>
+        <p>La puntuación es una orientación basada en tus propios registros. No diagnostica enfermedades ni sustituye una valoración médica.</p>
+      </section>
+    </main>
+  </div>`;
+
+  document.getElementById("backHealth").onclick=()=>{state.screen="settings";renderSettings();};
+  document.getElementById("healthDate").onchange=e=>{state.healthDate=e.target.value;renderHealth();};
+  document.getElementById("saveHealthEntry").onclick=()=>{
+    upsertHealthEntry({
+      date:state.healthDate,
+      steps:document.getElementById("healthSteps").value,
+      sleepHours:document.getElementById("healthSleepHours").value,
+      sleepScore:document.getElementById("healthSleepScore").value,
+      restingHr:document.getElementById("healthRestingHr").value,
+      hrv:document.getElementById("healthHrv").value,
+      activeCalories:document.getElementById("healthActiveCalories").value,
+      notes:document.getElementById("healthNotes").value.trim(),
+      source:"manual"
+    });
+    toast("Datos de salud guardados");
+    renderHealth();
+  };
+  document.getElementById("saveHealthSettings").onclick=()=>{
+    saveHealthSettings({
+      sleepTarget:Number(document.getElementById("healthSleepTarget").value||8),
+      stepTarget:Number(document.getElementById("healthStepTarget").value||8000),
+      restingHrBaseline:document.getElementById("healthRestingBaseline").value,
+      hrvBaseline:document.getElementById("healthHrvBaseline").value
+    });
+    toast("Objetivos de salud guardados");
+    renderHealth();
+  };
+  document.getElementById("healthCsvFile").onchange=async e=>{
+    const file=e.target.files?.[0];
+    if(!file) return;
+    try{
+      const rows=parseHealthCsv(await file.text(),file.name);
+      addDeveloperLog("success",`Importación de salud completada: ${rows} filas`);
+      toast(`${rows} registros importados`);
+      renderHealth();
+    }catch(error){
+      addDeveloperLog("error","Error importando datos de salud",error.message);
+      alert(error.message);
+    }
+  };
+}
+
 function renderNutrition(){
   const settings=getNutritionSettings();
   const entry=nutritionEntryForDate(state.nutritionDate);
@@ -4940,7 +5289,7 @@ async function renderDeveloperMode(){
 
 function renderSettings(){
   app.innerHTML=`<div class="app-shell">
-    <header class="topbar"><div><div class="brand">Ajustes</div><div class="subtle">GymOS v3.5.0 · Personalización y accesibilidad</div></div></header>
+    <header class="topbar"><div><div class="brand">Ajustes</div><div class="subtle">GymOS v3.6.0 · Salud, recuperación y relojes</div></div></header>
     <main class="screen">
       <section class="card experience-card">
         <div class="card-heading-row">
@@ -5028,6 +5377,17 @@ function renderSettings(){
           <p>Ejecuta <strong>supabase-schema.sql</strong> y añade <strong>https://apl00028.github.io/mi-rutina/</strong> en Authentication → URL Configuration → Redirect URLs. Usa la clave <strong>Publishable</strong> o <strong>anon public</strong>, nunca una secret/service role.</p>
         </details>
       </section>
+      <section class="card health-entry-card">
+        <div class="card-heading-row">
+          <div>
+            <span class="coach-badge">NUEVO</span>
+            <h2>Salud y recuperación</h2>
+            <p class="subtle">Registra sueño, pasos, frecuencia cardiaca y HRV. Importa datos desde CSV y prepara futuras conexiones con relojes.</p>
+          </div>
+        </div>
+        <button id="openHealth" class="primary full">Abrir salud y recuperación</button>
+      </section>
+
       <section class="card nutrition-entry-card">
         <div class="card-heading-row">
           <div>
@@ -5235,6 +5595,7 @@ function renderSettings(){
   document.getElementById("openExerciseLibrary").onclick=()=>{state.screen="exerciseLibrary";renderExerciseLibrary();};
   document.getElementById("openSubstitutionHistory").onclick=()=>{state.screen="substitutionHistory";renderSubstitutionHistory();};
   document.getElementById("openNutrition").onclick=()=>{state.screen="nutrition";renderNutrition();};
+  document.getElementById("openHealth").onclick=()=>{state.screen="health";renderHealth();};
   document.getElementById("openProgressDashboard").onclick=()=>{state.screen="progressDashboard";renderProgressDashboard();};
   document.getElementById("openCoach").onclick=()=>{state.screen="coach";renderCoach();};
   document.getElementById("openFavoriteExercises").onclick=()=>{state.screen="favoriteExercises";renderFavoriteExercises();};

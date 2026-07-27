@@ -1053,3 +1053,48 @@ body.large-tap-targets .quick-action-card{min-height:122px}
 @media(max-width:420px){
   .appearance-grid{grid-template-columns:1fr}
 }
+
+.health-entry-card{background:linear-gradient(150deg,var(--surface),color-mix(in srgb,#0f766e 11%,var(--surface)));border-color:color-mix(in srgb,#0f766e 25%,var(--border))}
+.health-home-grid{grid-template-columns:repeat(4,1fr)}
+.recovery-hero{display:grid;grid-template-columns:auto 1fr;align-items:center;gap:16px;color:#fff;background:linear-gradient(145deg,#0f766e,#14b8a6);border:0}
+.recovery-hero h1{font-size:1rem;margin:4px 0 6px}
+.recovery-hero p{font-size:.64rem;margin:0;opacity:.88}
+.recovery-media{background:linear-gradient(145deg,#b45309,#f59e0b)}
+.recovery-baja{background:linear-gradient(145deg,#991b1b,#ef4444)}
+.recovery-score-ring{
+  width:86px;height:86px;border-radius:50%;display:grid;place-items:center;position:relative;
+  background:conic-gradient(#fff calc(var(--score)*1%),rgba(255,255,255,.2) 0)
+}
+.recovery-score-ring:before{content:"";position:absolute;inset:7px;border-radius:50%;background:rgba(15,23,42,.28);backdrop-filter:blur(5px)}
+.recovery-score-ring strong,.recovery-score-ring span{position:relative;z-index:1}
+.recovery-score-ring strong{font-size:1.5rem}
+.recovery-score-ring span{font-size:.52rem;margin-top:-21px}
+.health-input-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:9px}
+.health-week-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.health-week-grid article{padding:10px;border-radius:12px;background:var(--surface-soft)}
+.health-week-grid span,.health-week-grid strong{display:block}
+.health-week-grid span{font-size:.56rem;color:var(--muted)}
+.health-week-grid strong{font-size:.82rem;margin-top:4px}
+.health-template-note{margin-top:9px;padding:10px;border-radius:11px;background:var(--surface-soft);font-size:.6rem;color:var(--muted)}
+.health-import-list{margin-top:10px}
+.health-import-list div{display:grid;grid-template-columns:1fr auto;gap:3px 10px;padding:9px 0;border-bottom:1px solid var(--border)}
+.health-import-list span{font-size:.65rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.health-import-list strong{font-size:.62rem}
+.health-import-list small{grid-column:1/-1;color:var(--muted);font-size:.54rem}
+.connector-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:9px}
+.connector-card{padding:12px;border-radius:14px;border:1px solid var(--border);background:var(--surface-soft)}
+.connector-card strong,.connector-card span,.connector-card small{display:block}
+.connector-card strong{font-size:.72rem}
+.connector-card span{font-size:.56rem;font-weight:900;text-transform:uppercase;margin:5px 0}
+.connector-card small{font-size:.57rem;color:var(--muted);line-height:1.4}
+.connector-card.ready{border-color:#10b981}
+.connector-card.ready span{color:#059669}
+.connector-card.planned span{color:var(--brand)}
+@media(max-width:520px){
+  .health-home-grid{grid-template-columns:repeat(2,1fr)}
+}
+@media(max-width:420px){
+  .health-input-grid,.connector-grid{grid-template-columns:1fr}
+  .recovery-hero{grid-template-columns:1fr;text-align:center}
+  .recovery-score-ring{margin:auto}
+}

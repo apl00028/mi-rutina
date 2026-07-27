@@ -29,7 +29,7 @@
       }
     ]
   },
-  "version": "3.5.0",
+  "version": "3.6.0",
   "health": {
     "endpoint": "GET /health"
   },
@@ -54,5 +54,13 @@
     "weeklySummary": "7-day averages",
     "weightTrend": "body-weight trend",
     "bodyCompositionAssessment": "comparison with weekly target"
+  },
+  "health_context": {
+    "settings": "health targets and optional baselines",
+    "recentEntries": "sleep, steps, resting heart rate, HRV and active calories",
+    "baselines": "rolling 30-day averages or manual baselines",
+    "recovery": "non-medical readiness score",
+    "weeklySummary": "7-day averages",
+    "imports": "recent CSV imports"
   }
 }

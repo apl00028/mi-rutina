@@ -2200,6 +2200,7 @@ let state = {
   accountIdentityDirty: false,
   accountPasswordEditorOpen: false,
   accountPasswordMessage: null,
+  accountPasswordReauthRequired: false,
   accountManagementMessage: null,
   passwordRecoveryMode: hasPasswordRecoveryUrl(),
   passwordRecoveryMessage: null,
@@ -2512,6 +2513,7 @@ function scheduleAccountProfileLoad(userId){
     state.accountIdentityDirty=false;
     state.accountPasswordEditorOpen=false;
     state.accountPasswordMessage=null;
+    state.accountPasswordReauthRequired=false;
   }
   state.accountProfileUserId=userId;
   state.accountProfileStatus="loading";
@@ -2589,6 +2591,7 @@ function resolveAuthenticatedAppState(session,pendingUser=null){
     state.accountManagementMessage=null;
     state.accountPasswordEditorOpen=false;
     state.accountPasswordMessage=null;
+    state.accountPasswordReauthRequired=false;
   }
   if(user&&!isEmailConfirmed(user)) return "email-verification";
   return "signed-out";
@@ -2645,13 +2648,6 @@ async function requestPasswordReset(email){
     redirectTo: "https://apl00028.github.io/mi-rutina/"
   });
   if(error) throw error;
-}
-async function updateAccountPassword(newPassword){
-  const client=getSupabaseClient();
-  if(!client||!isAppAuthenticated()) throw new Error("No hay una cuenta confirmada.");
-  const {data,error}=await client.auth.updateUser({password:newPassword});
-  if(error) throw error;
-  return data.user;
 }
 async function migrateLocalDataToAccount(){
   if(!isAppAuthenticated()) throw new Error("Confirma tu correo antes de migrar los datos.");
@@ -6705,6 +6701,7 @@ function renderAccount(){
           <div id="accountPasswordForm" class="account-password-form" ${state.accountPasswordEditorOpen?"":"hidden"}>
             <label><span>Nueva contraseña</span><input id="accountNewPassword" type="password" autocomplete="new-password" minlength="8"></label>
             <label><span>Confirmar nueva contraseña</span><input id="accountConfirmPassword" type="password" autocomplete="new-password" minlength="8"></label>
+            <label id="accountPasswordNonceRow" ${state.accountPasswordReauthRequired?"":"hidden"}><span>Código de verificación</span><input id="accountPasswordNonce" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="12" placeholder="Código enviado a tu correo"></label>
             <div id="accountPasswordMessage" class="verification-message account-password-message ${state.accountPasswordMessage?.type||""}" role="${state.accountPasswordMessage?.type==="error"?"alert":"status"}" ${state.accountPasswordMessage?"":"hidden"}>${state.accountPasswordMessage?esc(state.accountPasswordMessage.text):""}</div>
             <div class="settings-actions">
               <button type="button" id="cancelAccountPassword" class="secondary">Cancelar</button>
@@ -6852,23 +6849,31 @@ function renderAccount(){
     openPasswordButton.onclick=()=>{
       state.accountPasswordEditorOpen=true;
       state.accountPasswordMessage=null;
+      state.accountPasswordReauthRequired=false;
       openPasswordButton.hidden=true;
       passwordForm.hidden=false;
       document.getElementById("accountPasswordMessage").hidden=true;
+      document.getElementById("accountPasswordNonceRow").hidden=true;
+      document.getElementById("accountPasswordNonce").value="";
       document.getElementById("accountNewPassword").focus();
     };
     document.getElementById("cancelAccountPassword").onclick=()=>{
       state.accountPasswordEditorOpen=false;
       state.accountPasswordMessage=null;
+      state.accountPasswordReauthRequired=false;
       document.getElementById("accountNewPassword").value="";
       document.getElementById("accountConfirmPassword").value="";
+      document.getElementById("accountPasswordNonce").value="";
       document.getElementById("accountPasswordMessage").hidden=true;
+      document.getElementById("accountPasswordNonceRow").hidden=true;
       passwordForm.hidden=true;
       openPasswordButton.hidden=false;
     };
     document.getElementById("saveAccountPassword").onclick=async()=>{
       const newPasswordInput=document.getElementById("accountNewPassword");
       const confirmationInput=document.getElementById("accountConfirmPassword");
+      const nonceInput=document.getElementById("accountPasswordNonce");
+      const nonceRow=document.getElementById("accountPasswordNonceRow");
       const messageElement=document.getElementById("accountPasswordMessage");
       const button=document.getElementById("saveAccountPassword");
       const showPasswordMessage=(type,text)=>{
@@ -6894,39 +6899,134 @@ function renderAccount(){
         showPasswordMessage("error","Las contraseñas no coinciden.");
         return;
       }
+      const nonce=nonceInput.value.trim();
+      if(state.accountPasswordReauthRequired&&!nonce){
+        showPasswordMessage("error","Introduce el código de verificación enviado a tu correo.");
+        return;
+      }
       if(button.disabled) return;
       state.accountPasswordMessage=null;
       messageElement.hidden=true;
       button.disabled=true;
       button.textContent="Guardando…";
       try{
-        await updateAccountPassword(newPassword);
+        const client=getSupabaseClient();
+        if(!client||!isAppAuthenticated()){
+          showPasswordMessage("error","Tu sesión ya no es válida. Cierra sesión y vuelve a entrar.");
+          return;
+        }
+        let data,error;
+        if(state.accountPasswordReauthRequired){
+          ({data,error}=await client.auth.updateUser({
+            password:newPassword,
+            nonce
+          }));
+        }else{
+          ({data,error}=await client.auth.updateUser({
+            password:newPassword
+          }));
+        }
+        console.log("PASSWORD UPDATE RESULT",{
+          data,
+          error,
+          code:error?.code,
+          message:error?.message,
+          status:error?.status
+        });
+
+        if(error){
+          const code=String(error.code||"").toLowerCase();
+          const errorMessage=String(error.message||"").toLowerCase();
+          if(code==="same_password"||errorMessage.includes("same password")){
+            showPasswordMessage("error","La nueva contraseña debe ser diferente de la actual.");
+          }else if(code==="reauthentication_needed"||errorMessage.includes("reauthentication")){
+            const {data:reauthData,error:reauthError}=await client.auth.reauthenticate();
+            console.log("PASSWORD REAUTHENTICATION RESULT",{
+              data:reauthData,
+              error:reauthError,
+              code:reauthError?.code,
+              message:reauthError?.message,
+              status:reauthError?.status
+            });
+            if(reauthError){
+              console.error("PASSWORD REAUTHENTICATION ERROR",reauthError);
+              const reauthCode=String(reauthError.code||"").toLowerCase();
+              if(["session_not_found","refresh_token_not_found","user_not_found"].includes(reauthCode)){
+                showPasswordMessage("error","Tu sesión ya no es válida. Cierra sesión y vuelve a entrar.");
+              }else{
+                showPasswordMessage("error","No se pudo verificar tu identidad.");
+              }
+            }else{
+              state.accountPasswordReauthRequired=true;
+              nonceRow.hidden=false;
+              showPasswordMessage("error","Por seguridad, debes volver a verificar tu identidad antes de cambiar la contraseña.");
+              nonceInput.focus();
+            }
+          }else if(
+            ["session_not_found","refresh_token_not_found","user_not_found"].includes(code)||
+            errorMessage.includes("auth session missing")||
+            errorMessage.includes("session expired")||
+            errorMessage.includes("invalid refresh token")
+          ){
+            showPasswordMessage("error","Tu sesión ya no es válida. Cierra sesión y vuelve a entrar.");
+          }else if(code==="weak_password"||errorMessage.includes("weak password")){
+            showPasswordMessage("error",error.message||"La contraseña no cumple los requisitos de seguridad.");
+          }else{
+            console.error("PASSWORD UPDATE ERROR",{
+              error,
+              code:error.code,
+              message:error.message,
+              status:error.status
+            });
+            showPasswordMessage("error","No se pudo cambiar la contraseña.");
+          }
+          return;
+        }
+
+        if(!data?.user){
+          console.error("PASSWORD UPDATE ERROR: missing user",data);
+          showPasswordMessage("error","No se pudo cambiar la contraseña.");
+          return;
+        }
+
+        const {
+          data:{session}
+        }=await client.auth.getSession();
+        const {data:userData,error:userError}=await client.auth.getUser();
+        console.log("SESSION AFTER PASSWORD UPDATE",{
+          session,
+          user:userData?.user,
+          userError
+        });
+
         const visibleNewPassword=document.getElementById("accountNewPassword")||newPasswordInput;
         const visibleConfirmation=document.getElementById("accountConfirmPassword")||confirmationInput;
+        const visibleNonce=document.getElementById("accountPasswordNonce")||nonceInput;
+        const visibleNonceRow=document.getElementById("accountPasswordNonceRow")||nonceRow;
         visibleNewPassword.value="";
         visibleConfirmation.value="";
+        visibleNonce.value="";
+        visibleNonceRow.hidden=true;
+        state.accountPasswordReauthRequired=false;
         showPasswordMessage("success","Contraseña actualizada correctamente.");
       }catch(error){
+        console.error("UNEXPECTED PASSWORD UPDATE ERROR",error);
         const code=String(error?.code||"").toLowerCase();
-        const message=String(error?.message||"").toLowerCase();
-        if(code==="same_password"||message.includes("same password")){
+        if(code==="same_password"){
           showPasswordMessage("error","La nueva contraseña debe ser diferente de la actual.");
-        }else if(
-          ["session_not_found","refresh_token_not_found","refresh_token_already_used","user_not_found","bad_jwt","no_authorization"].includes(code)||
-          message.includes("auth session missing")||
-          message.includes("session expired")||
-          message.includes("not authenticated")||
-          message.includes("invalid refresh token")||
-          message.includes("jwt expired")||
-          message.includes("invalid jwt")
-        ){
-          showPasswordMessage("error","Tu sesión ha caducado. Vuelve a iniciar sesión.");
+        }else if(code==="reauthentication_needed"){
+          showPasswordMessage("error","Por seguridad, debes volver a verificar tu identidad antes de cambiar la contraseña.");
+        }else if(["session_not_found","refresh_token_not_found","user_not_found"].includes(code)){
+          showPasswordMessage("error","Tu sesión ya no es válida. Cierra sesión y vuelve a entrar.");
+        }else if(code==="weak_password"){
+          showPasswordMessage("error",error?.message||"La contraseña no cumple los requisitos de seguridad.");
         }else{
-          showPasswordMessage("error","No se pudo cambiar la contraseña. Inténtalo de nuevo.");
+          showPasswordMessage("error","No se pudo cambiar la contraseña.");
         }
       }finally{
-        button.disabled=false;
-        button.textContent="Guardar contraseña";
+        const visibleButton=document.getElementById("saveAccountPassword")||button;
+        visibleButton.disabled=false;
+        visibleButton.textContent="Guardar contraseña";
       }
     };
     document.getElementById("accountSyncNow").onclick=async()=>{

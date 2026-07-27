@@ -568,7 +568,7 @@ function updateExerciseTechnicalNotes(id,notes){
   return true;
 }
 
-const GYMOS_BACKUP_VERSION="4.0.2";
+const GYMOS_BACKUP_VERSION="4.0.3";
 const GYMOS_BACKUP_KEYS=[
   "gymos:routine",
   "gymos:history",
@@ -3198,13 +3198,13 @@ function renderOnboarding(){
       <div class="routine-preview-list">
         ${sessionsToShow.map(session=>`<article><h3>Sesión ${session}</h3>${proposed[session].map(item=>`<div><span>${esc(item.name)}</span><small>${item.sets} × ${esc(item.target)}</small></div>`).join("")}</article>`).join("")}
       </div>
-      <label class="consent-row"><input id="obConfirm" type="checkbox"><span>He revisado mis respuestas y quiero guardar esta rutina como punto de partida.</span></label>`;
+      <label class="consent-row"><input id="obConfirm" type="checkbox"><span>He revisado mis respuestas. Puedo guardar solo el perfil o sustituir mi rutina de forma explícita.</span></label>`;
   }
 
   app.innerHTML=`<div class="onboarding-shell">
     <header class="onboarding-header">
       <div class="onboarding-brand"><span class="onboarding-logo">G</span><div><div class="brand">GymOS</div><div class="subtle">Tu entrenamiento, bien planteado</div></div></div>
-      ${getOnboardingProfile()?.completedAt?`<button id="cancelOnboarding" class="text-button">Cerrar</button>`:""}
+      <button id="cancelOnboarding" class="text-button">Salir</button>
     </header>
     <div class="onboarding-stepper" aria-label="Paso ${step} de 5">
       ${[1,2,3,4,5].map(n=>`<span class="${n<step?"done":n===step?"active":""}">${n<step?"✓":n}</span>`).join("")}
@@ -3216,13 +3216,18 @@ function renderOnboarding(){
     <div class="onboarding-actions-wrap">
       <div class="onboarding-actions">
         ${step>1?`<button id="obBack" class="secondary">Atrás</button>`:"<span></span>"}
-        <button id="obNext" class="primary">${step===5?"Usar este plan":"Continuar"}</button>
+        ${step===5
+          ?`<div class="onboarding-final-actions">
+              <button id="obSaveProfile" class="secondary">Guardar solo perfil</button>
+              <button id="obNext" class="primary">Reemplazar rutina</button>
+            </div>`
+          :`<button id="obNext" class="primary">Continuar</button>`}
       </div>
     </div>
   </div>`;
 
   const cancel=document.getElementById("cancelOnboarding");
-  if(cancel) cancel.onclick=()=>{state.onboardingDraft=null;state.onboardingStep=1;state.screen="settings";renderSettings();};
+  if(cancel) cancel.onclick=()=>{state.onboardingDraft=null;state.onboardingStep=1;state.screen="home";renderHome();};
 
   const persistStep=()=>{
     if(step===1){
@@ -3257,6 +3262,24 @@ function renderOnboarding(){
   });
   const back=document.getElementById("obBack");
   if(back) back.onclick=()=>{persistStep();state.onboardingStep--;renderOnboarding();};
+  const saveProfileOnly=document.getElementById("obSaveProfile");
+  if(saveProfileOnly) saveProfileOnly.onclick=async()=>{
+    persistStep();
+    if(!document.getElementById("obConfirm").checked){
+      alert("Confirma que has revisado tus respuestas.");
+      return;
+    }
+    const now=new Date().toISOString();
+    p.completedAt=now;
+    p.updatedAt=now;
+    saveOnboardingProfile(p);
+    state.onboardingDraft=null;
+    state.onboardingStep=1;
+    state.screen="home";
+    toast("Perfil guardado. Tu rutina no se ha modificado.");
+    renderHome();
+    setTimeout(()=>autoSync("perfil deportivo actualizado"),400);
+  };
   document.getElementById("obNext").onclick=async()=>{
     persistStep();
     if(step===1){
@@ -6353,7 +6376,7 @@ function renderAccount(){
 
 function renderSettings(){
   app.innerHTML=`<div class="app-shell">
-    <header class="topbar"><div><div class="brand">Ajustes</div><div class="subtle">GymOS v4.0.2 · Selección de objetivo corregida</div></div></header>
+    <header class="topbar"><div><div class="brand">Ajustes</div><div class="subtle">GymOS v4.0.3 · Perfil sin sustituir rutina</div></div></header>
     <main class="screen">
       <section class="card account-entry-card">
         <div class="account-entry-main">

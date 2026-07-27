@@ -1374,3 +1374,11 @@ body.large-tap-targets .quick-action-card{min-height:122px}
 @media(max-width:370px){
   .onboarding-grid.two,.onboarding-summary,.pain-grid{grid-template-columns:1fr}
 }
+
+.onboarding-final-actions{display:flex;gap:9px;flex:1;justify-content:flex-end}
+.onboarding-final-actions button{min-width:0}
+@media(max-width:560px){
+  .onboarding-actions{align-items:stretch}
+  .onboarding-final-actions{display:grid;grid-template-columns:1fr;gap:7px}
+  .onboarding-final-actions button{width:100%}
+}

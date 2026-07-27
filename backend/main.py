@@ -18,7 +18,7 @@ ALLOWED_ORIGINS = [
     if origin.strip()
 ]
 
-app = FastAPI(title="GymOS Coach API", version="3.8.2")
+app = FastAPI(title="GymOS Coach API", version="3.8.3")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=ALLOWED_ORIGINS,
@@ -109,7 +109,7 @@ def parse_json_response(raw: str) -> dict[str, Any]:
 def health() -> dict[str, Any]:
     return {
         "status": "ok",
-        "version": "3.8.2",
+        "version": "3.8.3",
         "model": MODEL,
         "openaiConfigured": bool(API_KEY),
     }

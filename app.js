@@ -568,7 +568,7 @@ function updateExerciseTechnicalNotes(id,notes){
   return true;
 }
 
-const GYMOS_BACKUP_VERSION="4.0.1";
+const GYMOS_BACKUP_VERSION="4.0.2";
 const GYMOS_BACKUP_KEYS=[
   "gymos:routine",
   "gymos:history",
@@ -3247,7 +3247,14 @@ function renderOnboarding(){
     }
     state.onboardingDraft=p;
   };
-  document.querySelectorAll(".choice-card input").forEach(input=>input.onchange=()=>renderOnboarding());
+  document.querySelectorAll(".choice-card input").forEach(input=>{
+    input.onchange=()=>{
+      p.goal=input.value;
+      state.onboardingDraft=p;
+      document.querySelectorAll(".choice-card").forEach(card=>card.classList.remove("selected"));
+      input.closest(".choice-card")?.classList.add("selected");
+    };
+  });
   const back=document.getElementById("obBack");
   if(back) back.onclick=()=>{persistStep();state.onboardingStep--;renderOnboarding();};
   document.getElementById("obNext").onclick=async()=>{
@@ -6346,7 +6353,7 @@ function renderAccount(){
 
 function renderSettings(){
   app.innerHTML=`<div class="app-shell">
-    <header class="topbar"><div><div class="brand">Ajustes</div><div class="subtle">GymOS v4.0.1 · Onboarding renovado</div></div></header>
+    <header class="topbar"><div><div class="brand">Ajustes</div><div class="subtle">GymOS v4.0.2 · Selección de objetivo corregida</div></div></header>
     <main class="screen">
       <section class="card account-entry-card">
         <div class="account-entry-main">

@@ -568,7 +568,7 @@ function updateExerciseTechnicalNotes(id,notes){
   return true;
 }
 
-const GYMOS_BACKUP_VERSION="4.0.4";
+const GYMOS_BACKUP_VERSION="4.0.5";
 const GYMOS_BACKUP_KEYS=[
   "gymos:routine",
   "gymos:history",
@@ -3350,7 +3350,7 @@ function render(){
     return;
   }
 
-  if(state.syncUser&&!onboardingCompleted()&&state.screen!=="account"){
+  if(state.syncUser&&!onboardingCompleted()&&!getOnboardingProfile()?.onboardingDismissed&&state.screen!=="account"){
     state.screen="onboarding";
     renderOnboarding();
     return;
@@ -6395,7 +6395,7 @@ function renderAccount(){
 
 function renderSettings(){
   app.innerHTML=`<div class="app-shell">
-    <header class="topbar"><div><div class="brand">Ajustes</div><div class="subtle">GymOS v4.0.4 · Onboarding no bloqueante</div></div></header>
+    <header class="topbar"><div><div class="brand">Ajustes</div><div class="subtle">GymOS v4.0.5 · Persistencia del onboarding corregida</div></div></header>
     <main class="screen">
       <section class="card account-entry-card">
         <div class="account-entry-main">

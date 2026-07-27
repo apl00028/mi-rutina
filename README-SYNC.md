@@ -1,4 +1,4 @@
-# GymOS v3.8.0 — Sincronización multiusuario segura
+# GymOS v3.8.1 — Corrección de navegación y descargas
 
 GymOS sigue funcionando completamente en modo local.
 
@@ -331,3 +331,11 @@ de cuenta y pruebas automáticas con dos usuarios independientes.
 - SQL actualizado con metadatos y auditoría protegida por RLS.
 - Prueba de aislamiento entre usuarios.
 - Base de autenticación y limitación de peticiones para el backend Coach.
+
+
+## Corrección v3.8.1
+
+- El Excel ya no se descarga automáticamente al abrir «Más».
+- La rutina solo se exporta al pulsar «Exportar rutina actual».
+- Se restauran correctamente los botones de navegación y las pantallas de Ajustes.
+- Se corrige la configuración técnica cuando el campo de correo no está presente.

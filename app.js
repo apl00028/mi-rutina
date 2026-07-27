@@ -936,7 +936,7 @@ function undoLastCoachChange(){
 }
 function coachContextPayload(){
   return {
-    version:"3.8.0",
+    version:"3.8.1",
     generatedAt:new Date().toISOString(),
     settings:getCoachSettings(),
     routine:getRoutine(),
@@ -5652,7 +5652,7 @@ function renderAccount(){
 
 function renderSettings(){
   app.innerHTML=`<div class="app-shell">
-    <header class="topbar"><div><div class="brand">Ajustes</div><div class="subtle">GymOS v3.8.0 · Sincronización multiusuario segura</div></div></header>
+    <header class="topbar"><div><div class="brand">Ajustes</div><div class="subtle">GymOS v3.8.1 · Corrección de navegación y descargas</div></div></header>
     <main class="screen">
       <section class="card account-entry-card">
         <div class="account-entry-main">
@@ -5921,59 +5921,81 @@ function renderSettings(){
   };
   const openDeveloperMode=document.getElementById("openDeveloperMode");
   if(openDeveloperMode) openDeveloperMode.onclick=()=>{state.screen="developer";renderDeveloperMode();};
-  document.getElementById("saveSyncConfig").onclick=async()=>{
+  const saveSyncConfigButton=document.getElementById("saveSyncConfig");
+  if(saveSyncConfigButton) saveSyncConfigButton.onclick=async()=>{
+    const emailInput=document.getElementById("syncEmail");
     saveSyncConfig({
-      url:document.getElementById("syncUrl").value,
-      key:document.getElementById("syncKey").value,
-      email:document.getElementById("syncEmail").value
+      url:document.getElementById("syncUrl")?.value||"",
+      key:document.getElementById("syncKey")?.value||"",
+      email:emailInput?.value||getSyncConfig().email||""
     });
-    saveDeviceName(document.getElementById("deviceName").value);
+    const deviceInput=document.getElementById("deviceName");
+    if(deviceInput) saveDeviceName(deviceInput.value);
     await refreshSyncSession();
     toast("Configuración guardada");
     renderSettings();
   };
-  const rows=[];
-  const routine=getRoutine();
-  ["A","B","C"].forEach(session=>{
-    routine[session].forEach((item,index)=>{
-      const range=parseRepRange(item.target)||{min:"",max:""};
-      rows.push({
-        "Sesión":session,
-        "Orden":index+1,
-        "Ejercicio":item.name,
-        "Series":item.sets,
-        "Reps mín.":range.min,
-        "Reps máx.":range.max,
-        "Incremento kg":item.increment,
-        "Tipo":item.type
+
+  const bindScreen=(id,screen,renderer)=>{
+    const button=document.getElementById(id);
+    if(button) button.onclick=()=>{state.screen=screen;renderer();};
+  };
+
+  bindScreen("openHealth","health",renderHealth);
+  bindScreen("openNutrition","nutrition",renderNutrition);
+  bindScreen("openCoach","coach",renderCoach);
+  bindScreen("openBackupRestore","backupRestore",renderBackupRestore);
+  bindScreen("openRoutineEditor","routineEditor",renderRoutineEditor);
+  bindScreen("openTrainingBlocks","blocks",renderTrainingBlocks);
+  bindScreen("openGlobalAnalytics","globalAnalytics",renderGlobalAnalytics);
+  bindScreen("openExerciseLibrary","exerciseLibrary",renderExerciseLibrary);
+  bindScreen("openFavoriteExercises","favoriteExercises",renderFavoriteExercises);
+  bindScreen("openSubstitutionHistory","substitutionHistory",renderSubstitutionHistory);
+
+  const importRoutineButton=document.getElementById("importRoutine");
+  if(importRoutineButton) importRoutineButton.onclick=()=>routineFile.click();
+
+  const exportRoutineButton=document.getElementById("exportRoutine");
+  if(exportRoutineButton) exportRoutineButton.onclick=function(){
+    const rows=[];
+    const routine=getRoutine();
+    ["A","B","C"].forEach(session=>{
+      routine[session].forEach((item,index)=>{
+        const range=parseRepRange(item.target)||{min:"",max:""};
+        rows.push({
+          "Sesión":session,
+          "Orden":index+1,
+          "Ejercicio":item.name,
+          "Series":item.sets,
+          "Reps mín.":range.min,
+          "Reps máx.":range.max,
+          "Incremento kg":item.increment,
+          "Tipo":item.type
+        });
       });
     });
-  });
-  const ws=XLSX.utils.json_to_sheet(rows);
-  const wb=XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb,ws,"Rutina");
-  XLSX.writeFile(wb,`rutina-gymos-${new Date().toISOString().slice(0,10)}.xlsx`);
+    const ws=XLSX.utils.json_to_sheet(rows);
+    const wb=XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb,ws,"Rutina");
+    XLSX.writeFile(wb,`rutina-gymos-${new Date().toISOString().slice(0,10)}.xlsx`);
+  };
+
+  const exportDataButton=document.getElementById("exportData");
+  if(exportDataButton) exportDataButton.onclick=()=>exportData();
+
+  const importDataButton=document.getElementById("importData");
+  if(importDataButton) importDataButton.onclick=()=>importFile.click();
+
+  const deleteDataButton=document.getElementById("deleteData");
+  if(deleteDataButton) deleteDataButton.onclick=()=>{
+    if(!confirm("¿Borrar todos los datos locales de GymOS en este dispositivo?")) return;
+    BACKUP_KEYS.forEach(key=>localStorage.removeItem(key));
+    ["A","B","C"].forEach(session=>localStorage.removeItem(draftKey(session)));
+    toast("Datos locales eliminados");
+    state.screen="home";
+    render();
+  };
 }
-routineFile.onchange=async()=>{
-  const file=routineFile.files[0];
-  if(!file) return;
-  try{
-    const data=await file.arrayBuffer();
-    const workbook=XLSX.read(data,{type:"array"});
-    const first=workbook.Sheets[workbook.SheetNames[0]];
-    const rows=XLSX.utils.sheet_to_json(first,{defval:""});
-    const parsed=parseRoutineRows(rows);
-    if(parsed.errors.length){
-      alert("No se ha importado la rutina:\n\n"+parsed.errors.slice(0,12).join("\n"));
-      return;
-    }
-    showRoutinePreview(parsed.routine,file.name);
-  }catch(error){
-    alert("No se ha podido leer el Excel. Comprueba que utilizas la plantilla de GymOS.");
-  }finally{
-    routineFile.value="";
-  }
-};
 
 function exportData(){
   const payload={

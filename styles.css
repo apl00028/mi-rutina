@@ -801,3 +801,36 @@ select{
 .coach-change-card p{margin:0;color:#4b5563;font-size:.72rem;line-height:1.4}
 .coach-decision-card{display:flex;flex-direction:column;gap:8px}
 @media(max-width:420px){.coach-summary-grid{grid-template-columns:1fr}}
+
+.header-select{max-width:82px;padding:7px;border-radius:9px;border:1px solid #d1d5db;background:#fff;font-size:.7rem}
+.periodization-card{border:1px solid #c4b5fd;background:#faf5ff}
+.phase-badge{padding:6px 9px;border-radius:999px;background:#6d28d9;color:#fff;font-size:.62rem;font-weight:900}
+.fatigue-level{padding:6px 9px;border-radius:999px;font-size:.62rem;font-weight:900;text-transform:uppercase}
+.fatigue-level.baja{background:#dcfce7;color:#166534}
+.fatigue-level.media{background:#fef3c7;color:#92400e}
+.fatigue-level.alta{background:#fee2e2;color:#991b1b}
+.fatigue-meter{height:9px;border-radius:999px;background:#e5e7eb;overflow:hidden;margin-top:12px}
+.fatigue-meter span{display:block;height:100%;background:currentColor;border-radius:999px}
+.weekly-volume-chart{display:flex;align-items:flex-end;gap:8px;height:190px;margin-top:16px;overflow-x:auto}
+.weekly-bar-item{min-width:34px;flex:1;display:flex;flex-direction:column;align-items:center;gap:5px;height:100%}
+.weekly-bar-track{flex:1;width:100%;display:flex;align-items:flex-end;background:#f3f4f6;border-radius:8px;overflow:hidden}
+.weekly-bar-track span{display:block;width:100%;background:#7c3aed;border-radius:8px 8px 0 0}
+.weekly-bar-item small{font-size:.56rem;color:#6b7280}
+.weekly-bar-item strong{font-size:.58rem}
+.muscle-volume-list{display:flex;flex-direction:column;gap:12px;margin-top:12px}
+.muscle-volume-list>div>div:first-child{display:flex;justify-content:space-between;gap:10px;font-size:.7rem}
+.muscle-progress{height:7px;background:#e5e7eb;border-radius:999px;overflow:hidden;margin-top:6px}
+.muscle-progress span{display:block;height:100%;background:#7c3aed;border-radius:999px}
+.weight-trend-summary{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:12px}
+.weight-trend-summary article{padding:10px;border-radius:11px;background:#f3f4f6}
+.weight-trend-summary span,.weight-trend-summary strong{display:block}
+.weight-trend-summary span{font-size:.6rem;color:#6b7280}
+.weight-trend-summary strong{margin-top:5px;font-size:.85rem}
+.records-list{display:flex;flex-direction:column;margin-top:10px}
+.records-list article{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:11px 0;border-bottom:1px solid #e5e7eb}
+.records-list article:last-child{border-bottom:0}
+.records-list article div span{display:block;font-size:.65rem;color:#6b7280;margin-top:3px}
+@media(max-width:420px){
+  .weight-trend-summary{grid-template-columns:1fr}
+  .weekly-volume-chart{height:160px}
+}

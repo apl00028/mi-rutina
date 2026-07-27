@@ -817,6 +817,25 @@ function createLocalCoachProposal(){
     }
   });
 
+  const fatigue=fatigueAssessment();
+  const periodization=periodizationRecommendation();
+  notes.push(`Fase recomendada: ${periodization.phase}. ${periodization.action}`);
+  if(fatigue.level==="alta"){
+    summaries.forEach(item=>{
+      if(item.sets>2&&!changes.some(change=>change.session===item.session&&change.index===item.index&&change.field==="sets")){
+        changes.push({
+          type:"deload",
+          session:item.session,
+          index:item.index,
+          exercise:item.name,
+          field:"sets",
+          from:item.sets,
+          to:Math.max(2,Math.ceil(item.sets*0.65)),
+          reason:"Descarga recomendada por fatiga acumulada."
+        });
+      }
+    });
+  }
   if(workouts.length<3){
     notes.push("Hay pocos entrenamientos recientes. La propuesta es conservadora.");
   }
@@ -901,7 +920,7 @@ function undoLastCoachChange(){
 }
 function coachContextPayload(){
   return {
-    version:"3.0.0",
+    version:"3.1.0",
     generatedAt:new Date().toISOString(),
     settings:getCoachSettings(),
     routine:getRoutine(),
@@ -911,6 +930,161 @@ function coachContextPayload(){
     activeBlock:getActiveTrainingBlock?.()||null
   };
 }
+
+function startOfWeek(date){
+  const d=new Date(date);
+  const day=(d.getDay()+6)%7;
+  d.setHours(0,0,0,0);
+  d.setDate(d.getDate()-day);
+  return d;
+}
+function weekKey(date){
+  return startOfWeek(date).toISOString().slice(0,10);
+}
+function workoutDateValue(workout){
+  return new Date(workout.date||workout.completedAt||workout.createdAt||0);
+}
+function completedWorkoutExercises(workout){
+  return Array.isArray(workout.exercises)?workout.exercises:(Array.isArray(workout.items)?workout.items:[]);
+}
+function weeklyTrainingAnalytics(rangeWeeks=8){
+  const weeks=[];
+  const now=startOfWeek(new Date());
+  for(let i=rangeWeeks-1;i>=0;i--){
+    const start=new Date(now);
+    start.setDate(start.getDate()-i*7);
+    const key=weekKey(start);
+    weeks.push({
+      key,
+      start,
+      label:start.toLocaleDateString("es-ES",{day:"2-digit",month:"2-digit"}),
+      workouts:0,
+      sets:0,
+      volume:0,
+      avgRir:null,
+      avgRpe:null,
+      muscleSets:{}
+    });
+  }
+  const byKey=new Map(weeks.map(w=>[w.key,w]));
+  getHistory().forEach(workout=>{
+    const date=workoutDateValue(workout);
+    if(Number.isNaN(date.getTime())) return;
+    const bucket=byKey.get(weekKey(date));
+    if(!bucket) return;
+    bucket.workouts+=1;
+    const rirValues=[];
+    const rpeValues=[];
+    completedWorkoutExercises(workout).forEach(exercise=>{
+      const libraryItem=exerciseLibraryItemByName(exercise.name);
+      const muscle=libraryItem?.muscle||"Sin clasificar";
+      const sets=Array.isArray(exercise.sets)?exercise.sets:(Array.isArray(exercise.completedSets)?exercise.completedSets:[]);
+      sets.forEach(set=>{
+        const weight=Number(set.weight??set.kg??0);
+        const reps=Number(set.reps??0);
+        if(!weight&&!reps) return;
+        bucket.sets+=1;
+        bucket.volume+=weight*reps;
+        bucket.muscleSets[muscle]=(bucket.muscleSets[muscle]||0)+1;
+        const rir=set.rir??set.RIR;
+        const rpe=set.rpe??set.RPE;
+        if(rir!==null&&rir!==undefined&&rir!=="") rirValues.push(Number(rir));
+        if(rpe!==null&&rpe!==undefined&&rpe!=="") rpeValues.push(Number(rpe));
+      });
+    });
+    if(rirValues.length){
+      bucket._rir=(bucket._rir||[]).concat(rirValues);
+    }
+    if(rpeValues.length){
+      bucket._rpe=(bucket._rpe||[]).concat(rpeValues);
+    }
+  });
+  weeks.forEach(bucket=>{
+    if(bucket._rir?.length) bucket.avgRir=bucket._rir.reduce((a,b)=>a+b,0)/bucket._rir.length;
+    if(bucket._rpe?.length) bucket.avgRpe=bucket._rpe.reduce((a,b)=>a+b,0)/bucket._rpe.length;
+    delete bucket._rir;
+    delete bucket._rpe;
+  });
+  return weeks;
+}
+function fatigueAssessment(){
+  const weeks=weeklyTrainingAnalytics(4);
+  const current=weeks.at(-1)||{};
+  const previous=weeks.at(-2)||{};
+  let score=0;
+  const reasons=[];
+  if(current.avgRir!==null&&current.avgRir<1){
+    score+=3; reasons.push("RIR semanal muy bajo");
+  }else if(current.avgRir!==null&&current.avgRir<2){
+    score+=2; reasons.push("RIR semanal exigente");
+  }
+  if(current.avgRpe!==null&&current.avgRpe>9){
+    score+=3; reasons.push("RPE semanal muy alto");
+  }else if(current.avgRpe!==null&&current.avgRpe>8.5){
+    score+=2; reasons.push("RPE semanal alto");
+  }
+  if(previous.sets&&current.sets>previous.sets*1.25){
+    score+=2; reasons.push("Aumento rápido del volumen");
+  }
+  const summaries=coachExerciseSummary();
+  const declining=summaries.filter(item=>item.trend!==null&&item.trend<-0.05).length;
+  if(declining>=2){
+    score+=2; reasons.push(`${declining} ejercicios con rendimiento descendente`);
+  }
+  let level="baja";
+  if(score>=6) level="alta";
+  else if(score>=3) level="media";
+  return {score,level,reasons,current,previous,declining};
+}
+function periodizationRecommendation(){
+  const fatigue=fatigueAssessment();
+  const summaries=coachExerciseSummary();
+  const progressing=summaries.filter(item=>item.trend!==null&&item.trend>0.03).length;
+  const stalled=summaries.filter(item=>item.historyCount>=8&&(item.trend===null||Math.abs(item.trend)<0.02)).length;
+  if(fatigue.level==="alta"){
+    return {phase:"Descarga",action:"Reducir durante una semana un 30–40 % las series y evitar el fallo.",reason:fatigue.reasons.join(". ")};
+  }
+  if(stalled>=3&&fatigue.level!=="baja"){
+    return {phase:"Consolidación",action:"Mantener cargas durante una semana y priorizar técnica y recuperación.",reason:`${stalled} ejercicios muestran estancamiento.`};
+  }
+  if(progressing>=2){
+    return {phase:"Progresión",action:"Mantener la rutina y aplicar incrementos pequeños cuando completes el rango con RIR suficiente.",reason:`${progressing} ejercicios muestran una tendencia positiva.`};
+  }
+  return {phase:"Acumulación",action:"Mantener el volumen actual y registrar RIR/RPE para mejorar la siguiente revisión.",reason:"Todavía no hay una señal suficientemente clara para cambiar de fase."};
+}
+function bodyWeightTrend(){
+  let entries=[];
+  try{
+    entries=typeof getBodyWeightEntries==="function"?getBodyWeightEntries():[];
+  }catch(error){entries=[];}
+  const valid=entries
+    .map(item=>({date:new Date(item.date||item.createdAt||0),weight:Number(item.weight??item.value??0)}))
+    .filter(item=>item.weight>0&&!Number.isNaN(item.date.getTime()))
+    .sort((a,b)=>a.date-b.date);
+  if(valid.length<2) return {entries:valid,change:null,weeklyRate:null};
+  const first=valid[0],last=valid.at(-1);
+  const days=Math.max(1,(last.date-first.date)/86400000);
+  const change=last.weight-first.weight;
+  return {entries:valid,change,weeklyRate:change/(days/7)};
+}
+function adherenceSummary(rangeWeeks=8){
+  const weeks=weeklyTrainingAnalytics(rangeWeeks);
+  const target=3;
+  const completed=weeks.reduce((sum,w)=>sum+w.workouts,0);
+  const possible=target*rangeWeeks;
+  return {completed,possible,percent:possible?Math.min(100,completed/possible*100):0};
+}
+function personalRecords(){
+  const records=[];
+  getExerciseLibrary().forEach(item=>{
+    const stats=exerciseDetailStats(item.name);
+    if(stats.bestWeight||stats.best1RM){
+      records.push({name:item.name,bestWeight:stats.bestWeight,best1RM:stats.best1RM});
+    }
+  });
+  return records.sort((a,b)=>b.best1RM-a.best1RM).slice(0,8);
+}
+
 async function requestRemoteCoachProposal(){
   const settings=getCoachSettings();
   if(!settings.backendUrl) throw new Error("Configura primero la URL del backend Coach.");
@@ -1037,7 +1211,8 @@ let state = {
   editingLibraryExerciseId: null,
   selectedLibraryExerciseId: null,
   favoritesSort: "name",
-  coachSessionId: null
+  coachSessionId: null,
+  progressRangeWeeks: 8
 };
 
 function getHistory(){ return JSON.parse(localStorage.getItem("gymos:history") || "[]"); }
@@ -1839,6 +2014,7 @@ function render(){
   else if(state.screen==="backupRestore") renderBackupRestore();
   else if(state.screen==="coach") renderCoach();
   else if(state.screen==="coachProposal") renderCoachProposal();
+  else if(state.screen==="progressDashboard") renderProgressDashboard();
   else renderSettings();
 }
 
@@ -3531,6 +3707,106 @@ function renderSubstitutionHistory(){
 
 
 
+
+function renderProgressDashboard(){
+  const weeks=weeklyTrainingAnalytics(state.progressRangeWeeks);
+  const fatigue=fatigueAssessment();
+  const periodization=periodizationRecommendation();
+  const adherence=adherenceSummary(state.progressRangeWeeks);
+  const weightTrend=bodyWeightTrend();
+  const records=personalRecords();
+  const current=weeks.at(-1)||{workouts:0,sets:0,volume:0,muscleSets:{}};
+  const muscleTotals={};
+  weeks.forEach(week=>Object.entries(week.muscleSets).forEach(([muscle,count])=>{
+    muscleTotals[muscle]=(muscleTotals[muscle]||0)+count;
+  }));
+  const muscles=Object.entries(muscleTotals).sort((a,b)=>b[1]-a[1]);
+  const maxVolume=Math.max(1,...weeks.map(w=>w.volume));
+  const maxSets=Math.max(1,...muscles.map(([,sets])=>sets));
+
+  app.innerHTML=`<div class="app-shell">
+    <header class="topbar">
+      <button id="backProgressDashboard" class="back-button">←</button>
+      <div><div class="brand">Progreso</div><div class="subtle">Últimas ${state.progressRangeWeeks} semanas</div></div>
+      <select id="progressRange" class="header-select">
+        <option value="4" ${state.progressRangeWeeks===4?"selected":""}>4 sem.</option>
+        <option value="8" ${state.progressRangeWeeks===8?"selected":""}>8 sem.</option>
+        <option value="12" ${state.progressRangeWeeks===12?"selected":""}>12 sem.</option>
+      </select>
+    </header>
+    <main class="screen">
+      <section class="analytics-grid">
+        <article class="stat-card"><span>Entrenos esta semana</span><strong>${current.workouts}</strong></article>
+        <article class="stat-card"><span>Series esta semana</span><strong>${current.sets}</strong></article>
+        <article class="stat-card"><span>Volumen semanal</span><strong>${Math.round(current.volume).toLocaleString("es-ES")} kg</strong></article>
+        <article class="stat-card"><span>Adherencia</span><strong>${Math.round(adherence.percent)} %</strong></article>
+      </section>
+
+      <section class="card periodization-card">
+        <div class="card-heading-row">
+          <div><h2>Fase recomendada</h2><p class="subtle">${esc(periodization.reason)}</p></div>
+          <span class="phase-badge">${esc(periodization.phase)}</span>
+        </div>
+        <p>${esc(periodization.action)}</p>
+      </section>
+
+      <section class="card">
+        <div class="card-heading-row">
+          <div><h2>Fatiga estimada</h2><p class="subtle">${fatigue.reasons.length?esc(fatigue.reasons.join(" · ")):"Sin señales claras de fatiga acumulada."}</p></div>
+          <span class="fatigue-level ${fatigue.level}">${esc(fatigue.level)}</span>
+        </div>
+        <div class="fatigue-meter"><span style="width:${Math.min(100,fatigue.score/8*100)}%"></span></div>
+      </section>
+
+      <section class="card">
+        <h2>Volumen por semana</h2>
+        <div class="weekly-volume-chart">
+          ${weeks.map(week=>`<div class="weekly-bar-item">
+            <div class="weekly-bar-track"><span style="height:${Math.max(3,week.volume/maxVolume*100)}%"></span></div>
+            <small>${esc(week.label)}</small>
+            <strong>${Math.round(week.volume/100)/10}k</strong>
+          </div>`).join("")}
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>Distribución muscular</h2>
+        <div class="muscle-volume-list">
+          ${muscles.length?muscles.map(([muscle,sets])=>`<div>
+            <div><span>${esc(muscle)}</span><strong>${sets} series</strong></div>
+            <div class="muscle-progress"><span style="width:${sets/maxSets*100}%"></span></div>
+          </div>`).join(""):`<div class="routine-empty"><strong>Sin datos suficientes</strong><p>Registra tus entrenamientos para ver la distribución.</p></div>`}
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>Tendencia de peso</h2>
+        ${weightTrend.change===null?`<div class="routine-empty"><strong>Faltan registros</strong><p>Necesitas al menos dos mediciones de peso.</p></div>`:`<div class="weight-trend-summary">
+          <article><span>Cambio total</span><strong>${weightTrend.change>0?"+":""}${weightTrend.change.toFixed(1)} kg</strong></article>
+          <article><span>Ritmo semanal</span><strong>${weightTrend.weeklyRate>0?"+":""}${weightTrend.weeklyRate.toFixed(2)} kg/sem.</strong></article>
+          <article><span>Registros</span><strong>${weightTrend.entries.length}</strong></article>
+        </div>`}
+      </section>
+
+      <section class="card">
+        <h2>Récords personales</h2>
+        <div class="records-list">
+          ${records.length?records.map(record=>`<article>
+            <div><strong>${esc(record.name)}</strong><span>Mejor carga: ${record.bestWeight?record.bestWeight.toLocaleString("es-ES")+" kg":"—"}</span></div>
+            <strong>${record.best1RM?Math.round(record.best1RM*10)/10+" kg 1RM":"—"}</strong>
+          </article>`).join(""):`<div class="routine-empty"><strong>Sin récords todavía</strong><p>Los mejores valores aparecerán al registrar series.</p></div>`}
+        </div>
+      </section>
+    </main>
+  </div>`;
+
+  document.getElementById("backProgressDashboard").onclick=()=>{state.screen="settings";renderSettings();};
+  document.getElementById("progressRange").onchange=e=>{
+    state.progressRangeWeeks=Number(e.target.value);
+    renderProgressDashboard();
+  };
+}
+
 function renderCoach(){
   const settings=getCoachSettings();
   const proposals=getCoachProposals();
@@ -3867,7 +4143,7 @@ function renderBackupRestore(){
 
 function renderSettings(){
   app.innerHTML=`<div class="app-shell">
-    <header class="topbar"><div><div class="brand">Ajustes</div><div class="subtle">GymOS v3.0.0 · Coach adaptativo</div></div></header>
+    <header class="topbar"><div><div class="brand">Ajustes</div><div class="subtle">GymOS v3.1.0 · Periodización y fatiga</div></div></header>
     <main class="screen">
       <section class="card sync-card">
         <div class="card-heading-row">
@@ -3897,6 +4173,12 @@ function renderSettings(){
           <p>Ejecuta <strong>supabase-schema.sql</strong> y añade <strong>https://apl00028.github.io/mi-rutina/</strong> en Authentication → URL Configuration → Redirect URLs. Usa la clave <strong>Publishable</strong> o <strong>anon public</strong>, nunca una secret/service role.</p>
         </details>
       </section>
+      <section class="card">
+        <h2>Dashboard de progreso</h2>
+        <p class="subtle">Volumen semanal, fatiga, adherencia, grupos musculares y récords personales.</p>
+        <button id="openProgressDashboard" class="secondary full">Ver progreso</button>
+      </section>
+
       <section class="card coach-entry-card">
         <div class="coach-card-heading">
           <div>
@@ -4040,6 +4322,7 @@ function renderSettings(){
   document.getElementById("openGlobalAnalytics").onclick=()=>{state.screen="globalAnalytics";renderGlobalAnalytics();};
   document.getElementById("openExerciseLibrary").onclick=()=>{state.screen="exerciseLibrary";renderExerciseLibrary();};
   document.getElementById("openSubstitutionHistory").onclick=()=>{state.screen="substitutionHistory";renderSubstitutionHistory();};
+  document.getElementById("openProgressDashboard").onclick=()=>{state.screen="progressDashboard";renderProgressDashboard();};
   document.getElementById("openCoach").onclick=()=>{state.screen="coach";renderCoach();};
   document.getElementById("openFavoriteExercises").onclick=()=>{state.screen="favoriteExercises";renderFavoriteExercises();};
   document.getElementById("openBackupRestore").onclick=()=>{state.screen="backupRestore";renderBackupRestore();};

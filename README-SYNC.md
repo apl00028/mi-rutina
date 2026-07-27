@@ -1,4 +1,4 @@
-# GymOS v3.0.0 — Coach adaptativo
+# GymOS v3.1.0 — Periodización, fatiga y dashboard
 
 GymOS sigue funcionando completamente en modo local.
 
@@ -198,3 +198,17 @@ La resolución de conflictos conserva la copia con la fecha `updatedAt` más rec
 - Preparación para conectar un backend seguro de IA.
 - Endpoint esperado: POST /coach/review.
 - Las claves de OpenAI no se almacenan en el frontend público.
+
+
+## Novedades de la versión 3.1.0
+
+- Dashboard de progreso de 4, 8 o 12 semanas.
+- Volumen semanal y número de series.
+- Adherencia estimada sobre tres sesiones por semana.
+- Distribución de series por grupo muscular.
+- Récords personales y 1RM estimado.
+- Tendencia de peso y ritmo semanal.
+- Estimación de fatiga usando RIR, RPE, volumen y rendimiento.
+- Recomendación de fase: acumulación, progresión, consolidación o descarga.
+- Descarga automática propuesta por el Coach cuando la fatiga es alta.
+- Mejor integración de la periodización con las propuestas del Coach.

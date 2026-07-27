@@ -1,4 +1,4 @@
-# GymOS v3.3.0 — Nutrición y composición corporal
+# GymOS v3.4.0 — Rediseño visual y modos Usuario/Desarrollador
 
 GymOS sigue funcionando completamente en modo local.
 
@@ -246,3 +246,19 @@ La resolución de conflictos conserva la copia con la fecha `updatedAt` más rec
 - Contexto nutricional integrado en GymOS Coach.
 - Datos nutricionales incluidos en copias de seguridad y sincronización.
 - Backend actualizado para interpretar el contexto nutricional de forma conservadora.
+
+
+## Novedades de la versión 3.4.0
+
+- Rediseño visual completo con superficies, sombras y jerarquía más moderna.
+- Nueva pantalla de inicio con accesos rápidos a Progreso, Coach y Nutrición.
+- Barra inferior renovada: Inicio, Entrenar, Progreso, Coach y Más.
+- Tema claro, oscuro o automático según el dispositivo.
+- Modo Usuario para ocultar configuraciones técnicas.
+- Modo Desarrollador con diagnóstico, estado de servicios, almacenamiento y logs.
+- Centro de desarrollador con prueba del backend Coach y sincronización manual.
+- Descarga de diagnóstico técnico sin contraseñas ni claves secretas.
+- Opción de interfaz compacta.
+- Posibilidad de desactivar animaciones.
+- Preferencias visuales incluidas en copias de seguridad.
+- Compatibilidad mantenida con entrenamiento, nutrición, progreso, Coach y backend.

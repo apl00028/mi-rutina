@@ -584,7 +584,9 @@ const GYMOS_BACKUP_KEYS=[
   "gymos:coachChat",
   "gymos:coachConnection",
   "gymos:nutritionSettings",
-  "gymos:nutritionEntries"
+  "gymos:nutritionEntries",
+  "gymos:appPreferences",
+  "gymos:developerLogs"
 ];
 
 function getFavoriteExercises(){
@@ -924,7 +926,7 @@ function undoLastCoachChange(){
 }
 function coachContextPayload(){
   return {
-    version:"3.3.0",
+    version:"3.4.0",
     generatedAt:new Date().toISOString(),
     settings:getCoachSettings(),
     routine:getRoutine(),
@@ -1091,6 +1093,121 @@ function personalRecords(){
 }
 
 
+
+
+const APP_PREFERENCES_KEY="gymos:appPreferences";
+const APP_LOGS_KEY="gymos:developerLogs";
+
+function getAppPreferences(){
+  try{
+    return {
+      mode:"user",
+      theme:"system",
+      compact:false,
+      animations:true,
+      ...JSON.parse(localStorage.getItem(APP_PREFERENCES_KEY)||"{}")
+    };
+  }catch(error){
+    return {mode:"user",theme:"system",compact:false,animations:true};
+  }
+}
+function saveAppPreferences(value){
+  localStorage.setItem(APP_PREFERENCES_KEY,JSON.stringify({...getAppPreferences(),...value}));
+  applyAppPreferences();
+}
+function resolvedTheme(){
+  const preference=getAppPreferences().theme;
+  if(preference!=="system") return preference;
+  return window.matchMedia?.("(prefers-color-scheme: dark)").matches?"dark":"light";
+}
+function applyAppPreferences(){
+  const preferences=getAppPreferences();
+  document.documentElement.dataset.theme=resolvedTheme();
+  document.body.dataset.mode=preferences.mode;
+  document.body.classList.toggle("compact-ui",Boolean(preferences.compact));
+  document.body.classList.toggle("reduce-motion",!preferences.animations);
+}
+function developerModeEnabled(){
+  return getAppPreferences().mode==="developer";
+}
+function addDeveloperLog(level,message,details=null){
+  const logs=getDeveloperLogs();
+  logs.unshift({
+    id:`log-${Date.now().toString(36)}`,
+    createdAt:new Date().toISOString(),
+    level,
+    message:String(message),
+    details
+  });
+  localStorage.setItem(APP_LOGS_KEY,JSON.stringify(logs.slice(0,100)));
+}
+function getDeveloperLogs(){
+  try{
+    const value=JSON.parse(localStorage.getItem(APP_LOGS_KEY)||"[]");
+    return Array.isArray(value)?value:[];
+  }catch(error){return [];}
+}
+function clearDeveloperLogs(){
+  localStorage.removeItem(APP_LOGS_KEY);
+}
+function storageDiagnostics(){
+  const keys=Object.keys(localStorage).filter(key=>key.startsWith("gymos:"));
+  const rows=keys.map(key=>{
+    const value=localStorage.getItem(key)||"";
+    return {key,size:new Blob([value]).size};
+  }).sort((a,b)=>b.size-a.size);
+  return {
+    keys:rows,
+    totalBytes:rows.reduce((sum,row)=>sum+row.size,0),
+    itemCount:rows.length
+  };
+}
+function formatBytes(value){
+  if(value<1024) return `${value} B`;
+  if(value<1024*1024) return `${(value/1024).toFixed(1)} KB`;
+  return `${(value/1024/1024).toFixed(2)} MB`;
+}
+async function serviceWorkerDiagnostics(){
+  if(!("serviceWorker" in navigator)) return {supported:false};
+  const registration=await navigator.serviceWorker.getRegistration();
+  return {
+    supported:true,
+    registered:Boolean(registration),
+    scope:registration?.scope||null,
+    controller:Boolean(navigator.serviceWorker.controller)
+  };
+}
+function downloadDeveloperDiagnostics(){
+  const payload={
+    generatedAt:new Date().toISOString(),
+    appVersion:"3.4.0",
+    preferences:getAppPreferences(),
+    storage:storageDiagnostics(),
+    sync:{
+      status:state.syncStatus,
+      user:state.syncUser?.email||null,
+      lastSync:getLastSyncAt(),
+      config:{
+        configured:Boolean(getSyncConfig().url&&getSyncConfig().key),
+        url:getSyncConfig().url||null
+      }
+    },
+    coach:{
+      connection:getCoachConnection(),
+      backendConfigured:Boolean(getCoachSettings().backendUrl)
+    },
+    logs:getDeveloperLogs(),
+    userAgent:navigator.userAgent,
+    online:navigator.onLine
+  };
+  const blob=new Blob([JSON.stringify(payload,null,2)],{type:"application/json"});
+  const url=URL.createObjectURL(blob);
+  const link=document.createElement("a");
+  link.href=url;
+  link.download=`gymos-diagnostics-${new Date().toISOString().slice(0,10)}.json`;
+  link.click();
+  URL.revokeObjectURL(url);
+}
 
 const NUTRITION_SETTINGS_KEY="gymos:nutritionSettings";
 const NUTRITION_ENTRIES_KEY="gymos:nutritionEntries";
@@ -1474,7 +1591,8 @@ let state = {
   coachSessionId: null,
   progressRangeWeeks: 8,
   coachChatMessages: [],
-  nutritionDate: new Date().toISOString().slice(0,10)
+  nutritionDate: new Date().toISOString().slice(0,10),
+  developerLogFilter: "all"
 };
 
 function getHistory(){ return JSON.parse(localStorage.getItem("gymos:history") || "[]"); }
@@ -2235,12 +2353,17 @@ function miniBars(rows){
   }).join("")}</div>`;
 }
 function nav(active){
-  return `<nav class="bottom-nav">
-    <button data-nav="home" class="${active==="home"?"active":""}">Inicio</button>
-    <button data-nav="history" class="${active==="history"?"active":""}">Historial</button>
-    <button data-nav="stats" class="${active==="stats"?"active":""}">Estadísticas</button>
-    <button data-nav="records" class="${active==="records"?"active":""}">Récords</button>
-    <button data-nav="settings" class="${active==="settings"?"active":""}">Ajustes</button>
+  const items=[
+    ["home","⌂","Inicio"],
+    ["workout","＋","Entrenar"],
+    ["progressDashboard","↗","Progreso"],
+    ["coach","✦","Coach"],
+    ["settings","☰","Más"]
+  ];
+  return `<nav class="bottom-nav modern-bottom-nav">
+    ${items.map(([screen,icon,label])=>`<button data-nav="${screen}" class="${active===screen?"active":""}">
+      <span class="nav-icon">${icon}</span><span class="nav-label">${label}</span>
+    </button>`).join("")}
   </nav>`;
 }
 function bindNav(){
@@ -2254,6 +2377,7 @@ function toast(msg){
 }
 
 function render(){
+  applyAppPreferences();
   if(state.screen==="home") renderHome();
   else if(state.screen==="workout") renderWorkout();
   else if(state.screen==="history") renderHistory();
@@ -2279,13 +2403,14 @@ function render(){
   else if(state.screen==="progressDashboard") renderProgressDashboard();
   else if(state.screen==="coachChat") renderCoachChat();
   else if(state.screen==="nutrition") renderNutrition();
+  else if(state.screen==="developer") renderDeveloperMode();
   else renderSettings();
 }
 
 function renderHome(){
   const h=getHistory(), last=h[0];
   app.innerHTML=`<div class="app-shell">
-    <header class="topbar"><div><div class="brand">GymOS</div><div class="subtle">Entrena y registra</div></div>${syncBadge()}</header>
+    <header class="topbar home-topbar"><div><div class="eyebrow">TU ENTRENAMIENTO</div><div class="brand">GymOS</div></div><div class="home-header-actions"><button id="homeThemeToggle" class="icon-button" aria-label="Cambiar tema">${resolvedTheme()==="dark"?"☀":"◐"}</button>${syncBadge()}</div></header>
     <main class="screen">
       <section class="hero">
         <div class="hero-label">Hoy toca</div>
@@ -2293,7 +2418,12 @@ function renderHome(){
         <p>${sessions[state.selectedSession].length} ejercicios · RIR 3–4</p>
         <button id="startWorkout" class="primary">Comenzar entrenamiento</button>
       </section>
-      <div class="session-picker">
+      <section class="home-quick-grid">
+        <button id="homeProgress" class="quick-action-card"><span>↗</span><strong>Progreso</strong><small>Tu evolución</small></button>
+        <button id="homeCoach" class="quick-action-card"><span>✦</span><strong>Coach</strong><small>Revisión inteligente</small></button>
+        <button id="homeNutrition" class="quick-action-card"><span>◎</span><strong>Nutrición</strong><small>Macros y peso</small></button>
+      </section>
+      <div class="session-picker modern-session-picker">
         ${["A","B","C"].map(s=>`<button data-session="${s}" class="${s===state.selectedSession?"active":""}">Sesión ${s}</button>`).join("")}
       </div>
       <section class="card">
@@ -2371,6 +2501,13 @@ function renderHome(){
   });
   const openSyncSettings=document.getElementById("openSyncSettings");
   if(openSyncSettings) openSyncSettings.onclick=()=>{state.screen="settings";renderSettings();};
+  document.getElementById("homeThemeToggle").onclick=()=>{
+    saveAppPreferences({theme:resolvedTheme()==="dark"?"light":"dark"});
+    renderHome();
+  };
+  document.getElementById("homeProgress").onclick=()=>{state.screen="progressDashboard";renderProgressDashboard();};
+  document.getElementById("homeCoach").onclick=()=>{state.screen="coach";renderCoach();};
+  document.getElementById("homeNutrition").onclick=()=>{state.screen="nutrition";renderNutrition();};
   document.getElementById("startWorkout").onclick=()=>{state.screen="workout";renderWorkout();};
   document.getElementById("openPlan").onclick=()=>{state.screen="plan";renderPlan();};
   const openBlocksHome=document.getElementById("openBlocksHome");
@@ -4637,11 +4774,161 @@ function renderBackupRestore(){
   };
 }
 
+
+async function renderDeveloperMode(){
+  if(!developerModeEnabled()){
+    state.screen="settings";
+    renderSettings();
+    return;
+  }
+  const storage=storageDiagnostics();
+  const connection=getCoachConnection();
+  const sync=getSyncConfig();
+  const logs=getDeveloperLogs();
+  let sw={supported:"Comprobando",registered:false,controller:false};
+  try{sw=await serviceWorkerDiagnostics();}catch(error){}
+
+  app.innerHTML=`<div class="app-shell developer-shell">
+    <header class="topbar">
+      <button id="backDeveloper" class="back-button">←</button>
+      <div><div class="eyebrow">HERRAMIENTAS AVANZADAS</div><div class="brand">Desarrollador</div></div>
+      <span class="dev-badge">DEV</span>
+    </header>
+    <main class="screen">
+      <section class="developer-status-grid">
+        <article class="dev-stat-card"><span>Versión</span><strong>3.4.0</strong><small>Interfaz renovada</small></article>
+        <article class="dev-stat-card"><span>Almacenamiento</span><strong>${formatBytes(storage.totalBytes)}</strong><small>${storage.itemCount} claves</small></article>
+        <article class="dev-stat-card"><span>Red</span><strong>${navigator.onLine?"Online":"Offline"}</strong><small>${state.syncStatus||"sin estado"}</small></article>
+        <article class="dev-stat-card"><span>Service worker</span><strong>${sw.registered?"Activo":"Inactivo"}</strong><small>${sw.controller?"Controlando app":"Sin controlador"}</small></article>
+      </section>
+
+      <section class="card">
+        <div class="card-heading-row"><div><h2>Backend y servicios</h2><p class="subtle">Estado de las conexiones externas.</p></div></div>
+        <div class="developer-service-list">
+          <article><div><strong>GymOS Coach</strong><span>${esc(getCoachSettings().backendUrl||"URL no configurada")}</span></div><span class="service-status ${connection.status}">${connection.status}</span></article>
+          <article><div><strong>Supabase</strong><span>${esc(sync.url||"Proyecto no configurado")}</span></div><span class="service-status ${sync.url&&sync.key?"connected":"unknown"}">${sync.url&&sync.key?"configurado":"pendiente"}</span></article>
+          <article><div><strong>Service Worker</strong><span>${esc(sw.scope||"Sin ámbito registrado")}</span></div><span class="service-status ${sw.registered?"connected":"unknown"}">${sw.registered?"activo":"inactivo"}</span></article>
+        </div>
+        <div class="settings-actions">
+          <button id="devTestCoach" class="secondary">Probar Coach</button>
+          <button id="devForceSync" class="secondary">Forzar sincronización</button>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>Almacenamiento local</h2>
+        <div class="developer-storage-list">
+          ${storage.keys.slice(0,12).map(row=>`<div><span>${esc(row.key)}</span><strong>${formatBytes(row.size)}</strong></div>`).join("")}
+        </div>
+        ${storage.keys.length>12?`<p class="subtle">Se muestran las 12 claves de mayor tamaño.</p>`:""}
+      </section>
+
+      <section class="card">
+        <div class="card-heading-row">
+          <div><h2>Registro técnico</h2><p class="subtle">${logs.length} eventos guardados.</p></div>
+          <button id="clearDevLogs" class="text-button">Limpiar</button>
+        </div>
+        <div class="developer-log-list">
+          ${logs.length?logs.slice(0,20).map(log=>`<article class="${esc(log.level)}">
+            <span>${new Date(log.createdAt).toLocaleString("es-ES")}</span>
+            <strong>${esc(log.message)}</strong>
+          </article>`).join(""):`<div class="routine-empty"><strong>Sin eventos</strong><p>Las acciones técnicas aparecerán aquí.</p></div>`}
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>Diagnóstico</h2>
+        <p class="subtle">Genera un archivo técnico sin incluir contraseñas ni claves secretas.</p>
+        <div class="settings-actions">
+          <button id="downloadDiagnostics" class="primary">Descargar diagnóstico</button>
+          <button id="refreshAppCache" class="secondary">Actualizar caché</button>
+        </div>
+      </section>
+
+      <section class="card danger-zone">
+        <h2>Zona de pruebas</h2>
+        <p class="subtle">Estas acciones pueden cerrar sesiones en curso o modificar datos locales.</p>
+        <button id="resetUiPreferences" class="danger-soft full">Restablecer aspecto</button>
+      </section>
+    </main>
+  </div>`;
+
+  document.getElementById("backDeveloper").onclick=()=>{state.screen="settings";renderSettings();};
+  document.getElementById("downloadDiagnostics").onclick=()=>{
+    downloadDeveloperDiagnostics();
+    addDeveloperLog("info","Diagnóstico descargado");
+    toast("Diagnóstico descargado");
+  };
+  document.getElementById("clearDevLogs").onclick=()=>{
+    clearDeveloperLogs();
+    renderDeveloperMode();
+  };
+  document.getElementById("devTestCoach").onclick=async()=>{
+    try{
+      await testCoachConnection();
+      addDeveloperLog("success","Conexión con Coach correcta");
+      toast("Coach conectado");
+    }catch(error){
+      addDeveloperLog("error","Error de conexión con Coach",error.message);
+      alert(error.message);
+    }
+    renderDeveloperMode();
+  };
+  document.getElementById("devForceSync").onclick=async()=>{
+    try{
+      await syncNow();
+      addDeveloperLog("success","Sincronización manual completada");
+      toast("Sincronización completada");
+    }catch(error){
+      addDeveloperLog("error","Error de sincronización",error.message);
+      alert(error.message);
+    }
+    renderDeveloperMode();
+  };
+  document.getElementById("refreshAppCache").onclick=async()=>{
+    if("serviceWorker" in navigator){
+      const registration=await navigator.serviceWorker.getRegistration();
+      await registration?.update();
+      addDeveloperLog("info","Comprobación de caché solicitada");
+      toast("Caché comprobada");
+    }
+  };
+  document.getElementById("resetUiPreferences").onclick=()=>{
+    if(!confirm("¿Restablecer el aspecto y volver al modo usuario?")) return;
+    saveAppPreferences({mode:"user",theme:"system",compact:false,animations:true});
+    state.screen="settings";
+    renderSettings();
+  };
+}
+
 function renderSettings(){
   app.innerHTML=`<div class="app-shell">
-    <header class="topbar"><div><div class="brand">Ajustes</div><div class="subtle">GymOS v3.3.0 · Nutrición y composición corporal</div></div></header>
+    <header class="topbar"><div><div class="brand">Ajustes</div><div class="subtle">GymOS v3.4.0 · Nueva experiencia visual</div></div></header>
     <main class="screen">
-      <section class="card sync-card">
+      <section class="card experience-card">
+        <div class="card-heading-row">
+          <div><span class="section-kicker">EXPERIENCIA</span><h2>Aspecto y modo de uso</h2><p class="subtle">Adapta GymOS para entrenar sin distracciones o acceder a herramientas técnicas.</p></div>
+          <span class="mode-pill">${developerModeEnabled()?"Desarrollador":"Usuario"}</span>
+        </div>
+        <div class="segmented-control" id="appModeControl">
+          <button data-app-mode="user" class="${!developerModeEnabled()?"active":""}">Modo usuario</button>
+          <button data-app-mode="developer" class="${developerModeEnabled()?"active":""}">Modo desarrollador</button>
+        </div>
+        <label><span>Tema</span>
+          <select id="appTheme">
+            <option value="system" ${getAppPreferences().theme==="system"?"selected":""}>Automático</option>
+            <option value="light" ${getAppPreferences().theme==="light"?"selected":""}>Claro</option>
+            <option value="dark" ${getAppPreferences().theme==="dark"?"selected":""}>Oscuro</option>
+          </select>
+        </label>
+        <div class="preference-switches">
+          <label><input id="compactUi" type="checkbox" ${getAppPreferences().compact?"checked":""}><span>Diseño compacto</span></label>
+          <label><input id="animationsUi" type="checkbox" ${getAppPreferences().animations?"checked":""}><span>Animaciones</span></label>
+        </div>
+        ${developerModeEnabled()?`<button id="openDeveloperMode" class="secondary full">Abrir centro de desarrollador</button>`:""}
+      </section>
+
+      <section class="card sync-card developer-only">
         <div class="card-heading-row">
           <div><h2>Sincronización automática</h2><p class="subtle" data-sync-label>${syncStatusLabel()}</p></div>
           <span class="sync-dot ${state.syncStatus}" data-sync-dot></span>
@@ -4751,7 +5038,7 @@ function renderSettings(){
         <p class="subtle">Modifica sesiones y ejercicios directamente desde el móvil.</p>
         <button id="openRoutineEditor" class="primary full">Abrir editor de rutina</button>
       </section>
-      <section class="card">
+      <section class="card developer-only">
         <h2>Rutina desde Excel</h2>
         <p class="subtle">Descarga la plantilla, modifícala y vuelve a importarla. El historial anterior no se borra.</p>
         <div class="settings-actions">
@@ -4761,7 +5048,7 @@ function renderSettings(){
         </div>
         <div id="routinePreview"></div>
       </section>
-      <section class="card">
+      <section class="card developer-only">
         <h2>Copia de seguridad</h2>
         <p class="subtle">Exporta tus entrenamientos a un archivo y podrás recuperarlos en este u otro móvil.</p>
         <div class="settings-actions">
@@ -4769,13 +5056,34 @@ function renderSettings(){
           <button id="importData" class="secondary">Importar copia</button>
         </div>
       </section>
-      <section class="card">
+      <section class="card developer-only">
         <h2>Eliminar datos</h2>
         <p class="subtle">Esta acción borra el historial y las sesiones en curso de este dispositivo.</p>
         <button id="deleteData" class="danger full">Borrar todos los datos</button>
       </section>
     </main>${nav("settings")}
   </div>`;
+  document.querySelectorAll("[data-app-mode]").forEach(button=>button.onclick=()=>{
+    const mode=button.dataset.appMode;
+    if(mode==="developer"&&!confirm("El modo desarrollador muestra opciones técnicas y acciones avanzadas. ¿Activarlo?")) return;
+    saveAppPreferences({mode});
+    addDeveloperLog("info",`Modo ${mode} activado`);
+    renderSettings();
+  });
+  document.getElementById("appTheme").onchange=e=>{
+    saveAppPreferences({theme:e.target.value});
+    renderSettings();
+  };
+  document.getElementById("compactUi").onchange=e=>{
+    saveAppPreferences({compact:e.target.checked});
+    renderSettings();
+  };
+  document.getElementById("animationsUi").onchange=e=>{
+    saveAppPreferences({animations:e.target.checked});
+    renderSettings();
+  };
+  const openDeveloperMode=document.getElementById("openDeveloperMode");
+  if(openDeveloperMode) openDeveloperMode.onclick=()=>{state.screen="developer";renderDeveloperMode();};
   document.getElementById("saveSyncConfig").onclick=async()=>{
     saveSyncConfig({
       url:document.getElementById("syncUrl").value,
@@ -5045,3 +5353,5 @@ refreshSyncSession().then(user=>{
   render();
   if(user) setTimeout(()=>autoSync("inicio"),500);
 }).catch(()=>render());
+
+applyAppPreferences();

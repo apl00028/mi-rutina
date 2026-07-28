@@ -460,11 +460,17 @@ test("mantiene las claves internas de migración fuera del backup, vault y sincr
   const {api}=loadProfileData();
   assert.deepEqual(
     Array.from(api.MIGRATION_INTERNAL_KEY_PREFIXES),
-    ["gymos:preMigration:4.1.0-alpha.1:"]
+    [
+      "gymos:preMigration:4.1.0-alpha.1:",
+      "gymos:legacyTrainingSetup:4.2.0-alpha.1:"
+    ]
   );
   assert.deepEqual(
     Array.from(api.migrationInternalKeys(OWNER_A)),
-    [`gymos:preMigration:4.1.0-alpha.1:${OWNER_A}`]
+    [
+      `gymos:preMigration:4.1.0-alpha.1:${OWNER_A}`,
+      `gymos:legacyTrainingSetup:4.2.0-alpha.1:${OWNER_A}`
+    ]
   );
 
   const appSource=fs.readFileSync(path.join(projectRoot,"app.js"),"utf8");
@@ -505,6 +511,158 @@ test("elimina únicamente el snapshot del propietario en los flujos de borrado",
     ),
     /removeMigrationInternalData|preMigration/
   );
+});
+
+test("adapta un perfil anterior completado aunque la migración de esquema ya hubiera terminado",()=>{
+  const legacy=JSON.parse(legacyProfile);
+  legacy.equipment="basic";
+  legacy.preference="machines";
+  legacy.cardio="walking";
+  const {api,localStorage}=loadProfileData({
+    "gymos:dataSchemaVersion":"4.1.0-alpha.1",
+    "gymos:onboardingProfile":JSON.stringify(legacy),
+    "gymos:routine":legacyRoutine,
+    "gymos:history":legacyHistory
+  });
+  const routineBefore=localStorage.getItem("gymos:routine");
+  const historyBefore=localStorage.getItem("gymos:history");
+
+  const result=api.migrateLegacyTrainingSetup({ownerId:OWNER_A,mark:false});
+
+  assert.equal(result.migrated,true);
+  assert.equal(api.getActiveGoalCycle().primaryGoal,"muscle_gain");
+  assert.equal(api.getActiveTrainingPhase().type,"muscle_gain");
+  assert.equal(api.getUserProfile().weeklyAvailability,4);
+  assert.equal(api.getUserProfile().preferredSessionDurationMin,60);
+  assert.equal(api.getUserProfile().trainingLocation,"gym");
+  assert.deepEqual(Array.from(api.getUserProfile().availableEquipment),[
+    "bodyweight","mat","dumbbells","bench","resistance_band"
+  ]);
+  assert.equal(api.getUserProfile().trainingPreferences.style,"machines");
+  assert.equal(localStorage.getItem("gymos:routine"),routineBefore);
+  assert.equal(localStorage.getItem("gymos:history"),historyBefore);
+});
+
+test("la adaptación del configurador anterior es idempotente y separada por propietario",()=>{
+  const {api,localStorage}=loadProfileData({
+    "gymos:onboardingProfile":legacyProfile,
+    "gymos:routine":legacyRoutine,
+    "gymos:history":legacyHistory
+  });
+  const first=api.migrateLegacyTrainingSetup({ownerId:OWNER_A,mark:false});
+  const serialized=JSON.stringify(api.exportSyncData());
+  const second=api.migrateLegacyTrainingSetup({ownerId:OWNER_A,mark:false});
+
+  assert.equal(first.migrated,true);
+  assert.equal(second.migrated,false);
+  assert.equal(second.reason,"already_migrated");
+  assert.equal(JSON.stringify(api.exportSyncData()),serialized);
+  assert.ok(localStorage.getItem(api.legacyTrainingSetupMigrationKey(OWNER_A)));
+  assert.equal(localStorage.getItem(api.legacyTrainingSetupMigrationKey(OWNER_B)),null);
+});
+
+test("rellena el perfil marcador incompleto creado antes de terminar el configurador",()=>{
+  const {api}=loadProfileData({
+    "gymos:onboardingProfile":"{}"
+  });
+  api.migrateDataModel({ownerId:OWNER_A,mark:false});
+  assert.equal(api.getUserProfile().weeklyAvailability,null);
+  assert.deepEqual(Array.from(api.getUserProfile().availableEquipment),[]);
+
+  const completed={
+    ...JSON.parse(legacyProfile),
+    equipment:"full",
+    injuryNotes:"Molestia lumbar",
+    avoidExercises:"Burpees"
+  };
+  const result=api.migrateLegacyTrainingSetup({
+    ownerId:OWNER_A,legacyProfile:completed,mark:false
+  });
+
+  assert.equal(result.migrated,true);
+  assert.equal(api.getUserProfile().weeklyAvailability,4);
+  assert.equal(api.getUserProfile().preferredSessionDurationMin,60);
+  assert.equal(api.getUserProfile().trainingExperience,"intermediate");
+  assert.equal(api.getUserProfile().trainingLocation,"gym");
+  assert.ok(api.getUserProfile().availableEquipment.includes("dumbbells"));
+  assert.deepEqual(Array.from(api.getUserProfile().injuries),["Molestia lumbar"]);
+  assert.deepEqual(Array.from(api.getUserProfile().avoidedExercises),["Burpees"]);
+});
+
+test("la adaptación anterior no sobrescribe datos nuevos ya configurados",()=>{
+  const {api}=loadProfileData({"gymos:onboardingProfile":legacyProfile});
+  api.saveUserProfile({
+    name:"Perfil nuevo",experience:"advanced",days:5,duration:75,
+    location:"home",equipment:["bodyweight","mat"]
+  },{mark:false});
+  api.setCurrentLifeState({type:"general",startedAt:"2026-07-01"},{mark:false});
+  api.startGoalCycle({
+    primaryGoal:"strength_gain",secondaryGoals:["mobility"],
+    startedAt:"2026-07-01"
+  },{mark:false});
+  api.startTrainingPhase({type:"strength",startedAt:"2026-07-01"},{mark:false});
+  const before=JSON.stringify(api.exportSyncData());
+
+  api.migrateLegacyTrainingSetup({ownerId:OWNER_A,mark:false});
+
+  assert.equal(JSON.stringify(api.exportSyncData()),before);
+});
+
+test("las APIs públicas guardan objetivos, fase y disponibilidad sin tocar rutina ni historial",()=>{
+  const {api,localStorage}=loadProfileData({
+    "gymos:routine":legacyRoutine,
+    "gymos:history":legacyHistory
+  });
+  const beforeRoutine=localStorage.getItem("gymos:routine");
+  const beforeHistory=localStorage.getItem("gymos:history");
+  const validation=api.validateGoalSelection("muscle_gain",["strength_gain","mobility"]);
+  assert.equal(validation.valid,true);
+  assert.equal(api.validateGoalSelection("muscle_gain",["strength_gain","mobility","endurance"]).valid,false);
+  assert.equal(api.validateGoalSelection("muscle_gain",["muscle_gain"]).valid,false);
+
+  const profile=api.saveUserProfile({
+    experience:"intermediate",days:5,duration:60,location:"gym",
+    equipment:["dumbbells","bench"]
+  },{mark:false});
+  const goal=api.startGoalCycle({
+    primaryGoal:validation.primaryGoal,secondaryGoals:validation.secondaryGoals,
+    startedAt:"2026-07-28"
+  },{mark:false});
+  const phase=api.startTrainingPhase({
+    type:"muscle_gain",goalCycleId:goal.id,startedAt:"2026-07-28"
+  },{mark:false});
+
+  assert.equal(profile.weeklyAvailability,5);
+  assert.equal(profile.preferredSessionDurationMin,60);
+  assert.equal(profile.trainingLocation,"gym");
+  assert.deepEqual(Array.from(profile.availableEquipment),["dumbbells","bench"]);
+  assert.deepEqual(Array.from(goal.secondaryGoals),["strength_gain","mobility"]);
+  assert.equal(phase.type,"muscle_gain");
+  assert.equal(localStorage.getItem("gymos:routine"),beforeRoutine);
+  assert.equal(localStorage.getItem("gymos:history"),beforeHistory);
+});
+
+test("el configurador conectado no genera ni activa una rutina al guardar el perfil",()=>{
+  const appSource=fs.readFileSync(path.join(projectRoot,"app.js"),"utf8");
+  const onboarding=appSource.slice(
+    appSource.indexOf("function renderOnboarding()"),
+    appSource.indexOf("function render(){")
+  );
+  assert.match(onboarding,/Guardar perfil/);
+  assert.match(onboarding,/Guardar y crear propuesta/);
+  assert.match(onboarding,/persistTrainingProfileData\(p\)/);
+  assert.match(onboarding,/setFlowView\(state\.routineWorkflow,"prepare"\)/);
+  assert.doesNotMatch(onboarding,/saveRoutine\(|activateStoredRoutineProposal\(|persistRoutineProposal\(/);
+  assert.match(appSource,/const goalCycle=window\.GymOSProfileData\?\.getActiveGoalCycle/);
+  assert.match(appSource,/const trainingPhase=window\.GymOSProfileData\?\.getActiveTrainingPhase/);
+  assert.match(appSource,/secondaryGoals:secondaryGoals\.filter\(goal=>goal!==primaryGoal\)/);
+  assert.match(appSource,/activeGoalCycle:window\.GymOSProfileData\.getActiveGoalCycle\(\)/);
+  assert.match(appSource,/activeTrainingPhase:window\.GymOSProfileData\.getActiveTrainingPhase\(\)/);
+  assert.match(appSource,/function trainingProfileMissingStep/);
+  assert.match(appSource,/Completar perfil para generar/);
+  assert.match(appSource,/openTrainingProfileEditor\(\s*trainingProfileMissingStep\(preparation\.missing\)/);
+  assert.match(appSource,/Principiante o retomando/);
+  assert.match(appSource,/Otro lugar/);
 });
 
 console.log("All profile data tests passed.");

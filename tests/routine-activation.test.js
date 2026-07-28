@@ -365,8 +365,9 @@ test("32. integración carga el módulo antes de app y el worker solo lo cachea"
   assert.ok(indexSource.indexOf('src="routine-activation.js"')<indexSource.indexOf('src="app.js"'));
   assert.match(workerSource,/routine-activation\.js/);
   assert.doesNotMatch(activationSource,/document\.|querySelector|render\(|navigate|location\./);
-  assert.equal((appSource.match(/activateStoredRoutineProposal\(/g)||[]).length,1);
-  assert.equal((appSource.match(/rollbackStoredRoutineActivation\(/g)||[]).length,1);
+  assert.equal((appSource.match(/activateStoredRoutineProposal\(/g)||[]).length,2);
+  assert.equal((appSource.match(/rollbackStoredRoutineActivation\(/g)||[]).length,2);
+  assert.ok(appSource.indexOf("checkbox?.checked")<appSource.lastIndexOf("confirmed:true"));
 });
 
 test("33. activationId conflictivo conserva el baseline y la rutina activada originales",()=>{

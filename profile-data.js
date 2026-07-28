@@ -22,7 +22,11 @@
     STORAGE_KEYS.trainingPhases
   ]);
   const SNAPSHOT_PREFIX="gymos:preMigration:4.1.0-alpha.1:";
-  const MIGRATION_INTERNAL_KEY_PREFIXES=Object.freeze([SNAPSHOT_PREFIX]);
+  const LEGACY_TRAINING_SETUP_PREFIX="gymos:legacyTrainingSetup:4.2.0-alpha.1:";
+  const MIGRATION_INTERNAL_KEY_PREFIXES=Object.freeze([
+    SNAPSHOT_PREFIX,
+    LEGACY_TRAINING_SETUP_PREFIX
+  ]);
   const SNAPSHOT_DATA_KEYS=Object.freeze([
     "gymos:routine",
     "gymos:history",
@@ -183,8 +187,14 @@
   function migrationSnapshotKey(ownerId){
     return `${SNAPSHOT_PREFIX}${normalizeOwnerId(ownerId)}`;
   }
+  function legacyTrainingSetupMigrationKey(ownerId){
+    return `${LEGACY_TRAINING_SETUP_PREFIX}${normalizeOwnerId(ownerId)}`;
+  }
   function migrationInternalKeys(ownerId){
-    return Object.freeze([migrationSnapshotKey(ownerId)]);
+    return Object.freeze([
+      migrationSnapshotKey(ownerId),
+      legacyTrainingSetupMigrationKey(ownerId)
+    ]);
   }
   function removeMigrationInternalData(ownerId){
     migrationInternalKeys(ownerId).forEach(key=>localStorage.removeItem(key));
@@ -314,6 +324,10 @@
       painAreas:normalizeTextArray(input.painAreas),
       medicalRestrictions:normalizeTextArray(input.medicalRestrictions??(input.medicalRestriction==="yes"?"Pendiente de concretar":"")),
       avoidedExercises:normalizeTextArray(input.avoidedExercises??input.avoidExercises),
+      trainingPreferences:{
+        style:cleanText(input.trainingPreferences?.style??input.preference,80),
+        cardio:cleanText(input.trainingPreferences?.cardio??input.cardio,80)
+      },
       createdAt:existing?.createdAt||input.createdAt||now,updatedAt:input.updatedAt||now
     };
   }
@@ -416,6 +430,154 @@
       maintenance:"maintenance",
       return_to_training:"return_to_training"
     }[goalId]||null;
+  }
+  function legacyEquipment(value){
+    const preset=cleanText(value,80);
+    if(preset==="full"){
+      return [
+        "bodyweight","mat","bench","adjustable_bench","dumbbells","barbell","plates",
+        "squat_rack","smith_machine","cable_machine","resistance_band",
+        "chest_press_machine","shoulder_press_machine","leg_press","leg_extension",
+        "seated_leg_curl","lying_leg_curl","hip_thrust_machine","lat_pulldown",
+        "seated_row","calf_raise_machine","treadmill","stationary_bike","elliptical",
+        "step","stability_ball"
+      ];
+    }
+    if(preset==="basic") return ["bodyweight","mat","dumbbells","bench","resistance_band"];
+    if(preset==="bodyweight") return ["bodyweight","mat"];
+    return normalizeTextArray(value);
+  }
+  function legacyProfileToTrainingSetup(legacyProfile={}){
+    const legacy=clone(legacyProfile)||{};
+    const migratedGoal=migrateLegacyGoal(legacy.primaryGoal||legacy.goal);
+    const secondarySource=Array.isArray(legacy.secondaryGoals)?legacy.secondaryGoals:[];
+    const secondaryGoals=secondarySource
+      .map(value=>migrateLegacyGoal(value)?.id)
+      .filter((value,index,items)=>value&&value!==migratedGoal?.id&&items.indexOf(value)===index)
+      .slice(0,2);
+    const suggestedPhase=TRAINING_PHASE_OPTIONS.some(option=>option.id===legacy.phase)
+      ?legacy.phase
+      :phaseFromGoal(migratedGoal?.id);
+    const userProfile={
+      ...legacy,
+      availableEquipment:legacyEquipment(legacy.availableEquipment??legacy.equipment),
+      trainingPreferences:{
+        style:legacy.trainingPreferences?.style??legacy.preference,
+        cardio:legacy.trainingPreferences?.cardio??legacy.cardio
+      }
+    };
+    return {
+      valid:Boolean(
+        migratedGoal&&Number(legacy.days||legacy.weeklyAvailability)&&
+        Number(legacy.duration||legacy.preferredSessionDurationMin)&&
+        legacy.location
+      ),
+      userProfile,
+      currentLifeState:{type:"general",startedAt:todayIso()},
+      activeGoalCycle:migratedGoal?{
+        primaryGoal:migratedGoal.id,
+        secondaryGoals,
+        customGoalLabel:migratedGoal.customGoalLabel,
+        notes:migratedGoal.notes,
+        changeReason:"Adaptación segura desde el configurador anterior",
+        startedAt:isoDate(legacy.completedAt||legacy.updatedAt)||todayIso()
+      }:null,
+      activeTrainingPhase:suggestedPhase?{
+        type:suggestedPhase,
+        startedAt:isoDate(legacy.completedAt||legacy.updatedAt)||todayIso(),
+        notes:"Fase confirmada o deducida desde el configurador anterior."
+      }:null,
+      generationPreferences:{
+        style:cleanText(userProfile.trainingPreferences.style,80),
+        cardio:cleanText(userProfile.trainingPreferences.cardio,80)
+      }
+    };
+  }
+  function mergeLegacyUserProfile(currentProfile,legacyInput){
+    if(!currentProfile) return normalizeUserProfile(legacyInput);
+    const current=clone(currentProfile);
+    const legacy=normalizeUserProfile(legacyInput,current);
+    const placeholder=
+      current.weeklyAvailability===null&&
+      current.preferredSessionDurationMin===null&&
+      !normalizeTextArray(current.availableEquipment).length;
+    if(placeholder){
+      return normalizeUserProfile({
+        ...legacy,
+        id:current.id,
+        createdAt:current.createdAt
+      },current);
+    }
+    const next={...current};
+    [
+      "name","age","dateOfBirth","sex","heightCm","weightKg",
+      "weeklyAvailability","preferredSessionDurationMin"
+    ].forEach(key=>{
+      if((next[key]===null||next[key]==="")&&legacy[key]!==null&&legacy[key]!==""){
+        next[key]=legacy[key];
+      }
+    });
+    if(!normalizeTextArray(next.availableEquipment).length){
+      next.availableEquipment=legacy.availableEquipment;
+    }
+    if(!next.trainingPreferences?.style&&!next.trainingPreferences?.cardio){
+      next.trainingPreferences=legacy.trainingPreferences;
+    }
+    return normalizeUserProfile(next,current);
+  }
+  function migrateLegacyTrainingSetup(options={}){
+    const ownerId=normalizeOwnerId(options.ownerId);
+    const markerKey=legacyTrainingSetupMigrationKey(ownerId);
+    if(localStorage.getItem(markerKey)!==null){
+      return {migrated:false,reason:"already_migrated",ownerId};
+    }
+    const setup=legacyProfileToTrainingSetup(
+      options.legacyProfile||readJson("gymos:onboardingProfile",null)
+    );
+    if(!setup.valid) return {migrated:false,reason:"legacy_profile_incomplete",ownerId};
+    const beforeRoutine=localStorage.getItem("gymos:routine");
+    const beforeHistory=localStorage.getItem("gymos:history");
+    const previous=new Map(MANAGED_KEYS.map(key=>[key,localStorage.getItem(key)]));
+    try{
+      const currentProfile=getUserProfile();
+      const mergedProfile=mergeLegacyUserProfile(currentProfile,setup.userProfile);
+      if(!currentProfile||JSON.stringify(mergedProfile)!==JSON.stringify(currentProfile)){
+        writeJson(STORAGE_KEYS.userProfile,mergedProfile,{mark:false});
+      }
+      if(!getCurrentLifeState()) setCurrentLifeState(setup.currentLifeState,{mark:false});
+      if(!getActiveGoalCycle()&&setup.activeGoalCycle){
+        startGoalCycle(setup.activeGoalCycle,{mark:false});
+      }
+      if(!getActiveTrainingPhase()&&setup.activeTrainingPhase){
+        startTrainingPhase(setup.activeTrainingPhase,{mark:false});
+      }
+      if(
+        beforeRoutine!==localStorage.getItem("gymos:routine")||
+        beforeHistory!==localStorage.getItem("gymos:history")
+      ){
+        throw new Error("La adaptación intentó modificar la rutina o el historial.");
+      }
+      writeJson(markerKey,{
+        ownerId,
+        migratedAt:nowIso(),
+        source:"gymos:onboardingProfile"
+      },{mark:false});
+      markUpdated(options.mark!==false);
+      return {
+        migrated:true,
+        ownerId,
+        userProfile:Boolean(getUserProfile()),
+        activeGoalCycle:Boolean(getActiveGoalCycle()),
+        activeTrainingPhase:Boolean(getActiveTrainingPhase())
+      };
+    }catch(error){
+      previous.forEach((value,key)=>{
+        if(value===null) localStorage.removeItem(key);
+        else localStorage.setItem(key,value);
+      });
+      localStorage.removeItem(markerKey);
+      throw error;
+    }
   }
   function createMigrationSnapshot(ownerId){
     const normalizedOwnerId=normalizeOwnerId(ownerId);
@@ -544,14 +706,16 @@
 
   global.GymOSProfileData=Object.freeze({
     DATA_SCHEMA_VERSION,STORAGE_KEYS,MANAGED_KEYS,
-    SNAPSHOT_PREFIX,SNAPSHOT_DATA_KEYS,MIGRATION_INTERNAL_KEY_PREFIXES,
+    SNAPSHOT_PREFIX,LEGACY_TRAINING_SETUP_PREFIX,SNAPSHOT_DATA_KEYS,MIGRATION_INTERNAL_KEY_PREFIXES,
     GOAL_OPTIONS,LIFE_STATE_OPTIONS,TRAINING_PHASE_OPTIONS,
     calculatePregnancyTrimester,normalizePregnancyDetails,
     migrateLegacyGoal,validateGoalSelection,buildGoalCycle,buildTrainingPhase,normalizeUserProfile,buildLifeState,
+    phaseFromGoal,legacyProfileToTrainingSetup,mergeLegacyUserProfile,migrateLegacyTrainingSetup,
     getUserProfile,saveUserProfile,getCurrentLifeState,getLifeStateHistory,setCurrentLifeState,
     getActiveGoalCycle,getGoalsHistory,startGoalCycle,closeGoalCycle,
     getActiveTrainingPhase,getTrainingPhases,startTrainingPhase,closeTrainingPhase,
-    normalizeOwnerId,migrationSnapshotKey,migrationInternalKeys,removeMigrationInternalData,
+    normalizeOwnerId,migrationSnapshotKey,legacyTrainingSetupMigrationKey,
+    migrationInternalKeys,removeMigrationInternalData,
     createMigrationSnapshot,migrateDataModel,exportSyncData,importSyncData
   });
 })(typeof window!=="undefined"?window:globalThis);

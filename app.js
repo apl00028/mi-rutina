@@ -2532,6 +2532,16 @@ function ensureProfileDataMigration(options={}){
   if(!ownerId) throw new Error("No se puede migrar sin determinar primero el propietario de los datos.");
   return window.GymOSProfileData.migrateDataModel({...options,ownerId});
 }
+function ensureLegacyTrainingSetupMigration(options={}){
+  if(!window.GymOSProfileData) throw new Error("El modelo de perfil no está disponible.");
+  const ownerId=options.ownerId||localStorage.getItem(LOCAL_OWNER_KEY)||(!AUTH_REQUIRED?"local":null);
+  if(!ownerId) throw new Error("No se puede adaptar el perfil sin determinar primero el propietario.");
+  return window.GymOSProfileData.migrateLegacyTrainingSetup({
+    ...options,
+    ownerId,
+    legacyProfile:options.legacyProfile||getOnboardingProfile()
+  });
+}
 
 function exerciseDomainMigrationBackupKey(ownerId){
   if(!window.GymOSProfileData) throw new Error("El modelo de perfil no esta disponible.");
@@ -2663,6 +2673,7 @@ function activateLocalUser(userId){
   const previous=localStorage.getItem(LOCAL_OWNER_KEY);
   if(previous===userId){
     ensureProfileDataMigration({ownerId:userId,mark:false});
+    ensureLegacyTrainingSetupMigration({ownerId:userId,mark:false});
     ensureExerciseDomainMigration({ownerId:userId,mark:false});
     ensureRoutineProposalState(userId);
     ensureRoutineActivationState(userId);
@@ -2683,6 +2694,7 @@ function activateLocalUser(userId){
   }
   localStorage.setItem(LOCAL_OWNER_KEY,userId);
   ensureProfileDataMigration({ownerId:userId,mark:false});
+  ensureLegacyTrainingSetupMigration({ownerId:userId,mark:false});
   ensureExerciseDomainMigration({ownerId:userId,mark:false});
   ensureRoutineProposalState(userId);
   ensureRoutineActivationState(userId);
@@ -2982,9 +2994,15 @@ let state = {
   completedWorkoutSummary: null,
   workoutAnalysisId: null,
   aiSettingsMessage: null,
+  routineWorkflow: null,
   accountMode: "login",
   onboardingStep: 1,
   onboardingDraft: null,
+  onboardingMessage: null,
+  onboardingReturnScreen: null,
+  onboardingCreateProposalAfterSave: false,
+  onboardingExpandedGoals: false,
+  onboardingPhaseEditorOpen: false,
   exerciseTimers: {}
 };
 
@@ -4448,26 +4466,61 @@ function saveOnboardingProfile(profile){
   localStorage.setItem(ONBOARDING_KEY,JSON.stringify(profile));
   markLocalUpdated();
 }
+function canonicalOnboardingGoal(value){
+  return window.GymOSProfileData?.migrateLegacyGoal(value)?.id||null;
+}
+function onboardingEquipmentPreset(equipment){
+  const values=new Set(Array.isArray(equipment)?equipment:[]);
+  const full=window.GymOSExerciseDomain?.EQUIPMENT_PRESETS?.full||[];
+  if(full.length&&full.every(item=>values.has(item))) return "full";
+  if(values.has("dumbbells")||values.has("bench")) return "basic";
+  if(values.has("bodyweight")||values.has("mat")) return "bodyweight";
+  return "full";
+}
+function onboardingEquipmentValues(preset){
+  const presets=window.GymOSExerciseDomain?.EQUIPMENT_PRESETS||{};
+  if(preset==="full") return [...(presets.full||[])];
+  if(preset==="basic") return [...(presets.home_dumbbells||["bodyweight","mat","dumbbells","bench"])];
+  return [...(presets.bodyweight||["bodyweight","mat"])];
+}
+function suggestedTrainingPhase(goal){
+  return window.GymOSProfileData?.phaseFromGoal(goal)||"adaptation";
+}
 function newOnboardingDraft(){
   const current=getOnboardingProfile()||{};
+  const userProfile=window.GymOSProfileData?.getUserProfile?.()||{};
+  const goalCycle=window.GymOSProfileData?.getActiveGoalCycle?.()||{};
+  const trainingPhase=window.GymOSProfileData?.getActiveTrainingPhase?.()||{};
+  const primaryGoal=goalCycle.primaryGoal||canonicalOnboardingGoal(current.primaryGoal||current.goal)||"return_to_training";
+  const secondaryGoals=Array.isArray(goalCycle.secondaryGoals)
+    ?goalCycle.secondaryGoals.slice(0,2)
+    :(Array.isArray(current.secondaryGoals)?current.secondaryGoals.slice(0,2):[]);
   return {
-    name:current.name||accountDisplayName(state.syncUser)||"",
-    age:current.age||"",
-    sex:current.sex||"",
-    height:current.height||"",
-    weight:current.weight||"",
-    experience:current.experience||"beginner",
-    goal:current.goal||"return",
-    days:Number(current.days)||3,
-    duration:Number(current.duration)||50,
-    location:current.location||"gym",
-    equipment:current.equipment||"full",
-    painAreas:Array.isArray(current.painAreas)?current.painAreas:[],
-    injuryNotes:current.injuryNotes||"",
-    medicalRestriction:current.medicalRestriction||"no",
-    avoidExercises:current.avoidExercises||"",
-    preference:current.preference||"mixed",
-    cardio:current.cardio||"walking",
+    name:userProfile.name||current.name||accountDisplayName(state.syncUser)||"",
+    age:userProfile.age??current.age??"",
+    sex:userProfile.sex??current.sex??"",
+    height:userProfile.heightCm??current.height??"",
+    weight:userProfile.weightKg??current.weight??"",
+    experience:userProfile.trainingExperience||current.experience||"beginner",
+    primaryGoal,
+    secondaryGoals:secondaryGoals.filter(goal=>goal!==primaryGoal),
+    phase:trainingPhase.type||current.phase||suggestedTrainingPhase(primaryGoal),
+    phaseConfirmed:Boolean(trainingPhase.type||current.phase),
+    days:Number(userProfile.weeklyAvailability??current.days)||3,
+    duration:Number(userProfile.preferredSessionDurationMin??current.duration)||50,
+    location:userProfile.trainingLocation&&userProfile.trainingLocation!=="other"
+      ?({mixed:"both"}[userProfile.trainingLocation]||userProfile.trainingLocation)
+      :(current.location||"gym"),
+    equipment:Array.isArray(userProfile.availableEquipment)&&userProfile.availableEquipment.length
+      ?onboardingEquipmentPreset(userProfile.availableEquipment)
+      :(current.equipment||"full"),
+    painAreas:Array.isArray(userProfile.painAreas)?userProfile.painAreas
+      :(Array.isArray(current.painAreas)?current.painAreas:[]),
+    injuryNotes:userProfile.injuries?.join(", ")||current.injuryNotes||"",
+    medicalRestriction:userProfile.medicalRestrictions?.length?"yes":(current.medicalRestriction||"no"),
+    avoidExercises:userProfile.avoidedExercises?.join(", ")||current.avoidExercises||"",
+    preference:userProfile.trainingPreferences?.style||current.preference||"mixed",
+    cardio:userProfile.trainingPreferences?.cardio||current.cardio||"walking",
     completedAt:current.completedAt||null
   };
 }
@@ -4476,20 +4529,105 @@ function ensureOnboardingDraft(){
   return state.onboardingDraft;
 }
 function onboardingGoalLabel(value){
-  return ({
-    fat_loss:"Perder grasa",
-    muscle:"Ganar masa muscular",
-    strength:"Mejorar fuerza",
-    health:"Mejorar salud y condición física",
-    return:"Retomar el entrenamiento",
-    maintain:"Mantener forma física"
-  })[value]||"Entrenamiento general";
+  const goal=canonicalOnboardingGoal(value)||value;
+  return window.GymOSProfileData?.GOAL_OPTIONS?.find(option=>option.id===goal)?.label||"Entrenamiento general";
 }
 function onboardingExperienceLabel(value){
-  return ({new:"Nunca he entrenado",beginner:"Principiante",intermediate:"Intermedio",advanced:"Avanzado"})[value]||"Principiante";
+  return ({
+    new:"Nunca he entrenado",beginner:"Principiante o retomando",
+    returning:"Principiante o retomando",intermediate:"Intermedio",advanced:"Avanzado"
+  })[value]||"Principiante o retomando";
 }
 function onboardingLocationLabel(value){
-  return ({gym:"Gimnasio",home:"Casa",both:"Gimnasio y casa"})[value]||"Gimnasio";
+  return ({gym:"Gimnasio",home:"Casa",both:"Gimnasio y casa",mixed:"Gimnasio y casa",other:"Otro lugar"})[value]||"Otro lugar";
+}
+function trainingPhaseLabel(value){
+  return window.GymOSProfileData?.TRAINING_PHASE_OPTIONS?.find(option=>option.id===value)?.label||"Sin configurar";
+}
+function trainingProfileMissingStep(missing=[]){
+  if(missing.some(item=>["Objetivo principal","Fase de entrenamiento"].includes(item))) return 2;
+  if(missing.some(item=>/Días disponibles|Duración de sesión|Lugar de entrenamiento|Equipamiento/.test(item))) return 3;
+  return 1;
+}
+function openTrainingProfileEditor(step=1,{returnScreen="routineWorkflow",createProposal=false}={}){
+  state.onboardingDraft=newOnboardingDraft();
+  state.onboardingStep=Math.max(1,Math.min(5,Number(step)||1));
+  state.onboardingMessage=null;
+  state.onboardingReturnScreen=returnScreen;
+  state.onboardingCreateProposalAfterSave=createProposal;
+  state.onboardingExpandedGoals=false;
+  state.onboardingPhaseEditorOpen=false;
+  state.screen="onboarding";
+  renderOnboarding();
+}
+function persistTrainingProfileData(profile){
+  const api=window.GymOSProfileData;
+  if(!api) throw new Error("El modelo de perfil no está disponible.");
+  const goalValidation=api.validateGoalSelection(profile.primaryGoal,profile.secondaryGoals);
+  if(!goalValidation.valid) throw new Error(goalValidation.errors[0]);
+  if(!api.TRAINING_PHASE_OPTIONS.some(option=>option.id===profile.phase)){
+    throw new Error("Selecciona y confirma una fase de entrenamiento.");
+  }
+  const routineBefore=localStorage.getItem("gymos:routine");
+  const historyBefore=localStorage.getItem("gymos:history");
+  const existingProfile=api.getUserProfile()||{};
+  const savedProfile=api.saveUserProfile({
+    ...existingProfile,
+    name:profile.name,
+    age:profile.age,
+    sex:profile.sex,
+    heightCm:profile.height,
+    weightKg:profile.weight,
+    trainingExperience:profile.experience,
+    weeklyAvailability:Number(profile.days),
+    preferredSessionDurationMin:Number(profile.duration),
+    trainingLocation:profile.location,
+    availableEquipment:onboardingEquipmentValues(profile.equipment),
+    painAreas:profile.painAreas,
+    injuries:profile.injuryNotes,
+    medicalRestrictions:profile.medicalRestriction==="yes"
+      ?(existingProfile.medicalRestrictions?.length?existingProfile.medicalRestrictions:["Pendiente de concretar"])
+      :[],
+    avoidedExercises:profile.avoidExercises,
+    trainingPreferences:{style:profile.preference,cardio:profile.cardio}
+  },{mark:false});
+  if(!api.getCurrentLifeState()){
+    api.setCurrentLifeState({type:"general",startedAt:new Date().toISOString().slice(0,10)},{mark:false});
+  }
+  const activeGoal=api.getActiveGoalCycle();
+  const sameGoal=activeGoal?.primaryGoal===goalValidation.primaryGoal&&
+    JSON.stringify(activeGoal?.secondaryGoals||[])===JSON.stringify(goalValidation.secondaryGoals);
+  const goal=sameGoal?activeGoal:api.startGoalCycle({
+    primaryGoal:goalValidation.primaryGoal,
+    secondaryGoals:goalValidation.secondaryGoals,
+    startedAt:new Date().toISOString().slice(0,10),
+    changeReason:activeGoal?"Actualizado desde el perfil de entrenamiento":"Configurado desde el perfil de entrenamiento"
+  },{mark:false});
+  const activePhase=api.getActiveTrainingPhase();
+  const phase=activePhase?.type===profile.phase?activePhase:api.startTrainingPhase({
+    type:profile.phase,
+    goalCycleId:goal?.id||null,
+    startedAt:new Date().toISOString().slice(0,10),
+    notes:"Fase confirmada por el usuario."
+  },{mark:false});
+  if(
+    routineBefore!==localStorage.getItem("gymos:routine")||
+    historyBefore!==localStorage.getItem("gymos:history")
+  ){
+    throw new Error("El perfil no puede modificar la rutina ni el historial.");
+  }
+  markLocalUpdated();
+  return {
+    userProfile:savedProfile,
+    currentLifeState:api.getCurrentLifeState(),
+    activeGoalCycle:goal,
+    activeTrainingPhase:phase,
+    generationPreferences:{
+      preferredExerciseIds:getFavoriteExercises().map(exercise=>exercise.id),
+      style:savedProfile.trainingPreferences?.style||"",
+      cardio:savedProfile.trainingPreferences?.cardio||""
+    }
+  };
 }
 function selectedPain(profile,area){
   return profile.painAreas.includes(area)?"checked":"";
@@ -4618,24 +4756,69 @@ function renderOnboarding(){
         <option value="other" ${p.sex==="other"?"selected":""}>Otro</option>
       </select></label>`;
   }else if(step===2){
+    const goalOptions=(window.GymOSProfileData?.GOAL_OPTIONS||[]).filter(option=>option.id!=="custom");
+    const phaseOptions=(window.GymOSProfileData?.TRAINING_PHASE_OPTIONS||[]).filter(option=>option.id!=="custom");
+    const goalView=window.GymOSRoutineWorkflowUI.goalSelectionViewModel(goalOptions,{
+      primaryGoal:p.primaryGoal,
+      secondaryGoals:p.secondaryGoals,
+      expanded:state.onboardingExpandedGoals
+    });
+    const goalPresentation={
+      fat_loss:{icon:"↘",title:"Perder grasa",description:"Mejorar composición corporal"},
+      muscle_gain:{icon:"+",title:"Ganar masa muscular",description:"Construir músculo progresivamente"},
+      strength_gain:{icon:"↑",title:"Ganar fuerza",description:"Progresar en cargas y control"},
+      general_health:{icon:"○",title:"Mejorar salud",description:"Sentirte mejor y moverte más"},
+      return_to_training:{icon:"↺",title:"Retomar el gimnasio",description:"Volver con una progresión segura"},
+      maintenance:{icon:"=",title:"Mantenerme",description:"Conservar fuerza y hábitos"}
+    };
+    const phaseSuggested=suggestedTrainingPhase(p.primaryGoal);
+    const phaseIsSuggested=p.phase===phaseSuggested;
     content=`
       <div class="onboarding-step-icon" aria-hidden="true">02</div>
       <span class="section-kicker">OBJETIVO</span>
-      <h1>¿Qué quieres conseguir?</h1>
-      <p class="onboarding-lead">Elige la prioridad que mejor representa tu situación actual.</p>
-      <div class="choice-card-grid">
-        ${[
-          ["fat_loss","↘","Perder grasa","Manteniendo músculo y rendimiento"],
-          ["muscle","+","Ganar músculo","Aumentar masa muscular progresivamente"],
-          ["strength","↑","Mejorar fuerza","Priorizar fuerza y progresión"],
-          ["health","♥","Mejorar salud","Moverte mejor y ganar condición física"],
-          ["return","↻","Retomar el gimnasio","Volver de forma gradual y sostenible"],
-          ["maintain","=","Mantenerte","Conservar fuerza y composición corporal"]
-        ].map(([value,icon,title,desc])=>`<label class="choice-card ${p.goal===value?"selected":""}"><input type="radio" name="obGoal" value="${value}" ${p.goal===value?"checked":""}><span class="choice-icon">${icon}</span><span class="choice-copy"><strong>${title}</strong><small>${desc}</small></span><span class="choice-check">✓</span></label>`).join("")}
+      <h1>¿Cuál es tu objetivo principal?</h1>
+      <p class="onboarding-lead">Elige una única prioridad. Esta decisión dirige la dosificación central de la rutina.</p>
+      <div class="choice-card-grid goal-choice-grid">
+        ${goalView.visible.map(option=>{
+          const presentation=goalPresentation[option.id]||{
+            icon:"·",title:option.label,description:"Objetivo complementario de entrenamiento"
+          };
+          return `<label class="choice-card goal-choice-card ${option.primarySelected?"selected":""}">
+          <input type="radio" name="obPrimaryGoal" value="${esc(option.id)}" ${option.primarySelected?"checked":""}>
+          <span class="choice-icon" aria-hidden="true">${esc(presentation.icon)}</span>
+          <span class="choice-copy"><strong>${esc(presentation.title)}</strong><small>${esc(presentation.description)}</small></span>
+          <span class="choice-check" aria-hidden="true">✓</span>
+        </label>`;
+        }).join("")}
       </div>
+      ${goalView.hasAdditional?`<button id="toggleMoreGoals" class="text-button onboarding-more-goals" type="button" aria-expanded="${goalView.expanded}">
+        ${goalView.expanded?"Ver menos objetivos":"Ver más objetivos"}
+      </button>`:""}
+      <div class="onboarding-secondary-goals">
+        <div class="secondary-goal-heading"><h2>¿Tienes otros objetivos?</h2><span id="secondaryGoalHelp" role="status">${goalView.secondaryCount} de 2 seleccionados</span></div>
+        <p class="subtle">Puedes seleccionar hasta dos. Nunca sustituirán el objetivo principal.</p>
+        <div class="secondary-goal-grid">
+          ${goalView.visible.map(option=>`<label class="secondary-goal-chip ${option.secondarySelected?"selected":""} ${option.secondaryDisabled?"unavailable":""}">
+            <input type="checkbox" name="obSecondaryGoal" value="${esc(option.id)}"
+              ${option.secondarySelected?"checked":""} ${option.secondaryDisabled?"disabled":""}>
+            <span>${esc(goalPresentation[option.id]?.title||option.label)}</span>
+          </label>`).join("")}
+        </div>
+      </div>
+      <section class="onboarding-phase-card">
+        <div class="onboarding-phase-copy">
+          <span class="section-kicker">${phaseIsSuggested?"FASE RECOMENDADA":"FASE ELEGIDA"}</span>
+          <strong>${esc(trainingPhaseLabel(p.phase))}</strong>
+          <small>${phaseIsSuggested?"Basada en tu objetivo principal":"Elegida para tu situación actual"}</small>
+        </div>
+        <button id="togglePhaseEditor" class="text-button" type="button" aria-expanded="${state.onboardingPhaseEditorOpen}">${state.onboardingPhaseEditorOpen?"Cerrar":"Cambiar fase"}</button>
+        ${state.onboardingPhaseEditorOpen?`<label class="onboarding-phase-selector"><span>Fase de entrenamiento</span><select id="obPhase">
+          ${phaseOptions.map(option=>`<option value="${esc(option.id)}" ${p.phase===option.id?"selected":""}>${esc(option.label)}</option>`).join("")}
+        </select></label>`:""}
+      </section>
       <label><span>Experiencia</span><select id="obExperience">
         <option value="new" ${p.experience==="new"?"selected":""}>Nunca he entrenado</option>
-        <option value="beginner" ${p.experience==="beginner"?"selected":""}>Principiante o volviendo tras una pausa</option>
+        <option value="beginner" ${["beginner","returning"].includes(p.experience)?"selected":""}>Principiante o volviendo tras una pausa</option>
         <option value="intermediate" ${p.experience==="intermediate"?"selected":""}>Intermedio</option>
         <option value="advanced" ${p.experience==="advanced"?"selected":""}>Avanzado</option>
       </select></label>`;
@@ -4682,46 +4865,45 @@ function renderOnboarding(){
       </select></label>
       <label><span>Ejercicios que quieres evitar</span><textarea id="obAvoid" rows="2" placeholder="Sepáralos con comas">${esc(p.avoidExercises)}</textarea></label>`;
   }else{
-    const proposed=buildRecommendedRoutine(p);
-    const sessionsToShow=Number(p.days)<=2?["A","B"]:["A","B","C"];
     content=`
       <div class="onboarding-step-icon success" aria-hidden="true">✓</div>
-      <span class="section-kicker">TU PROPUESTA</span>
-      <h1>Este es tu punto de partida</h1>
-      <p class="onboarding-lead">Un plan inicial sencillo, progresivo y adaptado a tus respuestas.</p>
+      <span class="section-kicker">RESUMEN</span>
+      <h1>Revisa tu perfil</h1>
+      <p class="onboarding-lead">Guardaremos estos datos sin modificar tu rutina ni tu historial.</p>
       <div class="onboarding-summary">
-        <div><span>Objetivo</span><strong>${esc(onboardingGoalLabel(p.goal))}</strong></div>
+        <div><span>Objetivo principal</span><strong>${esc(onboardingGoalLabel(p.primaryGoal))}</strong></div>
+        <div><span>Objetivos secundarios</span><strong>${p.secondaryGoals.length?p.secondaryGoals.map(onboardingGoalLabel).map(esc).join(", "):"Ninguno"}</strong></div>
+        <div><span>Fase</span><strong>${esc(trainingPhaseLabel(p.phase))}</strong></div>
         <div><span>Nivel</span><strong>${esc(onboardingExperienceLabel(p.experience))}</strong></div>
         <div><span>Disponibilidad</span><strong>${p.days} días · ${p.duration} min</strong></div>
         <div><span>Entorno</span><strong>${esc(onboardingLocationLabel(p.location))}</strong></div>
       </div>
       <div class="safety-callout"><strong>Antes de empezar</strong><p>${esc(onboardingSafetyMessage(p))}</p></div>
-      <h2>Rutina recomendada</h2>
-      <div class="routine-preview-list">
-        ${sessionsToShow.map(session=>`<article><h3>Sesión ${session}</h3>${proposed[session].map(item=>`<div><span>${esc(item.name)}</span><small>${item.sets} × ${esc(item.target)}</small></div>`).join("")}</article>`).join("")}
-      </div>
-      <label class="consent-row"><input id="obConfirm" type="checkbox"><span>He revisado mis respuestas. Puedo guardar solo el perfil o sustituir mi rutina de forma explícita.</span></label>`;
+      <label class="consent-row"><input id="obConfirm" type="checkbox"><span>He revisado el objetivo principal, los objetivos secundarios y la fase de entrenamiento.</span></label>`;
   }
 
-  app.innerHTML=`<div class="onboarding-shell">
+  app.innerHTML=`<div class="onboarding-shell ${step===2?"onboarding-goal-step":""}">
     <header class="onboarding-header">
       <div class="onboarding-brand"><span class="onboarding-logo">G</span><div><div class="brand">GymOS</div><div class="subtle">Tu entrenamiento, bien planteado</div></div></div>
-      <button id="cancelOnboarding" class="text-button">Ya lo he realizado</button>
+      <button id="cancelOnboarding" class="text-button">${state.onboardingReturnScreen?"Cerrar":"Ya lo he realizado"}</button>
     </header>
     <div class="onboarding-stepper" aria-label="Paso ${step} de 5">
       ${[1,2,3,4,5].map(n=>`<span class="${n<step?"done":n===step?"active":""}">${n<step?"✓":n}</span>`).join("")}
     </div>
     <div class="onboarding-progress"><span style="width:${progress}%"></span></div>
     <main class="onboarding-main">
-      <section class="onboarding-card">${content}</section>
+      <section class="onboarding-card">
+        ${state.onboardingMessage?`<p class="onboarding-inline-message ${esc(state.onboardingMessage.type||"info")}" role="${state.onboardingMessage.type==="error"?"alert":"status"}">${esc(state.onboardingMessage.text)}</p>`:""}
+        ${content}
+      </section>
     </main>
-    <div class="onboarding-actions-wrap">
+    <div class="onboarding-actions-wrap ${step===2?"goal-step-actions":""}">
       <div class="onboarding-actions">
         ${step>1?`<button id="obBack" class="secondary">Atrás</button>`:"<span></span>"}
         ${step===5
           ?`<div class="onboarding-final-actions">
-              <button id="obSaveProfile" class="secondary">Guardar solo perfil</button>
-              <button id="obNext" class="primary">Reemplazar rutina</button>
+              <button id="obSaveProfile" class="secondary">Guardar perfil</button>
+              <button id="obNext" class="primary">Guardar y crear propuesta</button>
             </div>`
           :`<button id="obNext" class="primary">Continuar</button>`}
       </div>
@@ -4730,6 +4912,17 @@ function renderOnboarding(){
 
   const cancel=document.getElementById("cancelOnboarding");
   if(cancel) cancel.onclick=()=>{
+    if(state.onboardingReturnScreen){
+      const destination=state.onboardingReturnScreen;
+      state.onboardingDraft=null;
+      state.onboardingStep=1;
+      state.onboardingMessage=null;
+      state.onboardingReturnScreen=null;
+      state.onboardingCreateProposalAfterSave=false;
+      state.screen=destination;
+      render();
+      return;
+    }
     const existing=getOnboardingProfile()||{};
     const now=new Date().toISOString();
     saveOnboardingProfile({
@@ -4740,6 +4933,7 @@ function renderOnboarding(){
     });
     state.onboardingDraft=null;
     state.onboardingStep=1;
+    state.onboardingMessage=null;
     state.screen="home";
     toast("Cuestionario marcado como realizado.");
     renderHome();
@@ -4754,7 +4948,13 @@ function renderOnboarding(){
       p.weight=document.getElementById("obWeight").value;
       p.sex=document.getElementById("obSex").value;
     }else if(step===2){
-      p.goal=document.querySelector('input[name="obGoal"]:checked')?.value||p.goal;
+      p.primaryGoal=document.querySelector('input[name="obPrimaryGoal"]:checked')?.value||p.primaryGoal;
+      p.secondaryGoals=[...document.querySelectorAll('input[name="obSecondaryGoal"]:checked')]
+        .map(input=>input.value)
+        .filter(goal=>goal!==p.primaryGoal)
+        .slice(0,2);
+      p.phase=document.getElementById("obPhase")?.value||p.phase;
+      p.phaseConfirmed=true;
       p.experience=document.getElementById("obExperience").value;
     }else if(step===3){
       p.days=Number(document.getElementById("obDays").value);
@@ -4769,72 +4969,154 @@ function renderOnboarding(){
     }
     state.onboardingDraft=p;
   };
-  document.querySelectorAll(".choice-card input").forEach(input=>{
+  document.querySelectorAll('input[name="obPrimaryGoal"]').forEach(input=>{
     input.onchange=()=>{
-      p.goal=input.value;
+      p.primaryGoal=input.value;
+      p.secondaryGoals=p.secondaryGoals.filter(goal=>goal!==input.value);
+      if(!p.phaseConfirmed) p.phase=suggestedTrainingPhase(input.value);
       state.onboardingDraft=p;
-      document.querySelectorAll(".choice-card").forEach(card=>card.classList.remove("selected"));
-      input.closest(".choice-card")?.classList.add("selected");
+      renderOnboarding();
     };
   });
+  document.querySelectorAll('input[name="obSecondaryGoal"]').forEach(input=>{
+    input.onchange=()=>{
+      const selected=[...document.querySelectorAll('input[name="obSecondaryGoal"]:checked')]
+        .map(item=>item.value)
+        .filter(goal=>goal!==p.primaryGoal);
+      if(selected.length>2){
+        input.checked=false;
+        state.onboardingMessage={type:"info",text:"Puedes seleccionar como máximo dos objetivos secundarios."};
+      }else{
+        p.secondaryGoals=selected;
+        state.onboardingMessage=null;
+      }
+      state.onboardingDraft=p;
+      renderOnboarding();
+    };
+  });
+  const moreGoals=document.getElementById("toggleMoreGoals");
+  if(moreGoals) moreGoals.onclick=()=>{
+    state.onboardingExpandedGoals=!state.onboardingExpandedGoals;
+    renderOnboarding();
+  };
+  const phaseEditor=document.getElementById("togglePhaseEditor");
+  if(phaseEditor) phaseEditor.onclick=()=>{
+    state.onboardingPhaseEditorOpen=!state.onboardingPhaseEditorOpen;
+    renderOnboarding();
+  };
+  const phaseSelect=document.getElementById("obPhase");
+  if(phaseSelect) phaseSelect.onchange=()=>{
+    p.phase=phaseSelect.value;
+    p.phaseConfirmed=true;
+    state.onboardingDraft=p;
+    renderOnboarding();
+  };
+  const experienceSelect=document.getElementById("obExperience");
+  if(experienceSelect) experienceSelect.onchange=()=>{
+    p.experience=experienceSelect.value;
+    state.onboardingDraft=p;
+  };
   const back=document.getElementById("obBack");
   if(back) back.onclick=()=>{persistStep();state.onboardingStep--;renderOnboarding();};
   const saveProfileOnly=document.getElementById("obSaveProfile");
   if(saveProfileOnly) saveProfileOnly.onclick=async()=>{
     persistStep();
     if(!document.getElementById("obConfirm").checked){
-      alert("Confirma que has revisado tus respuestas.");
+      state.onboardingMessage={type:"error",text:"Confirma que has revisado tus respuestas."};
+      renderOnboarding();
       return;
     }
-    const now=new Date().toISOString();
-    p.completedAt=now;
-    p.onboardingDismissed=false;
-    p.onboardingCompletedManually=false;
-    p.updatedAt=now;
-    saveOnboardingProfile(p);
-    state.onboardingDraft=null;
-    state.onboardingStep=1;
-    state.screen="home";
-    toast("Perfil guardado. Tu rutina no se ha modificado.");
-    renderHome();
-    setTimeout(()=>autoSync("perfil deportivo actualizado"),400);
+    try{
+      const now=new Date().toISOString();
+      persistTrainingProfileData(p);
+      Object.assign(p,{
+        goal:p.primaryGoal,
+        completedAt:now,
+        onboardingDismissed:false,
+        onboardingCompletedManually:false,
+        updatedAt:now
+      });
+      saveOnboardingProfile(p);
+      state.onboardingDraft=null;
+      state.onboardingStep=1;
+      state.onboardingMessage=null;
+      state.onboardingReturnScreen=null;
+      state.onboardingCreateProposalAfterSave=false;
+      state.screen="routineWorkflow";
+      ensureRoutineWorkflowState();
+      state.routineWorkflow=window.GymOSRoutineWorkflowUI.setFlowView(state.routineWorkflow,"summary");
+      toast("Perfil guardado. Tu rutina no se ha modificado.");
+      renderRoutineWorkflow();
+      setTimeout(()=>autoSync("perfil deportivo actualizado"),400);
+    }catch(error){
+      state.onboardingMessage={type:"error",text:error?.message||"No se pudo guardar el perfil."};
+      renderOnboarding();
+    }
   };
   document.getElementById("obNext").onclick=async()=>{
     persistStep();
     if(step===1){
       if(!p.name||!p.age||!p.height||!p.weight){
-        alert("Completa nombre, edad, altura y peso para continuar.");
+        state.onboardingMessage={type:"error",text:"Completa nombre, edad, altura y peso para continuar."};
+        renderOnboarding();
         return;
       }
-      if(Number(p.age)<14||Number(p.age)>100){alert("Revisa la edad indicada.");return;}
+      if(Number(p.age)<14||Number(p.age)>100){
+        state.onboardingMessage={type:"error",text:"Revisa la edad indicada."};
+        renderOnboarding();
+        return;
+      }
+    }
+    if(step===2){
+      const validation=window.GymOSProfileData.validateGoalSelection(p.primaryGoal,p.secondaryGoals);
+      if(!validation.valid){
+        state.onboardingMessage={type:"error",text:validation.errors[0]};
+        renderOnboarding();
+        return;
+      }
+      if(!p.phaseConfirmed){
+        state.onboardingMessage={type:"error",text:"Revisa y confirma la fase de entrenamiento."};
+        renderOnboarding();
+        return;
+      }
     }
     if(step<5){
+      state.onboardingMessage=null;
       state.onboardingStep++;
       renderOnboarding();
       return;
     }
     if(!document.getElementById("obConfirm").checked){
-      alert("Confirma que has revisado la propuesta.");
+      state.onboardingMessage={type:"error",text:"Confirma que has revisado tus respuestas."};
+      renderOnboarding();
       return;
     }
-    const now=new Date().toISOString();
-    p.completedAt=now;
-    p.onboardingDismissed=false;
-    p.onboardingCompletedManually=false;
-    p.updatedAt=now;
-    const routine=buildRecommendedRoutine(p);
-    saveOnboardingProfile(p);
-    saveRoutine(routine);
-    sessions=getRoutine();
-    saveWeeklyGoal(Math.max(2,Math.min(5,Number(p.days)||3)));
-    state.selectedSession="A";
-    localStorage.setItem("gymos:selectedSession","A");
-    state.onboardingDraft=null;
-    state.onboardingStep=1;
-    state.screen="home";
-    toast("Tu plan inicial está listo");
-    renderHome();
-    setTimeout(()=>autoSync("onboarding completado"),400);
+    try{
+      const now=new Date().toISOString();
+      persistTrainingProfileData(p);
+      Object.assign(p,{
+        goal:p.primaryGoal,
+        completedAt:now,
+        onboardingDismissed:false,
+        onboardingCompletedManually:false,
+        updatedAt:now
+      });
+      saveOnboardingProfile(p);
+      state.onboardingDraft=null;
+      state.onboardingStep=1;
+      state.onboardingMessage=null;
+      state.onboardingReturnScreen=null;
+      state.onboardingCreateProposalAfterSave=false;
+      state.screen="routineWorkflow";
+      ensureRoutineWorkflowState();
+      state.routineWorkflow=window.GymOSRoutineWorkflowUI.setFlowView(state.routineWorkflow,"prepare");
+      toast("Perfil guardado. Revisa los datos antes de generar.");
+      renderRoutineWorkflow();
+      setTimeout(()=>autoSync("perfil deportivo actualizado"),400);
+    }catch(error){
+      state.onboardingMessage={type:"error",text:error?.message||"No se pudo guardar el perfil."};
+      renderOnboarding();
+    }
   };
 }
 
@@ -4889,6 +5171,7 @@ function render(){
   else if(state.screen==="body") renderBody();
   else if(state.screen==="editWorkout") renderEditWorkout();
   else if(state.screen==="plan") renderPlan();
+  else if(state.screen==="routineWorkflow") renderRoutineWorkflow();
   else if(state.screen==="routineEditor") renderRoutineEditor();
   else if(state.screen==="blocks") renderBlocks();
   else if(state.screen==="blockEditor") renderBlockEditor();
@@ -5267,7 +5550,7 @@ const QUICK_ACTIONS_REGISTRY=Object.freeze({
   workout_history:{label:"Historial",pickerLabel:"Historial de entrenamientos",icon:"↶",action:()=>openQuickActionScreen("history")},
   change_session:{label:"Cambiar sesión",icon:"⇄",context:()=>`Sesión ${state.selectedSession}`,action:changeQuickActionSession},
   timer:{label:"Temporizador",icon:"◷",action:openQuickActionTimer},
-  sports_profile:{label:"Perfil deportivo",icon:"◇",action:()=>{state.onboardingDraft=newOnboardingDraft();state.onboardingStep=1;openQuickActionScreen("onboarding");}},
+  sports_profile:{label:"Perfil deportivo",icon:"◇",action:()=>openTrainingProfileEditor(1,{returnScreen:"settings"})},
   account:{label:"Cuenta",icon:"○",action:()=>openQuickActionScreen("account")},
   appearance:{label:"Apariencia",icon:"◐",action:()=>openQuickActionScreen("settings",".experience-card")},
   sync:{label:"Sincronización",icon:"↻",context:()=>syncStatusLabel(),action:runQuickActionSync}
@@ -9410,6 +9693,514 @@ function renderAiSettings(){
   bindNav();
 }
 
+function routineWorkflowOwnerId(){
+  return routineProposalOwnerId();
+}
+function routineWorkflowLabels(){
+  return {
+    goals:window.GymOSProfileData?.GOAL_OPTIONS||[],
+    lifeStates:window.GymOSProfileData?.LIFE_STATE_OPTIONS||[],
+    phases:window.GymOSProfileData?.TRAINING_PHASE_OPTIONS||[],
+    experience:[
+      {id:"beginner",label:"Principiante o retomando"},
+      {id:"returning",label:"Principiante o retomando"},
+      {id:"intermediate",label:"Intermedio"},
+      {id:"advanced",label:"Avanzado"}
+    ],
+    locations:[
+      {id:"gym",label:"Gimnasio"},
+      {id:"home",label:"Casa"},
+      {id:"mixed",label:"Gimnasio y casa"},
+      {id:"other",label:"Otro lugar"}
+    ],
+    equipment:[
+      {id:"bodyweight",label:"Peso corporal"},{id:"mat",label:"Esterilla"},
+      {id:"bench",label:"Banco"},{id:"adjustable_bench",label:"Banco ajustable"},
+      {id:"dumbbells",label:"Mancuernas"},{id:"barbell",label:"Barra"},
+      {id:"plates",label:"Discos"},{id:"squat_rack",label:"Rack"},
+      {id:"smith_machine",label:"Multipower"},{id:"cable_machine",label:"Poleas"},
+      {id:"resistance_band",label:"Bandas"},{id:"leg_press",label:"Prensa"},
+      {id:"lat_pulldown",label:"Jalón"},{id:"seated_row",label:"Remo sentado"},
+      {id:"treadmill",label:"Cinta"},{id:"stationary_bike",label:"Bicicleta"}
+    ]
+  };
+}
+function ensureRoutineWorkflowState(){
+  const ownerId=routineWorkflowOwnerId();
+  state.routineWorkflow=window.GymOSRoutineWorkflowUI.resetFlowForOwner(
+    state.routineWorkflow,ownerId
+  );
+  return state.routineWorkflow;
+}
+function routineWorkflowGenerationSource(){
+  const profileApi=window.GymOSProfileData;
+  return {
+    userProfile:profileApi.getUserProfile(),
+    currentLifeState:profileApi.getCurrentLifeState(),
+    activeGoalCycle:profileApi.getActiveGoalCycle(),
+    activeTrainingPhase:profileApi.getActiveTrainingPhase(),
+    exerciseLibrary:getExerciseLibrary(),
+    currentRoutine:getRoutine(),
+    workoutHistory:getHistory(),
+    generationPreferences:{
+      preferredExerciseIds:getFavoriteExercises().map(exercise=>exercise.id),
+      style:profileApi.getUserProfile()?.trainingPreferences?.style||"",
+      cardio:profileApi.getUserProfile()?.trainingPreferences?.cardio||""
+    }
+  };
+}
+function routineWorkflowSummary(){
+  const ownerId=routineWorkflowOwnerId();
+  return window.GymOSRoutineWorkflowUI.workflowSummaryModel({
+    ownerId,
+    currentRoutine:getRoutine(),
+    proposalRecords:getRoutineProposalRecords(ownerId),
+    activationRecords:getRoutineActivationRecords(ownerId),
+    activeProposalId:null,
+    activeActivationId:null,
+    activeGoalCycle:window.GymOSProfileData.getActiveGoalCycle(),
+    activeTrainingPhase:window.GymOSProfileData.getActiveTrainingPhase(),
+    labels:routineWorkflowLabels()
+  });
+}
+function routineWorkflowStatusLabel(status){
+  return {
+    pending_review:"Pendiente de revisión",
+    stale:"Obsoleta",
+    review_required:"Requiere revisión",
+    incompatible:"No compatible",
+    unavailable:"No disponible"
+  }[status]||"Pendiente";
+}
+function routineWorkflowBlockerLabel(code){
+  return {
+    invalid_owner:"No se pudo validar el propietario.",
+    proposal_not_found:"La propuesta ya no existe.",
+    owner_mismatch:"La propuesta pertenece a otra cuenta.",
+    proposal_not_pending:"La propuesta ya no está pendiente.",
+    proposal_stale:"La rutina cambió desde que se generó la propuesta.",
+    baseline_mismatch:"La rutina actual ya no coincide con la utilizada al generar.",
+    activation_incompatible:"El runtime actual solo admite dos o tres sesiones.",
+    review_required:"La propuesta requiere revisión.",
+    unresolved_questions:"Hay preguntas pendientes.",
+    missing_patterns:"Faltan patrones obligatorios.",
+    proposal_invalid:"La propuesta contiene errores.",
+    proposal_errors:"La validación encontró errores de seguridad."
+  }[code]||"La propuesta no puede activarse todavía.";
+}
+function routineWorkflowDate(value){
+  if(!value) return "Sin fecha";
+  const date=new Date(value);
+  return Number.isNaN(date.getTime())
+    ?"Sin fecha"
+    :date.toLocaleString("es-ES",{day:"2-digit",month:"short",year:"numeric",hour:"2-digit",minute:"2-digit"});
+}
+function routineWorkflowMessage(){
+  const message=state.routineWorkflow?.message;
+  if(!message) return "";
+  return `<p class="routine-workflow-message ${esc(message.type||"info")}" role="${message.type==="error"?"alert":"status"}">${esc(message.text)}</p>`;
+}
+function renderRoutineWorkflowSummary(model,preparation){
+  const proposal=model.pendingProposal;
+  const activation=model.reversibleActivation;
+  const blocked=model.blockedActivation;
+  const missing=preparation.missing;
+  return `
+    <section class="routine-workflow-hero">
+      <span class="section-kicker">RUTINA ACTUAL</span>
+      <h1>Mi rutina</h1>
+      <p>${model.routine.sessionCount
+        ?`${model.routine.sessionCount} sesiones · ${model.routine.exerciseCount} ejercicios`
+        :"Todavía no hay sesiones configuradas."}</p>
+      <div class="routine-session-summary">
+        ${model.routine.sessions.map(session=>`<article>
+          <strong>${esc(session.name)}</strong>
+          <span>${session.exerciseCount} ejercicios${session.focus?` · ${esc(session.focus)}`:""}</span>
+        </article>`).join("")}
+      </div>
+    </section>
+    <section class="card routine-context-card">
+      <div><span>Objetivo actual</span><strong>${esc(model.goal)}</strong><button id="editRoutineGoal" class="text-button" type="button">${model.goal==="Sin configurar"?"Configurar objetivo":"Editar objetivo"}</button></div>
+      <div><span>Fase</span><strong>${esc(model.phase)}</strong><button id="editRoutinePhase" class="text-button" type="button">${model.phase==="Sin configurar"?"Configurar fase":"Editar fase"}</button></div>
+      <div><span>Perfil de entrenamiento</span><strong>${preparation.summary.days?`${preparation.summary.days} días · ${preparation.summary.duration||"—"} min`:"Sin configurar"}</strong><button id="editTrainingProfile" class="text-button" type="button">Editar perfil de entrenamiento</button></div>
+      <div><span>Última activación</span><strong>${model.lastActivation?esc(routineWorkflowDate(model.lastActivation.activatedAt)):"Sin activaciones"}</strong></div>
+    </section>
+    ${missing.length?`<section class="card routine-profile-pending" role="status">
+      <span class="section-kicker">PERFIL PENDIENTE</span>
+      <h2>Faltan ${missing.length} ${missing.length===1?"dato":"datos"} para poder generar tu rutina</h2>
+      <ul>${missing.map(item=>`<li>${esc(item)}</li>`).join("")}</ul>
+      <button id="completeRoutineProfile" class="secondary full" type="button">Completar perfil</button>
+    </section>`:""}
+    ${proposal?`<section class="card routine-proposal-summary">
+      <div class="card-heading-row">
+        <div><span class="section-kicker">PROPUESTA</span><h2>${esc(routineWorkflowStatusLabel(proposal.status))}</h2></div>
+        <span class="mode-pill">${proposal.sessionCount} sesiones</span>
+      </div>
+      <p>${esc(proposal.weeklyStructure)} · ${proposal.diff.summary.total} cambios respecto a la rutina actual.</p>
+      <button id="reviewRoutineProposal" class="primary full" type="button">Revisar propuesta pendiente</button>
+    </section>`:`<section class="card routine-empty-state">
+      <span class="section-kicker">PROPUESTA</span>
+      <h2>Sin propuesta pendiente</h2>
+      <p class="subtle">GymOS solo generará una propuesta cuando tú lo solicites.</p>
+    </section>`}
+    ${activation?`<section class="card routine-rollback-card">
+      <span class="section-kicker">COPIA REVERSIBLE</span>
+      <h2>Última activación disponible</h2>
+      <p>Activada el ${esc(routineWorkflowDate(activation.activatedAt))}. Puedes recuperar la rutina anterior mientras no modifiques la actual.</p>
+      <button id="openRoutineRollback" class="secondary full" type="button">Revertir a la rutina anterior</button>
+    </section>`:""}
+    ${blocked?`<section class="card routine-blocked-card" role="status">
+      <span class="section-kicker">REVERSIÓN BLOQUEADA</span>
+      <h2>La rutina cambió después de activarla</h2>
+      <p>La copia se conserva para auditoría, pero GymOS no sobrescribirá tus cambios posteriores.</p>
+    </section>`:""}
+    <button id="prepareRoutineProposal" class="primary full routine-main-action" type="button">${preparation.canGenerate?"Generar una nueva propuesta":"Completar perfil para generar"}</button>
+  `;
+}
+function renderRoutineWorkflowPreparation(model){
+  const summary=model.summary;
+  const row=(label,value)=>`<div><span>${label}</span><strong>${esc(value||"Sin configurar")}</strong></div>`;
+  return `
+    <section class="routine-workflow-heading">
+      <span class="section-kicker">ANTES DE GENERAR</span>
+      <h1>Revisa tus datos</h1>
+      <p>Estos datos se copiarán para crear la propuesta. La rutina actual no se modificará.</p>
+    </section>
+    ${model.missing.length?`<section class="routine-missing-data pending" role="status">
+      <strong>Faltan ${model.missing.length} ${model.missing.length===1?"dato":"datos"} para poder generar tu rutina</strong>
+      <ul>${model.missing.map(item=>`<li>${esc(item)}</li>`).join("")}</ul>
+      <button id="completeRoutineProfileFromReview" class="secondary full" type="button">Completar perfil</button>
+    </section>`:""}
+    <section class="card routine-preparation-grid">
+      ${row("Objetivo principal",summary.primaryGoal)}
+      ${row("Objetivos secundarios",summary.secondaryGoals.join(", ")||"Ninguno")}
+      ${row("Fase",summary.phase)}
+      ${row("Estado vital",summary.lifeState)}
+      ${row("Experiencia",summary.experience)}
+      ${row("Disponibilidad",summary.days?`${summary.days} días por semana`:"Sin configurar")}
+      ${row("Duración",summary.duration?`${summary.duration} minutos`:"Sin configurar")}
+      ${row("Lugar",summary.location)}
+      ${row("Equipamiento",summary.equipment.join(", ")||"Sin configurar")}
+      ${row("Restricciones",summary.restrictions.join(", ")||"Ninguna indicada")}
+      ${row("Preferencias",`${summary.preferences.preferredExerciseIds.length} favoritos · ${summary.preferences.avoidedExercises.length} evitados`)}
+      ${row("Experiencia previa",`${summary.knownExerciseCount} ejercicios conocidos · ${summary.previousWorkoutCount} entrenamientos guardados`)}
+    </section>
+    <div class="routine-workflow-actions">
+      <button id="cancelRoutineGeneration" class="secondary" type="button">Volver</button>
+      <button id="generateRoutineProposal" class="primary" type="button" ${model.canGenerate&&state.routineWorkflow.busy!=="generating"?"":"disabled"}>
+        ${state.routineWorkflow.busy==="generating"?"Generando…":"Generar propuesta"}
+      </button>
+    </div>
+  `;
+}
+function renderRoutineDiff(proposal){
+  const diff=proposal.diff;
+  return `<section class="card routine-diff">
+    <span class="section-kicker">COMPARACIÓN</span>
+    <h2>${diff.summary.total?`${diff.summary.total} cambios propuestos`:"Sin diferencias detectadas"}</h2>
+    <div class="routine-diff-grid">
+      <div><strong>${diff.summary.sessionsAdded}</strong><span>sesiones añadidas</span></div>
+      <div><strong>${diff.summary.sessionsRemoved}</strong><span>sesiones eliminadas</span></div>
+      <div><strong>${diff.summary.exercisesAdded}</strong><span>ejercicios añadidos</span></div>
+      <div><strong>${diff.summary.exercisesRemoved}</strong><span>ejercicios eliminados</span></div>
+      <div><strong>${diff.summary.exercisesSubstituted}</strong><span>sustituciones</span></div>
+      <div><strong>${diff.summary.prescriptionChanges}</strong><span>cambios de dosis</span></div>
+    </div>
+    ${diff.changes.length?`<details><summary>Ver cambios uno a uno</summary><ul>
+      ${diff.changes.map(change=>`<li>${esc(change.message)}</li>`).join("")}
+    </ul></details>`:""}
+  </section>`;
+}
+function renderRoutineProposalReview(proposal){
+  if(!proposal) return `<section class="card"><h1>Propuesta no disponible</h1><p>Vuelve al resumen para actualizar los datos.</p></section>`;
+  return `
+    <section class="routine-workflow-heading">
+      <span class="section-kicker">REVISIÓN</span>
+      <h1>${esc(proposal.weeklyStructure)}</h1>
+      <p>${proposal.sessionCount} sesiones${proposal.estimatedDurationMin?` · hasta ${proposal.estimatedDurationMin} min`:""} · ${esc(proposal.primaryGoal)} · ${esc(proposal.phase)}</p>
+    </section>
+    <section class="card routine-proposal-health ${proposal.canActivate?"ready":"blocked"}">
+      <div class="card-heading-row">
+        <div><span>Estado</span><h2>${esc(routineWorkflowStatusLabel(proposal.status))}</h2></div>
+        <span class="mode-pill">${proposal.compatible?"Compatible":"No compatible"}</span>
+      </div>
+      <p>Cobertura: ${proposal.coverage.balanced?"equilibrada":"incompleta"}.</p>
+      ${proposal.stale?`<p class="routine-warning">La rutina cambió desde que se generó. Crea una propuesta nueva para actualizarla.</p>`:""}
+      ${proposal.blockers.length?`<ul class="routine-blockers">${proposal.blockers.map(code=>`<li>${esc(routineWorkflowBlockerLabel(code))}</li>`).join("")}</ul>`:""}
+      ${proposal.warnings.length?`<details open><summary>Advertencias</summary><ul>${proposal.warnings.map(item=>`<li>${esc(item)}</li>`).join("")}</ul></details>`:""}
+      ${proposal.questions.length?`<details open><summary>Preguntas pendientes</summary><ul>${proposal.questions.map(item=>`<li>${esc(item)}</li>`).join("")}</ul></details>`:""}
+    </section>
+    ${renderRoutineDiff(proposal)}
+    <section class="routine-proposal-sessions">
+      ${proposal.sessions.map(session=>`<article class="card routine-proposal-session">
+        <header class="routine-session-heading">
+          <h2>${esc(session.name)}</h2>
+          <p>${esc(session.focus)}${session.estimatedDurationMin?` · ${session.estimatedDurationMin} min`:""}</p>
+          <span>${session.exercises.length} ${session.exercises.length===1?"ejercicio":"ejercicios"}</span>
+        </header>
+        <ol>${session.exercises.map(exercise=>`<li>
+          <div class="routine-exercise-order">${exercise.order}</div>
+          <div class="routine-exercise-content">
+            <strong>${esc(exercise.name)}</strong>
+            <div class="routine-exercise-prescription">
+              <span>${exercise.sets} series</span><span>${esc(exercise.target)}</span>
+              <span>${esc(exercise.rir)}</span><span>${exercise.restSeconds} s descanso</span>
+            </div>
+            <p class="routine-exercise-reason">${esc(exercise.reason)}</p>
+            <details class="routine-exercise-why">
+              <summary>¿Por qué este ejercicio?</summary>
+              <div class="routine-exercise-classification"><span>${esc(exercise.pattern)}</span><span>${esc(exercise.role)}</span></div>
+              ${exercise.reasons.length?`<ul class="routine-reason-list">${exercise.reasons.map(reason=>`<li>${esc(reason)}</li>`).join("")}</ul>`:""}
+              ${exercise.warnings.length?`<div class="routine-exercise-warnings"><strong>Ten en cuenta</strong><ul>${exercise.warnings.map(warning=>`<li>${esc(warning)}</li>`).join("")}</ul></div>`:""}
+              ${exercise.alternatives.length?`<div class="routine-exercise-alternatives"><strong>Alternativas disponibles</strong><ul>${exercise.alternatives.map(alternative=>`<li><strong>${esc(alternative.name)}</strong><span>${esc(alternative.reason)}</span></li>`).join("")}</ul></div>`:""}
+            </details>
+          </div>
+        </li>`).join("")}</ol>
+      </article>`).join("")}
+    </section>
+    <div class="routine-workflow-actions sticky-actions">
+      <button id="discardRoutineProposal" class="danger-soft" type="button" ${state.routineWorkflow.busy?"disabled":""}>Descartar propuesta</button>
+      ${proposal.stale?`<button id="regenerateRoutineProposal" class="primary" type="button">Generar nueva</button>`:`<button id="openRoutineActivation" class="primary" type="button" ${proposal.canActivate&&state.routineWorkflow.busy!=="activating"?"":"disabled"}>Activar rutina</button>`}
+    </div>
+  `;
+}
+function renderRoutineWorkflowConfirmation(model,proposal){
+  const type=state.routineWorkflow.confirmation;
+  if(type==="reject") return `<section class="routine-confirmation" role="dialog" aria-modal="false" aria-labelledby="routineRejectTitle" tabindex="-1">
+    <h2 id="routineRejectTitle">Descartar propuesta</h2>
+    <p>La rutina y el historial no se modificarán.</p>
+    <label><span>Razón opcional</span><textarea id="routineRejectionReason" maxlength="500" rows="3" ${state.routineWorkflow.busy?"disabled":""}></textarea></label>
+    <div><button id="cancelRoutineConfirmation" class="secondary" type="button" ${state.routineWorkflow.busy?"disabled":""}>Cancelar</button><button id="confirmRoutineRejection" class="danger" type="button" ${state.routineWorkflow.busy?"disabled":""}>${state.routineWorkflow.busy==="rejecting"?"Descartando…":"Descartar"}</button></div>
+  </section>`;
+  if(type==="activate"&&proposal) return `<section class="routine-confirmation" role="dialog" aria-modal="false" aria-labelledby="routineActivateTitle" tabindex="-1">
+    <h2 id="routineActivateTitle">Sustituir la rutina actual</h2>
+    <p>Pasarás de ${model.routine.sessionCount} a ${proposal.sessionCount} sesiones. Se guardará una copia reversible y tu historial no se borrará.</p>
+    <p>${proposal.diff.summary.total} cambios principales forman parte de esta propuesta.</p>
+    <label class="routine-confirm-check"><input id="confirmRoutineActivationCheck" type="checkbox" ${state.routineWorkflow.busy?"disabled":""}><span>Entiendo que mi rutina actual será sustituida y que podré revertirla mientras no la modifique posteriormente.</span></label>
+    <div><button id="cancelRoutineConfirmation" class="secondary" type="button" ${state.routineWorkflow.busy?"disabled":""}>Cancelar</button><button id="confirmRoutineActivation" class="primary" type="button" disabled>${state.routineWorkflow.busy==="activating"?"Activando…":"Activar rutina"}</button></div>
+  </section>`;
+  if(type==="rollback"&&model.reversibleActivation){
+    const activation=model.reversibleActivation;
+    return `<section class="routine-confirmation" role="dialog" aria-modal="false" aria-labelledby="routineRollbackTitle" tabindex="-1">
+      <h2 id="routineRollbackTitle">Revertir a la rutina anterior</h2>
+      <p>Activación: ${esc(routineWorkflowDate(activation.activatedAt))} · propuesta ${esc(activation.proposalId)}.</p>
+      <p>Rutina actual: ${activation.current.sessionCount} sesiones. Se restaurarán ${activation.baseline.sessionCount} sesiones.</p>
+      <p>Si modificaste la rutina posteriormente, GymOS bloqueará la reversión para proteger esos cambios.</p>
+      <label class="routine-confirm-check"><input id="confirmRoutineRollbackCheck" type="checkbox" ${state.routineWorkflow.busy?"disabled":""}><span>Entiendo qué rutina se restaurará y quiero continuar.</span></label>
+      <div><button id="cancelRoutineConfirmation" class="secondary" type="button" ${state.routineWorkflow.busy?"disabled":""}>Cancelar</button><button id="confirmRoutineRollback" class="primary" type="button" disabled>${state.routineWorkflow.busy==="rolling_back"?"Revirtiendo…":"Revertir rutina"}</button></div>
+    </section>`;
+  }
+  return "";
+}
+function bindRoutineWorkflowEvents(model,proposal,preparation){
+  const setWorkflow=next=>{state.routineWorkflow=next;renderRoutineWorkflow();};
+  const back=document.getElementById("backRoutineWorkflow");
+  if(back) back.onclick=()=>{
+    if(state.routineWorkflow.view==="summary"){
+      state.screen="settings";
+      renderSettings();
+    }else setWorkflow(window.GymOSRoutineWorkflowUI.setFlowView(state.routineWorkflow,"summary"));
+  };
+  const prepare=document.getElementById("prepareRoutineProposal");
+  if(prepare) prepare.onclick=()=>{
+    if(!preparation.canGenerate){
+      openTrainingProfileEditor(trainingProfileMissingStep(preparation.missing),{
+        returnScreen:"routineWorkflow",createProposal:true
+      });
+      return;
+    }
+    setWorkflow(window.GymOSRoutineWorkflowUI.setFlowView(state.routineWorkflow,"prepare"));
+  };
+  const editGoal=document.getElementById("editRoutineGoal");
+  if(editGoal) editGoal.onclick=()=>openTrainingProfileEditor(2,{returnScreen:"routineWorkflow"});
+  const editPhase=document.getElementById("editRoutinePhase");
+  if(editPhase) editPhase.onclick=()=>openTrainingProfileEditor(2,{returnScreen:"routineWorkflow"});
+  const editProfile=document.getElementById("editTrainingProfile");
+  if(editProfile) editProfile.onclick=()=>openTrainingProfileEditor(1,{returnScreen:"routineWorkflow"});
+  const completeProfile=document.getElementById("completeRoutineProfile");
+  if(completeProfile) completeProfile.onclick=()=>openTrainingProfileEditor(
+    trainingProfileMissingStep(preparation.missing),{returnScreen:"routineWorkflow",createProposal:true}
+  );
+  const completeFromReview=document.getElementById("completeRoutineProfileFromReview");
+  if(completeFromReview) completeFromReview.onclick=()=>openTrainingProfileEditor(
+    trainingProfileMissingStep(preparation.missing),{returnScreen:"routineWorkflow",createProposal:true}
+  );
+  const cancelGeneration=document.getElementById("cancelRoutineGeneration");
+  if(cancelGeneration) cancelGeneration.onclick=()=>setWorkflow(
+    window.GymOSRoutineWorkflowUI.setFlowView(state.routineWorkflow,"summary")
+  );
+  const review=document.getElementById("reviewRoutineProposal");
+  if(review&&model.pendingProposal) review.onclick=()=>setWorkflow(
+    window.GymOSRoutineWorkflowUI.setFlowView(
+      state.routineWorkflow,"review",model.pendingProposal.proposalId
+    )
+  );
+  const regenerate=document.getElementById("regenerateRoutineProposal");
+  if(regenerate) regenerate.onclick=()=>setWorkflow(
+    window.GymOSRoutineWorkflowUI.setFlowView(state.routineWorkflow,"prepare")
+  );
+  const generate=document.getElementById("generateRoutineProposal");
+  if(generate) generate.onclick=async()=>{
+    const started=window.GymOSRoutineWorkflowUI.beginOperation(state.routineWorkflow,"generating");
+    if(!started.accepted) return;
+    state.routineWorkflow=started.state;
+    renderRoutineWorkflow();
+    await Promise.resolve();
+    try{
+      const prepared=window.GymOSRoutineWorkflowUI.preparationModel(
+        routineWorkflowGenerationSource(),routineWorkflowLabels()
+      );
+      if(!prepared.canGenerate) throw new Error("Completa los datos obligatorios antes de generar.");
+      const timestamp=new Date().toISOString();
+      const generated=window.GymOSRoutineGenerator.generateRoutineProposal(
+        prepared.input,{timestamp}
+      );
+      if(!Array.isArray(generated.sessions)||!generated.sessions.length){
+        throw new Error(generated.unresolvedQuestions?.[0]||"La propuesta necesita más información antes de guardarse.");
+      }
+      const persisted=persistRoutineProposal(generated,{timestamp});
+      state.routineWorkflow=window.GymOSRoutineWorkflowUI.finishOperation(
+        window.GymOSRoutineWorkflowUI.setFlowView(
+          state.routineWorkflow,"review",persisted.record.proposal.proposalId
+        ),
+        {type:"success",text:"Propuesta generada y guardada para revisión."}
+      );
+    }catch(error){
+      state.routineWorkflow=window.GymOSRoutineWorkflowUI.finishOperation(
+        state.routineWorkflow,{type:"error",text:error?.message||"No se pudo generar la propuesta."}
+      );
+    }
+    renderRoutineWorkflow();
+  };
+  const discard=document.getElementById("discardRoutineProposal");
+  if(discard) discard.onclick=()=>setWorkflow(
+    window.GymOSRoutineWorkflowUI.openConfirmation(state.routineWorkflow,"reject")
+  );
+  const activate=document.getElementById("openRoutineActivation");
+  if(activate) activate.onclick=()=>setWorkflow(
+    window.GymOSRoutineWorkflowUI.openConfirmation(state.routineWorkflow,"activate")
+  );
+  const rollback=document.getElementById("openRoutineRollback");
+  if(rollback) rollback.onclick=()=>setWorkflow(
+    window.GymOSRoutineWorkflowUI.openConfirmation(state.routineWorkflow,"rollback")
+  );
+  const cancelConfirmation=document.getElementById("cancelRoutineConfirmation");
+  if(cancelConfirmation) cancelConfirmation.onclick=()=>setWorkflow(
+    window.GymOSRoutineWorkflowUI.closeConfirmation(state.routineWorkflow)
+  );
+  const activationCheck=document.getElementById("confirmRoutineActivationCheck");
+  if(activationCheck) activationCheck.onchange=()=>{
+    document.getElementById("confirmRoutineActivation").disabled=!activationCheck.checked;
+  };
+  const rollbackCheck=document.getElementById("confirmRoutineRollbackCheck");
+  if(rollbackCheck) rollbackCheck.onchange=()=>{
+    document.getElementById("confirmRoutineRollback").disabled=!rollbackCheck.checked;
+  };
+  const confirmRejection=document.getElementById("confirmRoutineRejection");
+  if(confirmRejection&&proposal) confirmRejection.onclick=async()=>{
+    const started=window.GymOSRoutineWorkflowUI.beginOperation(state.routineWorkflow,"rejecting");
+    if(!started.accepted) return;
+    const reason=document.getElementById("routineRejectionReason")?.value||"";
+    state.routineWorkflow=started.state;
+    renderRoutineWorkflow();
+    await Promise.resolve();
+    try{
+      rejectStoredRoutineProposal(proposal.proposalId,reason);
+      state.routineWorkflow=window.GymOSRoutineWorkflowUI.finishOperation(
+        window.GymOSRoutineWorkflowUI.setFlowView(state.routineWorkflow,"summary"),
+        {type:"success",text:"Propuesta descartada. Tu rutina no ha cambiado."}
+      );
+    }catch(error){
+      state.routineWorkflow=window.GymOSRoutineWorkflowUI.finishOperation(
+        state.routineWorkflow,{type:"error",text:error?.message||"No se pudo descartar la propuesta."}
+      );
+    }
+    renderRoutineWorkflow();
+  };
+  const confirmActivation=document.getElementById("confirmRoutineActivation");
+  if(confirmActivation&&proposal) confirmActivation.onclick=async()=>{
+    const checkbox=document.getElementById("confirmRoutineActivationCheck");
+    if(!checkbox?.checked) return;
+    const started=window.GymOSRoutineWorkflowUI.beginOperation(state.routineWorkflow,"activating");
+    if(!started.accepted) return;
+    state.routineWorkflow=started.state;
+    renderRoutineWorkflow();
+    await Promise.resolve();
+    try{
+      const result=activateStoredRoutineProposal(proposal.proposalId,{confirmed:true});
+      state.routineWorkflow=result.ok
+        ?window.GymOSRoutineWorkflowUI.finishOperation(
+          window.GymOSRoutineWorkflowUI.setFlowView(state.routineWorkflow,"summary"),
+          {type:"success",text:"Rutina activada. Tu historial y tus pesos se mantienen."}
+        )
+        :window.GymOSRoutineWorkflowUI.finishOperation(
+          state.routineWorkflow,{type:"error",text:result.message||"No se pudo activar la rutina."}
+        );
+    }catch(error){
+      state.routineWorkflow=window.GymOSRoutineWorkflowUI.finishOperation(
+        state.routineWorkflow,{type:"error",text:error?.message||"No se pudo activar la rutina."}
+      );
+    }
+    renderRoutineWorkflow();
+  };
+  const confirmRollback=document.getElementById("confirmRoutineRollback");
+  if(confirmRollback&&model.reversibleActivation) confirmRollback.onclick=async()=>{
+    const checkbox=document.getElementById("confirmRoutineRollbackCheck");
+    if(!checkbox?.checked) return;
+    const started=window.GymOSRoutineWorkflowUI.beginOperation(state.routineWorkflow,"rolling_back");
+    if(!started.accepted) return;
+    state.routineWorkflow=started.state;
+    renderRoutineWorkflow();
+    await Promise.resolve();
+    try{
+      const result=rollbackStoredRoutineActivation(model.reversibleActivation.activationId);
+      state.routineWorkflow=result.ok
+        ?window.GymOSRoutineWorkflowUI.finishOperation(
+          window.GymOSRoutineWorkflowUI.setFlowView(state.routineWorkflow,"summary"),
+          {type:"success",text:"Rutina anterior restaurada. El historial permanece intacto."}
+        )
+        :window.GymOSRoutineWorkflowUI.finishOperation(
+          window.GymOSRoutineWorkflowUI.setFlowView(state.routineWorkflow,"summary"),
+          {type:"error",text:result.message||"La reversión está bloqueada porque la rutina cambió."}
+        );
+    }catch(error){
+      state.routineWorkflow=window.GymOSRoutineWorkflowUI.finishOperation(
+        state.routineWorkflow,{type:"error",text:error?.message||"No se pudo revertir la rutina."}
+      );
+    }
+    renderRoutineWorkflow();
+  };
+}
+function renderRoutineWorkflow(){
+  ensureRoutineWorkflowState();
+  const model=routineWorkflowSummary();
+  const selectedId=state.routineWorkflow.selectedProposalId||model.pendingProposal?.proposalId;
+  const selectedRecord=getRoutineProposalRecords(model.ownerId).find(
+    record=>record.proposal.proposalId===selectedId
+  )||null;
+  const proposal=window.GymOSRoutineWorkflowUI.proposalViewModel(selectedRecord,{
+    ownerId:model.ownerId,currentRoutine:getRoutine(),labels:routineWorkflowLabels()
+  });
+  const preparation=window.GymOSRoutineWorkflowUI.preparationModel(
+    routineWorkflowGenerationSource(),routineWorkflowLabels()
+  );
+  const content=state.routineWorkflow.view==="prepare"
+    ?renderRoutineWorkflowPreparation(preparation)
+    :state.routineWorkflow.view==="review"
+      ?renderRoutineProposalReview(proposal)
+      :renderRoutineWorkflowSummary(model,preparation);
+  app.innerHTML=`<div class="app-shell routine-workflow-shell">
+    <header class="topbar"><button id="backRoutineWorkflow" class="back-button" type="button" aria-label="Volver">←</button><div><div class="brand">Mi rutina</div><div class="subtle">Generación y activación bajo tu control</div></div></header>
+    <main class="screen routine-workflow-screen">
+      ${routineWorkflowMessage()}
+      ${content}
+      ${renderRoutineWorkflowConfirmation(model,proposal)}
+    </main>
+  </div>`;
+  bindRoutineWorkflowEvents(model,proposal,preparation);
+  if(state.routineWorkflow.confirmation) document.querySelector(".routine-confirmation")?.focus();
+}
+
 function renderSettings(){
   app.innerHTML=`<div class="app-shell">
     <header class="topbar"><div><div class="brand">Ajustes</div><div class="subtle">GymOS v4.0.8 · Tema claro y tamaño corregidos</div></div></header>
@@ -9435,12 +10226,23 @@ function renderSettings(){
             <span class="section-kicker">MI PLAN</span>
             <h2>Objetivo y perfil deportivo</h2>
             <p class="subtle">${onboardingCompleted()
-              ?`${esc(onboardingGoalLabel(getOnboardingProfile().goal))} · ${getOnboardingProfile().days} días por semana`
+              ?`${esc(onboardingGoalLabel(window.GymOSProfileData?.getActiveGoalCycle?.()?.primaryGoal))} · ${window.GymOSProfileData?.getUserProfile?.()?.weeklyAvailability||getOnboardingProfile().days} días por semana`
               :"Completa el cuestionario para crear una rutina adaptada."}</p>
           </div>
           <span class="mode-pill">${onboardingCompleted()?"Configurado":"Pendiente"}</span>
         </div>
-        <button id="openOnboarding" class="primary full">${onboardingCompleted()?"Revisar objetivo y regenerar rutina":"Configurar mi plan"}</button>
+        <button id="openOnboarding" class="primary full">${onboardingCompleted()?"Editar perfil de entrenamiento":"Configurar mi perfil"}</button>
+      </section>
+
+      <section class="card routine-workflow-entry">
+        <div class="card-heading-row">
+          <div>
+            <span class="section-kicker">ENTRENAMIENTO</span>
+            <h2>Mi rutina</h2>
+            <p class="subtle">Consulta tu rutina, genera una propuesta y decide cuándo activarla o revertirla.</p>
+          </div>
+        </div>
+        <button id="openRoutineWorkflow" class="secondary full" type="button">Crear o cambiar rutina</button>
       </section>
 
       <section class="card ai-settings-entry">
@@ -9674,7 +10476,7 @@ function renderSettings(){
   </div>`;
   document.getElementById("openAccount").onclick=()=>{state.screen="account";renderAccount();};
   const openOnboarding=document.getElementById("openOnboarding");
-  if(openOnboarding) openOnboarding.onclick=()=>{state.onboardingDraft=newOnboardingDraft();state.onboardingStep=1;state.screen="onboarding";renderOnboarding();};
+  if(openOnboarding) openOnboarding.onclick=()=>openTrainingProfileEditor(1,{returnScreen:"settings"});
   const openAccountFromSync=document.getElementById("openAccountFromSync");
   if(openAccountFromSync) openAccountFromSync.onclick=()=>{state.screen="account";renderAccount();};
   document.getElementById("openAiSettings").onclick=async()=>{
@@ -9767,6 +10569,7 @@ function renderSettings(){
   bindScreen("openCoach","coach",renderCoach);
   bindScreen("openBackupRestore","backupRestore",renderBackupRestore);
   bindScreen("openRoutineEditor","routineEditor",renderRoutineEditor);
+  bindScreen("openRoutineWorkflow","routineWorkflow",renderRoutineWorkflow);
   bindScreen("openTrainingBlocks","blocks",renderBlocks);
   bindScreen("openGlobalAnalytics","globalAnalytics",renderGlobalAnalytics);
   bindScreen("openExerciseLibrary","exerciseLibrary",renderExerciseLibrary);

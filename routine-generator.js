@@ -272,6 +272,35 @@
     }
     return unique(blockers);
   }
+  function validateExerciseCompatibility({
+    exercise,userProfile={},currentLifeState=null,availableEquipment=null
+  }={}){
+    const equipment=Array.isArray(availableEquipment)
+      ?domain().normalizeEquipmentSelection(availableEquipment)
+      :normalizedEquipment(userProfile);
+    const restrictions=allRestrictions(userProfile,currentLifeState);
+    const kinds=restrictionKinds(restrictions);
+    const blockers=[];
+    const definition=domain().validateExerciseDefinition(exercise||{});
+    if(!definition.valid) blockers.push("invalid_exercise");
+    if(exercise&&!exerciseAvailable(exercise,equipment,userProfile.trainingLocation)){
+      blockers.push("equipment_or_location_unavailable");
+    }
+    if(exercise){
+      blockers.push(...restrictionBlockers(
+        exercise,kinds,list(userProfile.avoidedExercises),currentLifeState
+      ));
+    }
+    const pregnancy=pregnancyReview(currentLifeState);
+    const special=specialStateReview(currentLifeState);
+    return {
+      compatible:unique(blockers).length===0&&!pregnancy.required&&!special.required,
+      blockers:unique(blockers),
+      warnings:unique([...(definition.warnings||[]),...pregnancy.warnings]),
+      unresolvedQuestions:unique([...pregnancy.questions,...special.questions]),
+      equipment,restrictions,restrictionKinds:kinds
+    };
+  }
   function scoreExerciseCandidate(input){
     const {
       exercise,slot,userProfile,currentLifeState,activeGoalCycle,activeTrainingPhase,
@@ -576,6 +605,7 @@
   global.GymOSRoutineGenerator=Object.freeze({
     GENERATOR_VERSION,PRIORITY_ORDER,ESSENTIAL_PATTERNS,RESTRICTION_RULES,
     stableStringify,stableHash,validateInputs,weeklyStructure,sessionSlots,
-    scoreExerciseCandidate,estimateSessionDuration,generateRoutineProposal
+    validateExerciseCompatibility,scoreExerciseCandidate,estimateSessionDuration,
+    generateRoutineProposal
   });
 })(typeof window!=="undefined"?window:globalThis);

@@ -2696,6 +2696,50 @@ html[data-theme="light"] .global-accessibility-controls button{
 .routine-confirm-check input{width:20px;height:20px;margin:1px 0 0}
 .routine-workflow-screen button:disabled{cursor:not-allowed;opacity:.48}
 .routine-workflow-screen button:focus-visible,.routine-workflow-screen input:focus-visible,.routine-workflow-screen textarea:focus-visible,.routine-workflow-screen summary:focus-visible{outline:3px solid color-mix(in srgb,var(--accent,#7c3aed) 45%,transparent);outline-offset:3px}
+.routine-files-card{display:grid;gap:14px}
+.routine-files-card h2,.routine-import-sessions h2{margin:4px 0 0;font-size:1rem;line-height:1.35}
+.routine-files-card p,.routine-import-sessions p{margin:5px 0 0}
+.routine-file-actions{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.routine-file-actions .text-button{grid-column:1/-1;justify-self:start}
+.routine-format-choice{
+  display:flex;align-items:center;gap:8px;padding:10px;border-radius:12px;
+  background:var(--surface-soft,#f3f4f6)
+}
+.routine-format-choice span{margin-right:auto;color:var(--muted);font-size:.78rem;font-weight:750}
+.routine-format-choice button{
+  min-height:38px;padding:7px 12px;border:1px solid var(--border);
+  border-radius:10px;background:var(--surface);color:var(--text);font-weight:800
+}
+.routine-import-empty{display:grid;gap:9px}
+.routine-import-summary{display:grid;grid-template-columns:repeat(2,1fr);gap:9px}
+.routine-import-summary>div{padding:12px;border-radius:12px;background:var(--surface-soft)}
+.routine-import-summary span,.routine-import-summary strong{display:block}
+.routine-import-summary span{color:var(--muted);font-size:.72rem;font-weight:750}
+.routine-import-summary strong{margin-top:4px;font-size:.92rem}
+.routine-import-issues{padding:14px;border-radius:14px}
+.routine-import-issues.errors{background:#fee2e2;color:#991b1b}
+.routine-import-issues.warnings{background:#fff7ed;color:#9a3412}
+.routine-import-issues h3{margin:0;font-size:.9rem}
+.routine-import-issues ul{display:grid;gap:7px;margin:9px 0 0;padding-left:20px;font-size:.8rem;line-height:1.45}
+.routine-import-ignored{margin:0;color:var(--muted);font-size:.8rem}
+.routine-import-sessions{display:grid;gap:12px}
+.routine-import-sessions ol{display:grid;gap:0;margin:14px 0 0;padding:0;list-style:none}
+.routine-import-sessions li{
+  display:grid;grid-template-columns:28px minmax(0,1fr);gap:10px;
+  padding:11px 0;border-top:1px solid var(--border)
+}
+.routine-import-sessions li>span{
+  width:26px;height:26px;display:grid;place-items:center;border-radius:8px;
+  background:var(--surface-soft);font-size:.72rem;font-weight:850
+}
+.routine-import-sessions li strong,.routine-import-sessions li small{display:block}
+.routine-import-sessions li strong{line-height:1.35}
+.routine-import-sessions li small{margin-top:3px;color:var(--muted);line-height:1.4}
+.routine-import-actions{
+  position:sticky;bottom:10px;display:grid;grid-template-columns:auto 1fr 1.4fr;gap:8px;
+  padding:10px;border:1px solid var(--border);border-radius:16px;
+  background:color-mix(in srgb,var(--surface) 94%,transparent);backdrop-filter:blur(12px)
+}
 
 @media(max-width:480px){
   .routine-context-card,.routine-preparation-grid{grid-template-columns:1fr}
@@ -2705,6 +2749,9 @@ html[data-theme="light"] .global-accessibility-controls button{
   .routine-proposal-session{padding:16px 14px}
   .routine-proposal-session>ol>li{grid-template-columns:28px minmax(0,1fr);gap:9px}
   .routine-exercise-order{width:27px;height:27px;border-radius:8px;font-size:.76rem}
+  .routine-file-actions,.routine-import-actions{grid-template-columns:1fr}
+  .routine-file-actions .text-button{grid-column:auto}
+  .routine-import-actions{position:static}
 }
 
 /* v4.2 · Perfil de entrenamiento conectado */

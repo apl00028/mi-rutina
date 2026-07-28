@@ -2995,6 +2995,9 @@ let state = {
   workoutAnalysisId: null,
   aiSettingsMessage: null,
   routineWorkflow: null,
+  routineImport: null,
+  routineFileChooser: null,
+  routineFileBusy: null,
   accountMode: "login",
   onboardingStep: 1,
   onboardingDraft: null,
@@ -9693,6 +9696,293 @@ function renderAiSettings(){
   bindNav();
 }
 
+let routineImportReadSequence=0;
+function routineIoApi(){
+  if(!window.GymOSRoutineIO) throw new Error("El módulo de archivos de rutina no está disponible.");
+  return window.GymOSRoutineIO;
+}
+function downloadRoutineFile(content,fileName,type){
+  const blob=content instanceof Blob?content:new Blob([content],{type});
+  const url=URL.createObjectURL(blob);
+  const anchor=document.createElement("a");
+  anchor.href=url;
+  anchor.download=fileName;
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  URL.revokeObjectURL(url);
+}
+function styleRoutineWorksheet(sheet,columnCount){
+  const widths=[18,12,24,22,20,18,22,30,10,18,10,16,22,18,20,28];
+  sheet["!cols"]=widths.slice(0,columnCount).map(width=>({wch:width}));
+  if(sheet["!ref"]) sheet["!autofilter"]={ref:sheet["!ref"]};
+}
+function downloadRoutineWorkbook(model,fileName){
+  if(!window.XLSX) throw new Error("No se pudo cargar el lector de hojas de cálculo.");
+  const workbook=XLSX.utils.book_new();
+  model.sheets.forEach(source=>{
+    const sheet=XLSX.utils.aoa_to_sheet(source.rows);
+    styleRoutineWorksheet(sheet,Math.max(1,...source.rows.map(row=>row.length)));
+    XLSX.utils.book_append_sheet(workbook,sheet,source.name);
+  });
+  XLSX.writeFile(workbook,fileName,{bookType:"xlsx",compression:true});
+}
+function exportCurrentRoutineFile(format,expectedOwnerId=null){
+  const api=routineIoApi();
+  if(expectedOwnerId&&currentRoutineOwnerOrNull()!==expectedOwnerId){
+    throw new Error("La cuenta activa ha cambiado. Vuelve a solicitar la exportación.");
+  }
+  const rows=api.exportRoutineRows(getRoutine());
+  if(!rows.length) throw new Error("Todavía no hay ejercicios que exportar.");
+  const fileName=api.exportFileName("routine",format,new Date());
+  if(format==="csv"){
+    downloadRoutineFile(api.serializeCsv(rows),fileName,"text/csv;charset=utf-8");
+  }else{
+    downloadRoutineWorkbook({sheets:[{name:"Rutina",rows:api.rowsAsTable(rows)}]},fileName);
+  }
+}
+function downloadOfficialRoutineTemplate(format){
+  const api=routineIoApi();
+  const model=api.templateModel();
+  const fileName=api.exportFileName("template",format);
+  if(format==="csv"){
+    downloadRoutineFile(model.csv,fileName,"text/csv;charset=utf-8");
+  }else downloadRoutineWorkbook(model,fileName);
+}
+function routineImportContext(fileName,format){
+  return {
+    fileName,format,exerciseLibrary:getExerciseLibrary(),
+    userProfile:window.GymOSProfileData?.getUserProfile?.()||{},
+    currentLifeState:window.GymOSProfileData?.getCurrentLifeState?.()||null
+  };
+}
+function currentRoutineOwnerOrNull(){
+  try{return routineWorkflowOwnerId();}
+  catch(_){return null;}
+}
+function workbookToRoutineModel(workbook){
+  const api=routineIoApi();
+  const formulaCells=[],errors=[],macroSheets=[];
+  if(workbook.SheetNames.length>api.MAX_SHEETS){
+    return {
+      sheets:[],formulaCells:[],hasMacros:Boolean(workbook.vbaraw),
+      errors:[{
+        code:"too_many_sheets",severity:"error",row:null,column:null,value:null,
+        message:`El libro supera el límite de ${api.MAX_SHEETS} hojas.`
+      }]
+    };
+  }
+  const workbookSheets=workbook.Workbook?.Sheets||[];
+  workbook.SheetNames.forEach(name=>{
+    const sheet=workbook.Sheets[name];
+    if(sheet["!type"]==="macro") macroSheets.push(name);
+    const cellKeys=Object.keys(sheet).filter(key=>key[0]!=="!");
+    if(cellKeys.length>(api.MAX_ROWS+1)*api.MAX_COLUMNS){
+      errors.push({
+        code:"sheet_too_large",severity:"error",row:null,column:name,value:null,
+        message:`La hoja ${name} contiene demasiadas celdas.`
+      });
+      return;
+    }
+    cellKeys.forEach(key=>{
+      if(sheet[key]?.f||sheet[key]?.F) formulaCells.push(`${name}!${key}`);
+    });
+  });
+  const hasMacros=Boolean(workbook.vbaraw)||macroSheets.length>0;
+  const sheets=formulaCells.length||errors.length||hasMacros?[]:workbook.SheetNames.map(name=>{
+    const sheet=workbook.Sheets[name];
+    const visibility=Number(
+      workbookSheets.find(item=>item?.name===name)?.Hidden
+    )||0;
+    let decoded=null;
+    try{decoded=sheet["!ref"]?XLSX.utils.decode_range(sheet["!ref"]):null;}
+    catch(_){
+      errors.push({
+        code:"invalid_sheet_range",severity:"error",row:null,column:name,value:null,
+        message:`La hoja ${name} declara un rango no válido.`
+      });
+    }
+    if(decoded){
+      const rowCount=decoded.e.r-decoded.s.r+1;
+      const columnCount=decoded.e.c-decoded.s.c+1;
+      if(rowCount>api.MAX_ROWS+1){
+        errors.push({
+          code:"too_many_rows",severity:"error",row:null,column:name,value:rowCount,
+          message:`La hoja ${name} supera el límite de ${api.MAX_ROWS} filas.`
+        });
+      }
+      if(columnCount>api.MAX_COLUMNS){
+        errors.push({
+          code:"too_many_columns",severity:"error",row:null,column:name,value:columnCount,
+          message:`La hoja ${name} supera el límite de ${api.MAX_COLUMNS} columnas.`
+        });
+      }
+    }
+    return {
+      name,hidden:visibility!==0,
+      type:sheet["!type"]||null,
+      macro:sheet["!type"]==="macro",
+      rows:errors.length?[]:XLSX.utils.sheet_to_json(
+        sheet,{header:1,raw:false,defval:"",range:0}
+      )
+    };
+  });
+  return {
+    sheets:errors.length?[]:sheets,formulaCells,
+    hasMacros,
+    errors
+  };
+}
+function routineReadError(error){
+  const raw=String(error?.message||"").toLowerCase();
+  if(/password|encrypted|encryption|cipher/.test(raw)){
+    return {code:"encrypted_file",message:"El archivo está protegido con contraseña o cifrado y no puede leerse."};
+  }
+  if(/unsupported|format|file type/.test(raw)){
+    return {code:"unsupported_format",message:"No se reconoce el formato del archivo."};
+  }
+  return {code:"corrupt_file",message:"El archivo está dañado o no contiene una hoja de cálculo válida."};
+}
+async function handleRoutineFileSelection(file){
+  if(state.routineFileBusy==="reading") return;
+  const api=routineIoApi();
+  const descriptor=api.validateFileDescriptor({
+    name:file?.name,size:file?.size,type:file?.type
+  });
+  const ownerAtStart=currentRoutineOwnerOrNull();
+  if(!ownerAtStart){routineFile.value="";return;}
+  const baselineHash=window.GymOSRoutineProposals.routineHash(getRoutine());
+  const operationId=++routineImportReadSequence;
+  state.routineFileBusy="reading";
+  state.routineFileChooser=null;
+  state.routineImport={
+    ownerId:ownerAtStart,baselineHash,operationId,status:"reading",
+    fileName:descriptor.fileName,format:descriptor.format,preview:null,
+    message:null,errorCode:null
+  };
+  if(state.screen==="routineWorkflow") renderRoutineWorkflow();
+  try{
+    if(!descriptor.valid){
+      state.routineImport.status="error";
+      state.routineImport.preview={
+        state:"errors",fileName:descriptor.fileName,format:descriptor.format.toUpperCase(),
+        sheetName:null,rowCount:0,sessionCount:0,exerciseCount:0,
+        recognizedExerciseCount:0,sessions:[],warnings:[],errors:descriptor.errors,
+        ignoredRows:[],activationCompatible:false,reviewRequired:false,canSave:false
+      };
+      return;
+    }
+    if(!window.XLSX) throw new Error("No se pudo cargar el lector de hojas de cálculo.");
+    const bytes=await file.arrayBuffer();
+    if(
+      currentRoutineOwnerOrNull()!==ownerAtStart||
+      state.routineImport?.operationId!==operationId
+    ) return;
+    let workbookModel;
+    if(descriptor.format==="csv"){
+      const parsed=api.parseCsvText(new TextDecoder("utf-8").decode(bytes));
+      workbookModel={
+        sheets:parsed.errors.length?[]:[{name:"Rutina",hidden:false,rows:parsed.rows}],
+        formulaCells:[],hasMacros:false,errors:parsed.errors
+      };
+    }else{
+      const workbook=XLSX.read(bytes,{
+        type:"array",raw:true,cellFormula:true,cellHTML:false,bookVBA:true
+      });
+      workbookModel=workbookToRoutineModel(workbook);
+    }
+    const preview=api.inspectWorkbook(
+      workbookModel,
+      routineImportContext(descriptor.fileName,descriptor.format)
+    );
+    if(
+      currentRoutineOwnerOrNull()!==ownerAtStart||
+      state.routineImport?.operationId!==operationId
+    ) return;
+    state.routineImport.preview=preview;
+    state.routineImport.status=preview.state;
+  }catch(error){
+    if(
+      currentRoutineOwnerOrNull()===ownerAtStart&&
+      state.routineImport?.operationId===operationId
+    ){
+      const readable=routineReadError(error);
+      console.error("Routine import read failed",{
+        code:readable.code,errorName:error?.name||null
+      });
+      state.routineImport.status="error";
+      state.routineImport.errorCode=readable.code;
+      state.routineImport.message=readable.message;
+    }
+  }finally{
+    if(operationId===routineImportReadSequence) state.routineFileBusy=null;
+    routineFile.value="";
+    if(state.screen==="routineWorkflow") renderRoutineWorkflow();
+  }
+}
+function routineImportIssueList(items,title){
+  if(!items?.length) return "";
+  const location=item=>item.row
+    ?`Fila ${esc(item.row)}${item.column?` · ${esc(item.column)}`:""}`
+    :esc(item.column||"Archivo");
+  return `<section class="routine-import-issues ${title==="Errores"?"errors":"warnings"}">
+    <h3>${esc(title)}</h3>
+    <ul>${items.map(item=>`<li>${location(item)}: ${esc(item.message)}${item.value?` <strong>“${esc(item.value)}”</strong>`:""}</li>`).join("")}</ul>
+  </section>`;
+}
+function renderRoutineImport(){
+  const current=state.routineImport;
+  if(!current||current.status==="reading"){
+    return `<section class="routine-workflow-heading">
+      <span class="section-kicker">IMPORTAR RUTINA</span>
+      <h1>${current?.status==="reading"?"Leyendo archivo…":"Revisa antes de guardar"}</h1>
+      <p>${current?.status==="reading"?"Estamos validando el contenido sin guardar ningún dato.":"Elige un XLSX, XLS o CSV. La rutina activa no cambiará."}</p>
+    </section>
+    <section class="card routine-import-empty">
+      <button id="chooseRoutineFile" class="primary full" type="button" ${current?.status==="reading"?"disabled":""}>${current?.status==="reading"?"Leyendo…":"Elegir archivo"}</button>
+      <button id="cancelRoutineImport" class="text-button full" type="button">Cancelar importación</button>
+    </section>`;
+  }
+  const preview=current.preview;
+  if(!preview){
+    return `<section class="card routine-import-empty" role="alert">
+      <h2>No se pudo leer el archivo</h2>
+      <p>${esc(current.message||"Comprueba el formato y vuelve a intentarlo.")}</p>
+      <button id="chooseRoutineFile" class="secondary full" type="button">Elegir otro archivo</button>
+      <button id="cancelRoutineImport" class="text-button full" type="button">Cancelar importación</button>
+    </section>`;
+  }
+  return `<section class="routine-workflow-heading">
+    <span class="section-kicker">PREVIEW DE IMPORTACIÓN</span>
+    <h1>${esc(preview.fileName)}</h1>
+    <p>${esc(preview.format)}${preview.sheetName?` · Hoja ${esc(preview.sheetName)}`:""} · Nada se ha guardado todavía.</p>
+  </section>
+  <section class="card routine-import-summary">
+    <div><span>Filas</span><strong>${preview.rowCount}</strong></div>
+    <div><span>Sesiones</span><strong>${preview.sessionCount}</strong></div>
+    <div><span>Ejercicios</span><strong>${preview.exerciseCount}</strong></div>
+    <div><span>Reconocidos</span><strong>${preview.recognizedExerciseCount}</strong></div>
+    <div><span>Activación</span><strong>${preview.activationCompatible?"Compatible":preview.reviewRequired?"Requiere revisión":"Bloqueada"}</strong></div>
+    <div><span>Revisión</span><strong>${preview.reviewRequired?"Necesaria":"Sin avisos"}</strong></div>
+  </section>
+  ${current.message?`<p class="routine-workflow-message error" role="alert">${esc(current.message)}</p>`:""}
+  ${routineImportIssueList(preview.errors,"Errores")}
+  ${routineImportIssueList(preview.warnings,"Avisos")}
+  ${preview.ignoredRows.length?`<p class="routine-import-ignored">${preview.ignoredRows.length} filas vacías ignoradas.</p>`:""}
+  <section class="routine-import-sessions">
+    ${preview.sessions.map(session=>`<article class="card">
+      <div class="card-heading-row"><div><h2>${esc(session.name)}</h2><p>${esc(window.GymOSRoutineWorkflowUI.presentableLabel(session.focus,"Enfoque general"))}</p></div><span class="mode-pill">${session.exerciseCount}</span></div>
+      <ol>${session.exercises.map(exercise=>`<li>
+        <span>${exercise.order}</span><div><strong>${esc(exercise.name)}</strong><small>${exercise.sets} series · ${esc(exercise.target)} · RIR ${esc(exercise.rir)} · ${exercise.restSeconds} s</small></div>
+      </li>`).join("")}</ol>
+    </article>`).join("")}
+  </section>
+  <div class="routine-import-actions">
+    <button id="cancelRoutineImport" class="text-button" type="button" ${state.routineFileBusy?"disabled":""}>Cancelar importación</button>
+    <button id="chooseRoutineFile" class="secondary" type="button" ${state.routineFileBusy?"disabled":""}>Elegir otro archivo</button>
+    <button id="saveRoutineImport" class="primary" type="button" ${preview.canSave&&["valid","warnings","error"].includes(current.status)&&!state.routineFileBusy?"":"disabled"}>${current.status==="saving"?"Guardando…":"Guardar como propuesta"}</button>
+  </div>`;
+}
 function routineWorkflowOwnerId(){
   return routineProposalOwnerId();
 }
@@ -9727,6 +10017,13 @@ function routineWorkflowLabels(){
 }
 function ensureRoutineWorkflowState(){
   const ownerId=routineWorkflowOwnerId();
+  if(state.routineImport?.ownerId&&state.routineImport.ownerId!==ownerId){
+    routineImportReadSequence+=1;
+    state.routineImport=null;
+    state.routineFileChooser=null;
+    state.routineFileBusy=null;
+    routineFile.value="";
+  }
   state.routineWorkflow=window.GymOSRoutineWorkflowUI.resetFlowForOwner(
     state.routineWorkflow,ownerId
   );
@@ -9854,6 +10151,24 @@ function renderRoutineWorkflowSummary(model,preparation){
       <h2>La rutina cambió después de activarla</h2>
       <p>La copia se conserva para auditoría, pero GymOS no sobrescribirá tus cambios posteriores.</p>
     </section>`:""}
+    <section class="card routine-files-card">
+      <div>
+        <span class="section-kicker">ARCHIVOS DE RUTINA</span>
+        <h2>Importar, exportar o empezar con una plantilla</h2>
+        <p class="subtle">La importación siempre crea una propuesta para revisar.</p>
+      </div>
+      <div class="routine-file-actions">
+        <button id="toggleRoutineExport" class="secondary" type="button" ${state.routineFileBusy?"disabled":""}>${state.routineFileBusy==="exporting"?"Exportando…":"Exportar rutina"}</button>
+        <button id="openRoutineImport" class="secondary" type="button" ${state.routineFileBusy?"disabled":""}>Importar rutina</button>
+        <button id="toggleRoutineTemplate" class="text-button" type="button" ${state.routineFileBusy?"disabled":""}>${state.routineFileBusy==="template"?"Preparando…":"Descargar plantilla"}</button>
+      </div>
+      ${state.routineFileChooser==="export"?`<div class="routine-format-choice" role="group" aria-label="Formato de exportación">
+        <span>Elige formato</span><button data-routine-export="xlsx" type="button" ${state.routineFileBusy?"disabled":""}>XLSX</button><button data-routine-export="csv" type="button" ${state.routineFileBusy?"disabled":""}>CSV</button>
+      </div>`:""}
+      ${state.routineFileChooser==="template"?`<div class="routine-format-choice" role="group" aria-label="Formato de plantilla">
+        <span>Elige formato</span><button data-routine-template="xlsx" type="button" ${state.routineFileBusy?"disabled":""}>XLSX</button><button data-routine-template="csv" type="button" ${state.routineFileBusy?"disabled":""}>CSV</button>
+      </div>`:""}
+    </section>
     <button id="prepareRoutineProposal" class="primary full routine-main-action" type="button">${preparation.canGenerate?"Generar una nueva propuesta":"Completar perfil para generar"}</button>
   `;
 }
@@ -10000,6 +10315,158 @@ function bindRoutineWorkflowEvents(model,proposal,preparation){
       state.screen="settings";
       renderSettings();
     }else setWorkflow(window.GymOSRoutineWorkflowUI.setFlowView(state.routineWorkflow,"summary"));
+  };
+  const toggleExport=document.getElementById("toggleRoutineExport");
+  if(toggleExport) toggleExport.onclick=()=>{
+    state.routineFileChooser=state.routineFileChooser==="export"?null:"export";
+    renderRoutineWorkflow();
+  };
+  const toggleTemplate=document.getElementById("toggleRoutineTemplate");
+  if(toggleTemplate) toggleTemplate.onclick=()=>{
+    state.routineFileChooser=state.routineFileChooser==="template"?null:"template";
+    renderRoutineWorkflow();
+  };
+  document.querySelectorAll("[data-routine-export]").forEach(button=>{
+    button.onclick=async()=>{
+      if(state.routineFileBusy) return;
+      const exportOwnerId=currentRoutineOwnerOrNull();
+      if(!exportOwnerId) return;
+      state.routineFileBusy="exporting";
+      renderRoutineWorkflow();
+      await Promise.resolve();
+      try{
+        exportCurrentRoutineFile(button.dataset.routineExport,exportOwnerId);
+        state.routineFileChooser=null;
+        state.routineWorkflow=window.GymOSRoutineWorkflowUI.finishOperation(
+          state.routineWorkflow,{type:"success",text:"Rutina exportada sin modificar tus datos."}
+        );
+      }catch(error){
+        state.routineWorkflow=window.GymOSRoutineWorkflowUI.finishOperation(
+          state.routineWorkflow,{type:"error",text:error?.message||"No se pudo exportar la rutina."}
+        );
+      }finally{state.routineFileBusy=null;}
+      renderRoutineWorkflow();
+    };
+  });
+  document.querySelectorAll("[data-routine-template]").forEach(button=>{
+    button.onclick=async()=>{
+      if(state.routineFileBusy) return;
+      state.routineFileBusy="template";
+      renderRoutineWorkflow();
+      await Promise.resolve();
+      try{
+        downloadOfficialRoutineTemplate(button.dataset.routineTemplate);
+        state.routineFileChooser=null;
+        state.routineWorkflow=window.GymOSRoutineWorkflowUI.finishOperation(
+          state.routineWorkflow,{type:"success",text:"Plantilla oficial descargada."}
+        );
+      }catch(error){
+        state.routineWorkflow=window.GymOSRoutineWorkflowUI.finishOperation(
+          state.routineWorkflow,{type:"error",text:error?.message||"No se pudo descargar la plantilla."}
+        );
+      }finally{state.routineFileBusy=null;}
+      renderRoutineWorkflow();
+    };
+  });
+  const openImport=document.getElementById("openRoutineImport");
+  if(openImport) openImport.onclick=()=>{
+    if(state.routineFileBusy) return;
+    state.routineImport=null;
+    state.routineFileChooser=null;
+    setWorkflow(window.GymOSRoutineWorkflowUI.setFlowView(state.routineWorkflow,"import"));
+  };
+  const chooseFile=document.getElementById("chooseRoutineFile");
+  if(chooseFile) chooseFile.onclick=()=>{
+    if(state.routineFileBusy) return;
+    routineFile.click();
+  };
+  const cancelImport=document.getElementById("cancelRoutineImport");
+  if(cancelImport) cancelImport.onclick=()=>{
+    routineImportReadSequence+=1;
+    state.routineFileBusy=null;
+    state.routineImport=null;
+    routineFile.value="";
+    setWorkflow(window.GymOSRoutineWorkflowUI.setFlowView(state.routineWorkflow,"summary"));
+  };
+  const saveImport=document.getElementById("saveRoutineImport");
+  if(saveImport) saveImport.onclick=async()=>{
+    const preview=state.routineImport?.preview;
+    if(!preview?.canSave||!preview.imported||state.routineFileBusy) return;
+    const ownerIdAtPreview=state.routineImport.ownerId;
+    const currentOwnerId=routineWorkflowOwnerId();
+    if(ownerIdAtPreview!==currentOwnerId){
+      state.routineImport=null;
+      renderRoutineWorkflow();
+      return;
+    }
+    const currentBaselineHash=window.GymOSRoutineProposals.routineHash(getRoutine());
+    if(currentBaselineHash!==state.routineImport.baselineHash){
+      state.routineImport.status="stale";
+      state.routineImport.errorCode="baseline_changed";
+      state.routineImport.message="Tu rutina ha cambiado desde que se leyó el archivo. Elige el archivo de nuevo para recalcular la propuesta.";
+      renderRoutineWorkflow();
+      return;
+    }
+    state.routineFileBusy="saving";
+    state.routineImport.status="saving";
+    renderRoutineWorkflow();
+    await Promise.resolve();
+    try{
+      const api=routineIoApi();
+      const ownerId=routineWorkflowOwnerId();
+      const baselineHash=window.GymOSRoutineProposals.routineHash(getRoutine());
+      if(ownerId!==ownerIdAtPreview||baselineHash!==currentBaselineHash){
+        throw new Error("import_context_changed");
+      }
+      const fingerprint=api.importFingerprint({
+        ownerId,result:preview.imported,baselineHash,
+        templateVersion:preview.imported.templateVersion
+      });
+      const existing=api.findExistingImport(
+        getRoutineProposalRecords(ownerId),ownerId,fingerprint
+      );
+      let record=existing;
+      let created=false;
+      if(!record){
+        const timestamp=new Date().toISOString();
+        const imported=api.buildImportedProposal({
+          ownerId,result:preview.imported,baselineHash,
+          format:state.routineImport.format,fileName:state.routineImport.fileName,
+          templateVersion:preview.imported.templateVersion,generatedAt:timestamp
+        });
+        const persisted=persistRoutineProposal(imported,{ownerId,timestamp});
+        record=persisted.record;
+        created=persisted.created;
+      }
+      state.routineImport=null;
+      state.routineWorkflow=window.GymOSRoutineWorkflowUI.finishOperation(
+        window.GymOSRoutineWorkflowUI.setFlowView(
+          state.routineWorkflow,"review",record.proposal.proposalId
+        ),
+        {
+          type:"success",
+          text:created
+            ?"Rutina guardada como propuesta pendiente. Revísala antes de activar."
+            :"Esta importación ya existía para la rutina actual; se ha recuperado."
+        }
+      );
+    }catch(error){
+      state.routineImport=state.routineImport||{
+        ownerId:routineWorkflowOwnerId(),preview:null
+      };
+      state.routineImport.status="error";
+      state.routineImport.errorCode=error?.message==="import_context_changed"
+        ?"import_context_changed":"proposal_save_failed";
+      state.routineImport.message=error?.message==="import_context_changed"
+        ?"La cuenta o la rutina actual cambiaron durante el guardado. Vuelve a procesar el archivo."
+        :"No se pudo guardar la propuesta. Inténtalo de nuevo.";
+      console.error("Routine import proposal save failed",{
+        code:state.routineImport.errorCode
+      });
+    }finally{
+      state.routineFileBusy=null;
+    }
+    renderRoutineWorkflow();
   };
   const prepare=document.getElementById("prepareRoutineProposal");
   if(prepare) prepare.onclick=()=>{
@@ -10184,7 +10651,9 @@ function renderRoutineWorkflow(){
   const preparation=window.GymOSRoutineWorkflowUI.preparationModel(
     routineWorkflowGenerationSource(),routineWorkflowLabels()
   );
-  const content=state.routineWorkflow.view==="prepare"
+  const content=state.routineWorkflow.view==="import"
+    ?renderRoutineImport()
+    :state.routineWorkflow.view==="prepare"
     ?renderRoutineWorkflowPreparation(preparation)
     :state.routineWorkflow.view==="review"
       ?renderRoutineProposalReview(proposal)
@@ -10450,16 +10919,6 @@ function renderSettings(){
         <button id="openRoutineEditor" class="primary full">Abrir editor de rutina</button>
       </section>
       <section class="card developer-only">
-        <h2>Rutina desde Excel</h2>
-        <p class="subtle">Descarga la plantilla, modifícala y vuelve a importarla. El historial anterior no se borra.</p>
-        <div class="settings-actions">
-          <a class="primary download-link" href="plantilla-rutina-gymos.xlsx" download>Descargar plantilla Excel</a>
-          <button id="importRoutine" class="secondary">Importar rutina Excel</button>
-          <button id="exportRoutine" class="secondary">Exportar rutina actual</button>
-        </div>
-        <div id="routinePreview"></div>
-      </section>
-      <section class="card developer-only">
         <h2>Copia de seguridad</h2>
         <p class="subtle">Exporta tus entrenamientos a un archivo y podrás recuperarlos en este u otro móvil.</p>
         <div class="settings-actions">
@@ -10580,34 +11039,6 @@ function renderSettings(){
   bindScreen("openPlanSettings","plan",renderPlan);
   bindScreen("openBodySettings","body",renderBody);
 
-  const importRoutineButton=document.getElementById("importRoutine");
-  if(importRoutineButton) importRoutineButton.onclick=()=>routineFile.click();
-
-  const exportRoutineButton=document.getElementById("exportRoutine");
-  if(exportRoutineButton) exportRoutineButton.onclick=function(){
-    const rows=[];
-    const routine=getRoutine();
-    ["A","B","C"].forEach(session=>{
-      routine[session].forEach((item,index)=>{
-        const range=parseRepRange(item.target)||{min:"",max:""};
-        rows.push({
-          "Sesión":session,
-          "Orden":index+1,
-          "Ejercicio":item.name,
-          "Series":item.sets,
-          "Reps mín.":range.min,
-          "Reps máx.":range.max,
-          "Incremento kg":item.increment,
-          "Tipo":item.type
-        });
-      });
-    });
-    const ws=XLSX.utils.json_to_sheet(rows);
-    const wb=XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb,ws,"Rutina");
-    XLSX.writeFile(wb,`rutina-gymos-${new Date().toISOString().slice(0,10)}.xlsx`);
-  };
-
   const exportDataButton=document.getElementById("exportData");
   if(exportDataButton) exportDataButton.onclick=()=>exportData();
 
@@ -10657,6 +11088,12 @@ function exportData(){
   a.download=`gymos-backup-${new Date().toISOString().slice(0,10)}.json`;a.click();
   URL.revokeObjectURL(a.href);toast("Copia exportada");
 }
+
+routineFile.onchange=async()=>{
+  const file=routineFile.files?.[0];
+  if(!file) return;
+  await handleRoutineFileSelection(file);
+};
 
 importFile.onchange=async()=>{
   const file=importFile.files[0]; if(!file)return;

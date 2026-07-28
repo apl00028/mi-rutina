@@ -2,7 +2,7 @@
   "use strict";
 
   const MODEL_VERSION="4.2.0-alpha.1-phase-e";
-  const VIEWS=Object.freeze(["summary","prepare","review"]);
+  const VIEWS=Object.freeze(["summary","prepare","review","import"]);
   const CONFIRMATIONS=Object.freeze(["reject","activate","rollback"]);
   const COMMON_GOAL_IDS=Object.freeze([
     "fat_loss","muscle_gain","strength_gain",
@@ -85,12 +85,13 @@
   }
   function exerciseSelectionPresentation(exercise={}){
     const scoring=exercise.scoreBreakdown||{};
-    const reasons=unique([
-      "Cubre el patrón necesario.",
-      "Es compatible con tu equipamiento.",
-      ...list(scoring.positiveReasons).map(reason=>readableSentence(reason)),
-      readableSentence(exercise.selectionReason)
-    ]).filter(Boolean);
+    const explicitReasons=list(exercise.selectionReasons).map(reason=>readableSentence(reason));
+    const reasons=unique(explicitReasons.length?explicitReasons:[
+        "Cubre el patrón necesario.",
+        "Es compatible con tu equipamiento.",
+        ...list(scoring.positiveReasons).map(reason=>readableSentence(reason)),
+        readableSentence(exercise.selectionReason)
+      ]).filter(Boolean);
     const warnings=unique([
       ...list(scoring.penalties).map(warningLabel),
       ...list(scoring.blockers).map(warningLabel)

@@ -476,3 +476,33 @@ test("consume reglas y taxonomías mediante GymOSExerciseDomain",()=>{
   assert.match(generatorSource,/domain\(\)\.validateExerciseDefinition/);
   assert.doesNotMatch(generatorSource,/const\s+PROGRAMMING_RULES|const\s+MOVEMENT_PATTERNS|const\s+EQUIPMENT_TAXONOMY/);
 });
+
+test("expone compatibilidad pura para importaciones sin duplicar reglas",()=>{
+  const {domain,generator}=loadModules();
+  const candidate=exercise(
+    domain,"machine-only","Prensa exclusiva","knee_dominant",["leg_press"]
+  );
+  const result=plain(generator.validateExerciseCompatibility({
+    exercise:candidate,
+    userProfile:{
+      trainingLocation:"home",availableEquipment:["bodyweight"],
+      injuries:[],painAreas:[],medicalRestrictions:[],avoidedExercises:[]
+    },
+    currentLifeState:{type:"general",details:{}}
+  }));
+  assert.equal(result.compatible,false);
+  assert.ok(result.blockers.includes("equipment_or_location_unavailable"));
+});
+
+test("consultar compatibilidad no altera propuestas normales con generatedAt fijo",()=>{
+  const {domain,generator}=loadModules();
+  const input=baseInput(domain);
+  const before=plain(generator.generateRoutineProposal(input,{timestamp:FIXED_TIME}));
+  generator.validateExerciseCompatibility({
+    exercise:input.exerciseLibrary[0],
+    userProfile:input.userProfile,
+    currentLifeState:input.currentLifeState
+  });
+  const after=plain(generator.generateRoutineProposal(input,{timestamp:FIXED_TIME}));
+  assert.equal(JSON.stringify(after),JSON.stringify(before));
+});

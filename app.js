@@ -517,6 +517,8 @@ function trendLabel(value){
 }
 
 const EXERCISE_LIBRARY_KEY="gymos:exerciseLibrary";
+const EXERCISE_DOMAIN_SCHEMA_KEY="gymos:exerciseDomainSchemaVersion";
+const EXERCISE_DOMAIN_MIGRATION_BACKUP_PREFIX="gymos:exerciseDomainMigrationBackup:";
 
 function defaultExerciseLibrary(){
   return [
@@ -537,16 +539,38 @@ function defaultExerciseLibrary(){
   ];
 }
 function getExerciseLibrary(){
+  let saved=null;
   try{
-    const saved=JSON.parse(localStorage.getItem(EXERCISE_LIBRARY_KEY)||"null");
-    if(Array.isArray(saved)&&saved.length) return saved;
+    saved=JSON.parse(localStorage.getItem(EXERCISE_LIBRARY_KEY)||"null");
   }catch(error){}
+  const currentVersion=window.GymOSExerciseDomain?.DOMAIN_VERSION;
+  if(Array.isArray(saved)&&saved.length&&localStorage.getItem(EXERCISE_DOMAIN_SCHEMA_KEY)===currentVersion){
+    return saved;
+  }
+  const ownerId=localStorage.getItem("gymos:localDataOwnerId")||(!AUTH_REQUIRED?"local":null);
+  if(ownerId&&window.GymOSExerciseDomain&&window.GymOSProfileData){
+    ensureExerciseDomainMigration({ownerId,mark:false});
+    try{
+      const migrated=JSON.parse(localStorage.getItem(EXERCISE_LIBRARY_KEY)||"null");
+      if(Array.isArray(migrated)&&migrated.length) return migrated;
+    }catch(error){}
+  }
+  if(Array.isArray(saved)&&saved.length) return saved;
   const defaults=defaultExerciseLibrary();
   localStorage.setItem(EXERCISE_LIBRARY_KEY,JSON.stringify(defaults));
   return defaults;
 }
-function saveExerciseLibrary(items){
-  localStorage.setItem(EXERCISE_LIBRARY_KEY,JSON.stringify(items));
+function saveExerciseLibrary(items,{mark=true,touchUpdatedAt=true,setSchema=true}={}){
+  const timestamp=new Date().toISOString();
+  const normalized=window.GymOSExerciseDomain
+    ?window.GymOSExerciseDomain.migrateExerciseLibrary(items,{timestamp,touchUpdatedAt}).library
+    :(Array.isArray(items)?items:[]);
+  localStorage.setItem(EXERCISE_LIBRARY_KEY,JSON.stringify(normalized));
+  if(window.GymOSExerciseDomain&&setSchema){
+    localStorage.setItem(EXERCISE_DOMAIN_SCHEMA_KEY,window.GymOSExerciseDomain.DOMAIN_VERSION);
+  }
+  if(mark) markLocalUpdated();
+  return normalized;
 }
 function makeExerciseId(name){
   const base=String(name||"ejercicio").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"")
@@ -669,6 +693,7 @@ const GYMOS_BACKUP_KEYS=[
   "gymos:trainingBlocks",
   "gymos:activeBlockId",
   "gymos:exerciseLibrary",
+  "gymos:exerciseDomainSchemaVersion",
   "gymos:exerciseSubstitutions",
   "gymos:favoriteSubstitutions",
   "gymos:coachSettings",
@@ -772,9 +797,12 @@ function importGymOSBackup(payload,mode="merge"){
         try{
           const current=getExerciseLibrary();
           const incoming=JSON.parse(value);
-          const byId=new Map(current.map(item=>[item.id,item]));
-          (Array.isArray(incoming)?incoming:[]).forEach(item=>byId.set(item.id,item));
-          saveExerciseLibrary([...byId.values()]);
+          const merged=window.GymOSExerciseDomain.mergeExerciseLibraries(
+            current,
+            Array.isArray(incoming)?incoming:[],
+            {timestamp:new Date().toISOString()}
+          );
+          saveExerciseLibrary(merged.library,{mark:false,touchUpdatedAt:false,setSchema:false});
           return;
         }catch(error){}
       }
@@ -801,6 +829,7 @@ function importGymOSBackup(payload,mode="merge"){
   });
   const ownerId=localStorage.getItem(LOCAL_OWNER_KEY)||(!AUTH_REQUIRED?"local":null);
   ensureProfileDataMigration({ownerId,mark:false});
+  ensureExerciseDomainMigration({ownerId,mark:false,force:true});
   saveCurrentUserVault(ownerId);
   sessions=getRoutine();
 }
@@ -2123,6 +2152,93 @@ function ensureProfileDataMigration(options={}){
   return window.GymOSProfileData.migrateDataModel({...options,ownerId});
 }
 
+function exerciseDomainMigrationBackupKey(ownerId){
+  if(!window.GymOSProfileData) throw new Error("El modelo de perfil no esta disponible.");
+  return `${EXERCISE_DOMAIN_MIGRATION_BACKUP_PREFIX}${window.GymOSProfileData.normalizeOwnerId(ownerId)}`;
+}
+
+function restoreStorageValue(key,value){
+  if(value===null) localStorage.removeItem(key);
+  else localStorage.setItem(key,value);
+}
+
+function ensureExerciseDomainMigration(options={}){
+  if(!window.GymOSExerciseDomain) throw new Error("El dominio de ejercicios no esta disponible.");
+  if(!window.GymOSProfileData) throw new Error("El modelo de perfil no esta disponible.");
+  const requestedOwnerId=options.ownerId||localStorage.getItem(LOCAL_OWNER_KEY)||(!AUTH_REQUIRED?"local":null);
+  const ownerId=window.GymOSProfileData.normalizeOwnerId(requestedOwnerId);
+  const targetVersion=window.GymOSExerciseDomain.DOMAIN_VERSION;
+  if(!options.force&&localStorage.getItem(EXERCISE_DOMAIN_SCHEMA_KEY)===targetVersion){
+    return {migrated:false,ownerId,version:targetVersion};
+  }
+
+  const backupKey=exerciseDomainMigrationBackupKey(ownerId);
+  const previous={
+    library:localStorage.getItem(EXERCISE_LIBRARY_KEY),
+    profile:localStorage.getItem("gymos:userProfile"),
+    schemaVersion:localStorage.getItem(EXERCISE_DOMAIN_SCHEMA_KEY),
+    backup:localStorage.getItem(backupKey)
+  };
+  const protectedData={
+    routine:localStorage.getItem("gymos:routine"),
+    history:localStorage.getItem("gymos:history")
+  };
+  const timestamp=new Date().toISOString();
+
+  try{
+    let legacyLibrary=null;
+    try{
+      legacyLibrary=JSON.parse(previous.library||"null");
+    }catch(error){}
+    if(!Array.isArray(legacyLibrary)||!legacyLibrary.length) legacyLibrary=defaultExerciseLibrary();
+    const plan=window.GymOSExerciseDomain.buildExerciseDomainMigration({
+      exerciseLibrary:legacyLibrary,
+      userProfile:window.GymOSProfileData.getUserProfile(),
+      timestamp
+    });
+    const invalid=plan.validation.filter(result=>!result.valid);
+    if(invalid.length) throw new Error(`La biblioteca contiene ${invalid.length} ejercicios no validos.`);
+
+    if(previous.backup===null){
+      localStorage.setItem(backupKey,JSON.stringify({
+        ownerId,
+        fromVersion:previous.schemaVersion,
+        toVersion:targetVersion,
+        createdAt:timestamp,
+        storage:{
+          [EXERCISE_LIBRARY_KEY]:previous.library,
+          "gymos:userProfile":previous.profile
+        }
+      }));
+    }
+    localStorage.setItem(EXERCISE_LIBRARY_KEY,JSON.stringify(plan.exerciseLibrary));
+    if(plan.userProfile){
+      window.GymOSProfileData.saveUserProfile(plan.userProfile,{mark:false});
+    }
+    localStorage.setItem(EXERCISE_DOMAIN_SCHEMA_KEY,targetVersion);
+
+    if(
+      localStorage.getItem("gymos:routine")!==protectedData.routine||
+      localStorage.getItem("gymos:history")!==protectedData.history
+    ){
+      throw new Error("La migracion intento modificar la rutina o el historial.");
+    }
+    if(options.mark) markLocalUpdated();
+    return {
+      migrated:true,
+      ownerId,
+      version:targetVersion,
+      exerciseCount:plan.exerciseLibrary.length
+    };
+  }catch(error){
+    restoreStorageValue(EXERCISE_LIBRARY_KEY,previous.library);
+    restoreStorageValue("gymos:userProfile",previous.profile);
+    restoreStorageValue(EXERCISE_DOMAIN_SCHEMA_KEY,previous.schemaVersion);
+    restoreStorageValue(backupKey,previous.backup);
+    throw error;
+  }
+}
+
 function localDataKeys(){
   const draftKeys=["A","B","C"].map(session=>draftKey(session));
   const additional=[
@@ -2166,6 +2282,7 @@ function activateLocalUser(userId){
   const previous=localStorage.getItem(LOCAL_OWNER_KEY);
   if(previous===userId){
     ensureProfileDataMigration({ownerId:userId,mark:false});
+    ensureExerciseDomainMigration({ownerId:userId,mark:false});
     saveCurrentUserVault(userId);
     return;
   }
@@ -2183,6 +2300,7 @@ function activateLocalUser(userId){
   }
   localStorage.setItem(LOCAL_OWNER_KEY,userId);
   ensureProfileDataMigration({ownerId:userId,mark:false});
+  ensureExerciseDomainMigration({ownerId:userId,mark:false});
   saveCurrentUserVault(userId);
   state.selectedSession=localStorage.getItem("gymos:selectedSession")||nextSuggestedSession();
 }
@@ -2201,6 +2319,7 @@ function deleteOwnerLocalData(ownerId,{removeOwner=false}={}){
   if(current===normalizedOwnerId) clearCurrentUserData();
   localStorage.removeItem(`${LOCAL_VAULT_PREFIX}${normalizedOwnerId}`);
   window.GymOSProfileData.removeMigrationInternalData(normalizedOwnerId);
+  localStorage.removeItem(exerciseDomainMigrationBackupKey(normalizedOwnerId));
   if(removeOwner&&current===normalizedOwnerId) localStorage.removeItem(LOCAL_OWNER_KEY);
 }
 
@@ -2783,6 +2902,7 @@ function buildSyncPayload(){
     blocks:getTrainingBlocks(),
     activeBlockId:localStorage.getItem("gymos:activeBlockId"),
     exerciseLibrary:getExerciseLibrary(),
+    exerciseDomainSchemaVersion:localStorage.getItem(EXERCISE_DOMAIN_SCHEMA_KEY),
     exerciseSubstitutions:getExerciseSubstitutions(),
     nutritionSettings:getNutritionSettings(),
     nutritionEntries:getNutritionEntries(),
@@ -2810,6 +2930,9 @@ function applySyncPayload(payload){
   if(payload.routine){saveRoutine(payload.routine);sessions=getRoutine();}
   if(Array.isArray(payload.body)) saveBodyHistory(payload.body);
   if(Array.isArray(payload.body_summary_metrics)) saveBodySummaryMetrics(payload.body_summary_metrics,{markUpdated:false});
+  if(Array.isArray(payload.exerciseLibrary)&&payload.exerciseLibrary.length){
+    saveExerciseLibrary(payload.exerciseLibrary,{mark:false,touchUpdatedAt:false,setSchema:false});
+  }
   if(payload.nutritionSettings) saveNutritionSettings(payload.nutritionSettings);
   if(Array.isArray(payload.nutritionEntries)) saveNutritionEntries(payload.nutritionEntries);
   if(Array.isArray(payload.professionalNutritionPlans)) window.GymOSProfessionalNutrition?.mergePlans?.(payload.professionalNutritionPlans,false);
@@ -2839,6 +2962,7 @@ function applySyncPayload(payload){
   if(payload.activeBlockId) localStorage.setItem("gymos:activeBlockId",payload.activeBlockId);
     const importedProfileData=window.GymOSProfileData?.importSyncData?.(payload,{mark:false});
     if(!importedProfileData) ensureProfileDataMigration({mark:false});
+    ensureExerciseDomainMigration({mark:false,force:true});
     localStorage.setItem("gymos:updatedAt",payload.updatedAt||new Date().toISOString());
     localStorage.removeItem("gymos:syncPending");
   }finally{
@@ -9334,6 +9458,7 @@ importFile.onchange=async()=>{
     localStorage.setItem("gymos:selectedSession",state.selectedSession);
     const importedProfileData=window.GymOSProfileData?.importSyncData?.(data,{mark:false});
     if(!importedProfileData) ensureProfileDataMigration({mark:false});
+    ensureExerciseDomainMigration({mark:false,force:true});
     const ownerId=localStorage.getItem(LOCAL_OWNER_KEY)||(!AUTH_REQUIRED?"local":null);
     saveCurrentUserVault(ownerId);
     toast("Copia importada");renderSettings();

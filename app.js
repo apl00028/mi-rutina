@@ -695,7 +695,15 @@ const GYMOS_BACKUP_KEYS=[
   "gymos:localRevision",
   "gymos:lastRemoteRevision",
   "gymos:syncConflictMode",
-  "gymos:onboardingProfile"
+  "gymos:onboardingProfile",
+  "gymos:dataSchemaVersion",
+  "gymos:userProfile",
+  "gymos:currentLifeState",
+  "gymos:lifeStateHistory",
+  "gymos:activeGoalCycle",
+  "gymos:goalsHistory",
+  "gymos:activeTrainingPhase",
+  "gymos:trainingPhases"
 ];
 
 function getFavoriteExercises(){
@@ -791,6 +799,9 @@ function importGymOSBackup(payload,mode="merge"){
     }
     localStorage.setItem(key,String(value));
   });
+  const ownerId=localStorage.getItem(LOCAL_OWNER_KEY)||(!AUTH_REQUIRED?"local":null);
+  ensureProfileDataMigration({ownerId,mark:false});
+  saveCurrentUserVault(ownerId);
   sessions=getRoutine();
 }
 function readJsonFile(file){
@@ -2105,6 +2116,13 @@ const LOCAL_OWNER_KEY="gymos:localDataOwnerId";
 const LOCAL_VAULT_PREFIX="gymos:userVault:";
 const AUTH_CONFIGURED=()=>Boolean(getSyncConfig().url&&getSyncConfig().key);
 
+function ensureProfileDataMigration(options={}){
+  if(!window.GymOSProfileData) throw new Error("El modelo de perfil no está disponible.");
+  const ownerId=options.ownerId||localStorage.getItem(LOCAL_OWNER_KEY)||(!AUTH_REQUIRED?"local":null);
+  if(!ownerId) throw new Error("No se puede migrar sin determinar primero el propietario de los datos.");
+  return window.GymOSProfileData.migrateDataModel({...options,ownerId});
+}
+
 function localDataKeys(){
   const draftKeys=["A","B","C"].map(session=>draftKey(session));
   const additional=[
@@ -2146,7 +2164,11 @@ function loadUserVault(userId){
 function activateLocalUser(userId){
   if(!userId) return;
   const previous=localStorage.getItem(LOCAL_OWNER_KEY);
-  if(previous===userId) return;
+  if(previous===userId){
+    ensureProfileDataMigration({ownerId:userId,mark:false});
+    saveCurrentUserVault(userId);
+    return;
+  }
 
   if(previous){
     saveCurrentUserVault(previous);
@@ -2160,6 +2182,8 @@ function activateLocalUser(userId){
     }
   }
   localStorage.setItem(LOCAL_OWNER_KEY,userId);
+  ensureProfileDataMigration({ownerId:userId,mark:false});
+  saveCurrentUserVault(userId);
   state.selectedSession=localStorage.getItem("gymos:selectedSession")||nextSuggestedSession();
 }
 
@@ -2168,6 +2192,16 @@ function deactivateLocalUser(){
   if(current) saveCurrentUserVault(current);
   clearCurrentUserData();
   localStorage.removeItem(LOCAL_OWNER_KEY);
+}
+
+function deleteOwnerLocalData(ownerId,{removeOwner=false}={}){
+  if(!window.GymOSProfileData) throw new Error("El modelo de perfil no está disponible.");
+  const normalizedOwnerId=window.GymOSProfileData.normalizeOwnerId(ownerId);
+  const current=localStorage.getItem(LOCAL_OWNER_KEY);
+  if(current===normalizedOwnerId) clearCurrentUserData();
+  localStorage.removeItem(`${LOCAL_VAULT_PREFIX}${normalizedOwnerId}`);
+  window.GymOSProfileData.removeMigrationInternalData(normalizedOwnerId);
+  if(removeOwner&&current===normalizedOwnerId) localStorage.removeItem(LOCAL_OWNER_KEY);
 }
 
 function renderAuthConfigurationRequired(){
@@ -2764,6 +2798,7 @@ function buildSyncPayload(){
     quick_actions:getQuickActionPreferences().quickActions,
     quick_actions_hidden:getQuickActionPreferences().hidden,
     favoriteSubstitutions:getFavoriteSubstitutions(),
+    ...(window.GymOSProfileData?.exportSyncData?.()||{}),
     updatedAt:getLocalUpdatedAt()
   };
 }
@@ -2802,6 +2837,8 @@ function applySyncPayload(payload){
   if(Number(payload.weeklyGoal)>=1&&Number(payload.weeklyGoal)<=7) saveWeeklyGoal(Number(payload.weeklyGoal));
   if(Array.isArray(payload.blocks)) saveTrainingBlocks(payload.blocks);
   if(payload.activeBlockId) localStorage.setItem("gymos:activeBlockId",payload.activeBlockId);
+    const importedProfileData=window.GymOSProfileData?.importSyncData?.(payload,{mark:false});
+    if(!importedProfileData) ensureProfileDataMigration({mark:false});
     localStorage.setItem("gymos:updatedAt",payload.updatedAt||new Date().toISOString());
     localStorage.removeItem("gymos:syncPending");
   }finally{
@@ -3150,6 +3187,7 @@ function ensureAuthStateListener(client){
 async function refreshSyncSession(){
   const client=getSupabaseClient();
   if(!client){
+    if(!AUTH_REQUIRED) activateLocalUser("local");
     resolveAuthenticatedAppState(null);
     state.syncStatus="local";
     return null;
@@ -8619,8 +8657,14 @@ function renderAccount(){
     document.getElementById("requestAccountDeletion").onclick=async()=>{
       if(!confirm("¿Registrar una solicitud de eliminación completa de tu cuenta?")) return;
       try{
+        const ownerId=state.syncUser.id;
         await requestAccountDeletion();
-        toast("Solicitud registrada");
+        await signOutSync();
+        deleteOwnerLocalData(ownerId,{removeOwner:true});
+        state.accountMode="login";
+        state.screen="account";
+        toast("Solicitud registrada y datos locales eliminados");
+        render();
       }catch(error){showAccountManagementMessage("error",error?.message||"No se pudo registrar la solicitud.");}
     };
     document.getElementById("accountSignOut").onclick=async()=>{
@@ -9234,8 +9278,9 @@ function renderSettings(){
   const deleteDataButton=document.getElementById("deleteData");
   if(deleteDataButton) deleteDataButton.onclick=()=>{
     if(!confirm("¿Borrar todos los datos locales de GymOS en este dispositivo?")) return;
-    BACKUP_KEYS.forEach(key=>localStorage.removeItem(key));
-    ["A","B","C"].forEach(session=>localStorage.removeItem(draftKey(session)));
+    const ownerId=localStorage.getItem(LOCAL_OWNER_KEY)||(!AUTH_REQUIRED?"local":null);
+    if(!ownerId){toast("No se pudo identificar al propietario de los datos");return;}
+    deleteOwnerLocalData(ownerId);
     toast("Datos locales eliminados");
     state.screen="home";
     render();
@@ -9261,6 +9306,7 @@ function exportData(){
     weeklyGoal:getWeeklyGoal(),
     blocks:getTrainingBlocks(),
     activeBlockId:localStorage.getItem("gymos:activeBlockId"),
+    ...(window.GymOSProfileData?.exportSyncData?.()||{}),
     updatedAt:getLocalUpdatedAt()
   };
   const blob=new Blob([JSON.stringify(payload,null,2)],{type:"application/json"});
@@ -9286,6 +9332,10 @@ importFile.onchange=async()=>{
     });
     state.selectedSession=data.selectedSession||nextSuggestedSession();
     localStorage.setItem("gymos:selectedSession",state.selectedSession);
+    const importedProfileData=window.GymOSProfileData?.importSyncData?.(data,{mark:false});
+    if(!importedProfileData) ensureProfileDataMigration({mark:false});
+    const ownerId=localStorage.getItem(LOCAL_OWNER_KEY)||(!AUTH_REQUIRED?"local":null);
+    saveCurrentUserVault(ownerId);
     toast("Copia importada");renderSettings();
   }catch{alert("El archivo no es una copia válida de GymOS.");}
   importFile.value="";

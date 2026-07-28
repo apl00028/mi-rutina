@@ -1,5 +1,5 @@
-const CACHE="gymos-cache-4.2.0-alpha.1-phase-c";
-const ASSETS=["./","index.html","styles.css","app.js","auth-config.js","daily-thoughts.js","assets/heroes/manifest.js","recovery-center.js","professional-nutrition.js","nutrition-engine.js","workout-analysis.js","exercise-domain.js","profile-data.js","routine-proposals.js","manifest.json","icon-192.png","icon-512.png","plantilla-rutina-gymos.xlsx","README-SYNC.md","supabase-schema.sql","supabase-body-measurements.sql","supabase-workout-analyses.sql"];
+const CACHE="gymos-cache-4.2.0-alpha.1-phase-d";
+const ASSETS=["./","index.html","styles.css","app.js","auth-config.js","daily-thoughts.js","assets/heroes/manifest.js","recovery-center.js","professional-nutrition.js","nutrition-engine.js","workout-analysis.js","exercise-domain.js","profile-data.js","routine-proposals.js","routine-activation.js","manifest.json","icon-192.png","icon-512.png","plantilla-rutina-gymos.xlsx","README-SYNC.md","supabase-schema.sql","supabase-body-measurements.sql","supabase-workout-analyses.sql"];
 self.addEventListener("install",e=>{self.skipWaiting();e.waitUntil(caches.open(CACHE).then(c=>c.addAll(ASSETS)))});
 self.addEventListener("activate",e=>{e.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k!==CACHE).map(k=>caches.delete(k)))));self.clients.claim()});
 self.addEventListener("fetch",e=>{e.respondWith(fetch(e.request).then(r=>{const x=r.clone();caches.open(CACHE).then(c=>c.put(e.request,x));return r}).catch(()=>caches.match(e.request)))});

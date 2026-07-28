@@ -186,6 +186,8 @@ test("el merge conserva colisiones heredadas y repetir el backup no duplica",()=
     EXERCISE_LIBRARY_KEY:"gymos:exerciseLibrary",
     EXERCISE_SUBSTITUTIONS_KEY:"gymos:exerciseSubstitutions",
     FAVORITE_SUBSTITUTIONS_KEY:"gymos:favoriteSubstitutions",
+    ROUTINE_PROPOSALS_KEY:"gymos:routineProposals",
+    ACTIVE_ROUTINE_PROPOSAL_ID_KEY:"gymos:activeRoutineProposalId",
     LOCAL_OWNER_KEY:"gymos:localDataOwnerId",
     AUTH_REQUIRED:true,
     getExerciseLibrary:()=>JSON.parse(localStorage.getItem("gymos:exerciseLibrary")||"[]"),

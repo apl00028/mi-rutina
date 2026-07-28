@@ -684,6 +684,8 @@ function updateExerciseTechnicalNotes(id,notes){
 }
 
 const GYMOS_BACKUP_VERSION="4.0.8";
+const ROUTINE_PROPOSALS_KEY="gymos:routineProposals";
+const ACTIVE_ROUTINE_PROPOSAL_ID_KEY="gymos:activeRoutineProposalId";
 const GYMOS_BACKUP_KEYS=[
   "gymos:routine",
   "gymos:history",
@@ -694,6 +696,8 @@ const GYMOS_BACKUP_KEYS=[
   "gymos:activeBlockId",
   "gymos:exerciseLibrary",
   "gymos:exerciseDomainSchemaVersion",
+  "gymos:routineProposals",
+  "gymos:activeRoutineProposalId",
   "gymos:exerciseSubstitutions",
   "gymos:favoriteSubstitutions",
   "gymos:coachSettings",
@@ -730,6 +734,101 @@ const GYMOS_BACKUP_KEYS=[
   "gymos:activeTrainingPhase",
   "gymos:trainingPhases"
 ];
+
+function routineProposalOwnerId(explicitOwnerId=null){
+  if(!window.GymOSProfileData) throw new Error("El modelo de perfil no está disponible.");
+  const ownerId=explicitOwnerId||localStorage.getItem(LOCAL_OWNER_KEY)||(!AUTH_REQUIRED?"local":null);
+  return window.GymOSProfileData.normalizeOwnerId(ownerId);
+}
+function getRoutineProposalRecords(ownerId=null){
+  if(!window.GymOSRoutineProposals) throw new Error("El modelo de propuestas no está disponible.");
+  const normalizedOwner=routineProposalOwnerId(ownerId);
+  try{
+    const stored=JSON.parse(localStorage.getItem(ROUTINE_PROPOSALS_KEY)||"[]");
+    const normalized=window.GymOSRoutineProposals.normalizeRecords(stored,normalizedOwner,{
+      activeProposalId:localStorage.getItem(ACTIVE_ROUTINE_PROPOSAL_ID_KEY)
+    });
+    const activeId=window.GymOSRoutineProposals.selectActiveProposalId(
+      normalized,normalizedOwner,localStorage.getItem(ACTIVE_ROUTINE_PROPOSAL_ID_KEY)
+    );
+    if(activeId) localStorage.setItem(ACTIVE_ROUTINE_PROPOSAL_ID_KEY,activeId);
+    else localStorage.removeItem(ACTIVE_ROUTINE_PROPOSAL_ID_KEY);
+    return normalized;
+  }catch(error){
+    localStorage.removeItem(ACTIVE_ROUTINE_PROPOSAL_ID_KEY);
+    return [];
+  }
+}
+function saveRoutineProposalRecords(records,{ownerId=null,mark=true,preferredActiveId=null}={}){
+  const normalizedOwner=routineProposalOwnerId(ownerId);
+  const requestedActiveId=preferredActiveId||localStorage.getItem(ACTIVE_ROUTINE_PROPOSAL_ID_KEY);
+  const normalized=window.GymOSRoutineProposals.normalizeRecords(records,normalizedOwner,{
+    activeProposalId:requestedActiveId
+  });
+  localStorage.setItem(ROUTINE_PROPOSALS_KEY,JSON.stringify(normalized));
+  const activeId=window.GymOSRoutineProposals.selectActiveProposalId(
+    normalized,normalizedOwner,requestedActiveId
+  );
+  if(activeId) localStorage.setItem(ACTIVE_ROUTINE_PROPOSAL_ID_KEY,activeId);
+  else{
+    localStorage.removeItem(ACTIVE_ROUTINE_PROPOSAL_ID_KEY);
+  }
+  if(mark) markLocalUpdated();
+  return normalized;
+}
+function persistRoutineProposal(proposal,{ownerId=null,timestamp=new Date().toISOString(),mark=true}={}){
+  const normalizedOwner=routineProposalOwnerId(ownerId);
+  const result=window.GymOSRoutineProposals.storeProposal(getRoutineProposalRecords(normalizedOwner),{
+    ownerId:normalizedOwner,proposal,currentRoutine:getRoutine(),timestamp,
+    activeProposalId:localStorage.getItem(ACTIVE_ROUTINE_PROPOSAL_ID_KEY)
+  });
+  saveRoutineProposalRecords(result.records,{
+    ownerId:normalizedOwner,mark:false,preferredActiveId:result.activeProposalId
+  });
+  if(mark&&result.created) markLocalUpdated();
+  return result;
+}
+function rejectStoredRoutineProposal(proposalId,rejectionReason,{ownerId=null,timestamp=new Date().toISOString(),mark=true}={}){
+  const normalizedOwner=routineProposalOwnerId(ownerId);
+  const records=window.GymOSRoutineProposals.rejectProposal(getRoutineProposalRecords(normalizedOwner),{
+    ownerId:normalizedOwner,proposalId,rejectionReason,timestamp
+  });
+  saveRoutineProposalRecords(records,{
+    ownerId:normalizedOwner,mark:false,
+    preferredActiveId:localStorage.getItem(ACTIVE_ROUTINE_PROPOSAL_ID_KEY)
+  });
+  if(mark) markLocalUpdated();
+  return records;
+}
+function importRoutineProposalSyncData(payload,{ownerId=null,mark=false}={}){
+  const normalizedOwner=routineProposalOwnerId(ownerId);
+  if(!Array.isArray(payload?.routineProposals)) return false;
+  const currentActiveId=localStorage.getItem(ACTIVE_ROUTINE_PROPOSAL_ID_KEY);
+  const requestedId=String(payload.activeRoutineProposalId||"");
+  const preferredId=requestedId||currentActiveId;
+  const result=window.GymOSRoutineProposals.mergeProposalRecords(
+    getRoutineProposalRecords(normalizedOwner),
+    payload.routineProposals,
+    {ownerId:normalizedOwner,activeProposalId:preferredId}
+  );
+  const mergedRequestedValid=requestedId&&result.records.some(record=>
+    record.proposal.proposalId===requestedId&&record.lifecycle.status==="pending_review"
+  );
+  saveRoutineProposalRecords(result.records,{
+    ownerId:normalizedOwner,mark:false,
+    preferredActiveId:mergedRequestedValid?requestedId:result.activeProposalId
+  });
+  if(result.incidents.length) console.warn("Routine proposal import incidents",result.incidents);
+  if(mark) markLocalUpdated();
+  return result;
+}
+function ensureRoutineProposalState(ownerId){
+  const normalizedOwner=routineProposalOwnerId(ownerId);
+  return saveRoutineProposalRecords(getRoutineProposalRecords(normalizedOwner),{
+    ownerId:normalizedOwner,mark:false,
+    preferredActiveId:localStorage.getItem(ACTIVE_ROUTINE_PROPOSAL_ID_KEY)
+  });
+}
 
 function getFavoriteExercises(){
   return getExerciseLibrary().filter(item=>Boolean(item.favorite));
@@ -787,6 +886,7 @@ function validateGymOSBackup(payload){
 }
 function importGymOSBackup(payload,mode="merge"){
   const backup=validateGymOSBackup(payload);
+  const ownerId=localStorage.getItem(LOCAL_OWNER_KEY)||(!AUTH_REQUIRED?"local":null);
   if(mode==="replace"){
     GYMOS_BACKUP_KEYS.forEach(key=>localStorage.removeItem(key));
   }
@@ -824,10 +924,35 @@ function importGymOSBackup(payload,mode="merge"){
           return;
         }catch(error){}
       }
+      if(key===ROUTINE_PROPOSALS_KEY){
+        try{
+          const incoming=JSON.parse(value);
+          const result=window.GymOSRoutineProposals.mergeProposalRecords(
+            getRoutineProposalRecords(ownerId),
+            Array.isArray(incoming)?incoming:[],
+            {
+              ownerId:routineProposalOwnerId(ownerId),
+              activeProposalId:localStorage.getItem(ACTIVE_ROUTINE_PROPOSAL_ID_KEY)
+            }
+          );
+          saveRoutineProposalRecords(result.records,{
+            ownerId,mark:false,preferredActiveId:result.activeProposalId
+          });
+          if(result.incidents.length) console.warn("Routine proposal backup incidents",result.incidents);
+          return;
+        }catch(error){}
+      }
+      if(key===ACTIVE_ROUTINE_PROPOSAL_ID_KEY) return;
     }
     localStorage.setItem(key,String(value));
   });
-  const ownerId=localStorage.getItem(LOCAL_OWNER_KEY)||(!AUTH_REQUIRED?"local":null);
+  if(localStorage.getItem(ROUTINE_PROPOSALS_KEY)){
+    saveRoutineProposalRecords(getRoutineProposalRecords(ownerId),{ownerId,mark:false});
+    const activeId=localStorage.getItem(ACTIVE_ROUTINE_PROPOSAL_ID_KEY);
+    if(activeId&&!getRoutineProposalRecords(ownerId).some(record=>record.proposal.proposalId===activeId)){
+      localStorage.removeItem(ACTIVE_ROUTINE_PROPOSAL_ID_KEY);
+    }
+  }
   ensureProfileDataMigration({ownerId,mark:false});
   ensureExerciseDomainMigration({ownerId,mark:false,force:true});
   saveCurrentUserVault(ownerId);
@@ -2283,6 +2408,7 @@ function activateLocalUser(userId){
   if(previous===userId){
     ensureProfileDataMigration({ownerId:userId,mark:false});
     ensureExerciseDomainMigration({ownerId:userId,mark:false});
+    ensureRoutineProposalState(userId);
     saveCurrentUserVault(userId);
     return;
   }
@@ -2301,6 +2427,7 @@ function activateLocalUser(userId){
   localStorage.setItem(LOCAL_OWNER_KEY,userId);
   ensureProfileDataMigration({ownerId:userId,mark:false});
   ensureExerciseDomainMigration({ownerId:userId,mark:false});
+  ensureRoutineProposalState(userId);
   saveCurrentUserVault(userId);
   state.selectedSession=localStorage.getItem("gymos:selectedSession")||nextSuggestedSession();
 }
@@ -2901,6 +3028,8 @@ function buildSyncPayload(){
     weeklyGoal:getWeeklyGoal(),
     blocks:getTrainingBlocks(),
     activeBlockId:localStorage.getItem("gymos:activeBlockId"),
+    routineProposals:getRoutineProposalRecords(),
+    activeRoutineProposalId:localStorage.getItem(ACTIVE_ROUTINE_PROPOSAL_ID_KEY),
     exerciseLibrary:getExerciseLibrary(),
     exerciseDomainSchemaVersion:localStorage.getItem(EXERCISE_DOMAIN_SCHEMA_KEY),
     exerciseSubstitutions:getExerciseSubstitutions(),
@@ -2932,6 +3061,9 @@ function applySyncPayload(payload){
   if(Array.isArray(payload.body_summary_metrics)) saveBodySummaryMetrics(payload.body_summary_metrics,{markUpdated:false});
   if(Array.isArray(payload.exerciseLibrary)&&payload.exerciseLibrary.length){
     saveExerciseLibrary(payload.exerciseLibrary,{mark:false,touchUpdatedAt:false,setSchema:false});
+  }
+  if(Array.isArray(payload.routineProposals)){
+    importRoutineProposalSyncData(payload,{mark:false});
   }
   if(payload.nutritionSettings) saveNutritionSettings(payload.nutritionSettings);
   if(Array.isArray(payload.nutritionEntries)) saveNutritionEntries(payload.nutritionEntries);
@@ -9430,6 +9562,8 @@ function exportData(){
     weeklyGoal:getWeeklyGoal(),
     blocks:getTrainingBlocks(),
     activeBlockId:localStorage.getItem("gymos:activeBlockId"),
+    routineProposals:getRoutineProposalRecords(),
+    activeRoutineProposalId:localStorage.getItem(ACTIVE_ROUTINE_PROPOSAL_ID_KEY),
     ...(window.GymOSProfileData?.exportSyncData?.()||{}),
     updatedAt:getLocalUpdatedAt()
   };
@@ -9450,6 +9584,7 @@ importFile.onchange=async()=>{
     if(Number(data.weeklyGoal)>=1&&Number(data.weeklyGoal)<=7) saveWeeklyGoal(Number(data.weeklyGoal));
     if(Array.isArray(data.blocks)) saveTrainingBlocks(data.blocks);
     if(data.activeBlockId) localStorage.setItem("gymos:activeBlockId",data.activeBlockId);
+    if(Array.isArray(data.routineProposals)) importRoutineProposalSyncData(data,{mark:false});
     if(data.routine){saveRoutine(data.routine);sessions=getRoutine();}
     ["A","B","C"].forEach(s=>{
       if(data.drafts&&data.drafts[s])localStorage.setItem(draftKey(s),JSON.stringify(data.drafts[s]));

@@ -3,7 +3,9 @@
 
   const MODEL_VERSION="4.2.0-alpha.1-phase-c";
   const MAX_PROPOSALS_PER_OWNER=20;
-  const ALLOWED_STATUSES=Object.freeze(["pending_review","rejected","superseded"]);
+  const ALLOWED_STATUSES=Object.freeze([
+    "pending_review","rejected","superseded","activated","rolled_back"
+  ]);
 
   function clone(value){return value===undefined?undefined:JSON.parse(JSON.stringify(value));}
   function text(value){return String(value??"").trim();}
@@ -260,7 +262,7 @@
       text(a.proposal?.proposalId).localeCompare(text(b.proposal?.proposalId),"en");
   }
   function removalOrder(a,b){
-    const priority={rejected:0,superseded:1,pending_review:2};
+    const priority={rejected:0,superseded:1,rolled_back:2,activated:3,pending_review:4};
     return (priority[a.lifecycle.status]??3)-(priority[b.lifecycle.status]??3)||
       text(a.lifecycle.createdAt).localeCompare(text(b.lifecycle.createdAt),"en")||
       text(a.proposal.proposalId).localeCompare(text(b.proposal.proposalId),"en");
@@ -363,6 +365,32 @@
     if(!found) throw new Error("Proposal not found.");
     return normalizeRecords(next,normalizedOwner);
   }
+  function transitionProposalLifecycle(records,{ownerId,proposalId,status,timestamp}){
+    const normalizedOwner=normalizeOwnerId(ownerId);
+    if(!["activated","rolled_back"].includes(status)) throw new Error("Invalid lifecycle transition.");
+    let found=false;
+    const next=normalizeRecords(records,normalizedOwner).map(record=>{
+      if(record.proposal.proposalId!==proposalId) return record;
+      found=true;
+      if(record.lifecycle.status===status) return record;
+      if(status==="activated"&&record.lifecycle.status!=="pending_review"){
+        throw new Error("proposal_not_pending");
+      }
+      if(status==="rolled_back"&&record.lifecycle.status!=="activated"){
+        throw new Error("proposal_not_activated");
+      }
+      return {
+        ...record,
+        lifecycle:{
+          ...record.lifecycle,status,updatedAt:timestamp,reviewedAt:timestamp,
+          activatedAt:status==="activated"?timestamp:record.lifecycle.activatedAt||null,
+          rolledBackAt:status==="rolled_back"?timestamp:record.lifecycle.rolledBackAt||null
+        }
+      };
+    });
+    if(!found) throw new Error("Proposal not found.");
+    return normalizeRecords(next,normalizedOwner);
+  }
   function mergeProposalRecords(current,incoming,{ownerId,activeProposalId=null}){
     const normalizedOwner=normalizeOwnerId(ownerId);
     const base=normalizeRecords(current,normalizedOwner,{activeProposalId});
@@ -422,7 +450,8 @@
     MODEL_VERSION,MAX_PROPOSALS_PER_OWNER,ALLOWED_STATUSES,
     stableStringify,stableHash,routineHash,validateProposal,validateRecord,
     compareRoutineProposal,activationCompatibility,createProposalRecord,
-    normalizeRecords,selectActiveProposalId,trimRecords,storeProposal,rejectProposal,mergeProposalRecords,
+    normalizeRecords,selectActiveProposalId,trimRecords,storeProposal,rejectProposal,
+    transitionProposalLifecycle,mergeProposalRecords,
     refreshProposalComparisons
   });
 })(typeof window!=="undefined"?window:globalThis);

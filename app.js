@@ -130,6 +130,7 @@ function normalizeRoutine(raw){
         });
       }else if(item&&item.name){
         output[session].push({
+          ...item,
           name:String(item.name).trim(),
           target:String(item.target||"8–10 reps"),
           sets:Math.max(1,Math.min(10,Number(item.sets)||3)),
@@ -686,6 +687,8 @@ function updateExerciseTechnicalNotes(id,notes){
 const GYMOS_BACKUP_VERSION="4.0.8";
 const ROUTINE_PROPOSALS_KEY="gymos:routineProposals";
 const ACTIVE_ROUTINE_PROPOSAL_ID_KEY="gymos:activeRoutineProposalId";
+const ROUTINE_ACTIVATION_HISTORY_KEY="gymos:routineActivationHistory";
+const ACTIVE_ROUTINE_ACTIVATION_ID_KEY="gymos:activeRoutineActivationId";
 const GYMOS_BACKUP_KEYS=[
   "gymos:routine",
   "gymos:history",
@@ -698,6 +701,8 @@ const GYMOS_BACKUP_KEYS=[
   "gymos:exerciseDomainSchemaVersion",
   "gymos:routineProposals",
   "gymos:activeRoutineProposalId",
+  "gymos:routineActivationHistory",
+  "gymos:activeRoutineActivationId",
   "gymos:exerciseSubstitutions",
   "gymos:favoriteSubstitutions",
   "gymos:coachSettings",
@@ -830,6 +835,241 @@ function ensureRoutineProposalState(ownerId){
   });
 }
 
+function getRoutineActivationRecords(ownerId=null){
+  if(!window.GymOSRoutineActivation) throw new Error("El modelo de activaciones no está disponible.");
+  const normalizedOwner=routineProposalOwnerId(ownerId);
+  try{
+    const stored=JSON.parse(localStorage.getItem(ROUTINE_ACTIVATION_HISTORY_KEY)||"[]");
+    const normalized=window.GymOSRoutineActivation.normalizeRecords(stored,normalizedOwner,{
+      activeActivationId:localStorage.getItem(ACTIVE_ROUTINE_ACTIVATION_ID_KEY)
+    });
+    const activeId=window.GymOSRoutineActivation.selectActiveActivationId(
+      normalized,normalizedOwner,localStorage.getItem(ACTIVE_ROUTINE_ACTIVATION_ID_KEY)
+    );
+    if(activeId) localStorage.setItem(ACTIVE_ROUTINE_ACTIVATION_ID_KEY,activeId);
+    else localStorage.removeItem(ACTIVE_ROUTINE_ACTIVATION_ID_KEY);
+    return normalized;
+  }catch(_){
+    localStorage.removeItem(ACTIVE_ROUTINE_ACTIVATION_ID_KEY);
+    return [];
+  }
+}
+function saveRoutineActivationRecords(records,{ownerId=null,mark=true,preferredActiveId=null}={}){
+  const normalizedOwner=routineProposalOwnerId(ownerId);
+  const requestedId=preferredActiveId||localStorage.getItem(ACTIVE_ROUTINE_ACTIVATION_ID_KEY);
+  const normalized=window.GymOSRoutineActivation.normalizeRecords(records,normalizedOwner,{
+    activeActivationId:requestedId
+  });
+  localStorage.setItem(ROUTINE_ACTIVATION_HISTORY_KEY,JSON.stringify(normalized));
+  const activeId=window.GymOSRoutineActivation.selectActiveActivationId(
+    normalized,normalizedOwner,requestedId
+  );
+  if(activeId) localStorage.setItem(ACTIVE_ROUTINE_ACTIVATION_ID_KEY,activeId);
+  else localStorage.removeItem(ACTIVE_ROUTINE_ACTIVATION_ID_KEY);
+  if(mark) markLocalUpdated();
+  return normalized;
+}
+function importRoutineActivationSyncData(payload,{ownerId=null,mark=false}={}){
+  const normalizedOwner=routineProposalOwnerId(ownerId);
+  if(!Array.isArray(payload?.routineActivationHistory)) return false;
+  const requestedId=String(payload.activeRoutineActivationId||"");
+  const currentId=localStorage.getItem(ACTIVE_ROUTINE_ACTIVATION_ID_KEY);
+  const result=window.GymOSRoutineActivation.mergeActivationRecords(
+    getRoutineActivationRecords(normalizedOwner),
+    payload.routineActivationHistory,
+    {ownerId:normalizedOwner,activeActivationId:requestedId||currentId}
+  );
+  saveRoutineActivationRecords(result.records,{
+    ownerId:normalizedOwner,mark:false,
+    preferredActiveId:result.activeActivationId
+  });
+  if(result.incidents.length) console.warn("Routine activation import incidents",result.incidents);
+  if(mark) markLocalUpdated();
+  return result;
+}
+function ensureRoutineActivationState(ownerId){
+  const normalizedOwner=routineProposalOwnerId(ownerId);
+  return saveRoutineActivationRecords(getRoutineActivationRecords(normalizedOwner),{
+    ownerId:normalizedOwner,mark:false,
+    preferredActiveId:localStorage.getItem(ACTIVE_ROUTINE_ACTIVATION_ID_KEY)
+  });
+}
+function parseStoredJson(raw,fallback=null){
+  if(raw===null) return fallback;
+  try{return JSON.parse(raw);}catch(_){return fallback;}
+}
+function captureRoutineActivationStorage(ownerId){
+  const keys=[
+    "gymos:routine","gymos:selectedSession",
+    draftKey("A"),draftKey("B"),draftKey("C"),
+    ROUTINE_ACTIVATION_HISTORY_KEY,ACTIVE_ROUTINE_ACTIVATION_ID_KEY,
+    ROUTINE_PROPOSALS_KEY,ACTIVE_ROUTINE_PROPOSAL_ID_KEY,
+    "gymos:updatedAt","gymos:syncPending","gymos:localRevision",
+    "gymos:lastRemoteRevision","gymos:lastSyncAt","gymos:lastSyncHash",
+    `${LOCAL_VAULT_PREFIX}${ownerId}`
+  ];
+  return Object.fromEntries(keys.map(key=>[key,localStorage.getItem(key)]));
+}
+function restoreRoutineActivationStorage(snapshot){
+  Object.entries(snapshot).forEach(([key,value])=>restoreStorageValue(key,value));
+}
+function markRoutineActivationSyncPending(timestamp){
+  if(state.applyingRemote) return;
+  localStorage.setItem("gymos:updatedAt",timestamp||new Date().toISOString());
+  localStorage.setItem("gymos:syncPending","1");
+}
+function scheduleRoutineActivationSync(){
+  if(!isAppAuthenticated()) return;
+  state.syncStatus=navigator.onLine?"pending":"offline";
+  scheduleAutoSync();
+}
+function routineActivationBaseline(){
+  const routineRaw=localStorage.getItem("gymos:routine");
+  const selectedSessionRaw=localStorage.getItem("gymos:selectedSession");
+  const draftsRaw=Object.fromEntries(["A","B","C"].map(session=>[
+    session,localStorage.getItem(draftKey(session))
+  ]));
+  return {
+    currentRoutine:getRoutine(),
+    selectedSession:selectedSessionRaw||state.selectedSession||"A",
+    drafts:Object.fromEntries(Object.entries(draftsRaw).map(([session,raw])=>[
+      session,parseStoredJson(raw,null)
+    ])),
+    rawBaseline:{routine:routineRaw,selectedSession:selectedSessionRaw,drafts:draftsRaw}
+  };
+}
+function activateStoredRoutineProposal(proposalId,{
+  ownerId=null,confirmed=false,timestamp=new Date().toISOString()
+}={}){
+  const normalizedOwner=routineProposalOwnerId(ownerId);
+  const activations=getRoutineActivationRecords(normalizedOwner);
+  const existing=activations.find(record=>
+    record.proposalId===proposalId&&record.status==="activated"
+  );
+  if(existing) return {ok:true,idempotent:true,activation:existing};
+  const proposalRecords=getRoutineProposalRecords(normalizedOwner);
+  const proposalRecord=proposalRecords.find(record=>record.proposal.proposalId===proposalId);
+  const baseline=routineActivationBaseline();
+  const plan=window.GymOSRoutineActivation.createActivationPlan({
+    ownerId:normalizedOwner,proposalRecord,currentRoutine:baseline.currentRoutine,
+    selectedSession:baseline.selectedSession,drafts:baseline.drafts,
+    rawBaseline:baseline.rawBaseline,confirmed,timestamp
+  });
+  if(!plan.ok) return plan;
+  const historyBefore=localStorage.getItem("gymos:history");
+  let activationResult;
+  const transaction=window.GymOSRoutineActivation.executeTransaction({
+    capture:()=>captureRoutineActivationStorage(normalizedOwner),
+    restore:restoreRoutineActivationStorage
+  },[
+    ()=>localStorage.setItem("gymos:routine",JSON.stringify(plan.routine)),
+    ()=>["A","B","C"].forEach(session=>localStorage.removeItem(draftKey(session))),
+    ()=>localStorage.setItem("gymos:selectedSession",plan.selectedSession),
+    ()=>{
+      activationResult=window.GymOSRoutineActivation.addActivationRecord(
+        activations,plan.record,{
+          ownerId:normalizedOwner,
+          activeActivationId:localStorage.getItem(ACTIVE_ROUTINE_ACTIVATION_ID_KEY)
+        }
+      );
+      saveRoutineActivationRecords(activationResult.records,{
+        ownerId:normalizedOwner,mark:false,
+        preferredActiveId:activationResult.activeActivationId
+      });
+    },
+    ()=>{
+      const nextProposals=window.GymOSRoutineProposals.transitionProposalLifecycle(
+        proposalRecords,{ownerId:normalizedOwner,proposalId,status:"activated",timestamp}
+      );
+      saveRoutineProposalRecords(nextProposals,{ownerId:normalizedOwner,mark:false});
+    },
+    ()=>{
+      if(localStorage.getItem("gymos:history")!==historyBefore) throw new Error("history_changed");
+      markRoutineActivationSyncPending(timestamp);
+      saveCurrentUserVault(normalizedOwner);
+    }
+  ]);
+  if(!transaction.ok) return transaction;
+  sessions=getRoutine();
+  state.selectedSession=plan.selectedSession;
+  scheduleRoutineActivationSync();
+  return {ok:true,idempotent:false,activation:activationResult.record};
+}
+function rollbackStoredRoutineActivation(activationId,{
+  ownerId=null,timestamp=new Date().toISOString()
+}={}){
+  const normalizedOwner=routineProposalOwnerId(ownerId);
+  const activations=getRoutineActivationRecords(normalizedOwner);
+  const activation=activations.find(record=>record.activationId===activationId);
+  const decision=window.GymOSRoutineActivation.rollbackDecision({
+    ownerId:normalizedOwner,activationRecord:activation,currentRoutine:getRoutine()
+  });
+  if(!decision.ok){
+    if(decision.code!=="routine_changed"||!activation) return decision;
+    const blocked=window.GymOSRoutineActivation.markRollbackBlocked(
+      activation,decision.code,timestamp
+    );
+    const blockedTransaction=window.GymOSRoutineActivation.executeTransaction({
+      capture:()=>captureRoutineActivationStorage(normalizedOwner),
+      restore:restoreRoutineActivationStorage
+    },[()=>{
+      const updated=window.GymOSRoutineActivation.updateRecord(activations,blocked,{
+        ownerId:normalizedOwner,activeActivationId:activationId
+      });
+      saveRoutineActivationRecords(updated.records,{
+        ownerId:normalizedOwner,mark:false,preferredActiveId:updated.activeActivationId
+      });
+      markRoutineActivationSyncPending(timestamp);
+      saveCurrentUserVault(normalizedOwner);
+    }]);
+    if(!blockedTransaction.ok) return blockedTransaction;
+    scheduleRoutineActivationSync();
+    return {...decision,activation:blocked};
+  }
+  if(decision.idempotent) return {ok:true,idempotent:true,activation:decision.record};
+  const proposalRecords=getRoutineProposalRecords(normalizedOwner);
+  const historyBefore=localStorage.getItem("gymos:history");
+  let rolledBack;
+  const transaction=window.GymOSRoutineActivation.executeTransaction({
+    capture:()=>captureRoutineActivationStorage(normalizedOwner),
+    restore:restoreRoutineActivationStorage
+  },[
+    ()=>restoreStorageValue("gymos:routine",activation.baseline.routineRaw),
+    ()=>restoreStorageValue("gymos:selectedSession",activation.baseline.selectedSessionRaw),
+    ()=>["A","B","C"].forEach(session=>
+      restoreStorageValue(draftKey(session),activation.baseline.draftsRaw?.[session]??null)
+    ),
+    ()=>{
+      rolledBack=window.GymOSRoutineActivation.markRolledBack(activation,timestamp);
+      const updated=window.GymOSRoutineActivation.updateRecord(activations,rolledBack,{
+        ownerId:normalizedOwner,activeActivationId:activationId
+      });
+      saveRoutineActivationRecords(updated.records,{
+        ownerId:normalizedOwner,mark:false,preferredActiveId:updated.activeActivationId
+      });
+    },
+    ()=>{
+      const nextProposals=window.GymOSRoutineProposals.transitionProposalLifecycle(
+        proposalRecords,{
+          ownerId:normalizedOwner,proposalId:activation.proposalId,
+          status:"rolled_back",timestamp
+        }
+      );
+      saveRoutineProposalRecords(nextProposals,{ownerId:normalizedOwner,mark:false});
+    },
+    ()=>{
+      if(localStorage.getItem("gymos:history")!==historyBefore) throw new Error("history_changed");
+      markRoutineActivationSyncPending(timestamp);
+      saveCurrentUserVault(normalizedOwner);
+    }
+  ]);
+  if(!transaction.ok) return transaction;
+  sessions=getRoutine();
+  state.selectedSession=localStorage.getItem("gymos:selectedSession")||nextSuggestedSession();
+  scheduleRoutineActivationSync();
+  return {ok:true,idempotent:false,activation:rolledBack};
+}
+
 function getFavoriteExercises(){
   return getExerciseLibrary().filter(item=>Boolean(item.favorite));
 }
@@ -892,6 +1132,19 @@ function importGymOSBackup(payload,mode="merge"){
   }
   Object.entries(backup.storage).forEach(([key,value])=>{
     if(!GYMOS_BACKUP_KEYS.includes(key)) return;
+    if(key==="gymos:routineActivationHistory"){
+      try{
+        const incoming=JSON.parse(value);
+        importRoutineActivationSyncData({
+          routineActivationHistory:Array.isArray(incoming)?incoming:[],
+          activeRoutineActivationId:backup.storage["gymos:activeRoutineActivationId"]||null
+        },{ownerId,mark:false});
+      }catch(error){
+        console.warn("Routine activation backup import failed",error);
+      }
+      return;
+    }
+    if(key==="gymos:activeRoutineActivationId") return;
     if(mode==="merge"&&localStorage.getItem(key)!==null){
       if(key===EXERCISE_LIBRARY_KEY){
         try{
@@ -952,6 +1205,9 @@ function importGymOSBackup(payload,mode="merge"){
     if(activeId&&!getRoutineProposalRecords(ownerId).some(record=>record.proposal.proposalId===activeId)){
       localStorage.removeItem(ACTIVE_ROUTINE_PROPOSAL_ID_KEY);
     }
+  }
+  if(localStorage.getItem("gymos:routineActivationHistory")){
+    ensureRoutineActivationState(ownerId);
   }
   ensureProfileDataMigration({ownerId,mark:false});
   ensureExerciseDomainMigration({ownerId,mark:false,force:true});
@@ -2409,6 +2665,7 @@ function activateLocalUser(userId){
     ensureProfileDataMigration({ownerId:userId,mark:false});
     ensureExerciseDomainMigration({ownerId:userId,mark:false});
     ensureRoutineProposalState(userId);
+    ensureRoutineActivationState(userId);
     saveCurrentUserVault(userId);
     return;
   }
@@ -2428,6 +2685,7 @@ function activateLocalUser(userId){
   ensureProfileDataMigration({ownerId:userId,mark:false});
   ensureExerciseDomainMigration({ownerId:userId,mark:false});
   ensureRoutineProposalState(userId);
+  ensureRoutineActivationState(userId);
   saveCurrentUserVault(userId);
   state.selectedSession=localStorage.getItem("gymos:selectedSession")||nextSuggestedSession();
 }
@@ -3030,6 +3288,8 @@ function buildSyncPayload(){
     activeBlockId:localStorage.getItem("gymos:activeBlockId"),
     routineProposals:getRoutineProposalRecords(),
     activeRoutineProposalId:localStorage.getItem(ACTIVE_ROUTINE_PROPOSAL_ID_KEY),
+    routineActivationHistory:getRoutineActivationRecords(),
+    activeRoutineActivationId:localStorage.getItem(ACTIVE_ROUTINE_ACTIVATION_ID_KEY),
     exerciseLibrary:getExerciseLibrary(),
     exerciseDomainSchemaVersion:localStorage.getItem(EXERCISE_DOMAIN_SCHEMA_KEY),
     exerciseSubstitutions:getExerciseSubstitutions(),
@@ -3065,6 +3325,9 @@ function applySyncPayload(payload){
   if(Array.isArray(payload.routineProposals)){
     importRoutineProposalSyncData(payload,{mark:false});
   }
+  if(Array.isArray(payload.routineActivationHistory)){
+    importRoutineActivationSyncData(payload,{mark:false});
+  }
   if(payload.nutritionSettings) saveNutritionSettings(payload.nutritionSettings);
   if(Array.isArray(payload.nutritionEntries)) saveNutritionEntries(payload.nutritionEntries);
   if(Array.isArray(payload.professionalNutritionPlans)) window.GymOSProfessionalNutrition?.mergePlans?.(payload.professionalNutritionPlans,false);
@@ -3085,8 +3348,9 @@ function applySyncPayload(payload){
     },{markUpdated:false});
   }
   if(["A","B","C"].includes(payload.selectedSession)){
-    localStorage.setItem("gymos:selectedSession",payload.selectedSession);
-    state.selectedSession=payload.selectedSession;
+    const selected=validSelectedRoutineSession(payload.selectedSession);
+    localStorage.setItem("gymos:selectedSession",selected);
+    state.selectedSession=selected;
   }
   if([60,90,120,180].includes(Number(payload.restSeconds))) saveRestSeconds(Number(payload.restSeconds));
   if(Number(payload.weeklyGoal)>=1&&Number(payload.weeklyGoal)<=7) saveWeeklyGoal(Number(payload.weeklyGoal));
@@ -3730,9 +3994,18 @@ function shiftMonth(monthString,delta){
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`;
 }
 function nextSuggestedSession(){
+  const available=availableRoutineSessions();
+  if(!available.length) return "A";
   const h = JSON.parse(localStorage.getItem("gymos:history") || "[]");
-  if(!h.length) return "A";
-  return h[0].session === "A" ? "B" : h[0].session === "B" ? "C" : "A";
+  if(!h.length||!available.includes(h[0].session)) return available[0];
+  return available[(available.indexOf(h[0].session)+1)%available.length];
+}
+function availableRoutineSessions(routine=sessions){
+  return ["A","B","C"].filter(session=>Array.isArray(routine?.[session])&&routine[session].length>0);
+}
+function validSelectedRoutineSession(candidate,routine=sessions){
+  const available=availableRoutineSessions(routine);
+  return available.includes(candidate)?candidate:(available[0]||"A");
 }
 function draftKey(s){ return `gymos:draft:${s}`; }
 function emptyDraft(s){
@@ -4103,14 +4376,18 @@ function navigateToScreen(screen){
   }
 
   if(screen==="workout"){
-    const selected=state.selectedSession||localStorage.getItem("gymos:selectedSession");
-    if(!selected){
+    const available=availableRoutineSessions();
+    const selected=validSelectedRoutineSession(
+      state.selectedSession||localStorage.getItem("gymos:selectedSession")
+    );
+    if(!available.length){
       state.screen="home";
       renderHome();
-      toast("Selecciona primero una sesión para entrenar");
+      toast("No hay una sesión disponible para entrenar");
       return;
     }
     state.selectedSession=selected;
+    localStorage.setItem("gymos:selectedSession",selected);
   }
 
   state.screen=screen;
@@ -4946,7 +5223,8 @@ function openQuickActionScreen(screen,selector=null){
   if(selector) scrollToQuickActionTarget(selector);
 }
 function changeQuickActionSession(){
-  const available=["A","B","C"];
+  const available=availableRoutineSessions();
+  if(!available.length) return;
   state.selectedSession=available[(available.indexOf(state.selectedSession)+1)%available.length];
   localStorage.setItem("gymos:selectedSession",state.selectedSession);
   markLocalUpdated();
@@ -5349,7 +5627,8 @@ function renderHome(){
     }));
   }
   const cycleHomeSession=()=>{
-    const availableSessions=["A","B","C"];
+    const availableSessions=availableRoutineSessions();
+    if(!availableSessions.length) return;
     state.selectedSession=availableSessions[(availableSessions.indexOf(state.selectedSession)+1)%availableSessions.length];
     localStorage.setItem("gymos:selectedSession",state.selectedSession);
     renderHome();
@@ -5367,8 +5646,7 @@ function renderHome(){
       renderRecoveryCenter();
       return;
     }
-    state.screen="workout";
-    renderWorkout();
+    navigateToScreen("workout");
   };
   const homeSecondaryAction=document.getElementById("homeSecondaryAction");
   if(homeSecondaryAction) homeSecondaryAction.onclick=()=>{
@@ -5378,8 +5656,7 @@ function renderHome(){
         state.screen="history";
         renderHistory();
       }else{
-        state.screen="workout";
-        renderWorkout();
+        navigateToScreen("workout");
       }
       return;
     }
@@ -5712,7 +5989,10 @@ function finishWorkout(){
   const workoutAnalysis=window.GymOSWorkoutAnalysis?.analyzeAndSave?.(workout,{force:true});
   if(workoutAnalysis) window.GymOSWorkoutAnalysis?.maybeGenerateAiNarrative?.(workoutAnalysis);
   const newRecords=recordsForWorkout(workout);
-  state.selectedSession=s==="A"?"B":s==="B"?"C":"A";
+  const availableSessions=availableRoutineSessions();
+  state.selectedSession=availableSessions.length
+    ?availableSessions[(availableSessions.indexOf(s)+1)%availableSessions.length]
+    :"A";
   localStorage.setItem("gymos:selectedSession",state.selectedSession);
   clearInterval(state.timerInterval);state.timerSeconds=0;
   window.GymOSRecovery?.createPendingCheckin?.(workout);
@@ -9564,6 +9844,8 @@ function exportData(){
     activeBlockId:localStorage.getItem("gymos:activeBlockId"),
     routineProposals:getRoutineProposalRecords(),
     activeRoutineProposalId:localStorage.getItem(ACTIVE_ROUTINE_PROPOSAL_ID_KEY),
+    routineActivationHistory:getRoutineActivationRecords(),
+    activeRoutineActivationId:localStorage.getItem(ACTIVE_ROUTINE_ACTIVATION_ID_KEY),
     ...(window.GymOSProfileData?.exportSyncData?.()||{}),
     updatedAt:getLocalUpdatedAt()
   };
@@ -9585,11 +9867,12 @@ importFile.onchange=async()=>{
     if(Array.isArray(data.blocks)) saveTrainingBlocks(data.blocks);
     if(data.activeBlockId) localStorage.setItem("gymos:activeBlockId",data.activeBlockId);
     if(Array.isArray(data.routineProposals)) importRoutineProposalSyncData(data,{mark:false});
+    if(Array.isArray(data.routineActivationHistory)) importRoutineActivationSyncData(data,{mark:false});
     if(data.routine){saveRoutine(data.routine);sessions=getRoutine();}
     ["A","B","C"].forEach(s=>{
       if(data.drafts&&data.drafts[s])localStorage.setItem(draftKey(s),JSON.stringify(data.drafts[s]));
     });
-    state.selectedSession=data.selectedSession||nextSuggestedSession();
+    state.selectedSession=validSelectedRoutineSession(data.selectedSession||nextSuggestedSession());
     localStorage.setItem("gymos:selectedSession",state.selectedSession);
     const importedProfileData=window.GymOSProfileData?.importSyncData?.(data,{mark:false});
     if(!importedProfileData) ensureProfileDataMigration({mark:false});

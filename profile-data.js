@@ -33,6 +33,7 @@
     "gymos:trainingBlocks",
     "gymos:activeBlockId",
     "gymos:exerciseLibrary",
+    "gymos:exerciseDomainSchemaVersion",
     "gymos:exerciseSubstitutions",
     "gymos:favoriteSubstitutions",
     "gymos:coachSettings",

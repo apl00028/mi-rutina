@@ -454,14 +454,14 @@ test("módulo puro no accede a DOM, storage, red, timers ni librerías externas"
     assert.equal(source.includes(forbidden),false,forbidden);
   }
 });
-test("integración declara script una vez, orden correcto y caché rc.1",()=>{
+test("integración declara script una vez, orden correcto y caché rc.2",()=>{
   const io=indexSource.indexOf('src="routine-io.js"');
   const libraryIndex=indexSource.indexOf('src="exercise-library-workflow.js"');
   const workflow=indexSource.indexOf('src="routine-workflow-ui.js"');
   assert.ok(io>=0&&libraryIndex>io&&workflow>libraryIndex);
   assert.equal((indexSource.match(/exercise-library-workflow\.js/g)||[]).length,1);
   assert.equal((workerSource.match(/exercise-library-workflow\.js/g)||[]).length,1);
-  assert.match(workerSource,/gymos-cache-4\.2\.0-rc\.1/);
+  assert.match(workerSource,/gymos-cache-4\.2\.0-rc\.2/);
 });
 test("interfaz no usa onclick inline ni muestra JSON técnico en biblioteca",()=>{
   const start=appSource.lastIndexOf("function renderExerciseLibrary()");

@@ -8,7 +8,7 @@ El objetivo del proyecto es ofrecer una experiencia similar a la de un entrenado
 
 🚧 Release candidate en preparación
 
-Versión actual: v4.2.0-rc.1 (local, sin publicar)
+Versión actual: v4.2.0-rc.2 (local, sin publicar)
 
 ## Funcionalidades
 

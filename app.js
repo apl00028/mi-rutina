@@ -1,4 +1,5 @@
-const GYMOS_VERSION="4.2.0-rc.1";
+const GYMOS_VERSION="4.2.0-rc.2";
+const GYMOS_NAV_EXPANDED_KEY="gymos:deviceNavigationExpanded";
 const GYMOS_APPEARANCE_KEY="gymos:appearance";
 const GYMOS_FONT_SCALE_KEY="gymos:fontScale";
 const GYMOS_FONT_SCALES=["font-scale-sm","font-scale-md","font-scale-lg","font-scale-xl"];
@@ -3367,7 +3368,10 @@ function resetRoutineSessionOwnerState(){
   state.timerSeconds=0;
   clearTimeout(state.syncTimer);
   state.syncTimer=null;
+  state.syncOperationId+=1;
   state.syncInProgress=false;
+  state.syncIssue=null;
+  state.syncStatus=navigator.onLine?"local":"offline";
   state.completedWorkoutSummary=null;
   state.workoutAnalysisId=null;
   state.coachChatMessages=[];
@@ -3391,6 +3395,7 @@ function resetRoutineSessionOwnerState(){
   state.accountManagementMessage=null;
   state.onboardingDraft=null;
   state.onboardingMessage=null;
+  closeNavigationPanel({restoreFocus:false});
 }
 function assertActiveLocalOwner(ownerId){
   const expected=window.GymOSProfileData.normalizeOwnerId(ownerId);
@@ -3689,7 +3694,10 @@ function renderEmailVerificationGate(user=state.syncUser){
     try{
       await signOutSync();
     }catch(error){
-      console.error("GymOS sign out",error);
+      console.error("GymOS sign out",{
+        code:error?.code||"signout_failed",
+        status:error?.status||null
+      });
     }
     deactivateLocalUser();
     state.emailVerificationMessage=null;
@@ -3727,8 +3735,10 @@ let state = {
   accountMessage: null,
   emailVerificationMessage: null,
   syncStatus: navigator.onLine ? "local" : "offline",
+  syncIssue: null,
   syncTimer: null,
   syncInProgress: false,
+  syncOperationId: 0,
   applyingRemote: false,
   editingSession: "A",
   editingBlockId: null,
@@ -4646,10 +4656,12 @@ async function refreshSyncSession(){
     resolveAuthenticatedAppState(data.session);
     return state.syncUser;
   }catch(error){
-    console.error("GymOS auth error",error);
+    console.error("GymOS auth error",{code:error?.code||"auth_failed",status:error?.status||null});
     state.authRedirectInProgress=false;
     resolveAuthenticatedAppState(null);
-    state.syncStatus="error";
+    const issue=classifySyncError(error);
+    state.syncStatus=issue.status;
+    state.syncIssue=issue;
     return null;
   }
 }
@@ -4775,6 +4787,8 @@ async function syncNow(options={}){
     if(state.syncUser?.id!==userId) throw new Error("owner_changed");
   };
   state.syncInProgress=true;
+  const operationId=++state.syncOperationId;
+  state.syncIssue=null;
   state.syncStatus="syncing";updateSyncIndicators();addSyncAudit("sync","started");
   try{
     await window.GymOSRecovery?.syncWithSupabase?.();
@@ -4791,47 +4805,85 @@ async function syncNow(options={}){
     const remoteRevision=Number(remote?.revision||0);
     const localRevision=getLocalRevision();
     const lastRemote=getLastRemoteRevision();
-    const conflict=remote && remoteRevision>lastRemote && localRevision>lastRemote && !options.forceUpload;
-    if(conflict){
+    const localChecksum=simpleChecksum(buildSyncPayload());
+    const hasPendingChanges=localStorage.getItem("gymos:syncPending")==="1";
+    const sameRevisionDiverged=Boolean(
+      remote&&!hasPendingChanges&&remoteRevision===localRevision&&
+      remote.checksum&&remote.checksum!==localChecksum
+    );
+    const conflict=Boolean(
+      remote&&remoteRevision>lastRemote&&
+      (hasPendingChanges||localRevision>lastRemote)&&!options.forceUpload
+    );
+    if(conflict||sameRevisionDiverged){
+      state.syncStatus="conflict";
+      state.syncIssue={kind:"conflict",retryable:false};
+      updateSyncIndicators();
       const resolution=await chooseConflictResolution(remote);
       assertOwner();
       addSyncAudit("conflict",resolution,{remoteRevision,localRevision});
       if(resolution==="remote"){
         applySyncPayload(remote.payload||{});setLocalRevision(remoteRevision);setLastRemoteRevision(remoteRevision);
-        localStorage.setItem("gymos:lastSyncAt",new Date().toISOString());state.syncStatus="connected";updateSyncIndicators();return {direction:"download",revision:remoteRevision};
+        localStorage.removeItem("gymos:syncPending");
+        localStorage.setItem("gymos:lastSyncHash",remote.checksum||simpleChecksum(buildSyncPayload()));
+        localStorage.setItem("gymos:lastSyncAt",new Date().toISOString());state.syncStatus="synced";state.syncIssue=null;updateSyncIndicators();return {direction:"download",revision:remoteRevision};
       }
     }else if(remote && remoteRevision>localRevision && !options.forceUpload){
       applySyncPayload(remote.payload||{});setLocalRevision(remoteRevision);setLastRemoteRevision(remoteRevision);
-      localStorage.setItem("gymos:lastSyncAt",new Date().toISOString());state.syncStatus="connected";addSyncAudit("sync","downloaded",{revision:remoteRevision});updateSyncIndicators();return {direction:"download",revision:remoteRevision};
+      localStorage.removeItem("gymos:syncPending");
+      localStorage.setItem("gymos:lastSyncHash",remote.checksum||simpleChecksum(buildSyncPayload()));
+      localStorage.setItem("gymos:lastSyncAt",new Date().toISOString());state.syncStatus="synced";state.syncIssue=null;addSyncAudit("sync","downloaded",{revision:remoteRevision});updateSyncIndicators();return {direction:"download",revision:remoteRevision};
+    }else if(remote&&!hasPendingChanges&&!options.forceUpload&&remoteRevision===localRevision&&remote.checksum===localChecksum){
+      setLastRemoteRevision(remoteRevision);
+      localStorage.setItem("gymos:lastSyncAt",new Date().toISOString());
+      localStorage.setItem("gymos:lastSyncHash",localChecksum);
+      state.syncStatus="synced";
+      state.syncIssue=null;
+      updateSyncIndicators();
+      return {direction:"none",revision:remoteRevision};
     }
     assertOwner();
     const envelope=buildSyncEnvelope();
     const {error:writeError}=await client.from("gymos_sync").upsert({user_id:userId,payload:envelope.payload,revision:envelope.revision,device_id:envelope.deviceId,checksum:envelope.checksum,updated_at:envelope.updatedAt},{onConflict:"user_id"});
     assertOwner();
     if(writeError) throw writeError;
-    setLastRemoteRevision(envelope.revision);localStorage.setItem("gymos:lastSyncAt",new Date().toISOString());state.syncStatus="connected";addSyncAudit("sync","uploaded",{revision:envelope.revision});updateSyncIndicators();return {direction:"upload",revision:envelope.revision};
+    setLastRemoteRevision(envelope.revision);
+    localStorage.removeItem("gymos:syncPending");
+    localStorage.setItem("gymos:lastSyncHash",envelope.checksum);
+    localStorage.setItem("gymos:lastSyncAt",new Date().toISOString());
+    state.syncStatus="synced";state.syncIssue=null;
+    addSyncAudit("sync","uploaded",{revision:envelope.revision});updateSyncIndicators();
+    return {direction:"upload",revision:envelope.revision};
   }catch(error){
     if(currentRoutineOwnerOrNull()===ownerId&&state.syncUser?.id===userId){
-      state.syncStatus="error";addSyncAudit("sync","error",{
+      const issue=classifySyncError(error);
+      state.syncStatus=issue.status;
+      state.syncIssue=issue;
+      addSyncAudit("sync",issue.status,{
         code:error?.code||"sync_failed",status:error?.status||null
       });updateSyncIndicators();
     }
     throw error;
   }finally{
-    state.syncInProgress=false;
+    if(state.syncOperationId===operationId) state.syncInProgress=false;
   }
 }
 
 async function autoSync(reason="automática"){
   if(!isAppAuthenticated()||!navigator.onLine||state.syncInProgress) return;
   const recoveryBefore=window.GymOSRecovery?.dueCheckin?.()?.id||"";
-  await syncNow({silent:true});
+  try{
+    await syncNow({silent:true});
+  }catch(_){
+    return;
+  }
   const recoveryAfter=window.GymOSRecovery?.dueCheckin?.()?.id||"";
   if(state.screen==="home"&&recoveryBefore!==recoveryAfter) renderHome();
 }
 function updateSyncIndicators(){
   document.querySelectorAll("[data-sync-label]").forEach(el=>el.textContent=syncStatusLabel());
   document.querySelectorAll("[data-sync-dot]").forEach(el=>el.className=`sync-dot ${state.syncStatus}`);
+  document.querySelectorAll("[data-sync-description]").forEach(el=>el.textContent=syncStatusDescription());
   document.querySelectorAll("[data-last-sync]").forEach(el=>el.textContent=formatSyncDate(getLastSyncAt()));
 }
 function syncStatusLabel(){
@@ -4840,16 +4892,53 @@ function syncStatusLabel(){
   if(state.syncStatus==="offline") return "Sin conexión";
   if(state.syncStatus==="synced") return "Sincronizado";
   if(state.syncStatus==="connected") return "Cuenta conectada";
+  if(state.syncStatus==="conflict") return "Conflicto de sincronización";
+  if(state.syncStatus==="session_expired") return "Sesión caducada";
+  if(state.syncStatus==="permission_denied") return "Permiso rechazado";
+  if(state.syncStatus==="recoverable_error") return "No se pudo sincronizar";
   if(state.syncStatus==="configured") return "Configurado, sin sesión";
   if(state.syncStatus==="error") return "Error de sincronización";
   return "Solo en este dispositivo";
 }
-function syncBadge(){
-  if(!isAppAuthenticated()) return "";
-  return `<button class="sync-badge" id="openSyncSettings" type="button">
-    <span class="sync-dot ${state.syncStatus}" data-sync-dot></span>
-    <span data-sync-label>${syncStatusLabel()}</span>
-  </button>`;
+function classifySyncError(error){
+  if(!navigator.onLine) return {status:"offline",kind:"offline",retryable:true};
+  const code=String(error?.code||"").toLowerCase();
+  const status=Number(error?.status||0);
+  const message=String(error?.message||"").toLowerCase();
+  if(["session_not_found","refresh_token_not_found","user_not_found","jwt_expired"].includes(code)||status===401||message.includes("jwt expired")){
+    return {status:"session_expired",kind:"session",retryable:false};
+  }
+  if(code==="42501"||status===403||message.includes("row-level security")||message.includes("permission denied")){
+    return {status:"permission_denied",kind:"permission",retryable:false};
+  }
+  if(code==="sync_conflict") return {status:"conflict",kind:"conflict",retryable:false};
+  return {status:"recoverable_error",kind:"network",retryable:true};
+}
+function syncStatusDescription(){
+  const descriptions={
+    synced:"Tus cambios están guardados en este dispositivo y en la nube.",
+    pending:"Hay cambios locales pendientes de enviar.",
+    syncing:"GymOS está comprobando tus cambios.",
+    offline:"Seguirás trabajando en este dispositivo. Se reintentará al recuperar Internet.",
+    conflict:"Hay cambios distintos en dos dispositivos. Elige qué versión conservar desde Cuenta.",
+    session_expired:"Vuelve a iniciar sesión para continuar sincronizando.",
+    permission_denied:"No se pudo acceder a tus datos en la nube. Comprueba tu cuenta o vuelve a iniciar sesión.",
+    recoverable_error:"No se ha perdido ningún cambio local. Puedes volver a intentarlo.",
+    connected:"La cuenta está conectada.",
+    configured:"Inicia sesión para sincronizar.",
+    local:"Los datos se guardan únicamente en este dispositivo."
+  };
+  return descriptions[state.syncStatus]||"Estado de sincronización disponible.";
+}
+async function retrySyncFromNavigation(){
+  if(state.syncInProgress||!navigator.onLine) return;
+  state.syncStatus="syncing";
+  state.syncIssue=null;
+  render();
+  try{
+    await syncNow();
+  }catch(_){}
+  render();
 }
 function dateKey(value){
   const d=new Date(value);
@@ -5537,23 +5626,149 @@ function miniBars(rows){
     </div>`;
   }).join("")}</div>`;
 }
-function nav(active){
-  const items=[
-    ["home","⌂","Inicio"],
-    ["progressDashboard","↗","Progreso"],
-    ["coach","✦","Coach"],
-    ["nutrition","◉","Nutrición"],
-    ["settings","☰","Más"]
-  ];
-  return `<nav class="bottom-nav modern-bottom-nav" aria-label="Navegación principal">
-    ${items.map(([screen,icon,label])=>`<button type="button" data-nav="${screen}" aria-label="${label}" ${active===screen?'aria-current="page"':""} class="${active===screen?"active":""}">
-      <span class="nav-icon">${icon}</span><span class="nav-label">${label}</span>
-    </button>`).join("")}
-  </nav>`;
+const NAVIGATION_GROUPS=[
+  {label:"Principal",items:[
+    ["home","⌂","Inicio"],["workout","▶","Entrenar"],["progressDashboard","↗","Progreso"],
+    ["coach","✦","Coach"],["nutrition","◉","Nutrición"]
+  ]},
+  {label:"Planificación",items:[
+    ["routineWorkflow","▤","Mi rutina"],["exerciseLibrary","◇","Biblioteca de ejercicios"],
+    ["recovery","◌","Recovery Center"]
+  ]},
+  {label:"Cuenta",items:[
+    ["account","◎","Cuenta"],["settings","⚙","Ajustes"]
+  ]}
+];
+let navigationPanelOpen=false;
+let navigationSyncDetailOpen=false;
+let navigationReturnFocus=null;
+function navigationExpandedPreference(){
+  return localStorage.getItem(GYMOS_NAV_EXPANDED_KEY)==="1";
+}
+function navigationDestinationForScreen(screen=state.screen){
+  const direct=new Set(NAVIGATION_GROUPS.flatMap(group=>group.items.map(item=>item[0])));
+  if(direct.has(screen)) return screen;
+  if(screen==="workoutComplete") return "workout";
+  if(["history","stats","records","body","editWorkout"].includes(screen)) return "progressDashboard";
+  if(["plan","routineEditor","blocks","blockEditor","blockAnalytics","globalAnalytics","exerciseAnalytics"].includes(screen)) return "routineWorkflow";
+  if(["exerciseLibraryEditor","exerciseDetail","favoriteExercises","exerciseSubstitution","substitutionHistory"].includes(screen)) return "exerciseLibrary";
+  if(["coachProposal","coachChat","workoutAnalysis","aiSettings"].includes(screen)) return "coach";
+  if(["professionalNutrition","professionalNutritionImport","professionalNutritionPlan","professionalNutritionAdapt"].includes(screen)) return "nutrition";
+  if(["quickActions","backupRestore","developer","health"].includes(screen)) return "settings";
+  return "settings";
+}
+function navigationItem(screen,icon,label,active){
+  const selected=screen===active;
+  return `<button type="button" class="navigation-item ${selected?"active":""}" data-nav="${screen}" aria-label="${esc(label)}" title="${esc(label)}" ${selected?'aria-current="page"':""}>
+    <span class="navigation-icon" aria-hidden="true">${icon}</span><span class="navigation-label">${esc(label)}</span>
+  </button>`;
+}
+function nav(){
+  const active=navigationDestinationForScreen();
+  const expanded=window.matchMedia("(min-width:1024px)").matches&&navigationExpandedPreference();
+  const syncRetry=Boolean(state.syncIssue?.retryable)&&navigator.onLine;
+  return `
+    <header class="shell-mobile-header">
+      <button type="button" class="navigation-menu-button" data-shell-action="toggle" aria-label="Abrir menú" aria-controls="gymosNavigation" aria-expanded="${navigationPanelOpen}">☰</button>
+      <strong>GymOS</strong><span></span>
+    </header>
+    <aside id="gymosNavigation" class="navigation-rail ${expanded?"expanded":""} ${navigationPanelOpen?"panel-open":""}" aria-label="Navegación de GymOS">
+      <div class="navigation-brand">
+        <span class="navigation-brand-mark" aria-hidden="true">G</span>
+        <span class="navigation-label">GymOS</span>
+        <button type="button" class="navigation-expand-button" data-shell-action="toggle" aria-label="${expanded?"Contraer menú":"Expandir menú"}" aria-controls="gymosNavigation" aria-expanded="${expanded||navigationPanelOpen}">${expanded?"‹":"›"}</button>
+      </div>
+      <nav class="navigation-groups" aria-label="Secciones">
+        ${NAVIGATION_GROUPS.map(group=>`<section class="navigation-group" aria-label="${esc(group.label)}">
+          <h2 class="navigation-group-title">${esc(group.label)}</h2>
+          ${group.items.map(([screen,icon,label])=>navigationItem(screen,icon,label,active)).join("")}
+        </section>`).join("")}
+      </nav>
+      <div class="navigation-footer">
+        <button type="button" class="navigation-item sync-navigation-item ${esc(state.syncStatus)}" data-shell-action="sync-detail" aria-label="${esc(syncStatusLabel())}" title="${esc(syncStatusLabel())}" aria-expanded="${navigationSyncDetailOpen}">
+          <span class="sync-dot ${esc(state.syncStatus)}" data-sync-dot aria-hidden="true"></span><span class="navigation-label" data-sync-label>${esc(syncStatusLabel())}</span>
+        </button>
+        ${navigationSyncDetailOpen?`<section class="navigation-sync-detail" role="status">
+          <strong data-sync-label>${esc(syncStatusLabel())}</strong><p data-sync-description>${esc(syncStatusDescription())}</p>
+          ${syncRetry?`<button type="button" class="text-button" data-shell-action="sync-retry">Reintentar</button>`:""}
+        </section>`:""}
+        <button type="button" class="navigation-item" data-shell-action="theme" aria-label="Cambiar tema" title="Cambiar tema"><span class="navigation-icon" aria-hidden="true">◐</span><span class="navigation-label">Tema</span></button>
+        <button type="button" class="navigation-item" data-shell-action="font" aria-label="Cambiar tamaño de texto" title="Cambiar tamaño de texto"><span class="navigation-icon navigation-font-icon" aria-hidden="true">Aa</span><span class="navigation-label">Tamaño de texto</span></button>
+        ${isAppAuthenticated()?`<button type="button" class="navigation-item" data-shell-action="signout" aria-label="Cerrar sesión" title="Cerrar sesión"><span class="navigation-icon" aria-hidden="true">⇥</span><span class="navigation-label">Cerrar sesión</span></button>`:""}
+      </div>
+    </aside>
+    <button type="button" class="navigation-backdrop ${navigationPanelOpen?"visible":""}" data-shell-action="close" aria-label="Cerrar menú" tabindex="-1"></button>`;
 }
 let globalNavigationBound=false;
 
+function arrangeNavigationLandmarks(){
+  const shell=document.querySelector(".app-shell");
+  const header=shell?.querySelector(".shell-mobile-header");
+  const rail=shell?.querySelector("#gymosNavigation");
+  const backdrop=shell?.querySelector(".navigation-backdrop");
+  if(!shell||!rail) return;
+  if(header) shell.insertBefore(header,shell.firstChild);
+  shell.insertBefore(rail,header?.nextSibling||shell.firstChild);
+  if(backdrop) shell.insertBefore(backdrop,rail.nextSibling);
+  const mobile=window.matchMedia("(max-width:767px)").matches;
+  if(mobile&&!navigationPanelOpen){
+    rail.setAttribute("inert","");
+    rail.setAttribute("aria-hidden","true");
+  }else{
+    rail.removeAttribute("inert");
+    rail.removeAttribute("aria-hidden");
+  }
+}
+function closeNavigationPanel({restoreFocus=true}={}){
+  navigationPanelOpen=false;
+  navigationSyncDetailOpen=false;
+  document.body.classList.remove("navigation-panel-open");
+  if(restoreFocus&&navigationReturnFocus?.isConnected) navigationReturnFocus.focus();
+  const rail=document.getElementById("gymosNavigation");
+  rail?.classList.remove("panel-open");
+  rail?.removeAttribute("role");
+  rail?.removeAttribute("aria-modal");
+  if(window.matchMedia("(max-width:767px)").matches){
+    rail?.setAttribute("inert","");
+    rail?.setAttribute("aria-hidden","true");
+  }
+  document.querySelector(".navigation-backdrop")?.classList.remove("visible");
+  document.querySelectorAll('[data-shell-action="toggle"]').forEach(button=>button.setAttribute("aria-expanded","false"));
+  navigationReturnFocus=null;
+}
+function openNavigationPanel(button){
+  navigationReturnFocus=button||document.activeElement;
+  navigationPanelOpen=true;
+  document.body.classList.add("navigation-panel-open");
+  const rail=document.getElementById("gymosNavigation");
+  rail?.removeAttribute("inert");
+  rail?.removeAttribute("aria-hidden");
+  rail?.classList.add("panel-open");
+  rail?.setAttribute("role","dialog");
+  rail?.setAttribute("aria-modal","true");
+  document.querySelector(".navigation-backdrop")?.classList.add("visible");
+  document.querySelectorAll('[data-shell-action="toggle"]').forEach(item=>item.setAttribute("aria-expanded","true"));
+  rail?.querySelector("[data-nav]")?.focus();
+}
+function toggleNavigation(button){
+  if(window.matchMedia("(min-width:1024px)").matches){
+    const next=!navigationExpandedPreference();
+    localStorage.setItem(GYMOS_NAV_EXPANDED_KEY,next?"1":"0");
+    document.body.classList.toggle("navigation-expanded",next);
+    document.getElementById("gymosNavigation")?.classList.toggle("expanded",next);
+    if(button){
+      button.textContent=next?"‹":"›";
+      button.setAttribute("aria-label",next?"Contraer menú":"Expandir menú");
+    }
+    button?.setAttribute("aria-expanded",String(next));
+    return;
+  }
+  if(navigationPanelOpen) closeNavigationPanel();
+  else openNavigationPanel(button);
+}
+
 function navigateToScreen(screen){
+  closeNavigationPanel({restoreFocus:false});
   if(screen!=="exerciseLibrary") cancelExerciseLibrarySearchDebounce();
   try{
     stopAllExerciseTimers();
@@ -5581,11 +5796,12 @@ function navigateToScreen(screen){
     render();
   }catch(error){
     console.error(`Could not render screen: ${screen}`,error);
+    const readable="No se pudo abrir esta sección. Vuelve a intentarlo.";
     app.innerHTML=`<div class="app-shell">
       <main class="screen">
         <section class="card warning-card">
-          <h1>No se pudo abrir ${esc(screen)}</h1>
-          <p class="subtle">${esc(error?.message||"Error desconocido")}</p>
+          <h1>No se pudo abrir esta sección</h1>
+          <p class="subtle">${readable}</p>
           <button type="button" id="recoverHome" class="primary full">Volver a Inicio</button>
         </section>
       </main>
@@ -5599,16 +5815,46 @@ function navigateToScreen(screen){
 }
 
 function bindNav(){
+  arrangeNavigationLandmarks();
   if(globalNavigationBound) return;
   globalNavigationBound=true;
 
   document.addEventListener("click",event=>{
     const button=event.target.closest?.("[data-nav]");
-    if(!button) return;
+    if(button){
+      event.preventDefault();
+      event.stopPropagation();
+      navigateToScreen(button.dataset.nav);
+      return;
+    }
+    const actionButton=event.target.closest?.("[data-shell-action]");
+    if(!actionButton) return;
     event.preventDefault();
-    event.stopPropagation();
-    navigateToScreen(button.dataset.nav);
+    const action=actionButton.dataset.shellAction;
+    if(action==="toggle") toggleNavigation(actionButton);
+    else if(action==="close") closeNavigationPanel();
+    else if(action==="theme"){cycleAppearancePreference();render();}
+    else if(action==="font"){cycleFontScalePreference();render();}
+    else if(action==="sync-detail"){
+      navigationSyncDetailOpen=!navigationSyncDetailOpen;
+      render();
+    }else if(action==="sync-retry"){
+      retrySyncFromNavigation();
+    }else if(action==="signout"&&confirm("¿Cerrar sesión en este dispositivo?")){
+      signOutSync().catch(()=>toast("No se pudo cerrar la sesión. Inténtalo de nuevo."));
+    }
   });
+  document.addEventListener("keydown",event=>{
+    if(event.key==="Escape"&&navigationPanelOpen){
+      event.preventDefault();
+      closeNavigationPanel();
+    }
+  });
+  window.matchMedia("(max-width:767px)").addEventListener?.("change",()=>{
+    closeNavigationPanel({restoreFocus:false});
+    render();
+  });
+  document.body.classList.toggle("navigation-expanded",navigationExpandedPreference());
 }
 function toast(msg){
   const el=document.createElement("div"); el.className="toast"; el.textContent=msg;
@@ -7076,7 +7322,6 @@ function renderHome(){
         <div class="home-current-date">${esc(homeDateLabel(now))}</div>
         <p class="home-today-description">${esc(homeTodayDescription(dashboard,sessionProfile))}</p>
       </div>
-      <div class="home-header-actions"><button id="homeThemeToggle" class="icon-button" aria-label="Cambiar tema">${resolvedTheme()==="dark"?"☀":"◐"}</button><button id="homeFontScaleToggle" class="icon-button header-font-scale" type="button" aria-label="Cambiar tamaño de letra"><span class="aaa-symbol" aria-hidden="true"><span>A</span><span>A</span><span>A</span></span></button>${syncBadge()}</div>
     </header>
     <main class="screen home-screen">
       ${renderDailyThought()}
@@ -7147,17 +7392,6 @@ function renderHome(){
     }
     cycleHomeSession();
   };
-  const openSyncSettings=document.getElementById("openSyncSettings");
-  if(openSyncSettings) openSyncSettings.onclick=()=>{state.screen="settings";renderSettings();};
-  document.getElementById("homeThemeToggle").onclick=()=>{
-    saveAppPreferences({theme:resolvedTheme()==="dark"?"light":"dark"});
-    renderHome();
-  };
-  document.getElementById("homeFontScaleToggle").onclick=()=>{
-    cycleFontScalePreference();
-    updateFontScaleButton();
-  };
-  updateFontScaleButton();
   const editQuickActions=document.getElementById("editQuickActions");
   if(editQuickActions) editQuickActions.onclick=()=>{
     state.quickActionsDraft=null;
@@ -12416,7 +12650,7 @@ async function undoCurrentExerciseSubstitution(exerciseIndex){
 
 function renderSettings(){
   app.innerHTML=`<div class="app-shell">
-    <header class="topbar"><div><div class="brand">Ajustes</div><div class="subtle">GymOS v4.0.8 · Tema claro y tamaño corregidos</div></div></header>
+    <header class="topbar"><div><div class="brand">Ajustes</div><div class="subtle">GymOS ${GYMOS_VERSION}</div></div></header>
     <main class="screen">
       <section class="card account-entry-card">
         <div class="account-entry-main">
@@ -12768,7 +13002,7 @@ function renderSettings(){
   };
 
   bindScreen("openHealth","health",renderHealth);
-  bindScreen("openRecoveryCenter","recovery",renderRecoveryCenter);
+  bindScreen("openRecoveryCenter","recovery",()=>window.GymOSRecovery.renderRecoveryCenter());
   bindScreen("openCoach","coach",renderCoach);
   bindScreen("openBackupRestore","backupRestore",renderBackupRestore);
   bindScreen("openRoutineEditor","routineEditor",renderRoutineEditor);
@@ -12898,11 +13132,13 @@ if("serviceWorker" in navigator){navigator.serviceWorker.register("service-worke
 
 window.addEventListener("online",()=>{
   state.syncStatus=isAppAuthenticated()?"pending":"local";
+  state.syncIssue=null;
   updateSyncIndicators();
   autoSync("conexión recuperada");
 });
 window.addEventListener("offline",()=>{
   state.syncStatus="offline";
+  state.syncIssue={kind:"offline",retryable:true};
   updateSyncIndicators();
 });
 document.addEventListener("visibilitychange",()=>{
@@ -12915,7 +13151,10 @@ refreshSyncSession().then(user=>{
   render();
   if(isAppAuthenticated()) setTimeout(()=>autoSync("inicio"),500);
 }).catch(error=>{
-  console.error("GymOS startup auth",error);
+  console.error("GymOS startup auth",{
+    code:error?.code||"startup_auth_failed",
+    status:error?.status||null
+  });
   render();
 });
 

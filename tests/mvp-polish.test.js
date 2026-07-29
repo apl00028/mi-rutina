@@ -117,7 +117,7 @@ test("I4 sincronización captura propietario, bloquea dobles ejecuciones y reval
   assert.match(sync,/const ownerId=currentRoutineOwnerOrNull\(\)/);
   assert.match(sync,/const userId=state\.syncUser\.id/);
   assert.ok((sync.match(/assertOwner\(\)/g)||[]).length>=7);
-  assert.match(sync,/finally\{\s*state\.syncInProgress=false/);
+  assert.match(sync,/finally\{\s*if\(state\.syncOperationId===operationId\) state\.syncInProgress=false/);
 });
 
 test("I4 los logs de contraseña y sincronización no persisten usuario ni sesión",()=>{
@@ -140,8 +140,8 @@ test("I4 las descargas históricas bloquean esquemas y tipos no admitidos",()=>{
   );
 });
 
-test("I5 la caché rc.1 contiene todos los módulos locales en orden de carga",()=>{
-  assert.match(workerSource,/const CACHE="gymos-cache-4\.2\.0-rc\.1"/);
+test("I5 la caché rc.2 contiene todos los módulos locales en orden de carga",()=>{
+  assert.match(workerSource,/const CACHE="gymos-cache-4\.2\.0-rc\.2"/);
   const localScripts=Array.from(
     indexSource.matchAll(/<script src="(?!https?:)([^"]+)"/g),
     match=>match[1]
@@ -162,10 +162,10 @@ test("I5 el worker no cachea Supabase ni peticiones mutables",()=>{
 });
 
 test("I7 prepara la versión rc sin alterar versiones históricas de migración",()=>{
-  assert.match(appSource,/const GYMOS_VERSION="4\.2\.0-rc\.1"/);
+  assert.match(appSource,/const GYMOS_VERSION="4\.2\.0-rc\.2"/);
   assert.match(appSource,/const GYMOS_BACKUP_VERSION=GYMOS_VERSION/);
   const manifest=JSON.parse(read("manifest.json"));
-  assert.equal(manifest.name,"GymOS 4.2.0-rc.1");
-  assert.equal(manifest.start_url,"./?v=420rc1");
+  assert.equal(manifest.name,"GymOS 4.2.0-rc.2");
+  assert.equal(manifest.start_url,"./?v=420rc2");
   assert.match(read("routine-session-migration.js"),/MIGRATION_VERSION/);
 });

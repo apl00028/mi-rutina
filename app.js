@@ -1,11 +1,9 @@
 const GYMOS_VERSION="4.2.0-rc.2";
 const GYMOS_NAV_EXPANDED_KEY="gymos:deviceNavigationExpanded";
-const GYMOS_APPEARANCE_KEY="gymos:appearance";
-const GYMOS_FONT_SCALE_KEY="gymos:fontScale";
 const GYMOS_FONT_SCALES=["font-scale-sm","font-scale-md","font-scale-lg","font-scale-xl"];
 
 function getAppearancePreference(){
-  return localStorage.getItem(GYMOS_APPEARANCE_KEY)||"light";
+  return getAppPreferences().theme||"system";
 }
 function updateAppearanceButton(value=getAppearancePreference()){
   const button=document.getElementById("appearanceCycleButton");
@@ -18,22 +16,7 @@ function updateAppearanceButton(value=getAppearancePreference()){
 function applyAppearancePreference(value=getAppearancePreference()){
   const allowed=["light","dark","system"];
   const next=allowed.includes(value)?value:"light";
-  const resolved=next==="system"
-    ?(window.matchMedia?.("(prefers-color-scheme: dark)").matches?"dark":"light")
-    :next;
-  document.documentElement.dataset.appearance=next;
-  document.documentElement.dataset.theme=resolved;
-  document.documentElement.classList.remove("theme-light","theme-dark","theme-system");
-  document.documentElement.classList.add(`theme-${next}`);
-  if(localStorage.getItem(GYMOS_APPEARANCE_KEY)!==next){
-    localStorage.setItem(GYMOS_APPEARANCE_KEY,next);
-  }
-  try{
-    const current=JSON.parse(localStorage.getItem("gymos:appPreferences")||"{}");
-    if(current.theme!==next){
-      localStorage.setItem("gymos:appPreferences",JSON.stringify({...current,theme:next}));
-    }
-  }catch(_){}
+  saveAppPreferences({theme:next});
   updateAppearanceButton(next);
 }
 function cycleAppearancePreference(){
@@ -43,8 +26,9 @@ function cycleAppearancePreference(){
   applyAppearancePreference(next);
 }
 function getFontScalePreference(){
-  const stored=localStorage.getItem(GYMOS_FONT_SCALE_KEY)||"font-scale-md";
-  return GYMOS_FONT_SCALES.includes(stored)?stored:"font-scale-md";
+  const stored=getAppPreferences().fontScale||"normal";
+  const values={small:"font-scale-sm",normal:"font-scale-md",large:"font-scale-lg",xlarge:"font-scale-xl"};
+  return values[stored]||"font-scale-md";
 }
 function updateFontScaleButton(value=getFontScalePreference()){
   const position=GYMOS_FONT_SCALES.indexOf(value)+1;
@@ -54,25 +38,12 @@ function updateFontScaleButton(value=getFontScalePreference()){
   });
 }
 function applyFontScalePreference(value=getFontScalePreference()){
-  const scaleMap={
-    "font-scale-sm":"small",
-    "font-scale-md":"normal",
-    "font-scale-lg":"large",
-    "font-scale-xl":"xlarge"
-  };
-  GYMOS_FONT_SCALES.forEach(cls=>document.documentElement.classList.remove(cls));
   const next=GYMOS_FONT_SCALES.includes(value)?value:"font-scale-md";
-  document.documentElement.classList.add(next);
-  document.documentElement.dataset.fontScale=scaleMap[next];
-  if(localStorage.getItem(GYMOS_FONT_SCALE_KEY)!==next){
-    localStorage.setItem(GYMOS_FONT_SCALE_KEY,next);
-  }
-  try{
-    const current=JSON.parse(localStorage.getItem("gymos:appPreferences")||"{}");
-    if(current.fontScale!==scaleMap[next]){
-      localStorage.setItem("gymos:appPreferences",JSON.stringify({...current,fontScale:scaleMap[next]}));
-    }
-  }catch(_){}
+  const scaleMap={
+    "font-scale-sm":"small","font-scale-md":"normal",
+    "font-scale-lg":"large","font-scale-xl":"xlarge"
+  };
+  saveAppPreferences({fontScale:scaleMap[next]});
   updateFontScaleButton(next);
 }
 function cycleFontScalePreference(){
@@ -94,10 +65,6 @@ function bindGlobalAppearanceControls(){
   updateAppearanceButton();
   updateFontScaleButton();
 }
-applyAppearancePreference();
-applyFontScalePreference();
-bindGlobalAppearanceControls();
-
 const defaultSessions = {
   A: [
     ["Press banca / máquina pecho", "8–10 reps"],
@@ -1947,7 +1914,7 @@ function fatigueAssessment(){
   const recoveryEntries=window.GymOSRecovery?.getEntries?.().slice(-3)||[];
   if(recoveryEntries.length>=2){
     const averageRecovery=recoveryEntries.reduce((sum,item)=>sum+Number(item.recoveryScore||0),0)/recoveryEntries.length;
-    if(averageRecovery<55){score+=2;reasons.push("Recovery Score reciente bajo");}
+    if(averageRecovery<55){score+=2;reasons.push("Recuperación reciente baja");}
     if(recoveryEntries.filter(item=>Number(item.fatigue)>=3).length>=2){score+=2;reasons.push("Fatiga muscular alta en varios check-ins");}
     if(recoveryEntries.filter(item=>Number(item.motivation)<=2).length>=2){score+=1;reasons.push("Motivación baja durante varios días");}
   }
@@ -2262,26 +2229,38 @@ function saveQuickActionPreferences(value,{markUpdated=true}={}){
 
 function getAppPreferences(){
   try{
+    const stored=JSON.parse(localStorage.getItem(APP_PREFERENCES_KEY)||"{}");
+    const legacyFontScale={
+      "font-scale-sm":"small","font-scale-md":"normal",
+      "font-scale-lg":"large","font-scale-xl":"xlarge"
+    }[localStorage.getItem("gymos:fontScale")];
     return {
       mode:"user",
-      theme:"system",
+      theme:localStorage.getItem("gymos:appearance")||"system",
       accent:"violet",
       density:"comfortable",
-      fontScale:"normal",
+      fontScale:legacyFontScale||"normal",
       highContrast:false,
       largeTapTargets:false,
       compact:false,
       animations:true,
       dailyThought:"automatic",
-      ...JSON.parse(localStorage.getItem(APP_PREFERENCES_KEY)||"{}")
+      ...stored
     };
   }catch(error){
     return {mode:"user",theme:"system",accent:"violet",density:"comfortable",fontScale:"normal",highContrast:false,largeTapTargets:false,compact:false,animations:true,dailyThought:"automatic"};
   }
 }
 function saveAppPreferences(value){
-  localStorage.setItem(APP_PREFERENCES_KEY,JSON.stringify({...getAppPreferences(),...value}));
+  const current=getAppPreferences();
+  const next={...current,...value};
+  if(JSON.stringify(current)===JSON.stringify(next)){
+    applyAppPreferences();
+    return {changed:false,preferences:current};
+  }
+  localStorage.setItem(APP_PREFERENCES_KEY,JSON.stringify(next));
   applyAppPreferences();
+  return {changed:true,preferences:next};
 }
 
 const DAILY_THOUGHT_STORAGE_KEY="gymos:dailyThought";
@@ -2305,8 +2284,30 @@ function dailyThoughtHash(value){
   }
   return hash>>>0;
 }
-function dailyThoughtContext(now=new Date()){
-  const history=getHistory()
+function dailyThoughtCompletedWeekStreak(history,goal,now=new Date()){
+  const target=Number(goal);
+  if(!Number.isInteger(target)||target<1) return 0;
+  const countForWeek=start=>{
+    const end=new Date(start);
+    end.setDate(end.getDate()+7);
+    return history.filter(item=>{
+      const date=new Date(item?.date);
+      return !Number.isNaN(date.getTime())&&date>=start&&date<end;
+    }).length;
+  };
+  const cursor=new Date(now);
+  cursor.setHours(0,0,0,0);
+  cursor.setDate(cursor.getDate()-((cursor.getDay()+6)%7));
+  if(countForWeek(cursor)<target) cursor.setDate(cursor.getDate()-7);
+  let streak=0;
+  while(streak<=260&&countForWeek(cursor)>=target){
+    streak++;
+    cursor.setDate(cursor.getDate()-7);
+  }
+  return streak;
+}
+function dailyThoughtContext(now=new Date(),inputs={}){
+  const history=(Array.isArray(inputs.history)?inputs.history:getHistory())
     .filter(workout=>workout?.date&&!Number.isNaN(new Date(workout.date).getTime()))
     .sort((a,b)=>new Date(b.date)-new Date(a.date));
   const latest=history[0]||null;
@@ -2315,7 +2316,7 @@ function dailyThoughtContext(now=new Date()){
   let improved=false;
   if(latestIsToday){
     try{
-      improved=recordsForWorkout(latest).length>0;
+      improved=recordsForWorkout(latest,history).length>0;
     }catch(error){
       console.error("Daily thought record context",error);
     }
@@ -2334,7 +2335,8 @@ function dailyThoughtContext(now=new Date()){
   if(improved) tags.push("record");
   if(latestIsToday) tags.push("completed");
   if(daysSinceLast!==null&&daysSinceLast>=4) tags.push("return");
-  if(completedWeekStreak()>=2) tags.push("streak");
+  const weeklyGoal=inputs.weeklyGoal??getWeeklyGoal();
+  if(dailyThoughtCompletedWeekStreak(history,weeklyGoal,now)>=2) tags.push("streak");
   if(inDefinition) tags.push("definition");
   if(now.getDay()===1) tags.push("monday");
   if(now.getDay()===5) tags.push("friday");
@@ -2349,12 +2351,12 @@ function readStoredDailyThought(){
     return null;
   }
 }
-function getDailyThought(now=new Date()){
+function getDailyThought(now=new Date(),contextInputs={}){
   const preference=getAppPreferences().dailyThought||"automatic";
   if(preference==="disabled") return null;
   const entries=DAILY_THOUGHT_SOURCE.getEntries();
   if(!entries.length) return null;
-  const context=dailyThoughtContext(now);
+  const context=dailyThoughtContext(now,contextInputs);
   const stored=readStoredDailyThought();
   if(stored?.date===context.today){
     const selected=entries.find(entry=>entry.id===stored.id);
@@ -2385,8 +2387,7 @@ function getDailyThought(now=new Date()){
   }));
   return selected;
 }
-function renderDailyThought(){
-  const thought=getDailyThought();
+function renderDailyThought(thought=getDailyThought()){
   if(!thought) return "";
   return `<aside class="daily-thought-card" aria-label="Pensamiento del día">
     <div class="daily-thought-label">Pensamiento del día</div>
@@ -3346,6 +3347,7 @@ function resetExerciseLibraryOwnerState(){
 }
 function resetRoutineSessionOwnerState(){
   if(typeof state==="undefined") return;
+  stopWorkoutSessionTimer();
   stopAllExerciseTimers();
   routineImportReadSequence+=1;
   state.selectedSession=null;
@@ -3362,10 +3364,24 @@ function resetRoutineSessionOwnerState(){
   state.coachSessionId=null;
   state.workoutDraftMessage=null;
   state.workoutDraftObservedIds=new Set();
+  state.workoutExerciseIndex=0;
+  state.workoutSessionOverviewOpen=false;
+  state.workoutTechniqueExpanded=false;
+  state.workoutChangeMenuOpen=false;
+  state.workoutCompletionReviewOpen=false;
+  state.workoutDiscardConfirmOpen=false;
+  state.workoutSeriesDeleteCandidate=null;
+  state.workoutInlineMessage=null;
+  state.workoutVisualLibrarySelections=new Map();
+  state.workoutUnresolvedDismissed=new Set();
+  state.workoutLibraryCandidateKey=null;
+  state.workoutDiscardMenuOpen=false;
+  state.workoutReturnFocusSelector=null;
   sessions=[];
   clearInterval(state.timerInterval);
   state.timerInterval=null;
   state.timerSeconds=0;
+  state.restPreferenceBusy=false;
   clearTimeout(state.syncTimer);
   state.syncTimer=null;
   state.syncOperationId+=1;
@@ -3385,9 +3401,14 @@ function resetRoutineSessionOwnerState(){
   state.bodySummaryDraft=null;
   state.bodySummaryReturnFocus=null;
   state.bodyFormMessage=null;
+  state.recoveryView="overview";
   state.recoveryDraft=null;
   state.recoveryResultDate=null;
   state.recoveryCheckinId=null;
+  state.recoveryMessage=null;
+  state.recoveryQuestionnaireError=null;
+  state.recoveryBusy=false;
+  state.recoveryOperationId=(state.recoveryOperationId||0)+1;
   state.accountProfile=null;
   state.accountProfileUserId=null;
   state.accountIdentityDirty=false;
@@ -3395,6 +3416,7 @@ function resetRoutineSessionOwnerState(){
   state.accountManagementMessage=null;
   state.onboardingDraft=null;
   state.onboardingMessage=null;
+  closeShellPopover({restoreFocus:false,renderShell:false});
   closeNavigationPanel({restoreFocus:false});
 }
 function assertActiveLocalOwner(ownerId){
@@ -3493,6 +3515,15 @@ function deactivateLocalUser(){
   resetRoutineSessionOwnerState();
 }
 
+function removeOwnerRecoveryReminderData(ownerId){
+  const prefix=`gymos:recovery-reminder:${ownerId}:`;
+  const keys=[];
+  for(let index=0;index<localStorage.length;index+=1){
+    const key=localStorage.key(index);
+    if(key?.startsWith(prefix)) keys.push(key);
+  }
+  keys.forEach(key=>localStorage.removeItem(key));
+}
 function deleteOwnerLocalData(ownerId,{removeOwner=false}={}){
   if(!window.GymOSProfileData) throw new Error("El modelo de perfil no está disponible.");
   const normalizedOwnerId=window.GymOSProfileData.normalizeOwnerId(ownerId);
@@ -3501,6 +3532,7 @@ function deleteOwnerLocalData(ownerId,{removeOwner=false}={}){
   localStorage.removeItem(`${LOCAL_VAULT_PREFIX}${normalizedOwnerId}`);
   window.GymOSProfileData.removeMigrationInternalData(normalizedOwnerId);
   localStorage.removeItem(exerciseDomainMigrationBackupKey(normalizedOwnerId));
+  removeOwnerRecoveryReminderData(normalizedOwnerId);
   if(removeOwner&&current===normalizedOwnerId) localStorage.removeItem(LOCAL_OWNER_KEY);
 }
 
@@ -3713,6 +3745,22 @@ let state = {
   selectedSessionId: localStorage.getItem(SELECTED_SESSION_ID_KEY),
   timerSeconds: 0,
   timerInterval: null,
+  workoutSessionTimer: null,
+  workoutExerciseIndex: 0,
+  workoutSessionOverviewOpen: false,
+  workoutTechniqueExpanded: false,
+  workoutChangeMenuOpen: false,
+  workoutCompletionReviewOpen: false,
+  workoutDiscardConfirmOpen: false,
+  workoutSeriesDeleteCandidate: null,
+  workoutInlineMessage: null,
+  workoutVisualLibrarySelections: new Map(),
+  workoutUnresolvedDismissed: new Set(),
+  workoutLibraryCandidateKey: null,
+  workoutDiscardMenuOpen: false,
+  workoutReturnFocusSelector: null,
+  workoutSetBusyKey: null,
+  restPreferenceBusy: false,
   expandedHistoryId: null,
   selectedStatsExercise: null,
   selectedRecordExercise: null,
@@ -3792,6 +3840,10 @@ let state = {
   recoveryDraft: null,
   recoveryResultDate: null,
   recoveryCheckinId: null,
+  recoveryMessage: null,
+  recoveryQuestionnaireError: null,
+  recoveryBusy: false,
+  recoveryOperationId: 0,
   completedWorkoutSummary: null,
   workoutAnalysisId: null,
   workoutDraftMessage: null,
@@ -4021,8 +4073,31 @@ function getRestSeconds(){
   return [60,90,120,180].includes(value)?value:90;
 }
 function saveRestSeconds(value){
-  localStorage.setItem("gymos:restSeconds",String(value));
-  markLocalUpdated();
+  const seconds=Number(value);
+  if(![60,90,120,180].includes(seconds)) throw new Error("invalid_rest_seconds");
+  const ownerId=currentRoutineOwnerOrNull();
+  if(!ownerId) throw new Error("owner_not_active");
+  assertActiveLocalOwner(ownerId);
+  if(getRestSeconds()===seconds) return {changed:false,value:seconds};
+  const previous={
+    restSeconds:localStorage.getItem("gymos:restSeconds"),
+    updatedAt:localStorage.getItem("gymos:updatedAt"),
+    syncPending:localStorage.getItem("gymos:syncPending"),
+    syncStatus:state.syncStatus
+  };
+  try{
+    localStorage.setItem("gymos:restSeconds",String(seconds));
+    assertActiveLocalOwner(ownerId);
+    markLocalUpdated();
+    assertActiveLocalOwner(ownerId);
+    return {changed:true,value:seconds};
+  }catch(error){
+    restoreStorageValue("gymos:restSeconds",previous.restSeconds);
+    restoreStorageValue("gymos:updatedAt",previous.updatedAt);
+    restoreStorageValue("gymos:syncPending",previous.syncPending);
+    state.syncStatus=previous.syncStatus;
+    throw error;
+  }
 }
 function getWeeklyGoal(){
   const value=Number(localStorage.getItem("gymos:weeklyGoal")||3);
@@ -4237,7 +4312,7 @@ function applySyncPayload(payload){
   if(payload.healthSettings) saveHealthSettings(payload.healthSettings);
   if(Array.isArray(payload.healthEntries)) saveHealthEntries(payload.healthEntries);
   if(Array.isArray(payload.healthImports)) saveHealthImports(payload.healthImports);
-  if(Array.isArray(payload.recoveryEntries)) window.GymOSRecovery?.saveEntries?.(payload.recoveryEntries,false);
+  if(Array.isArray(payload.recoveryEntries)) window.GymOSRecovery?.mergeRecoveryEntries?.(payload.recoveryEntries,false);
   if(Array.isArray(payload.recoveryCheckins)) window.GymOSRecovery?.mergeCheckins?.(payload.recoveryCheckins,false);
   if(Array.isArray(payload.workoutAnalyses)) window.GymOSWorkoutAnalysis?.mergeAnalyses?.(payload.workoutAnalyses,false);
   if(payload.appPreferences) saveAppPreferences(payload.appPreferences);
@@ -4435,18 +4510,26 @@ function isAppAuthenticated(){
 function resolveAuthenticatedAppState(session,pendingUser=null){
   const previousAuthorizedUserId=isAppAuthenticated()?state.syncUser?.id:null;
   const user=session?.user||(pendingUser&&!isEmailConfirmed(pendingUser)?pendingUser:null);
+  const confirmed=Boolean(session&&isEmailConfirmed(user));
 
   state.syncSession=session||null;
   state.syncUser=user;
   state.authResolved=true;
-  state.syncStatus=session&&isEmailConfirmed(user)?"connected":"configured";
+  if(!confirmed) state.syncStatus="configured";
 
   if(state.passwordRecoveryMode){
     state.syncStatus="configured";
     return "password-recovery";
   }
-  if(session&&isEmailConfirmed(user)){
-    if(user.id!==previousAuthorizedUserId) activateLocalUser(user.id);
+  if(confirmed){
+    if(user.id!==previousAuthorizedUserId){
+      activateLocalUser(user.id);
+      state.syncStatus=navigator.onLine?"pending":"offline";
+      state.syncIssue=navigator.onLine?null:{kind:"offline",retryable:true};
+    }else if(!navigator.onLine){
+      state.syncStatus="offline";
+      state.syncIssue={kind:"offline",retryable:true};
+    }
     scheduleAccountProfileLoad(user.id);
     return "authenticated";
   }
@@ -4891,13 +4974,13 @@ function syncStatusLabel(){
   if(state.syncStatus==="pending") return "Cambios pendientes";
   if(state.syncStatus==="offline") return "Sin conexión";
   if(state.syncStatus==="synced") return "Sincronizado";
-  if(state.syncStatus==="connected") return "Cuenta conectada";
+  if(state.syncStatus==="connected") return "Cambios pendientes";
   if(state.syncStatus==="conflict") return "Conflicto de sincronización";
   if(state.syncStatus==="session_expired") return "Sesión caducada";
   if(state.syncStatus==="permission_denied") return "Permiso rechazado";
-  if(state.syncStatus==="recoverable_error") return "No se pudo sincronizar";
-  if(state.syncStatus==="configured") return "Configurado, sin sesión";
+  if(state.syncStatus==="recoverable_error") return "Error recuperable";
   if(state.syncStatus==="error") return "Error de sincronización";
+  if(state.syncStatus==="configured") return "Configurado, sin sesión";
   return "Solo en este dispositivo";
 }
 function classifySyncError(error){
@@ -4924,7 +5007,7 @@ function syncStatusDescription(){
     session_expired:"Vuelve a iniciar sesión para continuar sincronizando.",
     permission_denied:"No se pudo acceder a tus datos en la nube. Comprueba tu cuenta o vuelve a iniciar sesión.",
     recoverable_error:"No se ha perdido ningún cambio local. Puedes volver a intentarlo.",
-    connected:"La cuenta está conectada.",
+    connected:"La sesión está iniciada, pero la sincronización aún no se ha comprobado.",
     configured:"Inicia sesión para sincronizar.",
     local:"Los datos se guardan únicamente en este dispositivo."
   };
@@ -5480,9 +5563,9 @@ function totalCurrentWeekVolume(){
 function compactNumber(value){
   return new Intl.NumberFormat("es-ES",{maximumFractionDigits:0}).format(value);
 }
-function allExercisePerformances(name,excludeWorkoutId=null){
+function allExercisePerformances(name,excludeWorkoutId=null,historyInput=null){
   const performances=[];
-  getHistory().forEach(workout=>{
+  (Array.isArray(historyInput)?historyInput:getHistory()).forEach(workout=>{
     if(excludeWorkoutId!==null&&workout.id===excludeWorkoutId) return;
     const exercise=workout.exercises.find(e=>e.name===name);
     if(!exercise) return;
@@ -5514,10 +5597,10 @@ function recordStats(name){
   const maxReps=performances.reduce((best,p)=>p.reps>best.reps?p:best,performances[0]);
   return {performances,maxWeight,bestVolumeSet,bestE1rm,maxReps};
 }
-function recordsForWorkout(workout){
+function recordsForWorkout(workout,historyInput=null){
   const records=[];
   workout.exercises.forEach(exercise=>{
-    const previous=allExercisePerformances(exercise.name,workout.id);
+    const previous=allExercisePerformances(exercise.name,workout.id,historyInput);
     const previousMaxWeight=previous.length?Math.max(...previous.map(p=>p.weight)):0;
     const previousBestE1rm=previous.length?Math.max(...previous.map(p=>p.e1rm)):0;
     const previousBestVolume=previous.length?Math.max(...previous.map(p=>p.volume)):0;
@@ -5627,26 +5710,50 @@ function miniBars(rows){
   }).join("")}</div>`;
 }
 const NAVIGATION_GROUPS=[
-  {label:"Principal",items:[
-    ["home","⌂","Inicio"],["workout","▶","Entrenar"],["progressDashboard","↗","Progreso"],
-    ["coach","✦","Coach"],["nutrition","◉","Nutrición"]
+  {label:"Entrenamiento",items:[
+    ["home","home","Inicio"],["workout","dumbbell","Entrenar"],["recovery","recovery","Recuperación"]
+  ]},
+  {label:"Seguimiento",items:[
+    ["progressDashboard","progress","Progreso"],["coach","coach","Coach"],["nutrition","nutrition","Nutrición"]
   ]},
   {label:"Planificación",items:[
-    ["routineWorkflow","▤","Mi rutina"],["exerciseLibrary","◇","Biblioteca de ejercicios"],
-    ["recovery","◌","Recovery Center"]
-  ]},
-  {label:"Cuenta",items:[
-    ["account","◎","Cuenta"],["settings","⚙","Ajustes"]
+    ["routineWorkflow","routine","Mi rutina"],["exerciseLibrary","library","Biblioteca"]
   ]}
 ];
+const NAVIGATION_FOOTER_ITEMS=[
+  ["settings","settings","Ajustes"]
+];
+const NAVIGATION_ICON_PATHS={
+  home:'<path d="M3 10.8 12 3l9 7.8"/><path d="M5.5 9.5V21h13V9.5"/><path d="M9.5 21v-7h5v7"/>',
+  dumbbell:'<path d="M6 7v10M18 7v10M3 9v6M21 9v6M6 12h12"/>',
+  recovery:'<path d="M3 12h4l2-4 3 8 2-4h7"/><path d="M20.8 5.7a5.4 5.4 0 0 0-7.6 0L12 6.9l-1.2-1.2a5.4 5.4 0 0 0-7.6 7.6L12 22l8.8-8.7a5.4 5.4 0 0 0 0-7.6Z"/>',
+  progress:'<path d="M4 19V9M10 19V5M16 19v-7M22 19V3"/><path d="m4 13 6-5 6 2 6-6"/>',
+  coach:'<path d="M21 12a8 8 0 0 1-8 8H6l-4 3v-7a8 8 0 1 1 19-4Z"/><path d="m12 7 .8 2.1 2.2.2-1.7 1.5.5 2.2-1.8-1.2-1.8 1.2.5-2.2-1.7-1.5 2.2-.2Z"/>',
+  nutrition:'<path d="M7 3v8M4 3v5a3 3 0 0 0 6 0V3M7 11v10M16 3v18M16 3c3 1 4 4 4 7h-4"/>',
+  routine:'<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M8 3v4M16 3v4M3 10h18M8 14h3M8 17h6"/>',
+  library:'<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>',
+  settings:'<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-2.8 2.8-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6v.2h-4V21a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1L4.2 17l.1-.1a1.7 1.7 0 0 0 .3-1.9A1.7 1.7 0 0 0 3 14H2.8v-4H3a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9L4.2 7 7 4.2l.1.1a1.7 1.7 0 0 0 1.9.3A1.7 1.7 0 0 0 10 3v-.2h4V3a1.7 1.7 0 0 0 1 1.6 1.7 1.7 0 0 0 1.9-.3l.1-.1L19.8 7l-.1.1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0 1.6 1h.2v4H21a1.7 1.7 0 0 0-1.6 1Z"/>',
+  expand:'<path d="m9 18 6-6-6-6"/>',
+  collapse:'<path d="m15 18-6-6 6-6"/>'
+};
+function navigationIcon(name){
+  const paths=NAVIGATION_ICON_PATHS[name]||NAVIGATION_ICON_PATHS.library;
+  return `<svg viewBox="0 0 24 24" focusable="false" aria-hidden="true">${paths}</svg>`;
+}
 let navigationPanelOpen=false;
 let navigationSyncDetailOpen=false;
 let navigationReturnFocus=null;
+let shellAppearancePanelOpen=false;
+let shellAccountPanelOpen=false;
+let shellPanelReturnAction=null;
 function navigationExpandedPreference(){
   return localStorage.getItem(GYMOS_NAV_EXPANDED_KEY)==="1";
 }
+function navigationDestinations(){
+  return [...NAVIGATION_GROUPS.flatMap(group=>group.items),...NAVIGATION_FOOTER_ITEMS];
+}
 function navigationDestinationForScreen(screen=state.screen){
-  const direct=new Set(NAVIGATION_GROUPS.flatMap(group=>group.items.map(item=>item[0])));
+  const direct=new Set(navigationDestinations().map(item=>item[0]));
   if(direct.has(screen)) return screen;
   if(screen==="workoutComplete") return "workout";
   if(["history","stats","records","body","editWorkout"].includes(screen)) return "progressDashboard";
@@ -5654,29 +5761,110 @@ function navigationDestinationForScreen(screen=state.screen){
   if(["exerciseLibraryEditor","exerciseDetail","favoriteExercises","exerciseSubstitution","substitutionHistory"].includes(screen)) return "exerciseLibrary";
   if(["coachProposal","coachChat","workoutAnalysis","aiSettings"].includes(screen)) return "coach";
   if(["professionalNutrition","professionalNutritionImport","professionalNutritionPlan","professionalNutritionAdapt"].includes(screen)) return "nutrition";
+  if(screen==="account") return "account";
   if(["quickActions","backupRestore","developer","health"].includes(screen)) return "settings";
   return "settings";
 }
+const SHELL_SCREEN_ROUTES={
+  history:"Historial",stats:"Estadísticas",records:"Récords",body:"Seguimiento corporal",
+  editWorkout:"Editar entrenamiento",plan:"Plan semanal",routineEditor:"Editor",
+  blocks:"Bloques",blockEditor:"Editar bloque",blockAnalytics:"Análisis de bloque",
+  globalAnalytics:"Análisis global",exerciseAnalytics:"Análisis de ejercicio",
+  exerciseLibraryEditor:"Nuevo ejercicio",exerciseDetail:"Detalle de ejercicio",
+  favoriteExercises:"Favoritos",exerciseSubstitution:"Sustituir ejercicio",
+  substitutionHistory:"Historial de sustituciones",coachProposal:"Propuesta",
+  coachChat:"Conversación",workoutAnalysis:"Análisis de sesión",
+  aiSettings:"Inteligencia artificial",professionalNutrition:"Planificación profesional",
+  professionalNutritionImport:"Importar planificación",professionalNutritionPlan:"Plan profesional",
+  professionalNutritionAdapt:"Adaptar planificación",backupRestore:"Copias de seguridad",
+  developer:"Diagnóstico",health:"Salud"
+};
+function shellScreenContext(screen=state.screen){
+  const destination=navigationDestinationForScreen(screen);
+  const navigationLabel=navigationDestinations().find(item=>item[0]===destination)?.[2];
+  return {
+    destination,
+    title:destination==="account"?"Cuenta":navigationLabel||"Ajustes",
+    route:SHELL_SCREEN_ROUTES[screen]||""
+  };
+}
+function shellAccountInitials(){
+  return accountInitials(accountDisplayName());
+}
 function navigationItem(screen,icon,label,active){
   const selected=screen===active;
-  return `<button type="button" class="navigation-item ${selected?"active":""}" data-nav="${screen}" aria-label="${esc(label)}" title="${esc(label)}" ${selected?'aria-current="page"':""}>
-    <span class="navigation-icon" aria-hidden="true">${icon}</span><span class="navigation-label">${esc(label)}</span>
+  const tooltipId=`nav-tooltip-${screen}`;
+  return `<button type="button" class="navigation-item ${selected?"active":""}" data-nav="${screen}" aria-label="${esc(label)}" aria-describedby="${tooltipId}" ${selected?'aria-current="page"':""}>
+    <span class="navigation-icon" aria-hidden="true">${navigationIcon(icon)}</span><span class="navigation-label">${esc(label)}</span>
+    <span class="navigation-tooltip" id="${tooltipId}" role="tooltip">${esc(label)}</span>
   </button>`;
 }
 function nav(){
   const active=navigationDestinationForScreen();
   const expanded=window.matchMedia("(min-width:1024px)").matches&&navigationExpandedPreference();
   const syncRetry=Boolean(state.syncIssue?.retryable)&&navigator.onLine;
+  const accountEmail=String(state.syncUser?.email||"").trim();
+  const accountName=accountDisplayName();
+  const context=shellScreenContext();
+  const accountInitialsValue=shellAccountInitials();
+  const appearance=getAppPreferences();
   return `
-    <header class="shell-mobile-header">
+    <header class="shell-global-topbar">
       <button type="button" class="navigation-menu-button" data-shell-action="toggle" aria-label="Abrir menú" aria-controls="gymosNavigation" aria-expanded="${navigationPanelOpen}">☰</button>
-      <strong>GymOS</strong><span></span>
+      <div class="shell-screen-context">
+        <strong>${esc(context.title)}</strong>
+        ${context.route?`<span aria-label="${esc(`${context.title}, ${context.route}`)}">${esc(context.title)} / ${esc(context.route)}</span>`:""}
+      </div>
+      <div class="shell-global-actions">
+        <button type="button" class="shell-sync-trigger ${esc(state.syncStatus)}" data-shell-action="sync-detail" aria-label="${esc(`Sincronización: ${syncStatusLabel()}`)}" aria-controls="shellSyncPanel" aria-expanded="${navigationSyncDetailOpen}">
+          <span class="sync-dot ${esc(state.syncStatus)}" data-sync-dot aria-hidden="true"></span>
+          <span class="shell-action-label" data-sync-label>${esc(syncStatusLabel())}</span>
+        </button>
+        <button type="button" class="shell-appearance-trigger" data-shell-action="appearance" aria-label="Abrir preferencias de apariencia" aria-controls="shellAppearancePanel" aria-expanded="${shellAppearancePanelOpen}">
+          <span aria-hidden="true">◐</span><span class="shell-action-label">Apariencia</span>
+        </button>
+        <button type="button" class="shell-account-trigger ${active==="account"?"active":""}" data-shell-action="account-menu" aria-label="Abrir menú de cuenta" aria-controls="shellAccountPanel" aria-expanded="${shellAccountPanelOpen}">
+          <span data-account-avatar aria-hidden="true">${esc(accountInitialsValue)}</span><span aria-hidden="true" class="shell-account-chevron">⌄</span>
+        </button>
+      </div>
     </header>
-    <aside id="gymosNavigation" class="navigation-rail ${expanded?"expanded":""} ${navigationPanelOpen?"panel-open":""}" aria-label="Navegación de GymOS">
+    ${navigationSyncDetailOpen?`<section id="shellSyncPanel" class="shell-popover shell-sync-panel" role="dialog" aria-label="Estado de sincronización">
+      <div class="shell-popover-heading"><span class="sync-dot ${esc(state.syncStatus)}" data-sync-dot aria-hidden="true"></span><strong data-sync-label>${esc(syncStatusLabel())}</strong></div>
+      <p data-sync-description>${esc(syncStatusDescription())}</p>
+      ${syncRetry?`<button type="button" class="secondary" data-shell-action="sync-retry">Reintentar</button>`:""}
+    </section>`:""}
+    ${shellAppearancePanelOpen?`<section id="shellAppearancePanel" class="shell-popover shell-appearance-panel" role="dialog" aria-label="Preferencias de apariencia">
+      <fieldset>
+        <legend>Tema</legend>
+        <div class="shell-choice-grid">
+          ${[["light","Claro"],["dark","Oscuro"],["system","Sistema"]].map(([value,label])=>`<button type="button" data-shell-appearance="theme" data-value="${value}" aria-pressed="${appearance.theme===value}">${appearance.theme===value?"✓ ":""}${label}</button>`).join("")}
+        </div>
+      </fieldset>
+      <fieldset>
+        <legend>Tamaño de texto</legend>
+        <div class="shell-choice-grid four">
+          ${[["small","A"],["normal","A"],["large","A"],["xlarge","A"]].map(([value,label],index)=>`<button type="button" class="font-choice-${index+1}" data-shell-appearance="fontScale" data-value="${value}" aria-label="Tamaño de texto ${index+1} de 4" aria-pressed="${appearance.fontScale===value}">${appearance.fontScale===value?"✓ ":""}${label}</button>`).join("")}
+        </div>
+      </fieldset>
+      <label class="shell-toggle"><input type="checkbox" data-shell-appearance="highContrast" ${appearance.highContrast?"checked":""}><span>Alto contraste</span></label>
+      <label class="shell-toggle"><input type="checkbox" data-shell-appearance="animations" ${appearance.animations?"":"checked"}><span>Reducir movimiento</span></label>
+      <button type="button" class="text-button shell-settings-link" data-nav="settings">Más opciones en Ajustes</button>
+    </section>`:""}
+    ${shellAccountPanelOpen?`<section id="shellAccountPanel" class="shell-popover shell-account-panel" role="menu" aria-label="Menú de cuenta">
+      <div class="shell-account-identity">
+        <strong>${esc(accountName)}</strong>
+        <span title="${esc(accountEmail)}">${esc(accountEmail)}</span>
+      </div>
+      <button type="button" role="menuitem" data-nav="account">Mi cuenta</button>
+      <button type="button" role="menuitem" data-nav="settings">Ajustes</button>
+      <button type="button" role="menuitem" class="shell-account-appearance-link" data-shell-action="appearance">Apariencia</button>
+      <hr>
+      <button type="button" role="menuitem" class="shell-signout-action" data-shell-action="signout">Cerrar sesión</button>
+    </section>`:""}
+    <aside id="gymosNavigation" class="navigation-rail ${expanded?"expanded":""} ${navigationPanelOpen?"panel-open":""}" aria-label="Navegación de GymOS" ${navigationPanelOpen?'role="dialog" aria-modal="true"':""}>
       <div class="navigation-brand">
         <span class="navigation-brand-mark" aria-hidden="true">G</span>
         <span class="navigation-label">GymOS</span>
-        <button type="button" class="navigation-expand-button" data-shell-action="toggle" aria-label="${expanded?"Contraer menú":"Expandir menú"}" aria-controls="gymosNavigation" aria-expanded="${expanded||navigationPanelOpen}">${expanded?"‹":"›"}</button>
       </div>
       <nav class="navigation-groups" aria-label="Secciones">
         ${NAVIGATION_GROUPS.map(group=>`<section class="navigation-group" aria-label="${esc(group.label)}">
@@ -5685,16 +5873,11 @@ function nav(){
         </section>`).join("")}
       </nav>
       <div class="navigation-footer">
-        <button type="button" class="navigation-item sync-navigation-item ${esc(state.syncStatus)}" data-shell-action="sync-detail" aria-label="${esc(syncStatusLabel())}" title="${esc(syncStatusLabel())}" aria-expanded="${navigationSyncDetailOpen}">
-          <span class="sync-dot ${esc(state.syncStatus)}" data-sync-dot aria-hidden="true"></span><span class="navigation-label" data-sync-label>${esc(syncStatusLabel())}</span>
+        ${NAVIGATION_FOOTER_ITEMS.map(([screen,icon,label])=>navigationItem(screen,icon,label,active)).join("")}
+        <button type="button" class="navigation-item navigation-expand-button" data-shell-action="toggle" aria-label="${expanded?"Contraer menú":"Expandir menú"}" aria-describedby="nav-tooltip-expand" aria-controls="gymosNavigation" aria-expanded="${expanded||navigationPanelOpen}">
+          <span class="navigation-icon" aria-hidden="true">${navigationIcon(expanded?"collapse":"expand")}</span><span class="navigation-label">${expanded?"Contraer menú":"Expandir menú"}</span>
+          <span class="navigation-tooltip" id="nav-tooltip-expand" role="tooltip">${expanded?"Contraer menú":"Expandir menú"}</span>
         </button>
-        ${navigationSyncDetailOpen?`<section class="navigation-sync-detail" role="status">
-          <strong data-sync-label>${esc(syncStatusLabel())}</strong><p data-sync-description>${esc(syncStatusDescription())}</p>
-          ${syncRetry?`<button type="button" class="text-button" data-shell-action="sync-retry">Reintentar</button>`:""}
-        </section>`:""}
-        <button type="button" class="navigation-item" data-shell-action="theme" aria-label="Cambiar tema" title="Cambiar tema"><span class="navigation-icon" aria-hidden="true">◐</span><span class="navigation-label">Tema</span></button>
-        <button type="button" class="navigation-item" data-shell-action="font" aria-label="Cambiar tamaño de texto" title="Cambiar tamaño de texto"><span class="navigation-icon navigation-font-icon" aria-hidden="true">Aa</span><span class="navigation-label">Tamaño de texto</span></button>
-        ${isAppAuthenticated()?`<button type="button" class="navigation-item" data-shell-action="signout" aria-label="Cerrar sesión" title="Cerrar sesión"><span class="navigation-icon" aria-hidden="true">⇥</span><span class="navigation-label">Cerrar sesión</span></button>`:""}
       </div>
     </aside>
     <button type="button" class="navigation-backdrop ${navigationPanelOpen?"visible":""}" data-shell-action="close" aria-label="Cerrar menú" tabindex="-1"></button>`;
@@ -5703,7 +5886,7 @@ let globalNavigationBound=false;
 
 function arrangeNavigationLandmarks(){
   const shell=document.querySelector(".app-shell");
-  const header=shell?.querySelector(".shell-mobile-header");
+  const header=shell?.querySelector(".shell-global-topbar");
   const rail=shell?.querySelector("#gymosNavigation");
   const backdrop=shell?.querySelector(".navigation-backdrop");
   if(!shell||!rail) return;
@@ -5719,9 +5902,61 @@ function arrangeNavigationLandmarks(){
     rail.removeAttribute("aria-hidden");
   }
 }
+function closeShellPopover({restoreFocus=true,renderShell=true}={}){
+  const returnAction=shellPanelReturnAction;
+  const wasOpen=navigationSyncDetailOpen||shellAppearancePanelOpen||shellAccountPanelOpen;
+  navigationSyncDetailOpen=false;
+  shellAppearancePanelOpen=false;
+  shellAccountPanelOpen=false;
+  shellPanelReturnAction=null;
+  if(!wasOpen) return;
+  if(renderShell) render();
+  if(restoreFocus&&returnAction){
+    queueMicrotask(()=>document.querySelector(`[data-shell-action="${returnAction}"]`)?.focus());
+  }
+}
+function openShellPopover(name,button){
+  const wasOpen={
+    "sync-detail":navigationSyncDetailOpen,
+    appearance:shellAppearancePanelOpen,
+    "account-menu":shellAccountPanelOpen
+  }[name];
+  navigationSyncDetailOpen=name==="sync-detail"&&!wasOpen;
+  shellAppearancePanelOpen=name==="appearance"&&!wasOpen;
+  shellAccountPanelOpen=name==="account-menu"&&!wasOpen;
+  shellPanelReturnAction=wasOpen
+    ?null
+    :name==="appearance"&&button?.closest?.("#shellAccountPanel")
+      ?"account-menu"
+      :name;
+  render();
+  if(!wasOpen){
+    queueMicrotask(()=>{
+      const panel={
+        "sync-detail":"#shellSyncPanel",
+        appearance:"#shellAppearancePanel",
+        "account-menu":"#shellAccountPanel"
+      }[name];
+      document.querySelector(`${panel} button,${panel} input`)?.focus();
+    });
+  }else{
+    queueMicrotask(()=>document.querySelector(`[data-shell-action="${name}"]`)?.focus());
+  }
+}
+function updateNavigationExpandControl(button,expanded){
+  if(!button) return;
+  const text=expanded?"Contraer menú":"Expandir menú";
+  button.setAttribute("aria-label",text);
+  button.setAttribute("aria-expanded",String(expanded));
+  const icon=button.querySelector(".navigation-icon");
+  const label=button.querySelector(".navigation-label");
+  const tooltip=button.querySelector(".navigation-tooltip");
+  if(icon) icon.innerHTML=navigationIcon(expanded?"collapse":"expand");
+  if(label) label.textContent=text;
+  if(tooltip) tooltip.textContent=text;
+}
 function closeNavigationPanel({restoreFocus=true}={}){
   navigationPanelOpen=false;
-  navigationSyncDetailOpen=false;
   document.body.classList.remove("navigation-panel-open");
   if(restoreFocus&&navigationReturnFocus?.isConnected) navigationReturnFocus.focus();
   const rail=document.getElementById("gymosNavigation");
@@ -5734,6 +5969,7 @@ function closeNavigationPanel({restoreFocus=true}={}){
   }
   document.querySelector(".navigation-backdrop")?.classList.remove("visible");
   document.querySelectorAll('[data-shell-action="toggle"]').forEach(button=>button.setAttribute("aria-expanded","false"));
+  updateNavigationExpandControl(document.querySelector(".navigation-expand-button"),false);
   navigationReturnFocus=null;
 }
 function openNavigationPanel(button){
@@ -5748,6 +5984,7 @@ function openNavigationPanel(button){
   rail?.setAttribute("aria-modal","true");
   document.querySelector(".navigation-backdrop")?.classList.add("visible");
   document.querySelectorAll('[data-shell-action="toggle"]').forEach(item=>item.setAttribute("aria-expanded","true"));
+  updateNavigationExpandControl(rail?.querySelector(".navigation-expand-button"),true);
   rail?.querySelector("[data-nav]")?.focus();
 }
 function toggleNavigation(button){
@@ -5756,11 +5993,7 @@ function toggleNavigation(button){
     localStorage.setItem(GYMOS_NAV_EXPANDED_KEY,next?"1":"0");
     document.body.classList.toggle("navigation-expanded",next);
     document.getElementById("gymosNavigation")?.classList.toggle("expanded",next);
-    if(button){
-      button.textContent=next?"‹":"›";
-      button.setAttribute("aria-label",next?"Contraer menú":"Expandir menú");
-    }
-    button?.setAttribute("aria-expanded",String(next));
+    updateNavigationExpandControl(button,next);
     return;
   }
   if(navigationPanelOpen) closeNavigationPanel();
@@ -5768,7 +6001,9 @@ function toggleNavigation(button){
 }
 
 function navigateToScreen(screen){
+  closeShellPopover({restoreFocus:false,renderShell:false});
   closeNavigationPanel({restoreFocus:false});
+  if(screen!=="workout") stopWorkoutSessionTimer();
   if(screen!=="exerciseLibrary") cancelExerciseLibrarySearchDebounce();
   try{
     stopAllExerciseTimers();
@@ -5827,30 +6062,63 @@ function bindNav(){
       navigateToScreen(button.dataset.nav);
       return;
     }
+    const appearanceButton=event.target.closest?.("button[data-shell-appearance]");
+    if(appearanceButton){
+      event.preventDefault();
+      saveAppPreferences({
+        [appearanceButton.dataset.shellAppearance]:appearanceButton.dataset.value
+      });
+      render();
+      return;
+    }
     const actionButton=event.target.closest?.("[data-shell-action]");
-    if(!actionButton) return;
+    if(!actionButton){
+      if((navigationSyncDetailOpen||shellAppearancePanelOpen||shellAccountPanelOpen)&&
+        !event.target.closest?.(".shell-popover")){
+        closeShellPopover();
+      }
+      return;
+    }
     event.preventDefault();
     const action=actionButton.dataset.shellAction;
     if(action==="toggle") toggleNavigation(actionButton);
     else if(action==="close") closeNavigationPanel();
-    else if(action==="theme"){cycleAppearancePreference();render();}
-    else if(action==="font"){cycleFontScalePreference();render();}
-    else if(action==="sync-detail"){
-      navigationSyncDetailOpen=!navigationSyncDetailOpen;
-      render();
+    else if(["sync-detail","appearance","account-menu"].includes(action)){
+      openShellPopover(action,actionButton);
     }else if(action==="sync-retry"){
       retrySyncFromNavigation();
     }else if(action==="signout"&&confirm("¿Cerrar sesión en este dispositivo?")){
-      signOutSync().catch(()=>toast("No se pudo cerrar la sesión. Inténtalo de nuevo."));
+      closeNavigationPanel({restoreFocus:false});
+      actionButton.disabled=true;
+      signOutSync().then(()=>{
+        state.screen="account";
+        render();
+      }).catch(()=>{
+        actionButton.disabled=false;
+        toast("No se pudo cerrar la sesión. Inténtalo de nuevo.");
+      });
     }
   });
+  document.addEventListener("change",event=>{
+    const control=event.target.closest?.("[data-shell-appearance]");
+    if(!control) return;
+    const key=control.dataset.shellAppearance;
+    const value=key==="animations"?!control.checked:Boolean(control.checked);
+    saveAppPreferences({[key]:value});
+    render();
+  });
   document.addEventListener("keydown",event=>{
-    if(event.key==="Escape"&&navigationPanelOpen){
+    if(event.key!=="Escape") return;
+    if(navigationSyncDetailOpen||shellAppearancePanelOpen||shellAccountPanelOpen){
+      event.preventDefault();
+      closeShellPopover();
+    }else if(navigationPanelOpen){
       event.preventDefault();
       closeNavigationPanel();
     }
   });
   window.matchMedia("(max-width:767px)").addEventListener?.("change",()=>{
+    closeShellPopover({restoreFocus:false,renderShell:false});
     closeNavigationPanel({restoreFocus:false});
     render();
   });
@@ -6739,6 +7007,392 @@ function animateHomeNumbers(){
     requestAnimationFrame(draw);
   });
 }
+function homeValidDate(value){
+  const date=new Date(value);
+  return Number.isFinite(date.getTime())?date:null;
+}
+function homeHistoryInRange(history,start,end){
+  return (Array.isArray(history)?history:[]).filter(item=>{
+    const date=homeValidDate(item?.date||item?.completedAt);
+    return date&&date>=start&&date<end;
+  });
+}
+function homeHeaderModel({now=new Date(),name="",session=null,focus="",hasRoutine=false,hasDraft=false,weekly=null}={}){
+  const date=homeValidDate(now)||new Date(0);
+  let description="Todavía no tienes una rutina activa.";
+  if(hasRoutine&&hasDraft) description="Tienes un entrenamiento pendiente de continuar.";
+  else if(hasRoutine&&session){
+    const sessionFocus=String(focus||session.focus||"").trim().toLocaleLowerCase("es");
+    description=sessionFocus?`Hoy toca ${sessionFocus}.`:"Tu próxima sesión está lista.";
+  }
+  return {
+    greeting:homeGreeting(date),
+    name:String(name||"").trim().split(/\s+/)[0]||"",
+    dateLabel:homeDateLabel(date),
+    description,
+    weeklySummary:weekly?.configured
+      ?`${weekly.count} de ${weekly.goal} ${weekly.goal===1?"sesión":"sesiones"} esta semana`
+      :""
+  };
+}
+function nextSessionModel({
+  sessions=[],selectedSessionId=null,draft=null,draftStatus="missing",
+  routineAvailable=true,routineValid=true,defaultDuration=45,restSeconds=90
+}={}){
+  const list=Array.isArray(sessions)?sessions:[];
+  const selected=list.find(item=>item?.sessionId===selectedSessionId)||list[0]||null;
+  if(!routineAvailable||!selected){
+    return {
+      available:false,valid:false,sessionId:null,name:"Sin rutina activa",focus:"",
+      duration:null,exerciseCount:0,restSeconds:null,hasDraft:false,
+      primaryAction:"routine-create",primaryLabel:"Crear mi rutina",canChange:false,heroType:"rest"
+    };
+  }
+  const valid=routineValid!==false&&Boolean(selected.sessionId)&&Array.isArray(selected.exercises);
+  if(!valid){
+    return {
+      available:true,valid:false,sessionId:selected.sessionId||null,
+      name:String(selected.name||"Rutina no disponible"),focus:"",
+      duration:null,exerciseCount:0,restSeconds:null,hasDraft:false,
+      primaryAction:"routine-review",primaryLabel:"Revisar mi rutina",
+      canChange:list.length>1,heroType:"rest"
+    };
+  }
+  const index=list.indexOf(selected);
+  const name=String(selected.name||selected.label||`Sesión ${index+1}`).trim();
+  const sessionProfile=homeSessionProfile(selected);
+  const hasDraft=Boolean(draft)&&draftStatus==="current";
+  return {
+    available:true,valid:true,sessionId:selected.sessionId,name,
+    focus:String(selected.focus||sessionProfile.focus||"").trim(),
+    duration:Math.max(1,Number(selected.estimatedDurationMinutes)||Number(defaultDuration)||45),
+    exerciseCount:selected.exercises.length,
+    restSeconds:[60,90,120,180].includes(Number(restSeconds))?Number(restSeconds):90,
+    hasDraft,
+    primaryAction:"workout",
+    primaryLabel:hasDraft?"Continuar entrenamiento":"Comenzar entrenamiento",
+    canChange:list.length>1,
+    heroType:sessionProfile.heroType
+  };
+}
+function weeklyGoalModel({history=[],goal=null,now=new Date()}={}){
+  const date=homeValidDate(now)||new Date(0);
+  const start=mondayOf(date);
+  const end=addDays(start,7);
+  const parsedGoal=Number(goal);
+  const configured=goal!==null&&goal!==""&&Number.isInteger(parsedGoal)&&parsedGoal>0;
+  const count=homeHistoryInRange(history,start,end).length;
+  if(!configured){
+    return {configured:false,start:start.toISOString(),end:end.toISOString(),count,goal:null,remaining:null,percentage:0,complete:false};
+  }
+  const percentage=Math.min(100,Math.max(0,Math.round((count/parsedGoal)*100)));
+  return {
+    configured:true,start:start.toISOString(),end:end.toISOString(),
+    count,goal:parsedGoal,remaining:Math.max(0,parsedGoal-count),
+    percentage,complete:count>=parsedGoal
+  };
+}
+function recoverySummaryModel(input={}){
+  const api=globalThis.GymOSRecovery||globalThis.window?.GymOSRecovery;
+  if(api?.recoveryHomeSummaryModel){
+    return api.recoveryHomeSummaryModel({
+      entries:input.entries||[],
+      checkins:input.checkins||[],
+      referenceDate:input.referenceDate||"",
+      online:input.online!==false,
+      authenticated:input.authenticated!==false,
+      error:input.error||null
+    });
+  }
+  if(input.available===false) return {status:"unavailable",title:"Recuperación no está disponible.",action:null};
+  if(input.error) return {status:"error",title:"No se pudo cargar tu recuperación.",action:"recovery"};
+  if(input.pending){
+    return {
+      status:"pending",title:"Check-in pendiente",
+      detail:"Cuéntanos cómo has recuperado.",
+      action:"checkin",checkinId:String(input.pending.id||"")
+    };
+  }
+  if(input.entry){
+    const result=api?.resultForEntry?.(input.entry);
+    return {
+      status:"completed",title:result?.title||"Recuperación registrada",
+      detail:"Evaluación completada hoy.",action:"recovery"
+    };
+  }
+  return {status:"idle",title:"Todo al día",detail:"No tienes ninguna evaluación pendiente.",action:"recovery"};
+}
+function weeklyActivityModel({sessions=[],history=[],selectedSessionId=null,drafts=[],now=new Date()}={}){
+  const list=Array.isArray(sessions)?sessions:[];
+  const date=homeValidDate(now)||new Date(0);
+  const start=mondayOf(date);
+  const end=addDays(start,7);
+  const weekHistory=homeHistoryInRange(history,start,end);
+  const draftIds=new Set((Array.isArray(drafts)?drafts:[])
+    .filter(item=>item&&item.status==="current")
+    .map(item=>item.sessionId));
+  return list.map((session,index)=>{
+    const match=[...weekHistory].reverse().find(item=>
+      item?.sessionId===session.sessionId||
+      (session.legacySessionKey&&(item?.legacySessionKey===session.legacySessionKey||item?.session===session.legacySessionKey))
+    )||null;
+    let status="pending";
+    if(draftIds.has(session.sessionId)) status="draft";
+    else if(match) status="completed";
+    else if(session.sessionId===selectedSessionId) status="next";
+    return {
+      sessionId:session.sessionId,
+      name:String(session.name||session.label||`Sesión ${index+1}`),
+      status,
+      completedAt:match?(match.date||match.completedAt||null):null
+    };
+  });
+}
+function homeMetricModel(rows,key,label,unit){
+  const values=(Array.isArray(rows)?rows:[])
+    .map(item=>({date:item?.date,value:Number(item?.[key])}))
+    .filter(item=>homeValidDate(item.date)&&Number.isFinite(item.value)&&item.value>0)
+    .sort((a,b)=>homeValidDate(a.date)-homeValidDate(b.date));
+  if(!values.length) return null;
+  const latest=values.at(-1);
+  const previous=values.at(-2)||null;
+  return {
+    key,label,unit,value:latest.value,date:latest.date,
+    trend:previous?latest.value-previous.value:null,
+    comparableCount:values.length
+  };
+}
+function recentProgressModel({bodyHistory=[],history=[],now=new Date()}={}){
+  const date=homeValidDate(now)||new Date(0);
+  const monthStart=new Date(date.getFullYear(),date.getMonth(),1);
+  const monthEnd=new Date(date.getFullYear(),date.getMonth()+1,1);
+  const metrics=[
+    homeMetricModel(bodyHistory,"weight","Peso actual","kg"),
+    homeMetricModel(bodyHistory,"waist","Cintura","cm"),
+    {
+      key:"monthlySessions",label:"Sesiones este mes",unit:"",
+      value:homeHistoryInRange(history,monthStart,monthEnd).length,
+      date:null,trend:null,comparableCount:0
+    }
+  ].filter(Boolean).slice(0,3);
+  const hasMeasurements=metrics.some(item=>item.key!=="monthlySessions");
+  return {metrics,hasMeasurements,empty:!hasMeasurements&&!metrics.find(item=>item.key==="monthlySessions")?.value};
+}
+function lastWorkoutModel({history=[]}={}){
+  const workout=(Array.isArray(history)?history:[])
+    .filter(item=>homeValidDate(item?.date||item?.completedAt))
+    .sort((a,b)=>homeValidDate(b.date||b.completedAt)-homeValidDate(a.date||a.completedAt))[0]||null;
+  if(!workout) return {available:false};
+  const snapshot=workout.sessionSnapshot||{};
+  const exercises=Array.isArray(workout.exercises)?workout.exercises:[];
+  const completedExercises=exercises.filter(exercise=>
+    Array.isArray(exercise?.series)&&exercise.series.some(series=>series?.done)
+  ).length;
+  const durationMs=Number(workout.durationMs);
+  const durationMinutes=Number.isFinite(durationMs)&&durationMs>=0
+    ?Math.round(durationMs/60000)
+    :Number(workout.durationMinutes||workout.duration);
+  return {
+    available:true,id:workout.id??null,
+    name:String(workout.sessionName||snapshot.name||`Sesión ${workout.session||workout.legacySessionKey||""}`).trim(),
+    focus:String(snapshot.focus||workout.sessionFocus||workout.focus||"").trim(),
+    date:workout.date||workout.completedAt,
+    durationMinutes:Number.isFinite(durationMinutes)&&durationMinutes>0?durationMinutes:null,
+    completedExercises,totalExercises:exercises.length,
+    substitutions:exercises.filter(item=>item?.substitution).length,
+    hasDetail:workout.id!==null&&workout.id!==undefined&&exercises.length>0
+  };
+}
+function readHomeDraft(session,canonicalRoutine){
+  if(!session) return {draft:null,status:"missing"};
+  try{
+    if(canonicalRoutine){
+      const draft=routineSessionRuntimeApi().getDraft(getCanonicalDrafts(),{
+        ownerId:currentRoutineOwnerOrNull(),routine:canonicalRoutine,sessionId:session.sessionId
+      });
+      if(!draft) return {draft:null,status:"missing"};
+      const result=routineSessionMigrationApi().draftStatus(draft,{
+        ownerId:currentRoutineOwnerOrNull(),canonicalRoutine
+      });
+      return {draft,status:result.status};
+    }
+    const draft=readStoredJson(draftKey(session.legacySessionKey||session.sessionId));
+    return {draft,status:draft?"current":"missing"};
+  }catch(error){
+    return {draft:null,status:"invalid"};
+  }
+}
+function readHomeBodyHistory(){
+  try{
+    const rows=JSON.parse(localStorage.getItem("gymos:body")||"[]");
+    return (Array.isArray(rows)?rows:[])
+      .map(normalizeBodyMeasurement)
+      .filter(row=>row.date)
+      .sort((a,b)=>new Date(a.date)-new Date(b.date));
+  }catch(error){return [];}
+}
+function buildHomeDashboardModel(now=new Date()){
+  const history=getHistory();
+  const canonical=getCanonicalRoutine();
+  let sessions=[];
+  let routineValid=true;
+  try{sessions=activeRoutineSessions();}
+  catch(error){routineValid=false;}
+  const selectedId=canonical
+    ?routineSessionRuntimeApi().selectedSessionId({
+      routine:canonical,
+      preferredSessionId:state.selectedSessionId||localStorage.getItem(SELECTED_SESSION_ID_KEY),
+      legacySelection:state.selectedSession||localStorage.getItem("gymos:selectedSession"),
+      history
+    })
+    :(sessions.find(item=>item.legacySessionKey===state.selectedSession)||sessions[0])?.sessionId||null;
+  const selected=sessions.find(item=>item.sessionId===selectedId)||sessions[0]||null;
+  const draft=readHomeDraft(selected,canonical);
+  const goalValue=localStorage.getItem("gymos:weeklyGoal");
+  const weekly=weeklyGoalModel({history,goal:goalValue===null?null:Number(goalValue),now});
+  const next=nextSessionModel({
+    sessions,selectedSessionId:selected?.sessionId||null,draft:draft.draft,
+    draftStatus:draft.status,routineAvailable:sessions.length>0,routineValid,
+    defaultDuration:getOnboardingProfile()?.duration,restSeconds:getRestSeconds()
+  });
+  const draftRows=selected&&draft.draft
+    ?[{sessionId:selected.sessionId,status:draft.status}]
+    :[];
+  let recoveryInput={available:Boolean(window.GymOSRecovery)};
+  try{
+    const pending=window.GymOSRecovery?.dueCheckin?.()||null;
+    const entry=window.GymOSRecovery?.entryForDate?.(dateKey(now))||null;
+    recoveryInput={
+      available:Boolean(window.GymOSRecovery?.dueCheckin&&window.GymOSRecovery?.startCheckin),
+      pending,entry,
+      entries:window.GymOSRecovery?.getEntries?.()||[],
+      checkins:window.GymOSRecovery?.getCheckins?.()||[],
+      referenceDate:dateKey(now),
+      online:navigator.onLine!==false,
+      authenticated:Boolean(state.session)
+    };
+  }catch(error){recoveryInput={available:true,error:true};}
+  return {
+    header:homeHeaderModel({
+      now,name:accountDisplayName(),session:selected,focus:next.focus,
+      hasRoutine:next.available,hasDraft:next.hasDraft,weekly
+    }),
+    next,weekly,
+    recovery:recoverySummaryModel(recoveryInput),
+    activity:weeklyActivityModel({
+      sessions,history,selectedSessionId:selected?.sessionId||null,drafts:draftRows,now
+    }),
+    progress:recentProgressModel({bodyHistory:readHomeBodyHistory(),history,now}),
+    lastWorkout:lastWorkoutModel({history}),
+    thought:getDailyThought(now,{history,weeklyGoal:weekly.configured?weekly.goal:getWeeklyGoal()})
+  };
+}
+function renderHomeNextSession(model){
+  const rest=model.restSeconds
+    ?`${model.restSeconds%60===0?`${model.restSeconds/60} min`:`${model.restSeconds} s`} de descanso`
+    :"";
+  const meta=model.valid
+    ?[`${model.duration} min`,`${model.exerciseCount} ${model.exerciseCount===1?"ejercicio":"ejercicios"}`,rest].filter(Boolean)
+    :[];
+  return `<section class="home-next-session" aria-labelledby="homeNextSessionTitle">
+    <span class="section-kicker">TU PRÓXIMA SESIÓN</span>
+    <h2 id="homeNextSessionTitle">${esc(model.name)}</h2>
+    ${model.focus?`<p class="home-next-focus">${esc(model.focus)}</p>`:""}
+    ${meta.length?`<p class="home-next-meta">${meta.map(esc).join(" <span aria-hidden=\"true\">·</span> ")}</p>`:""}
+    ${model.hasDraft?'<p class="home-draft-state" role="status">Entrenamiento pendiente de continuar.</p>':""}
+    <div class="home-next-actions">
+      <button id="homePrimaryAction" class="primary" type="button" data-home-action="${esc(model.primaryAction)}">${esc(model.primaryLabel)}</button>
+      ${model.canChange?'<button id="homeSecondaryAction" class="text-button" type="button">Cambiar sesión</button>':""}
+    </div>
+  </section>`;
+}
+function renderHomeWeeklyGoal(model){
+  if(!model.configured){
+    return `<section class="card home-summary-card home-weekly-card" aria-labelledby="homeWeeklyTitle">
+      <span class="section-kicker">OBJETIVO SEMANAL</span>
+      <h2 id="homeWeeklyTitle">Sin objetivo configurado</h2>
+      <p>Define cuántas sesiones quieres completar cada semana.</p>
+      <button id="configureWeeklyGoal" class="text-button" type="button">Configurar objetivo →</button>
+    </section>`;
+  }
+  const status=model.complete
+    ?"Objetivo semanal completado."
+    :`Te ${model.remaining===1?"falta":"faltan"} ${model.remaining} ${model.remaining===1?"sesión":"sesiones"}.`;
+  return `<section class="card home-summary-card home-weekly-card" aria-labelledby="homeWeeklyTitle">
+    <span class="section-kicker">OBJETIVO SEMANAL</span>
+    <div class="home-summary-heading">
+      <h2 id="homeWeeklyTitle">${model.count} de ${model.goal} sesiones</h2>
+      <strong>${model.percentage} %</strong>
+    </div>
+    <div class="weekly-progress-track" role="progressbar" aria-label="${esc(`${model.count} de ${model.goal} sesiones completadas`)}" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${model.percentage}">
+      <div class="weekly-progress-fill" data-weekly-progress="${model.percentage}"></div>
+    </div>
+    <p>${esc(status)}</p>
+  </section>`;
+}
+function renderHomeRecovery(model){
+  const action=model.action==="checkin"
+    ?`<button class="text-button" type="button" data-home-recovery-checkin="${esc(model.checkinId)}">Completar check-in →</button>`
+    :model.action==="recovery"
+      ?'<button class="text-button" type="button" data-home-recovery>Ver recuperación →</button>'
+      :"";
+  return `<section class="card home-summary-card home-recovery-card home-recovery-${esc(model.status)}" aria-labelledby="homeRecoveryTitle">
+    <span class="section-kicker">RECUPERACIÓN</span>
+    <h2 id="homeRecoveryTitle">${esc(model.title)}</h2>
+    ${model.detail?`<p>${esc(model.detail)}</p>`:""}
+    ${action}
+  </section>`;
+}
+function renderHomeWeek(items){
+  if(!items.length) return "";
+  const labels={completed:"Completada",next:"Próxima",draft:"Con entrenamiento pendiente",pending:"Pendiente"};
+  return `<section class="home-week-section" aria-labelledby="homeWeekTitle">
+    <div class="home-section-heading"><span class="section-kicker">ACTIVIDAD</span><h2 id="homeWeekTitle">Tu semana</h2></div>
+    <div class="home-week-list">
+      ${items.map(item=>`<article class="home-week-item home-week-${esc(item.status)}">
+        <span class="home-week-state" aria-hidden="true"></span>
+        <div><strong>${esc(item.name)}</strong><small>${esc(item.completedAt?`${labels[item.status]} el ${formatDate(item.completedAt)}`:labels[item.status])}</small></div>
+      </article>`).join("")}
+    </div>
+  </section>`;
+}
+function renderHomeProgress(model){
+  const measurementMetrics=model.metrics.filter(item=>item.key!=="monthlySessions");
+  return `<section class="card home-detail-card home-progress-card" aria-labelledby="homeProgressTitle">
+    <span class="section-kicker">PROGRESO RECIENTE</span>
+    <h2 id="homeProgressTitle">${model.hasMeasurements?"Tus últimos datos":"Aún no hay medidas"}</h2>
+    ${model.hasMeasurements?`<div class="home-progress-metrics">
+      ${model.metrics.map(item=>`<div>
+        <span>${esc(item.label)}</span>
+        <strong>${item.key==="monthlySessions"?item.value:`${formatBodyNumber(item.value)} ${item.unit}`}</strong>
+        ${item.trend===null?`${item.key!=="monthlySessions"?'<small>Una medición registrada</small>':""}`:`<small>${esc(signedBodyValue(item.trend,item.unit))} desde la anterior</small>`}
+      </div>`).join("")}
+    </div>`:`<p>Todavía no hay suficientes datos de progreso.</p>
+      <p class="home-context-hint">${model.metrics.find(item=>item.key==="monthlySessions")?.value||0} sesiones completadas este mes.</p>`}
+    <button id="${measurementMetrics.length?"openHomeProgress":"openHomeBody"}" class="text-button" type="button">${measurementMetrics.length?"Ver todo el progreso":"Registrar primera medición"} →</button>
+  </section>`;
+}
+function renderHomeLastWorkout(model){
+  if(!model.available){
+    return `<section class="card home-detail-card home-last-workout-card" aria-labelledby="homeLastWorkoutTitle">
+      <span class="section-kicker">ÚLTIMO ENTRENAMIENTO</span>
+      <h2 id="homeLastWorkoutTitle">Tu primer entrenamiento aparecerá aquí.</h2>
+    </section>`;
+  }
+  const completed=model.totalExercises
+    ?`${model.completedExercises} de ${model.totalExercises} ejercicios completados`
+    :"Entrenamiento guardado";
+  return `<section class="card home-detail-card home-last-workout-card" aria-labelledby="homeLastWorkoutTitle">
+    <span class="section-kicker">ÚLTIMO ENTRENAMIENTO</span>
+    <h2 id="homeLastWorkoutTitle">${esc(model.name)}</h2>
+    ${model.focus?`<p class="home-last-focus">${esc(model.focus)}</p>`:""}
+    <p class="home-last-meta">${esc(formatDate(model.date))}${model.durationMinutes?` · ${model.durationMinutes} min`:""}</p>
+    <strong class="home-last-completed">${esc(completed)}</strong>
+    ${model.substitutions?`<small>${model.substitutions} ${model.substitutions===1?"sustitución":"sustituciones"}</small>`:""}
+    ${model.hasDetail?`<button class="text-button" type="button" data-home-history-id="${esc(String(model.id))}">Ver detalle →</button>`:""}
+  </section>`;
+}
+
 function homeDashboardState(now,week){
   const history=lastCompletedWorkouts();
   const latestWorkout=history[0]||null;
@@ -6775,7 +7429,7 @@ function homeDashboardHero(dashboard,sessionProfile,plannedDuration,plannedExerc
       selected,activeRoutineSessions().findIndex(item=>item.sessionId===selected.sessionId)
     )
     :"Sesión";
-  let kicker="HOY";
+  let kicker="PRÓXIMA SESIÓN";
   let title=selectedName;
   let purposeLabel="OBJETIVO";
   let purpose=homeTrainingObjective(sessionProfile);
@@ -6801,7 +7455,7 @@ function homeDashboardHero(dashboard,sessionProfile,plannedDuration,plannedExerc
     primary="Revisar recuperación";
     secondary="Ver entrenamiento →";
   }else if(dashboard.mode==="return"){
-    kicker="HOY";
+    kicker="PRÓXIMA SESIÓN";
     title=selectedName;
     purposeLabel="ENFOQUE";
     purpose=sessionProfile.focus;
@@ -7289,53 +7943,47 @@ function renderHomeRecoveryStatus(dashboard){
   }
   const entry=window.GymOSRecovery?.entryForDate?.(dateKey(new Date()));
   if(!entry||dashboard?.trainedToday) return "";
-  const label=window.GymOSRecovery.scoreLabel(entry.recoveryScore);
+  const result=window.GymOSRecovery?.resultForEntry?.(entry);
   return `<section class="home-recovery-status recorded">
     <div>
       <span class="section-kicker">RECUPERACIÓN</span>
-      <strong>${entry.recoveryScore} · ${esc(label)}</strong>
+      <strong>${esc(result?.title||"Recuperación registrada")}</strong>
     </div>
     <button class="text-button" type="button" data-open-recovery>Revisar →</button>
   </section>`;
 }
 
 function renderHome(){
-  const selectedSession=activeRoutineSession(resolveRuntimeSessionId());
-  const plannedDuration=Math.max(
-    1,Number(selectedSession?.estimatedDurationMinutes)||
-    Number(getOnboardingProfile()?.duration)||45
-  );
-  const plannedExercises=selectedSession?.exercises?.length||0;
   const now=new Date();
-  const sessionProfile=homeSessionProfile();
-  const greetingName=homeGreetingName();
-  const week=weeklyProgress(now);
-  const dashboard=homeDashboardState(now,week);
-  const heroType=homeHeroContextType(dashboard,sessionProfile);
-  const heroImage=HOME_HERO_IMAGE_SOURCE.findByType(heroType);
-  const projectedPercentage=Math.min(100,Math.round(((week.count+1)/week.goal)*100));
-  const celebrateWeeklyGoal=claimWeeklyGoalCelebration(week);
+  const dashboard=buildHomeDashboardModel(now);
+  const heroImage=HOME_HERO_IMAGE_SOURCE.findByType(dashboard.next.heroType);
+  const thought=renderDailyThought(dashboard.thought);
   app.innerHTML=`<div class="app-shell">
-    <header class="topbar home-topbar">
-      <div class="home-greeting">
-        <h1>${homeGreeting(now)}${greetingName?`, ${esc(greetingName)}`:""}</h1>
-        <div class="home-current-date">${esc(homeDateLabel(now))}</div>
-        <p class="home-today-description">${esc(homeTodayDescription(dashboard,sessionProfile))}</p>
+    <main class="screen home-screen" aria-labelledby="homeGreetingTitle">
+      <header class="home-context-header">
+        <div class="home-greeting">
+          <h1 id="homeGreetingTitle">${esc(dashboard.header.greeting)}${dashboard.header.name?`, ${esc(dashboard.header.name)}`:""}</h1>
+          <div class="home-current-date">${esc(dashboard.header.dateLabel)}</div>
+          <p class="home-today-description">${esc(dashboard.header.description)}</p>
+        </div>
+        ${dashboard.header.weeklySummary?`<p class="home-header-weekly-summary">${esc(dashboard.header.weeklySummary)}</p>`:""}
+      </header>
+      <div class="home-primary-grid">
+        ${renderHomeNextSession(dashboard.next)}
+        <div class="home-summary-stack">
+          ${renderHomeWeeklyGoal(dashboard.weekly)}
+          ${renderHomeRecovery(dashboard.recovery)}
+        </div>
       </div>
-    </header>
-    <main class="screen home-screen">
-      ${renderDailyThought()}
-      ${renderHomeRecoveryStatus(dashboard)}
-      ${homeDashboardHero(dashboard,sessionProfile,plannedDuration,plannedExercises)}
-      ${dashboard.bodyPriority?renderHomeBodyCard():""}
-      ${renderHomeWeeklyCard(week,dashboard,projectedPercentage)}
-      ${renderHomeCoachInsight(dashboard)}
-      ${renderHomeQuickActions(dashboard)}
-      ${dashboard.bodyPriority?"":renderHomeBodyCard()}
+      ${renderHomeWeek(dashboard.activity)}
+      <div class="home-detail-grid">
+        ${renderHomeProgress(dashboard.progress)}
+        ${renderHomeLastWorkout(dashboard.lastWorkout)}
+      </div>
+      ${thought}
     </main>${nav("home")}
   </div>`;
-  animateHomeNumbers();
-  const homeHero=document.querySelector(".home-focus");
+  const homeHero=document.querySelector(".home-next-session");
   if(homeHero&&heroImage?.file){
     homeHero.classList.add("has-hero-image");
     homeHero.style.setProperty("--home-hero-image",`url("${heroImage.file}")`);
@@ -7345,94 +7993,41 @@ function renderHome(){
   if(weeklyProgressFill){
     requestAnimationFrame(()=>requestAnimationFrame(()=>{
       weeklyProgressFill.style.width=`${weeklyProgressFill.dataset.weeklyProgress}%`;
-      if(celebrateWeeklyGoal){
-        document.querySelector(".weekly-home-card")?.classList.add("weekly-goal-celebrate");
-      }
     }));
   }
   const cycleHomeSession=()=>{
     const availableSessions=availableRoutineSessions();
     if(!availableSessions.length) return;
-    const current=resolveRuntimeSessionId();
+    const current=dashboard.next.sessionId;
     const next=availableSessions[(availableSessions.indexOf(current)+1)%availableSessions.length];
     persistSelectedRoutineSession(next);
     renderHome();
   };
-  document.getElementById("homePrimaryAction").onclick=()=>{
-    if(dashboard.mode==="coach"){
-      state.coachSessionId=dashboard.pendingCoach.id;
-      state.screen="coachProposal";
-      renderCoachProposal();
-      return;
-    }
-    if(dashboard.mode==="recovery"){
-      state.recoveryView="overview";
-      state.screen="recovery";
-      window.GymOSRecovery.renderRecoveryCenter();
-      return;
-    }
-    navigateToScreen("workout");
-  };
+  document.getElementById("homePrimaryAction")?.addEventListener("click",event=>{
+    const action=event.currentTarget.dataset.homeAction;
+    if(action==="workout") navigateToScreen("workout");
+    else navigateToScreen("routineWorkflow");
+  },{once:true});
   const homeSecondaryAction=document.getElementById("homeSecondaryAction");
-  if(homeSecondaryAction) homeSecondaryAction.onclick=()=>{
-    if(dashboard.mode==="coach"){
-      if(dashboard.trainedToday){
-        state.expandedHistoryId=dashboard.latestWorkout?.id||null;
-        state.screen="history";
-        renderHistory();
-      }else{
-        navigateToScreen("workout");
-      }
-      return;
-    }
-    if(dashboard.mode==="recovery"){
-      state.screen="history";
-      renderHistory();
-      return;
-    }
-    cycleHomeSession();
-  };
-  const editQuickActions=document.getElementById("editQuickActions");
-  if(editQuickActions) editQuickActions.onclick=()=>{
-    state.quickActionsDraft=null;
-    state.quickActionsEditorMessage=null;
-    state.screen="quickActions";
-    renderQuickActionsEditor();
-  };
-  document.querySelectorAll("[data-quick-action]").forEach(button=>button.onclick=()=>executeQuickAction(button.dataset.quickAction));
-  document.querySelectorAll("[data-open-recovery]").forEach(button=>{
-    button.onclick=()=>{state.recoveryView="overview";state.screen="recovery";window.GymOSRecovery.renderRecoveryCenter();};
-  });
-  document.querySelectorAll("[data-open-recovery-checkin]").forEach(button=>{
-    button.onclick=()=>{
-      const checkin=window.GymOSRecovery.getCheckins().find(item=>item.id===button.dataset.openRecoveryCheckin);
-      window.GymOSRecovery.startCheckin(checkin);
-    };
-  });
-  document.querySelectorAll("[data-dismiss-recovery-checkin]").forEach(button=>{
-    button.onclick=()=>{
-      const checkin=window.GymOSRecovery.getCheckins().find(item=>item.id===button.dataset.dismissRecoveryCheckin);
-      window.GymOSRecovery.dismissReminder(checkin);
-      renderHome();
-    };
-  });
-  document.getElementById("openHomeCoachInsight").onclick=event=>{
-    const proposalId=event.currentTarget.dataset.proposalId;
-    if(proposalId){
-      state.coachSessionId=proposalId;
-      state.screen="coachProposal";
-      renderCoachProposal();
-    }else{
-      state.screen="coach";
-      renderCoach();
-    }
-  };
-  document.getElementById("openPlan").onclick=()=>{state.screen="plan";renderPlan();};
-  document.querySelectorAll("[data-open-body]").forEach(button=>button.onclick=()=>{state.screen="body";renderBody();});
-  document.querySelectorAll("[data-edit-body-summary]").forEach(button=>button.onclick=()=>{
-    state.bodySummaryDraft=getBodySummaryMetrics();
-    renderBodySummaryEditor();
-  });
+  homeSecondaryAction?.addEventListener("click",cycleHomeSession,{once:true});
+  document.getElementById("configureWeeklyGoal")?.addEventListener("click",()=>navigateToScreen("settings"),{once:true});
+  document.querySelector("[data-home-recovery]")?.addEventListener("click",()=>navigateToScreen("recovery"),{once:true});
+  document.querySelector("[data-home-recovery-checkin]")?.addEventListener("click",event=>{
+    const checkin=window.GymOSRecovery?.getCheckins?.()
+      .find(item=>String(item.id)===event.currentTarget.dataset.homeRecoveryCheckin);
+    if(checkin) window.GymOSRecovery.startCheckin(checkin);
+    else navigateToScreen("recovery");
+  },{once:true});
+  document.getElementById("openHomeProgress")?.addEventListener("click",()=>navigateToScreen("progressDashboard"),{once:true});
+  document.getElementById("openHomeBody")?.addEventListener("click",()=>navigateToScreen("body"),{once:true});
+  document.querySelector("[data-home-history-id]")?.addEventListener("click",event=>{
+    const id=event.currentTarget.dataset.homeHistoryId;
+    const workout=getHistory().find(item=>String(item.id)===id);
+    if(!workout) return;
+    state.expandedHistoryId=workout.id;
+    state.screen="history";
+    renderHistory();
+  },{once:true});
   bindNav();
 }
 
@@ -7497,7 +8092,9 @@ function stopExerciseTimer(session,exerciseIndex,setIndex){
   draft.exercises[exerciseIndex].series[setIndex].weight="";
   saveDraft(draft);
   updateExerciseTimerDisplay(key);
-  const input=document.querySelector(`[data-seconds="${exerciseIndex}:${setIndex}"]`);
+  const input=document.querySelector(
+    `[data-set-field="seconds"][data-set-index="${setIndex}"],[data-seconds="${exerciseIndex}:${setIndex}"]`
+  );
   if(input) input.value=seconds;
   toast(`${seconds} segundos registrados`);
 }
@@ -7510,7 +8107,9 @@ function resetExerciseTimer(session,exerciseIndex,setIndex){
   draft.exercises[exerciseIndex].series[setIndex].seconds="";
   saveDraft(draft);
   updateExerciseTimerDisplay(key);
-  const input=document.querySelector(`[data-seconds="${exerciseIndex}:${setIndex}"]`);
+  const input=document.querySelector(
+    `[data-set-field="seconds"][data-set-index="${setIndex}"],[data-seconds="${exerciseIndex}:${setIndex}"]`
+  );
   if(input) input.value="";
 }
 function stopAllExerciseTimers(){
@@ -7529,7 +8128,667 @@ function stopAllExerciseTimers(){
   });
 }
 
+function activeWorkoutApi(){
+  if(!window.GymOSActiveWorkout) throw new Error("active_workout_model_unavailable");
+  return window.GymOSActiveWorkout;
+}
+function formatSessionElapsed(milliseconds){
+  const total=Math.max(0,Math.floor(Number(milliseconds||0)/1000));
+  const hours=Math.floor(total/3600);
+  const minutes=Math.floor((total%3600)/60);
+  const seconds=total%60;
+  return hours
+    ?`${String(hours).padStart(2,"0")}:${String(minutes).padStart(2,"0")}:${String(seconds).padStart(2,"0")}`
+    :`${String(minutes).padStart(2,"0")}:${String(seconds).padStart(2,"0")}`;
+}
+function sessionElapsedAccessible(milliseconds){
+  const total=Math.max(0,Math.floor(Number(milliseconds||0)/1000));
+  const hours=Math.floor(total/3600);
+  const minutes=Math.floor((total%3600)/60);
+  const seconds=total%60;
+  return `Tiempo de sesión: ${hours?`${hours} ${hours===1?"hora":"horas"}, `:""}${minutes} ${minutes===1?"minuto":"minutos"} y ${seconds} ${seconds===1?"segundo":"segundos"}`;
+}
+function stopWorkoutSessionTimer(){
+  const timer=state?.workoutSessionTimer;
+  if(timer?.intervalId) clearInterval(timer.intervalId);
+  if(typeof state!=="undefined") state.workoutSessionTimer=null;
+}
+function updateWorkoutSessionElapsed(){
+  const timer=state.workoutSessionTimer;
+  if(!timer) return;
+  const node=document.querySelector("[data-workout-session-elapsed]");
+  if(
+    currentRoutineOwnerOrNull()!==timer.ownerId||
+    state.screen!=="workout"||
+    !node||
+    node.dataset.draftId!==timer.draftId
+  ){
+    stopWorkoutSessionTimer();
+    return;
+  }
+  const model=activeWorkoutApi().sessionElapsedModel({startedAt:timer.startedAt,now:Date.now()});
+  node.textContent=formatSessionElapsed(model.elapsedMs);
+  node.setAttribute("aria-label",sessionElapsedAccessible(model.elapsedMs));
+}
+function startWorkoutSessionTimer({ownerId,draftId,startedAt}){
+  const current=state.workoutSessionTimer;
+  if(current&&current.ownerId===ownerId&&current.draftId===draftId&&current.startedAt===startedAt&&current.intervalId){
+    updateWorkoutSessionElapsed();
+    return;
+  }
+  stopWorkoutSessionTimer();
+  state.workoutSessionTimer={
+    ownerId,draftId:String(draftId||""),startedAt,
+    intervalId:setInterval(updateWorkoutSessionElapsed,1000)
+  };
+  updateWorkoutSessionElapsed();
+}
+function activeWorkoutExerciseKey(sessionId,exercise,index){
+  return `${sessionId}:${activeWorkoutApi().exerciseIdentity(exercise,index)}`;
+}
+function previousExerciseForWorkout(last,exercise,index){
+  if(!last?.exercises?.length) return null;
+  const id=exercise?.exerciseId||exercise?.id;
+  if(id){
+    const exact=last.exercises.find(item=>
+      (item?.exerciseId||item?.id)===id||
+      item?.substitution?.plannedExerciseId===id
+    );
+    if(exact) return exact;
+  }
+  return last.exercises[index]||null;
+}
+function activeWorkoutExerciseStatus(exercise){
+  const sets=Array.isArray(exercise?.series)?exercise.series:[];
+  const completed=sets.filter(set=>set?.done).length;
+  const started=sets.some(activeWorkoutApi().setHasResults);
+  if(completed===sets.length&&sets.length) return "completed";
+  if(started||completed) return "started";
+  return "pending";
+}
+function renderActiveWorkoutGuide(guide,exercise){
+  const technique=guide.technique;
+  const listHtml=items=>items.length?`<ul>${items.map(item=>`<li>${esc(item)}</li>`).join("")}</ul>`:"";
+  return `<aside class="active-workout-guide" aria-labelledby="exerciseGuideTitle">
+    <span class="section-kicker">GUÍA DEL EJERCICIO</span>
+    <h2 id="exerciseGuideTitle">Referencia técnica</h2>
+    <div class="active-workout-image">
+      ${guide.image
+        ?`<img src="${esc(guide.image.src)}" alt="${esc(guide.image.alt)}">`
+        :'<div class="active-workout-image-placeholder" role="img" aria-label="Imagen todavía no disponible">Imagen todavía no disponible</div>'}
+    </div>
+    <section class="active-workout-muscles" aria-labelledby="exerciseMusclesTitle">
+      <h3 id="exerciseMusclesTitle">Músculos trabajados</h3>
+      ${guide.muscles.available?`
+        ${guide.muscles.primary.length?`<div><span>Principales</span><p>${guide.muscles.primary.map(value=>`<strong>${esc(value)}</strong>`).join("")}</p></div>`:""}
+        ${guide.muscles.secondary.length?`<div><span>Secundarios</span><p>${guide.muscles.secondary.map(value=>`<strong>${esc(value)}</strong>`).join("")}</p></div>`:""}
+      `:"<p>Información muscular todavía no disponible.</p>"}
+    </section>
+    <section class="active-workout-technique" aria-labelledby="exerciseTechniqueTitle">
+      <h3 id="exerciseTechniqueTitle">Técnica</h3>
+      ${technique.available?`
+        ${technique.highlights.length?`<ul class="technique-highlights">${technique.highlights.map(item=>`<li>${esc(item)}</li>`).join("")}</ul>`:""}
+        <details>
+          <summary>Ver técnica completa</summary>
+          ${technique.setup.length?`<h4>Preparación</h4>${listHtml(technique.setup)}`:""}
+          ${technique.execution.length?`<h4>Ejecución</h4>${listHtml(technique.execution)}`:""}
+          ${technique.breathing?`<h4>Respiración</h4><p>${esc(technique.breathing)}</p>`:""}
+          ${technique.cautions.length?`<h4>Indicaciones registradas</h4>${listHtml(technique.cautions)}`:""}
+        </details>
+      `:"<p>Técnica todavía no disponible para este ejercicio.</p>"}
+    </section>
+  </aside>`;
+}
+function renderActiveWorkoutUnresolved(resolution,exercise,key){
+  if(state.workoutUnresolvedDismissed?.has(key)) return "";
+  const showCandidates=state.workoutLibraryCandidateKey===key;
+  return `<section class="active-workout-resolution" role="status">
+    <span class="section-kicker">FICHA DEL EJERCICIO PENDIENTE</span>
+    <h3>Necesitamos confirmar la ficha correcta</h3>
+    <p>GymOS no puede determinar con seguridad qué ficha de la biblioteca corresponde a “${esc(exercise.name)}”. Puedes continuar registrando el entrenamiento.</p>
+    <div>
+      ${resolution.candidates.length?`<button type="button" class="secondary" data-workout-show-candidates aria-expanded="${showCandidates}">Elegir la ficha correcta</button>`:""}
+      <button type="button" class="text-button" data-workout-dismiss-resolution>Continuar sin ficha</button>
+    </div>
+    ${showCandidates?`<div class="active-workout-candidates" aria-label="Fichas compatibles">
+      ${resolution.candidates.map(candidate=>`<button type="button" data-workout-library-candidate="${esc(candidate.id)}">
+        <strong>${esc(candidate.name)}</strong>
+        <span>${[
+          exerciseLibraryWorkflowApi().label(candidate.movementPattern),
+          candidate.primaryMuscles?.length?candidate.primaryMuscles.map(exerciseLibraryWorkflowApi().label).join(", "):"",
+          candidate.requiredEquipment?.length?candidate.requiredEquipment.map(exerciseLibraryWorkflowApi().label).join(", "):""
+        ].filter(Boolean).map(esc).join(" · ")}</span>
+        <small>Coincidencia compatible para revisar; no se aplicará sin tu confirmación.</small>
+      </button>`).join("")}
+      <p>La selección se aplica solo a esta vista. GymOS no modificará tu rutina ni el historial.</p>
+    </div>`:""}
+  </section>`;
+}
+function renderActiveWorkoutSet(row,exerciseIndex,sessionId,nextPendingIndex){
+  const previous=row.previous
+    ?row.timed
+      ?row.previous.seconds?`${esc(String(row.previous.seconds))} s`:"—"
+      :hasInputValue(row.previous.weight)||hasInputValue(row.previous.reps)
+        ?`${esc(String(row.previous.weight||"—"))} kg × ${esc(String(row.previous.reps||"—"))}`
+        :"—"
+    :"—";
+  return `<article class="active-set-card ${row.done?"completed":row.index===nextPendingIndex?"next":""}" data-active-set="${row.index}">
+    <header><strong>Serie ${row.number}</strong>${row.done?'<span aria-label="Serie completada">✓ Completada</span>':""}</header>
+    <div class="active-set-reference"><span>Anterior: <strong>${previous}</strong></span><span>Objetivo: <strong>${esc(row.target||"Sin definir")}</strong></span></div>
+    <div class="active-set-fields">
+      ${row.timed
+        ?`<div class="active-set-stopwatch">
+            <span>Tiempo</span>
+            <strong data-exercise-timer-display="${esc(exerciseTimerKey(sessionId,exerciseIndex,row.index))}">${formatExerciseTimer(currentExerciseTimerMs(getExerciseTimer(sessionId,exerciseIndex,row.index)))}</strong>
+            <div><button type="button" data-active-timer-start="${row.index}" ${row.done?"disabled":""}>Iniciar</button><button type="button" data-active-timer-stop="${row.index}" ${row.done?"disabled":""}>Parar</button><button type="button" data-active-timer-reset="${row.index}" aria-label="Reiniciar cronómetro" ${row.done?"disabled":""}>↺</button></div>
+          </div>
+          <label><span>Duración <small>(segundos)</small></span><input inputmode="numeric" data-set-field="seconds" data-set-index="${row.index}" value="${esc(String(row.seconds))}" ${row.done?"disabled":""}></label>`
+        :`<label><span>Peso <small>(kg)</small></span><input inputmode="decimal" data-set-field="weight" data-set-index="${row.index}" value="${esc(String(row.weight))}" ${row.done?"disabled":""}></label>
+          <label><span>Repeticiones</span><input inputmode="numeric" data-set-field="reps" data-set-index="${row.index}" value="${esc(String(row.reps))}" ${row.done?"disabled":""}></label>`}
+      <label><span>RIR</span><select data-set-field="rir" data-set-index="${row.index}" ${row.done?"disabled":""}>
+        <option value="" ${row.rir===""?"selected":""}>—</option>
+        ${[0,1,2,3,4,5].map(value=>`<option value="${value}" ${String(row.rir)===String(value)?"selected":""}>${value}</option>`).join("")}
+      </select></label>
+    </div>
+    <label class="active-set-warmup"><input type="checkbox" data-set-warmup="${row.index}" ${row.warmup?"checked":""} ${row.done?"disabled":""}><span>Serie de calentamiento</span></label>
+    <div class="active-set-actions">
+      <button type="button" class="${row.done?"secondary":"primary"}" data-complete-active-set="${row.index}" aria-pressed="${row.done}">${row.done?"Corregir serie":"Completar serie"}</button>
+      ${row.canDelete?`<button type="button" class="text-button" data-delete-active-set="${row.index}">Eliminar serie</button>`:""}
+    </div>
+  </article>`;
+}
+function hasInputValue(value){
+  return value!==null&&value!==undefined&&value!=="";
+}
+function renderActiveWorkoutOverlays({draft,header,review,resolution,currentExercise,key}){
+  const statusLabels={completed:"Completado",started:"Iniciado",pending:"Pendiente"};
+  const summary=state.workoutSessionOverviewOpen?`<div class="workout-modal-backdrop" data-workout-close-modal>
+    <section id="workoutSessionOverviewDialog" class="workout-modal session-overview-modal" role="dialog" aria-modal="true" aria-labelledby="workoutSessionOverviewTitle">
+      <header><div><span class="section-kicker">SESIÓN</span><h2 id="workoutSessionOverviewTitle">${esc(header.sessionName)}</h2></div><button type="button" class="icon-button" data-workout-close-modal aria-label="Cerrar">×</button></header>
+      <div class="workout-session-exercise-list">
+        ${draft.exercises.map((exercise,index)=>{
+          const status=activeWorkoutExerciseStatus(exercise);
+          return `<button type="button" data-workout-jump-exercise="${index}" data-exercise-id="${esc(activeWorkoutApi().exerciseIdentity(exercise,index))}" aria-current="${index===header.exerciseIndex?"step":"false"}">
+            <span>${index+1}</span><strong>${esc(exercise.name)}</strong><small>${exercise.substitution?"Sustituido · ":""}${statusLabels[status]}</small>
+          </button>`;
+        }).join("")}
+      </div>
+    </section>
+  </div>`:"";
+  const change=state.workoutChangeMenuOpen?`<div class="workout-modal-backdrop" data-workout-close-modal>
+    <section id="workoutChangeDialog" class="workout-modal workout-change-modal" role="dialog" aria-modal="true" aria-labelledby="workoutChangeTitle">
+      <header><h2 id="workoutChangeTitle">¿Dónde quieres aplicar el cambio?</h2><button type="button" class="icon-button" data-workout-close-modal aria-label="Cerrar">×</button></header>
+      ${resolution.exercise?`<button type="button" data-workout-change-mode="temporary"><strong>Solo en este entrenamiento</strong><span>La rutina continuará igual.</span></button>
+        <button type="button" data-workout-change-mode="permanent"><strong>Cambiar en mi rutina</strong><span>Se creará una propuesta para revisar y confirmar.</span></button>`
+        :`<p class="form-message info">Primero debes elegir una ficha compatible para esta visita. GymOS no puede crear una sustitución segura desde una coincidencia ambigua.</p>`}
+    </section>
+  </div>`:"";
+  const completion=state.workoutCompletionReviewOpen?`<div class="workout-modal-backdrop" data-workout-close-modal>
+    <section id="workoutCompletionDialog" class="workout-modal workout-completion-modal" role="dialog" aria-modal="true" aria-labelledby="workoutCompletionTitle">
+      <header><div><span class="section-kicker">REVISIÓN FINAL</span><h2 id="workoutCompletionTitle">Revisa tu entrenamiento</h2></div><button type="button" class="icon-button" data-workout-close-modal aria-label="Cerrar">×</button></header>
+      <dl>
+        <div><dt>Ejercicios completados</dt><dd>${review.completedExercises} de ${review.exercises.length}</dd></div>
+        <div><dt>Ejercicios parciales</dt><dd>${review.partialExercises}</dd></div>
+        <div><dt>Sin comenzar</dt><dd>${review.untouchedExercises}</dd></div>
+        <div><dt>Series pendientes</dt><dd>${review.pendingSets}</dd></div>
+        <div><dt>Duración</dt><dd>${formatSessionElapsed(review.elapsedMs)}</dd></div>
+        <div><dt>Sustituciones</dt><dd>${review.substitutions}</dd></div>
+        ${review.notes?`<div><dt>Ejercicios con notas</dt><dd>${review.notes}</dd></div>`:""}
+      </dl>
+      ${review.noteItems.length?`<section class="workout-review-notes" aria-labelledby="workoutReviewNotesTitle">
+        <h3 id="workoutReviewNotesTitle">Notas registradas</h3>
+        <ul>${review.noteItems.map(item=>`<li><strong>${esc(item.name)}</strong><span>${esc(item.text)}</span></li>`).join("")}</ul>
+      </section>`:""}
+      ${review.complete?"":`<div class="form-message info" role="status"><strong>Te quedan ${review.pendingSets} ${review.pendingSets===1?"serie pendiente":"series pendientes"}.</strong><p>Puedes volver al entrenamiento o finalizar conservando únicamente los resultados registrados.</p></div>`}
+      <div class="workout-modal-actions">
+        ${review.complete?"":'<button type="button" class="secondary" data-workout-close-modal>Volver al entrenamiento</button>'}
+        <button type="button" class="primary" data-workout-finish ${state.finishingWorkout?"disabled":""}>${state.finishingWorkout?"Finalizando…":review.complete?"Finalizar entrenamiento":"Finalizar de todas formas"}</button>
+      </div>
+    </section>
+  </div>`:"";
+  const deleteSet=state.workoutSeriesDeleteCandidate?`<div class="workout-modal-backdrop" data-workout-close-modal>
+    <section class="workout-modal" role="dialog" aria-modal="true" aria-labelledby="deleteWorkoutSetTitle">
+      <h2 id="deleteWorkoutSetTitle">¿Eliminar esta serie?</h2>
+      <p>La serie contiene datos. Esta acción no se puede deshacer.</p>
+      <div class="workout-modal-actions"><button type="button" class="secondary" data-workout-close-modal>Cancelar</button><button type="button" class="danger-button" data-confirm-delete-active-set>Eliminar serie</button></div>
+    </section>
+  </div>`:"";
+  const discard=state.workoutDiscardConfirmOpen?`<div class="workout-modal-backdrop" data-workout-close-modal>
+    <section class="workout-modal" role="dialog" aria-modal="true" aria-labelledby="discardWorkoutTitle">
+      <h2 id="discardWorkoutTitle">Descartar entrenamiento</h2>
+      <p>Se eliminará este borrador y los resultados que todavía no has finalizado.</p>
+      <div class="workout-modal-actions"><button type="button" class="secondary" data-workout-close-modal>Conservar entrenamiento</button><button type="button" class="danger-button" data-confirm-discard-workout>Descartar</button></div>
+    </section>
+  </div>`:"";
+  return summary+change+completion+deleteSet+discard;
+}
+function closeActiveWorkoutOverlay(){
+  const returnFocusSelector=state.workoutReturnFocusSelector;
+  state.workoutSessionOverviewOpen=false;
+  state.workoutChangeMenuOpen=false;
+  state.workoutCompletionReviewOpen=false;
+  state.workoutDiscardConfirmOpen=false;
+  state.workoutSeriesDeleteCandidate=null;
+  state.workoutReturnFocusSelector=null;
+  renderWorkout();
+  if(returnFocusSelector) requestAnimationFrame(()=>document.querySelector(returnFocusSelector)?.focus());
+}
+function activeWorkoutRecoveryGuidanceModel(entry,recoveryApi=globalThis.GymOSRecovery||globalThis.window?.GymOSRecovery){
+  const result=entry&&recoveryApi?.resultForEntry?.(entry);
+  if(!result) return {available:false};
+  return {
+    available:true,
+    status:String(result.status||"ready"),
+    title:String(result.title||"Orientación de recuperación"),
+    guidance:String(result.guidance||"Ajusta el esfuerzo según tus sensaciones reales.")
+  };
+}
 function renderWorkout(){
+  const s=resolveRuntimeSessionId();
+  const api=activeWorkoutApi();
+  const ownerId=currentRoutineOwnerOrNull();
+  const sessionId=s;
+  const session=activeRoutineSession(sessionId);
+  if(!session){state.screen="home";renderHome();return;}
+  const canonical=getCanonicalRoutine();
+  const persisted=readHomeDraft(session,canonical);
+  const draft=getDraft(sessionId);
+  if(!persisted.draft||!draft.startedAt){
+    draft.startedAt=Date.now();
+    saveDraft(draft);
+  }
+  const totalExercises=draft.exercises.length;
+  state.workoutExerciseIndex=Math.min(Math.max(0,state.workoutExerciseIndex||0),Math.max(0,totalExercises-1));
+  const exerciseIndex=state.workoutExerciseIndex;
+  const exercise=draft.exercises[exerciseIndex]||null;
+  const sessionName=routineSessionRuntimeApi().displayName(
+    session,activeRoutineSessions().findIndex(item=>item.sessionId===sessionId)
+  );
+  const header=api.activeWorkoutHeaderModel({
+    session:{...session,name:sessionName},exerciseIndex,totalExercises,
+    startedAt:draft.startedAt,now:Date.now()
+  });
+  const elapsed=header.elapsed.elapsedMs;
+  const elapsedForDisplay=header.elapsed.anomalous?0:elapsed;
+  const last=lastWorkoutForSession(sessionId);
+  const previous=exercise?previousExerciseForWorkout(last,exercise,exerciseIndex):null;
+  const library=getExerciseLibrary();
+  const key=exercise?activeWorkoutExerciseKey(sessionId,exercise,exerciseIndex):"";
+  const selectedLibraryId=state.workoutVisualLibrarySelections.get(key)||null;
+  const resolution=api.exerciseLibraryResolutionModel({
+    exercise,library,selectedExerciseId:selectedLibraryId,
+    normalize:window.GymOSExerciseDomain.normalizeToken
+  });
+  const guide=api.exerciseGuideModel({
+    exercise:resolution.exercise,label:exerciseLibraryWorkflowApi().label
+  });
+  const timed=exercise?isTimedExercise(exercise):false;
+  const rows=exercise?exercise.series.map((set,index)=>api.setEntryModel({
+    set,index,previous:previous?.series?.[index]||null,target:exercise.target,timed
+  })):[];
+  const nextPendingIndex=rows.find(row=>!row.done)?.index??-1;
+  const review=api.workoutCompletionReviewModel({exercises:draft.exercises,elapsedMs:elapsedForDisplay});
+  const recommendation=exercise&&!timed
+    ?exerciseRecommendation(previous,exercise.target,exercise.increment,exercise.type)
+    :null;
+  const recoveryGuidance=activeWorkoutRecoveryGuidanceModel(
+    window.GymOSRecovery?.entryForDate?.(dateKey(new Date()))||null
+  );
+  const defaultRest=getRestSeconds();
+  const rest=api.restTimerModel({
+    seconds:state.timerSeconds,running:Boolean(state.timerInterval),defaultSeconds:defaultRest
+  });
+  const tags=guide.available?[
+    ...guide.muscles.primary.slice(0,2),
+    ...guide.equipment.slice(0,1),
+    guide.pattern
+  ].filter(Boolean):[];
+  app.innerHTML=`<div class="app-shell active-workout-shell">
+    <main class="screen active-workout-screen" aria-labelledby="activeExerciseTitle">
+      <header class="active-workout-context">
+        <button type="button" class="text-button active-workout-back" data-workout-back>← Volver a ${esc(sessionName)}</button>
+        <button type="button" class="active-workout-progress-trigger" data-workout-session-overview aria-expanded="${state.workoutSessionOverviewOpen}" aria-controls="workoutSessionOverviewDialog">
+          <strong>Ejercicio ${header.exerciseNumber} de ${header.totalExercises}</strong><span>Ver resumen de la sesión</span>
+        </button>
+        <time data-workout-session-elapsed data-draft-id="${esc(String(draft.draftId||""))}" aria-label="${esc(header.elapsed.anomalous?"Tiempo de sesión pendiente de revisar":sessionElapsedAccessible(elapsedForDisplay))}">${header.elapsed.anomalous?"--:--":formatSessionElapsed(elapsedForDisplay)}</time>
+        <div class="active-workout-session-progress" role="progressbar" aria-label="Progreso por ejercicios" aria-valuemin="0" aria-valuemax="${header.totalExercises}" aria-valuenow="${header.exerciseNumber}"><span style="width:${header.progressPercentage}%"></span></div>
+        ${header.focus?`<p>${esc(header.focus)}</p>`:""}
+      </header>
+      ${header.elapsed.anomalous?`<section class="form-message info active-workout-old-draft" role="status"><p>Este borrador lleva abierto un periodo inusual. Conservamos todos sus datos, pero debes reiniciar el contador antes de finalizar.</p><button type="button" class="secondary" data-reset-workout-session-time>Retomar tiempo desde ahora</button></section>`:""}
+      ${state.workoutInlineMessage?`<p class="form-message ${esc(state.workoutInlineMessage.type||"info")}" role="${state.workoutInlineMessage.type==="error"?"alert":"status"}">${esc(state.workoutInlineMessage.text)}</p>`:""}
+      ${state.workoutDraftMessage?`<p class="workout-draft-message ${esc(state.workoutDraftMessage.type)}" role="${state.workoutDraftMessage.type==="warning"?"alert":"status"}">${esc(state.workoutDraftMessage.text)}</p>`:""}
+      ${exercise?`<div class="active-workout-layout">
+        <section class="active-workout-exercise-heading" aria-labelledby="activeExerciseTitle">
+          <span class="section-kicker">REGISTRO</span>
+          <div class="active-exercise-title-row">
+            <div><h1 id="activeExerciseTitle" tabindex="-1">${esc(exercise.name)}</h1>
+              <p>${exercise.sets||exercise.series.length} series · ${esc(exercise.target||"Objetivo sin definir")} · RIR ${esc(exercise.targetRir||"sin definir")} · Descanso ${defaultRest%60===0?`${defaultRest/60} min`:`${defaultRest} s`}</p></div>
+            <button type="button" class="secondary" data-workout-change-exercise aria-controls="workoutChangeDialog">Cambiar ejercicio</button>
+          </div>
+          ${tags.length?`<div class="active-exercise-tags">${tags.map(tag=>`<span>${esc(tag)}</span>`).join("")}</div>`:""}
+          ${!resolution.exercise?renderActiveWorkoutUnresolved(resolution,exercise,key):""}
+        </section>
+        ${renderActiveWorkoutGuide(guide,exercise)}
+        <section class="active-workout-register" aria-label="Registro del ejercicio">
+          ${recoveryGuidance.available?`<aside class="active-workout-recovery active-workout-recovery-${esc(recoveryGuidance.status)}" aria-label="Orientación de recuperación">
+            <span class="section-kicker">ORIENTACIÓN DE RECUPERACIÓN</span>
+            <strong>${esc(recoveryGuidance.title)}</strong>
+            <p>${esc(recoveryGuidance.guidance)}</p>
+          </aside>`:""}
+          ${recommendation?`<section class="active-workout-recommendation">
+            <span class="section-kicker">RECOMENDACIÓN DE HOY</span>
+            <strong>${esc(recommendation.title)}</strong><p>${esc(recommendation.text)}</p>
+            ${previous?`<small>Basada en la última vez que realizaste este ejercicio.</small>`:"<small>Se creará una referencia cuando completes esta sesión.</small>"}
+          </section>`:""}
+          <section class="active-workout-sets" aria-labelledby="activeWorkoutSetsTitle">
+            <div class="active-workout-section-heading"><h2 id="activeWorkoutSetsTitle">Series</h2><button type="button" class="text-button" data-add-active-set>Añadir serie</button></div>
+            <div class="active-set-desktop-head" aria-hidden="true"><span>Serie</span><span>Anterior / objetivo</span><span>Registro</span><span>Estado</span></div>
+            ${rows.map(row=>renderActiveWorkoutSet(row,exerciseIndex,sessionId,nextPendingIndex)).join("")}
+          </section>
+          <label class="active-workout-notes"><span>Notas del ejercicio</span><textarea data-active-workout-notes placeholder="Opcional">${esc(exercise.notes||"")}</textarea></label>
+          <label class="active-workout-notes"><span>Molestias durante el ejercicio</span><input data-active-workout-discomfort value="${esc(exercise.discomfort||"")}" placeholder="Déjalo vacío si no hubo molestias"></label>
+        </section>
+      </div>`:`<section class="workout-empty-state" role="status"><h1 id="activeExerciseTitle">Esta sesión no tiene ejercicios</h1><p>Vuelve a Mi rutina para añadir ejercicios antes de empezar.</p><button type="button" data-open-routine-from-workout class="secondary">Ir a Mi rutina</button></section>`}
+      ${rest.running?`<section class="active-rest-timer" aria-labelledby="activeRestTitle">
+        <div><span class="section-kicker">DESCANSO</span><strong id="activeRestTitle" data-active-rest-time aria-live="off">${formatTimer(rest.remainingSeconds)}</strong></div>
+        <div><button type="button" class="secondary" data-skip-rest>Omitir descanso</button><button type="button" class="secondary" data-add-rest>+30 s</button></div>
+      </section>`:""}
+      <p id="activeRestStatus" class="sr-only" aria-live="polite"></p>
+      ${exercise?`<nav class="active-exercise-navigation" aria-label="Navegación entre ejercicios">
+        <button type="button" class="secondary" data-workout-previous ${exerciseIndex===0?"disabled":""}>← Ejercicio anterior</button>
+        <button type="button" class="primary" ${exerciseIndex===totalExercises-1?'data-workout-review aria-controls="workoutCompletionDialog"':"data-workout-next"}>${exerciseIndex===totalExercises-1?"Revisar y finalizar sesión":"Siguiente ejercicio →"}</button>
+        <div class="active-workout-more">
+          <button type="button" class="icon-button" data-workout-discard-menu aria-label="Más acciones" aria-expanded="${state.workoutDiscardMenuOpen||false}">•••</button>
+          ${state.workoutDiscardMenuOpen?'<button type="button" class="danger-soft" data-workout-discard>Descartar entrenamiento</button>':""}
+        </div>
+      </nav>`:""}
+    </main>
+    ${renderActiveWorkoutOverlays({draft,header,review,resolution,currentExercise:exercise,key})}
+    ${nav("workout")}
+  </div>`;
+  if(!header.elapsed.anomalous) startWorkoutSessionTimer({
+    ownerId,draftId:String(draft.draftId||""),startedAt:draft.startedAt
+  });
+  else stopWorkoutSessionTimer();
+  bindActiveWorkoutEvents({ownerId,sessionId,draftId:draft.draftId,exerciseIndex,key,resolution,elapsedAnomalous:header.elapsed.anomalous});
+  bindNav();
+}
+
+function activeWorkoutIdentityValid(context){
+  if(currentRoutineOwnerOrNull()!==context.ownerId) return false;
+  const session=activeRoutineSession(context.sessionId);
+  if(!session) return false;
+  const stored=readHomeDraft(session,getCanonicalRoutine());
+  return Boolean(stored.draft)&&(
+    stored.draft.draftId===context.draftId&&
+    stored.draft.routineId===getCanonicalRoutine()?.routineId&&
+    stored.draft.sessionId===context.sessionId
+  );
+}
+function activeWorkoutHumanError(error){
+  return {
+    owner_changed:"La cuenta activa cambió. Vuelve a abrir el entrenamiento.",
+    owner_mismatch:"La cuenta activa cambió. Vuelve a abrir el entrenamiento.",
+    draft_changed:"El entrenamiento cambió en otra vista. Vuelve a abrirlo.",
+    draft_session_not_found:"La sesión ya no está disponible.",
+    session_not_found:"La sesión ya no está disponible."
+  }[error?.message]||"No se pudieron guardar los cambios. Inténtalo de nuevo.";
+}
+function setActiveWorkoutMessage(type,text){
+  state.workoutInlineMessage={type,text};
+}
+function bindActiveWorkoutEvents(context){
+  const shell=document.querySelector(".active-workout-shell");
+  const main=shell?.querySelector(".active-workout-screen");
+  if(!shell||!main) return;
+  const getCurrent=()=>{
+    if(!activeWorkoutIdentityValid(context)) throw new Error("owner_changed");
+    const draft=getDraft(context.sessionId);
+    if(draft.draftId!==context.draftId) throw new Error("draft_changed");
+    return draft;
+  };
+  const persist=mutator=>{
+    const draft=getCurrent();
+    mutator(draft);
+    if(!activeWorkoutIdentityValid(context)) throw new Error("owner_changed");
+    saveDraft(draft);
+    if(!activeWorkoutIdentityValid(context)) throw new Error("owner_changed");
+    return draft;
+  };
+  const rerenderWithError=error=>{
+    setActiveWorkoutMessage("error",activeWorkoutHumanError(error));
+    renderWorkout();
+  };
+  main.addEventListener("input",event=>{
+    const target=event.target;
+    try{
+      if(target.matches("[data-set-field]")){
+        const setIndex=Number(target.dataset.setIndex);
+        persist(draft=>{
+          const set=draft.exercises[context.exerciseIndex]?.series?.[setIndex];
+          if(!set||set.done) return;
+          set[target.dataset.setField]=target.value;
+          if(target.dataset.setField==="seconds"){set.weight="";set.reps="";}
+        });
+      }else if(target.matches("[data-active-workout-notes]")){
+        persist(draft=>{draft.exercises[context.exerciseIndex].notes=target.value;});
+      }else if(target.matches("[data-active-workout-discomfort]")){
+        persist(draft=>{draft.exercises[context.exerciseIndex].discomfort=target.value;});
+      }
+    }catch(error){rerenderWithError(error);}
+  });
+  main.addEventListener("change",event=>{
+    const target=event.target;
+    if(!target.matches("[data-set-warmup]")) return;
+    try{
+      const setIndex=Number(target.dataset.setWarmup);
+      persist(draft=>{
+        const set=draft.exercises[context.exerciseIndex]?.series?.[setIndex];
+        if(set&&!set.done) set.warmup=target.checked;
+      });
+      renderWorkout();
+    }catch(error){rerenderWithError(error);}
+  });
+  main.addEventListener("click",event=>{
+    const button=event.target.closest("button");
+    if(!button||button.disabled) return;
+    try{
+      if(button.matches("[data-workout-back]")){
+        const draft=getCurrent();
+        saveDraft(draft);
+        stopAllExerciseTimers();
+        stopWorkoutSessionTimer();
+        state.workoutInlineMessage=null;
+        state.screen="home";
+        renderHome();
+      }else if(button.matches("[data-reset-workout-session-time]")){
+        persist(draft=>{draft.startedAt=Date.now();});
+        setActiveWorkoutMessage("success","El tiempo de esta sesión vuelve a contar desde ahora.");
+        renderWorkout();
+      }else if(button.matches("[data-workout-session-overview]")){
+        state.workoutReturnFocusSelector="[data-workout-session-overview]";
+        state.workoutSessionOverviewOpen=true;renderWorkout();
+      }else if(button.matches("[data-workout-change-exercise]")){
+        state.workoutReturnFocusSelector="[data-workout-change-exercise]";
+        state.workoutChangeMenuOpen=true;renderWorkout();
+      }else if(button.matches("[data-workout-show-candidates]")){
+        state.workoutLibraryCandidateKey=context.key;renderWorkout();
+      }else if(button.matches("[data-workout-dismiss-resolution]")){
+        state.workoutUnresolvedDismissed.add(context.key);
+        state.workoutLibraryCandidateKey=null;
+        renderWorkout();
+      }else if(button.matches("[data-workout-library-candidate]")){
+        const candidateId=button.dataset.workoutLibraryCandidate;
+        if(!context.resolution.candidates.some(item=>item.id===candidateId)) return;
+        state.workoutVisualLibrarySelections.set(context.key,candidateId);
+        state.workoutLibraryCandidateKey=null;
+        renderWorkout();
+      }else if(button.matches("[data-active-timer-start]")){
+        startExerciseTimer(context.sessionId,context.exerciseIndex,Number(button.dataset.activeTimerStart));
+      }else if(button.matches("[data-active-timer-stop]")){
+        stopExerciseTimer(context.sessionId,context.exerciseIndex,Number(button.dataset.activeTimerStop));
+      }else if(button.matches("[data-active-timer-reset]")){
+        resetExerciseTimer(context.sessionId,context.exerciseIndex,Number(button.dataset.activeTimerReset));
+      }else if(button.matches("[data-complete-active-set]")){
+        const setIndex=Number(button.dataset.completeActiveSet);
+        const busyKey=`${context.draftId}:${context.exerciseIndex}:${setIndex}`;
+        if(state.workoutSetBusyKey===busyKey) return;
+        state.workoutSetBusyKey=busyKey;
+        try{
+          let startRest=false;
+          const before=getCurrent();
+          const beforeSet=before.exercises[context.exerciseIndex]?.series?.[setIndex];
+          if(
+            beforeSet&&!beforeSet.done&&
+            isTimedExercise(before.exercises[context.exerciseIndex])&&!hasInputValue(beforeSet.seconds)
+          ){
+            stopExerciseTimer(context.sessionId,context.exerciseIndex,setIndex);
+          }
+          persist(draft=>{
+            const set=draft.exercises[context.exerciseIndex]?.series?.[setIndex];
+            if(!set) return;
+            const wasDone=Boolean(set.done);
+            set.done=!wasDone;
+            startRest=!wasDone&&!set.warmup;
+          });
+          if(startRest) startTimer(getRestSeconds());
+        }finally{state.workoutSetBusyKey=null;}
+        renderWorkout();
+      }else if(button.matches("[data-add-active-set]")){
+        persist(draft=>{
+          draft.exercises[context.exerciseIndex].series.push(normalizeSeries({}));
+          draft.exercises[context.exerciseIndex].sets=draft.exercises[context.exerciseIndex].series.length;
+        });
+        renderWorkout();
+      }else if(button.matches("[data-delete-active-set]")){
+        const setIndex=Number(button.dataset.deleteActiveSet);
+        const draft=getCurrent();
+        const set=draft.exercises[context.exerciseIndex]?.series?.[setIndex];
+        if(!set||set.done) return;
+        if(activeWorkoutApi().setHasResults(set)){
+          state.workoutReturnFocusSelector=`[data-delete-active-set="${setIndex}"]`;
+          state.workoutSeriesDeleteCandidate={exerciseIndex:context.exerciseIndex,setIndex};
+          renderWorkout();
+        }else{
+          persist(current=>{
+            current.exercises[context.exerciseIndex].series.splice(setIndex,1);
+            current.exercises[context.exerciseIndex].sets=current.exercises[context.exerciseIndex].series.length;
+          });
+          renderWorkout();
+        }
+      }else if(button.matches("[data-skip-rest]")){
+        clearInterval(state.timerInterval);state.timerInterval=null;state.timerSeconds=0;
+        updateTimerUI();renderWorkout();
+      }else if(button.matches("[data-add-rest]")){
+        state.timerSeconds=Math.max(0,state.timerSeconds)+30;updateTimerUI();renderWorkout();
+      }else if(button.matches("[data-workout-previous]")){
+        saveDraft(getCurrent());
+        state.workoutExerciseIndex=Math.max(0,context.exerciseIndex-1);
+        state.workoutTechniqueExpanded=false;renderWorkout();
+      }else if(button.matches("[data-workout-next]")){
+        saveDraft(getCurrent());
+        state.workoutExerciseIndex=context.exerciseIndex+1;
+        state.workoutTechniqueExpanded=false;renderWorkout();
+      }else if(button.matches("[data-workout-review]")){
+        saveDraft(getCurrent());
+        state.workoutReturnFocusSelector="[data-workout-review]";
+        state.workoutCompletionReviewOpen=true;renderWorkout();
+      }else if(button.matches("[data-workout-discard-menu]")){
+        state.workoutDiscardMenuOpen=!state.workoutDiscardMenuOpen;renderWorkout();
+      }else if(button.matches("[data-workout-discard]")){
+        state.workoutReturnFocusSelector="[data-workout-discard-menu]";
+        state.workoutDiscardMenuOpen=false;state.workoutDiscardConfirmOpen=true;renderWorkout();
+      }else if(button.matches("[data-open-routine-from-workout]")){
+        stopWorkoutSessionTimer();navigateToScreen("routineWorkflow");
+      }
+    }catch(error){rerenderWithError(error);}
+  });
+  shell.addEventListener("click",event=>{
+    const button=event.target.closest("button");
+    if(button?.matches("[data-workout-close-modal]")||event.target.matches(".workout-modal-backdrop[data-workout-close-modal]")){
+      closeActiveWorkoutOverlay();
+      return;
+    }
+    if(button?.matches("[data-workout-jump-exercise]")){
+      if(!activeWorkoutIdentityValid(context)) return rerenderWithError(new Error("owner_changed"));
+      const index=Number(button.dataset.workoutJumpExercise);
+      const draft=getDraft(context.sessionId);
+      const exercise=draft.exercises[index];
+      if(!exercise||activeWorkoutApi().exerciseIdentity(exercise,index)!==button.dataset.exerciseId) return;
+      state.workoutSessionOverviewOpen=false;
+      state.workoutExerciseIndex=index;
+      renderWorkout();
+      requestAnimationFrame(()=>document.getElementById("activeExerciseTitle")?.focus());
+      return;
+    }
+    if(button?.matches("[data-workout-change-mode]")){
+      const mode=button.dataset.workoutChangeMode;
+      state.workoutChangeMenuOpen=false;
+      openExerciseSubstitution(mode,context.exerciseIndex);
+      return;
+    }
+    if(button?.matches("[data-confirm-delete-active-set]")){
+      const candidate=state.workoutSeriesDeleteCandidate;
+      try{
+        if(!candidate||candidate.exerciseIndex!==context.exerciseIndex) return;
+        persist(draft=>{
+          const set=draft.exercises[candidate.exerciseIndex]?.series?.[candidate.setIndex];
+          if(!set||set.done) return;
+          draft.exercises[candidate.exerciseIndex].series.splice(candidate.setIndex,1);
+          draft.exercises[candidate.exerciseIndex].sets=draft.exercises[candidate.exerciseIndex].series.length;
+        });
+        state.workoutSeriesDeleteCandidate=null;renderWorkout();
+      }catch(error){rerenderWithError(error);}
+      return;
+    }
+    if(button?.matches("[data-confirm-discard-workout]")){
+      try{
+        if(!activeWorkoutIdentityValid(context)) throw new Error("owner_changed");
+        stopWorkoutSessionTimer();stopAllExerciseTimers();
+        clearInterval(state.timerInterval);state.timerInterval=null;state.timerSeconds=0;
+        clearDraft(context.sessionId);
+        state.workoutDiscardConfirmOpen=false;
+        state.workoutExerciseIndex=0;
+        state.screen="home";renderHome();
+      }catch(error){rerenderWithError(error);}
+      return;
+    }
+    if(button?.matches("[data-workout-finish]")){
+      if(state.finishingWorkout) return;
+      try{
+        if(!activeWorkoutIdentityValid(context)) throw new Error("owner_changed");
+        if(context.elapsedAnomalous){
+          state.workoutCompletionReviewOpen=false;
+          setActiveWorkoutMessage("error","Reinicia el contador de sesión antes de finalizar este borrador antiguo.");
+          renderWorkout();
+          return;
+        }
+        button.disabled=true;
+        stopWorkoutSessionTimer();stopAllExerciseTimers();
+        finishWorkout();
+      }catch(error){
+        state.finishingWorkout=false;
+        rerenderWithError(error);
+      }
+    }
+  });
+  shell.addEventListener("keydown",event=>{
+    const dialog=shell.querySelector('.workout-modal[role="dialog"]');
+    if(event.key==="Escape"&&dialog){
+      event.preventDefault();closeActiveWorkoutOverlay();
+    }else if(event.key==="Tab"&&dialog){
+      const focusable=[...dialog.querySelectorAll('button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),summary,[tabindex]:not([tabindex="-1"])')]
+        .filter(node=>!node.hidden&&node.getClientRects().length);
+      if(!focusable.length){event.preventDefault();dialog.focus();return;}
+      const first=focusable[0],last=focusable[focusable.length-1];
+      if(event.shiftKey&&document.activeElement===first){event.preventDefault();last.focus();}
+      else if(!event.shiftKey&&document.activeElement===last){event.preventDefault();first.focus();}
+    }
+  });
+  shell.querySelector(".workout-modal button")?.focus();
+}
+
+function renderLegacyWorkout(){
   const s=resolveRuntimeSessionId();
   const session=activeRoutineSession(s);
   if(!session){state.screen="home";renderHome();return;}
@@ -7566,8 +8825,8 @@ function renderWorkout(){
           <div class="exercise-context-actions">
             ${ex.substitution?.mode==="temporary"
               ?`<button type="button" class="text-button" data-undo-exercise-substitution="${i}">Volver al ejercicio planificado</button>`
-              :`<button type="button" class="text-button" data-temporary-exercise-substitution="${i}">Cambiar solo hoy</button>`}
-            <button type="button" class="text-button" data-permanent-exercise-substitution="${i}">Cambiar en mi rutina</button>
+              :`<button type="button" class="text-button" data-temporary-exercise-substitution="${i}">Cambiar ejercicio</button>`}
+            <button type="button" class="text-button" data-permanent-exercise-substitution="${i}">Crear propuesta de cambio</button>
           </div>
           ${timed?`<div class="timed-exercise-note">Ejercicio por tiempo: inicia y detén el cronómetro en cada serie.</div>`:""}
           ${last?.exercises?.[i]?`<div class="last-session"><strong>Última vez:</strong> ${last.exercises[i].series.map(x=>{
@@ -7630,7 +8889,7 @@ function renderWorkout(){
       <div class="timer-main"><div><div class="subtle">Descanso</div><div id="timerValue" class="timer-value">${formatTimer(state.timerSeconds)}</div></div><button id="closeTimer" class="secondary">Cerrar</button></div>
       <div class="timer-actions"><button class="secondary" data-time="60">60 s</button><button class="secondary" data-time="90">90 s</button><button class="secondary" data-time="120">120 s</button><button class="secondary" data-time="180">180 s</button></div>
     </div>
-    <footer class="sticky-actions"><div class="sticky-actions-inner"><button id="backHome" class="secondary">Salir</button><button id="finishWorkout" class="primary" ${emptySession?"disabled":""}>Finalizar</button></div></footer>
+    <footer class="sticky-actions"><div class="sticky-actions-inner"><button id="backHome" class="secondary">Volver a la sesión</button><button id="finishWorkout" class="primary" ${emptySession?"disabled":""}>Revisar y finalizar sesión</button></div></footer>
   </div>`;
 
   document.querySelectorAll("[data-exercise]").forEach(card=>{
@@ -7714,12 +8973,19 @@ function startTimer(sec){
   const p=document.getElementById("timerPanel"); if(p)p.classList.remove("hidden");
   state.timerInterval=setInterval(()=>{
     state.timerSeconds--; updateTimerUI();
-    if(state.timerSeconds<=0){clearInterval(state.timerInterval);if(navigator.vibrate)navigator.vibrate([200,100,200]);}
+    if(state.timerSeconds<=0){
+      clearInterval(state.timerInterval);
+      state.timerInterval=null;
+      state.timerSeconds=0;
+      const status=document.getElementById("activeRestStatus");
+      if(status) status.textContent="Descanso finalizado.";
+      if(navigator.vibrate)navigator.vibrate([200,100,200]);
+    }
   },1000);
 }
 function formatTimer(sec){return `${Math.floor(sec/60)}:${String(sec%60).padStart(2,"0")}`;}
 function updateTimerUI(){
-  const a=document.getElementById("timerValue"),b=document.getElementById("timerChip");
+  const a=document.getElementById("timerValue")||document.querySelector("[data-active-rest-time]"),b=document.getElementById("timerChip");
   if(a)a.textContent=formatTimer(state.timerSeconds);
   if(b)b.textContent=state.timerSeconds?formatTimer(state.timerSeconds):"Descanso";
 }
@@ -7732,6 +8998,7 @@ function finishWorkout(){
   if(!ownerId||!canonical) throw new Error("canonical_runtime_required");
   const existing=getHistory().find(workout=>workout.draftId===d.draftId);
   if(existing){
+    window.GymOSRecovery?.createPendingCheckin?.(existing);
     state.completedWorkoutSummary=existing;
     state.screen="workoutComplete";
     window.GymOSRecovery.renderWorkoutComplete();
@@ -7756,6 +9023,7 @@ function finishWorkout(){
     if(!history.some(item=>item.draftId===d.draftId)){
       localStorage.setItem("gymos:history",JSON.stringify([workout,...history]));
     }
+    window.GymOSRecovery?.createPendingCheckin?.(workout,{mark:false,sync:false});
     clearDraft(s,{mark:false});
     const next=routineSessionRuntimeApi().nextSessionId(canonical,s);
     persistSelectedRoutineSession(next);
@@ -7774,8 +9042,8 @@ function finishWorkout(){
     const workoutAnalysis=window.GymOSWorkoutAnalysis?.analyzeAndSave?.(workout,{force:true});
     if(workoutAnalysis) window.GymOSWorkoutAnalysis?.maybeGenerateAiNarrative?.(workoutAnalysis);
     newRecords=recordsForWorkout(workout);
-    clearInterval(state.timerInterval);state.timerSeconds=0;
-    window.GymOSRecovery?.createPendingCheckin?.(workout);
+    stopWorkoutSessionTimer();
+    clearInterval(state.timerInterval);state.timerInterval=null;state.timerSeconds=0;
     state.completedWorkoutSummary=workout;
     state.screen="workoutComplete";
   }finally{
@@ -9093,7 +10361,7 @@ function renderHealth(){
     </header>
     <main class="screen">
       <section class="card recovery-hero recovery-${recovery.status.toLowerCase()}">
-        <div class="recovery-score-ring" style="--score:${recovery.score}">
+        <div class="health-score-ring" style="--score:${recovery.score}">
           <strong>${recovery.score}</strong><span>/100</span>
         </div>
         <div>
@@ -12497,14 +13765,29 @@ function openExerciseSubstitution(mode,exerciseIndex){
   const api=exerciseLibraryWorkflowApi(),owner=exerciseLibraryOwner(),session=resolveRuntimeSessionId();
   const source=mode==="temporary"?getDraft(session):activeRoutineSession(session);
   const exercise=mode==="temporary"?source.exercises?.[exerciseIndex]:source?.exercises?.[exerciseIndex];
-  const original=findLibraryExerciseForRuntime(exercise);
-  if(!original){toast("Este ejercicio todavía no tiene una ficha inequívoca en la biblioteca.");return;}
+  const key=activeWorkoutExerciseKey(session,exercise,exerciseIndex);
+  const visualId=state.workoutVisualLibrarySelections.get(key);
+  const original=(visualId?getExerciseLibrary().find(item=>item.id===visualId):null)
+    ||findLibraryExerciseForRuntime(exercise);
+  if(!original){
+    state.workoutChangeMenuOpen=false;
+    setActiveWorkoutMessage("info","Elige primero una ficha compatible para poder buscar una sustitución segura. Puedes continuar registrando sin resolverla.");
+    state.screen="workout";
+    renderWorkout();
+    return;
+  }
   if(mode==="temporary"&&api.hasExerciseResults(exercise)){
-    toast("No puedes cambiar este ejercicio porque ya has empezado a registrarlo.");return;
+    state.workoutChangeMenuOpen=false;
+    setActiveWorkoutMessage("info","No puedes cambiar este ejercicio en la sesión actual porque ya has empezado a registrar resultados.");
+    state.screen="workout";
+    renderWorkout();
+    return;
   }
   const baselineHash=window.GymOSRoutineProposals.routineHash(activeRoutineForComparison());
   const draftHash=window.GymOSRoutineProposals.stableHash(getDraft(session));
   state.exerciseSubstitution={ownerId:owner,mode,session,exerciseIndex,originalExerciseId:original.id,baselineHash,draftHash,selectedId:null,reason:"",showAll:false,busy:null,message:null};
+  stopWorkoutSessionTimer();
+  stopAllExerciseTimers();
   state.screen="exerciseSubstitution";renderExerciseSubstitution();
 }
 function substitutionAlternatives(){
@@ -12546,7 +13829,7 @@ function renderExerciseSubstitution(){
   const selected=getExerciseLibrary().find(item=>item.id===flow.selectedId);
   app.innerHTML=`<div class="app-shell exercise-library-shell">
     <header class="topbar"><button id="backExerciseSubstitution" class="back-button" type="button" aria-label="Volver">←</button>
-      <div><div class="brand">${flow.mode==="temporary"?"Cambiar solo hoy":"Cambiar en mi rutina"}</div><div class="subtle">${esc(original?.name||"Ejercicio")}</div></div></header>
+      <div><div class="brand">${flow.mode==="temporary"?"Cambio para este entrenamiento":"Propuesta de cambio de rutina"}</div><div class="subtle">${esc(original?.name||"Ejercicio")}</div></div></header>
     <main class="screen">
       ${flow.message?`<div class="form-message error" role="alert">${esc(flow.message)}</div>`:`<div aria-live="polite"></div>`}
       <section class="card"><h2>Elige una alternativa</h2><p>${flow.mode==="temporary"
@@ -12560,7 +13843,7 @@ function renderExerciseSubstitution(){
         <div class="substitution-compare"><div><span>Actual</span><strong>${esc(original.name)}</strong><p>${esc(exerciseLibraryWorkflowApi().label(original.movementPattern))}</p></div>
         <div><span>Propuesto</span><strong>${esc(selected.name)}</strong><p>${esc(exerciseLibraryWorkflowApi().label(selected.movementPattern))}</p></div></div>
         <label for="substitutionReason"><span>Motivo opcional</span><textarea id="substitutionReason" maxlength="500">${esc(flow.reason||"")}</textarea></label>
-        <button id="applyExerciseSubstitution" class="primary full" type="button" ${flow.busy?"disabled":""}>${flow.busy?"Guardando…":flow.mode==="temporary"?"Cambiar solo hoy":"Crear propuesta"}</button>
+        <button id="applyExerciseSubstitution" class="primary full" type="button" ${flow.busy?"disabled":""}>${flow.busy?"Guardando…":flow.mode==="temporary"?"Aplicar en esta sesión":"Crear propuesta"}</button>
       </section>`:""}
     </main>
   </div>`;
@@ -12648,10 +13931,82 @@ async function undoCurrentExerciseSubstitution(exerciseIndex){
   }finally{state.exerciseLibraryBusy=null;}
 }
 
+function organizeSettingsScreen(main){
+  if(!main) return;
+  const cardFor=selector=>main.querySelector(selector)?.closest(".card")||null;
+  const assigned=new Set();
+  const definitions=[
+    {
+      id:"account-sync",title:"Cuenta y sincronización",
+      description:"Gestiona tu sesión y comprueba si tus cambios están guardados.",
+      cards:[cardFor(".account-entry-card")]
+    },
+    {
+      id:"appearance",title:"Apariencia",
+      description:"Adapta tema, texto, contraste y movimiento.",
+      cards:[cardFor(".experience-card")]
+    },
+    {
+      id:"training",title:"Entrenamiento",
+      description:"Configura el comportamiento durante una sesión y accede a recuperación y Coach.",
+      cards:[
+        cardFor("#trainingRestSettings"),cardFor("#openRecoveryCenter"),cardFor("#openCoach")
+      ]
+    },
+    {
+      id:"routine-planning",title:"Rutina y planificación",
+      description:"Revisa tu objetivo, planificación y biblioteca de ejercicios.",
+      cards:[
+        cardFor(".onboarding-profile-card"),cardFor(".routine-workflow-entry"),
+        cardFor("#openProgressDashboard"),cardFor("#openFavoriteExercises"),
+        cardFor("#openSubstitutionHistory"),cardFor("#openExerciseLibrary"),
+        cardFor("#openGlobalAnalytics"),cardFor("#openBlocksSettings"),
+        cardFor("#openPlanSettings"),cardFor("#openRoutineEditor")
+      ]
+    },
+    {
+      id:"data",title:"Datos",
+      description:"Consulta tus registros y gestiona copias o datos locales.",
+      cards:[
+        cardFor("#openBackupRestore"),cardFor("#openHealth"),cardFor("#openBodySettings"),
+        cardFor("#exportData"),cardFor("#deleteData")
+      ]
+    },
+    {
+      id:"advanced",title:"Avanzado",
+      description:`GymOS ${GYMOS_VERSION} · Diagnóstico y configuración técnica.`,
+      cards:[cardFor(".ai-settings-entry"),cardFor(".sync-card")]
+    }
+  ];
+  const allCards=Array.from(main.children).filter(element=>element.classList.contains("card"));
+  definitions.forEach(definition=>definition.cards=definition.cards.filter(card=>{
+    if(!card||assigned.has(card)) return false;
+    assigned.add(card);
+    return true;
+  }));
+  definitions.at(-1).cards.push(...allCards.filter(card=>!assigned.has(card)));
+  const fragment=document.createDocumentFragment();
+  definitions.forEach(definition=>{
+    if(!definition.cards.length) return;
+    const section=document.createElement("section");
+    section.className="settings-section";
+    section.dataset.settingsSection=definition.id;
+    section.setAttribute("aria-labelledby",`settings-${definition.id}`);
+    section.innerHTML=`<header class="settings-section-heading">
+      <h2 id="settings-${definition.id}">${definition.title}</h2>
+      <p>${definition.description}</p>
+    </header><div class="settings-section-grid"></div>`;
+    const grid=section.querySelector(".settings-section-grid");
+    definition.cards.forEach(card=>grid.appendChild(card));
+    fragment.appendChild(section);
+  });
+  main.replaceChildren(fragment);
+}
+
 function renderSettings(){
   app.innerHTML=`<div class="app-shell">
     <header class="topbar"><div><div class="brand">Ajustes</div><div class="subtle">GymOS ${GYMOS_VERSION}</div></div></header>
-    <main class="screen">
+    <main class="screen settings-screen">
       <section class="card account-entry-card">
         <div class="account-entry-main">
           <div class="account-avatar" ${state.syncUser?"data-account-avatar":""}>${state.syncUser?esc(accountAvatarContent()):"○"}</div>
@@ -12663,7 +14018,15 @@ function renderSettings(){
               :"Crea una cuenta para mantener entrenamientos, nutrición y salud separados de otros usuarios."}</p>
           </div>
         </div>
-        <button id="openAccount" class="primary full">${state.syncUser?"Gestionar cuenta":"Crear cuenta o iniciar sesión"}</button>
+        <div class="settings-account-sync-row">
+          <span class="sync-dot ${esc(state.syncStatus)}" data-sync-dot aria-hidden="true"></span>
+          <div><strong data-sync-label>${esc(syncStatusLabel())}</strong><small data-sync-description>${esc(syncStatusDescription())}</small></div>
+        </div>
+        <div class="settings-actions">
+          <button id="openAccount" class="primary">${state.syncUser?"Gestionar cuenta":"Crear cuenta o iniciar sesión"}</button>
+          ${state.syncIssue?.retryable&&navigator.onLine?`<button id="settingsSyncRetry" type="button" class="secondary">Reintentar sincronización</button>`:""}
+          ${isAppAuthenticated()?`<button id="settingsSignOut" type="button" class="secondary">Cerrar sesión</button>`:""}
+        </div>
       </section>
 
 
@@ -12768,7 +14131,7 @@ function renderSettings(){
 
         <div class="preference-switches">
           <label><input id="compactUi" type="checkbox" ${getAppPreferences().compact?"checked":""}><span>Diseño compacto</span></label>
-          <label><input id="animationsUi" type="checkbox" ${getAppPreferences().animations?"checked":""}><span>Animaciones</span></label>
+          <label><input id="reduceMotionUi" type="checkbox" ${getAppPreferences().animations?"":"checked"}><span>Reducir movimiento</span></label>
           <label><input id="highContrastUi" type="checkbox" ${getAppPreferences().highContrast?"checked":""}><span>Alto contraste</span></label>
           <label><input id="largeTapTargetsUi" type="checkbox" ${getAppPreferences().largeTapTargets?"checked":""}><span>Botones más grandes</span></label>
           <label><input id="quickActionsVisible" type="checkbox" ${getQuickActionPreferences().hidden?"":"checked"}><span>Mostrar accesos rápidos en Inicio</span></label>
@@ -12818,8 +14181,8 @@ function renderSettings(){
       <section class="card recovery-entry-card">
         <div class="card-heading-row">
           <div>
-            <h2>Recovery Center</h2>
-            <p class="subtle">Consulta evaluaciones pendientes, Recovery Score e histórico de recuperación.</p>
+            <h2>Recuperación</h2>
+            <p class="subtle">Consulta evaluaciones pendientes, orientación e historial de recuperación.</p>
           </div>
         </div>
         <button id="openRecoveryCenter" class="primary full">Abrir recuperación</button>
@@ -12879,11 +14242,11 @@ function renderSettings(){
         <p class="subtle">Consulta la adherencia semanal, la racha y el calendario de actividad.</p>
         <button id="openPlanSettings" class="secondary full">Abrir plan semanal</button>
       </section>
-      <section class="card">
+      <section class="card training-rest-card" id="trainingRestSettings">
         <h2>Descanso entre series</h2>
-        <p class="subtle">El temporizador se inicia al marcar una serie como completada.</p>
-        <div class="rest-options">
-          ${[60,90,120,180].map(value=>`<button class="rest-option ${getRestSeconds()===value?"active":""}" data-rest-setting="${value}">${value===60?"1 min":value===90?"1:30":value===120?"2 min":"3 min"}</button>`).join("")}
+        <p class="subtle">Define el descanso de las próximas series. Un temporizador que ya esté en marcha conserva su tiempo actual.</p>
+        <div class="rest-options" role="group" aria-label="Descanso por defecto">
+          ${[60,90,120,180].map(value=>`<button type="button" class="rest-option ${getRestSeconds()===value?"active":""}" data-rest-setting="${value}" aria-pressed="${getRestSeconds()===value}" ${state.restPreferenceBusy?"disabled":""}>${value===60?"1 min":value===90?"1:30":value===120?"2 min":"3 min"}</button>`).join("")}
         </div>
       </section>
       <section class="card">
@@ -12911,7 +14274,23 @@ function renderSettings(){
       </section>
     </main>${nav("settings")}
   </div>`;
+  organizeSettingsScreen(document.querySelector(".settings-screen"));
   document.getElementById("openAccount").onclick=()=>{state.screen="account";renderAccount();};
+  const settingsSyncRetry=document.getElementById("settingsSyncRetry");
+  if(settingsSyncRetry) settingsSyncRetry.onclick=()=>retrySyncFromNavigation();
+  const settingsSignOut=document.getElementById("settingsSignOut");
+  if(settingsSignOut) settingsSignOut.onclick=async()=>{
+    if(!confirm("¿Cerrar sesión en este dispositivo?")) return;
+    settingsSignOut.disabled=true;
+    try{
+      await signOutSync();
+      state.screen="account";
+      render();
+    }catch(_){
+      settingsSignOut.disabled=false;
+      toast("No se pudo cerrar la sesión. Inténtalo de nuevo.");
+    }
+  };
   const openOnboarding=document.getElementById("openOnboarding");
   if(openOnboarding) openOnboarding.onclick=()=>openTrainingProfileEditor(1,{returnScreen:"settings"});
   const openAccountFromSync=document.getElementById("openAccountFromSync");
@@ -12962,8 +14341,8 @@ function renderSettings(){
     saveAppPreferences({compact:e.target.checked});
     renderSettings();
   };
-  document.getElementById("animationsUi").onchange=e=>{
-    saveAppPreferences({animations:e.target.checked});
+  document.getElementById("reduceMotionUi").onchange=e=>{
+    saveAppPreferences({animations:!e.target.checked});
     renderSettings();
   };
   document.getElementById("highContrastUi").onchange=e=>{
@@ -12979,6 +14358,21 @@ function renderSettings(){
     toast(e.target.checked?"Accesos rápidos visibles.":"Accesos rápidos ocultos.");
     renderSettings();
   };
+  document.querySelectorAll("[data-rest-setting]").forEach(button=>button.onclick=()=>{
+    if(state.restPreferenceBusy) return;
+    state.restPreferenceBusy=true;
+    document.querySelectorAll("[data-rest-setting]").forEach(option=>{option.disabled=true;});
+    let changed=false;
+    try{
+      changed=saveRestSeconds(Number(button.dataset.restSetting)).changed;
+    }catch(error){
+      if(error?.message!=="owner_changed") toast("No se pudo guardar el descanso. Inténtalo de nuevo.");
+    }finally{
+      state.restPreferenceBusy=false;
+    }
+    if(changed) renderSettings();
+    else document.querySelectorAll("[data-rest-setting]").forEach(option=>{option.disabled=false;});
+  });
   const openDeveloperMode=document.getElementById("openDeveloperMode");
   if(openDeveloperMode) openDeveloperMode.onclick=()=>{state.screen="developer";renderDeveloperMode();};
   const saveSyncConfigButton=document.getElementById("saveSyncConfig");

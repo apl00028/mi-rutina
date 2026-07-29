@@ -254,11 +254,35 @@ test("RC2 diferencia los ocho estados y ofrece reintento solo para errores recup
   assert.match(navigation,/data-sync-description/);
 });
 
+test("RC2 la topbar usa estados comprensibles y no confunde sesión con sincronización",()=>{
+  const source=functionSource("syncStatusLabel","classifySyncError");
+  const context={state:{syncStatus:"synced"}};
+  vm.createContext(context);
+  vm.runInContext(`${source}; label=syncStatusLabel;`,context);
+  const expected={
+    synced:"Sincronizado",
+    syncing:"Sincronizando…",
+    pending:"Cambios pendientes",
+    connected:"Cambios pendientes",
+    offline:"Sin conexión",
+    conflict:"Conflicto de sincronización",
+    recoverable_error:"Error recuperable",
+    session_expired:"Sesión caducada",
+    permission_denied:"Permiso rechazado"
+  };
+  for(const [status,label] of Object.entries(expected)){
+    context.state.syncStatus=status;
+    assert.equal(context.label(),label,status);
+  }
+  assert.match(stylesSource,/sync-dot\.synced,[\s\S]*background:#059669/);
+  assert.match(stylesSource,/sync-dot\.conflict[\s\S]*background:#dc2626/);
+});
+
 test("RC2 la navegación lateral agrupa destinos humanos y marca el activo",()=>{
   for(const label of [
-    "Principal","Inicio","Entrenar","Progreso","Coach","Nutrición",
-    "Planificación","Mi rutina","Biblioteca de ejercicios","Recovery Center",
-    "Cuenta","Ajustes"
+    "Entrenamiento","Inicio","Entrenar","Recuperación",
+    "Seguimiento","Progreso","Coach","Nutrición",
+    "Planificación","Mi rutina","Biblioteca","Ajustes"
   ]) assert.ok(appSource.includes(label),label);
   assert.match(appSource,/aria-current="page"/);
   assert.match(appSource,/navigationDestinationForScreen/);
@@ -270,9 +294,9 @@ test("RC2 el shell no conserva la barra inferior y responde por breakpoint",()=>
   assert.match(stylesSource,/@media\(min-width:1024px\)/);
   assert.match(stylesSource,/@media\(min-width:768px\) and \(max-width:1023px\)/);
   assert.match(stylesSource,/@media\(max-width:767px\)/);
-  assert.match(stylesSource,/width:68px/);
-  assert.match(stylesSource,/width:256px/);
-  assert.match(stylesSource,/width:min\(86vw,292px\)/);
+  assert.match(stylesSource,/width:70px/);
+  assert.match(stylesSource,/width:248px/);
+  assert.match(stylesSource,/width:min\(86vw,288px\)/);
   assert.match(stylesSource,/body\.navigation-panel-open\{overflow:hidden\}/);
 });
 
@@ -282,7 +306,8 @@ test("RC2 el drawer ofrece backdrop, Escape, diálogo y restauración de foco",(
     appSource.indexOf("function toast(")
   );
   assert.match(shell,/navigation-backdrop/);
-  assert.match(shell,/event\.key==="Escape"&&navigationPanelOpen/);
+  assert.match(shell,/event\.key!=="Escape"/);
+  assert.match(shell,/else if\(navigationPanelOpen\)/);
   assert.match(shell,/setAttribute\("role","dialog"\)/);
   assert.match(shell,/setAttribute\("aria-modal","true"\)/);
   assert.match(shell,/navigationReturnFocus\?\.isConnected/);
@@ -317,13 +342,86 @@ test("RC2 la preferencia de expansión es local y no ensucia datos del propietar
   assert.match(reset,/state\.syncOperationId\+=1/);
 });
 
-test("RC2 tema, tamaño de texto y cierre de sesión viven en el footer del shell",()=>{
+test("RC2 el footer queda dedicado a Ajustes y expansión",()=>{
   const navigation=functionSource("nav","closeNavigationPanel");
   assert.match(navigation,/class="navigation-footer"/);
-  assert.match(navigation,/data-shell-action="theme"/);
-  assert.match(navigation,/data-shell-action="font"/);
-  assert.match(navigation,/data-shell-action="signout"/);
+  assert.doesNotMatch(navigation,/data-shell-action="theme"/);
+  assert.doesNotMatch(navigation,/data-shell-action="font"/);
+  assert.match(navigation,/NAVIGATION_FOOTER_ITEMS\.map\(\(\[screen,icon,label\]\)=>navigationItem\(screen,icon,label,active\)\)/);
+  assert.match(navigation,/class="navigation-item navigation-expand-button"/);
+  const rail=navigation.slice(navigation.indexOf("<aside"),navigation.indexOf("navigation-backdrop"));
+  assert.doesNotMatch(rail,/sync-detail|accountEmail|data-shell-action="signout"/);
   assert.doesNotMatch(appSource,/id="homeThemeToggle"|id="homeFontScaleToggle"|sync-badge/);
+});
+
+test("RC2 Ajustes conserva tema, cuatro tamaños, contraste y reducción de movimiento",()=>{
+  const settings=appSource.slice(
+    appSource.indexOf("function renderSettings("),
+    appSource.indexOf("function exportData(")
+  );
+  assert.match(settings,/id="appTheme"/);
+  assert.match(settings,/id="appFontScale"/);
+  for(const size of ["small","normal","large","xlarge"]){
+    assert.match(settings,new RegExp(`option value="${size}"`));
+  }
+  assert.match(settings,/id="highContrastUi"/);
+  assert.match(settings,/id="reduceMotionUi"/);
+  assert.match(settings,/saveAppPreferences\(\{animations:!e\.target\.checked\}\)/);
+});
+
+test("RC2 el correo del bloque de cuenta se escapa, trunca y no se persiste",()=>{
+  const navigation=functionSource("nav","closeNavigationPanel");
+  assert.match(navigation,/const accountEmail=String\(state\.syncUser\?\.email\|\|""\)\.trim\(\)/);
+  assert.ok((navigation.match(/esc\(accountEmail\)/g)||[]).length>=2);
+  assert.match(navigation,/title="\$\{esc\(accountEmail\)\}"/);
+  assert.match(stylesSource,/shell-account-identity strong,.shell-account-identity span\{[\s\S]*text-overflow:ellipsis;white-space:nowrap/);
+  assert.doesNotMatch(navigation,/localStorage\.(?:setItem|getItem)\([^)]*(?:email|accountEmail)/i);
+});
+
+test("RC2 la cuenta está en la topbar y el cierre queda dentro de su menú",()=>{
+  const navigation=functionSource("nav","closeNavigationPanel");
+  const groups=appSource.slice(
+    appSource.indexOf("const NAVIGATION_GROUPS"),
+    appSource.indexOf("let navigationPanelOpen")
+  );
+  assert.doesNotMatch(groups,/\["account"/);
+  assert.match(navigation,/data-shell-action="account-menu" aria-label="Abrir menú de cuenta"/);
+  assert.match(navigation,/class="shell-signout-action" data-shell-action="signout">Cerrar sesión/);
+  assert.match(stylesSource,/\.shell-account-trigger/);
+  assert.match(stylesSource,/\.shell-account-panel/);
+});
+
+test("RC2 el pie es fijo y solo la navegación central puede desplazarse",()=>{
+  assert.match(stylesSource,/navigation-groups\{[\s\S]*flex:1;min-height:0;[\s\S]*overflow:visible/);
+  assert.match(stylesSource,/@media\(max-height:660px\)\{[\s\S]*overflow-y:auto/);
+  assert.match(stylesSource,/navigation-footer\{flex:0 0 auto/);
+  assert.match(stylesSource,/scrollbar-gutter:stable/);
+  assert.match(stylesSource,/navigation-groups::-webkit-scrollbar\{width:4px\}/);
+  assert.match(stylesSource,/padding-right:8px/);
+});
+
+test("RC2 el cambio de propietario renueva cuenta y estado sin conservar el menú",()=>{
+  const navigation=functionSource("nav","closeNavigationPanel");
+  const reset=appSource.slice(
+    appSource.indexOf("function resetRoutineSessionOwnerState"),
+    appSource.indexOf("function assertActiveLocalOwner")
+  );
+  assert.match(navigation,/state\.syncUser\?\.email/);
+  assert.match(reset,/state\.syncIssue=null/);
+  assert.match(reset,/state\.syncStatus=navigator\.onLine\?"local":"offline"/);
+  assert.match(reset,/closeNavigationPanel\(\{restoreFocus:false\}\)/);
+});
+
+test("RC2 cerrar sesión cierra el menú, invalida lo privado y vuelve a Cuenta",()=>{
+  const binding=functionSource("bindNav","toast");
+  const signOut=appSource.slice(
+    appSource.indexOf("async function signOutSync"),
+    appSource.indexOf("function bodyMeasurementToDatabase")
+  );
+  assert.match(binding,/closeNavigationPanel\(\{restoreFocus:false\}\)/);
+  assert.match(binding,/signOutSync\(\)\.then\(\(\)=>\{[\s\S]*state\.screen="account";[\s\S]*render\(\)/);
+  assert.match(signOut,/resolveAuthenticatedAppState\(null\)/);
+  assert.match(appSource,/if\(previousAuthorizedUserId\) deactivateLocalUser\(\)/);
 });
 
 test("RC2 respeta foco visible y movimiento reducido",()=>{

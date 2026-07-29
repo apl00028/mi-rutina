@@ -257,3 +257,119 @@ test("stale de drafts solo cambia cuando cambia la definición de su sesión y e
   assert.equal(once.draftsBySessionId["stable-session-6"].stale,true);
   assert.equal(JSON.stringify(twice),JSON.stringify(once));
 });
+
+test("H4 consolida solo duplicados preexistentes demostrablemente equivalentes",()=>{
+  const count=name=>(appSource.match(new RegExp(`function ${name}\\(`,"g"))||[]).length;
+  assert.equal(count("getDeviceId"),1);
+  assert.equal(count("addDays"),1);
+  assert.equal(count("estimatedOneRepMax"),2);
+  assert.equal(count("renderExerciseLibrary"),2);
+  assert.equal(count("renderExerciseLibraryEditor"),2);
+});
+
+test("H4 invalida operaciones pendientes al cambiar de propietario",()=>{
+  const reset=appSource.slice(
+    appSource.indexOf("function resetRoutineSessionOwnerState"),
+    appSource.indexOf("function assertActiveLocalOwner")
+  );
+  assert.match(reset,/routineImportReadSequence\+=1/);
+  assert.match(reset,/state\.routineImport=null/);
+  assert.match(reset,/state\.routineFileBusy=null/);
+  assert.match(reset,/state\.routineWorkflow=null/);
+  assert.match(reset,/state\.selectedSessionId=null/);
+  assert.match(reset,/state\.editingSession=null/);
+  assert.match(reset,/state\.finishingWorkout=false/);
+});
+
+test("H4 revalida propietario y busy después de cada frontera asíncrona",()=>{
+  const events=appSource.slice(
+    appSource.indexOf("function bindRoutineWorkflowEvents"),
+    appSource.indexOf("function renderRoutineWorkflow()")
+  );
+  for(const operation of ["generating","rejecting","activating","rolling_back"]){
+    assert.match(events,new RegExp(
+      `currentRoutineOwnerOrNull\\(\\)!==ownerAtStart[\\s\\S]{0,160}busy!==\"${operation}\"`
+    ));
+  }
+});
+
+test("selector dinámico de sesiones expone semántica accesible",()=>{
+  const editor=appSource.slice(
+    appSource.indexOf("function renderRoutineEditor"),
+    appSource.indexOf("function renderBlocks")
+  );
+  assert.match(editor,/role="tablist" aria-label="Sesiones de la rutina"/);
+  assert.match(editor,/type="button" role="tab" aria-selected=/);
+  assert.match(editor,/data-edit-session="\$\{esc\(item\.sessionId\)\}"/);
+});
+
+test("H4 no muestra identificadores internos en la interfaz normal",()=>{
+  assert.doesNotMatch(appSource,/getDeviceId\(\)\.slice/);
+  assert.doesNotMatch(appSource,/propuesta \$\{esc\(activation\.proposalId\)\}/);
+  assert.match(appSource,/Activaci.n del \$\{esc\(routineWorkflowDate\(activation\.activatedAt\)\)\}/);
+});
+
+test("H4 recorre activación, drafts, historial, rotación, aislamiento y rollback con seis sesiones",()=>{
+  const context=loadFull(),current=routine(2),target=proposal(6);
+  const record=context.GymOSRoutineProposals.createProposalRecord({
+    ownerId:OWNER_A,proposal:target,currentRoutine:current,
+    timestamp:"2026-07-29T10:00:00.000Z"
+  });
+  const plan=plain(context.GymOSRoutineActivation.createActivationPlan({
+    ownerId:OWNER_A,proposalRecord:record,currentRoutine:current,
+    currentCanonicalRoutine:current,selectedSessionId:"stable-session-2",
+    targetRoutineId:"runtime-e2e-routine",confirmed:true,
+    timestamp:"2026-07-29T11:00:00.000Z"
+  }));
+  assert.equal(plan.ok,true);
+  assert.equal(plan.canonicalRoutine.sessions.length,6);
+
+  let drafts=context.GymOSRoutineSessionMigration.emptyDraftContainer(
+    plan.canonicalRoutine.routineId
+  );
+  const history=[];
+  plan.canonicalRoutine.sessions.forEach((session,index)=>{
+    const value={
+      draftId:`runtime-e2e-draft-${index+1}`,ownerId:OWNER_A,
+      routineId:plan.canonicalRoutine.routineId,
+      routineRevision:plan.canonicalRoutine.revision,
+      sessionId:session.sessionId,
+      sessionDefinitionHash:context.GymOSRoutineSessionMigration.sessionDefinitionHash(
+        plan.canonicalRoutine,session.sessionId
+      ),
+      startedAt:0,updatedAt:"2026-07-29T11:00:00.000Z",
+      sessionSnapshot:{
+        name:session.name,label:session.label,focus:session.focus,
+        order:session.order,legacySessionKey:session.legacySessionKey||null
+      },
+      exercises:plain(session.exercises)
+    };
+    drafts=context.GymOSRoutineSessionRuntime.upsertDraft(drafts,value,{
+      ownerId:OWNER_A,routine:plan.canonicalRoutine
+    });
+    history.push(plain(context.GymOSRoutineSessionRuntime.historyEntry({
+      ownerId:OWNER_A,routine:plan.canonicalRoutine,sessionId:session.sessionId,
+      draft:value,workoutId:index+1,
+      date:`2026-07-${String(20+index).padStart(2,"0")}T10:00:00.000Z`,
+      durationMs:2700000,completedSeries:3,exercises:value.exercises
+    })));
+  });
+  assert.equal(Object.keys(drafts.draftsBySessionId).length,6);
+  assert.equal(new Set(history.map(item=>item.sessionId)).size,6);
+  assert.equal(
+    context.GymOSRoutineSessionRuntime.nextSessionId(
+      plan.canonicalRoutine,plan.canonicalRoutine.sessions[5].sessionId
+    ),
+    plan.canonicalRoutine.sessions[0].sessionId
+  );
+  assert.equal(context.GymOSRoutineSessionRuntime.getDraft(drafts,{
+    ownerId:OWNER_B,routine:plan.canonicalRoutine,
+    sessionId:plan.canonicalRoutine.sessions[0].sessionId
+  }),null);
+  const rollback=context.GymOSRoutineActivation.rollbackDecision({
+    ownerId:OWNER_A,activationRecord:plan.record,
+    currentRoutine:plan.routine,currentCanonicalRoutine:plan.canonicalRoutine
+  });
+  assert.equal(rollback.ok,true);
+  assert.equal(rollback.idempotent,false);
+});

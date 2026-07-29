@@ -310,11 +310,6 @@ function setActiveBlock(id){
 function makeBlockId(){
   return crypto.randomUUID?crypto.randomUUID():`block-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }
-function addDays(date,days){
-  const copy=new Date(date);
-  copy.setDate(copy.getDate()+days);
-  return copy;
-}
 function dateOnly(value){
   const d=new Date(`${value}T12:00:00`);
   return Number.isNaN(d.getTime())?null:d;
@@ -3342,6 +3337,7 @@ function resetExerciseLibraryOwnerState(){
 function resetRoutineSessionOwnerState(){
   if(typeof state==="undefined") return;
   stopAllExerciseTimers();
+  routineImportReadSequence+=1;
   state.selectedSession=null;
   state.selectedSessionId=null;
   state.editingSession=null;
@@ -3351,6 +3347,7 @@ function resetRoutineSessionOwnerState(){
   state.editWorkoutId=null;
   state.routineWorkflow=null;
   state.routineImport=null;
+  state.routineFileChooser=null;
   state.routineFileBusy=null;
   state.coachSessionId=null;
 }
@@ -3999,14 +3996,6 @@ function getLocalUpdatedAt(){
 }
 function getLastSyncAt(){
   return localStorage.getItem("gymos:lastSyncAt")||"";
-}
-function getDeviceId(){
-  let id=localStorage.getItem("gymos:deviceId");
-  if(!id){
-    id=(crypto.randomUUID?crypto.randomUUID():`device-${Date.now()}-${Math.random().toString(16).slice(2)}`);
-    localStorage.setItem("gymos:deviceId",id);
-  }
-  return id;
 }
 function defaultDeviceName(){
   const ua=navigator.userAgent||"";
@@ -8103,8 +8092,8 @@ function renderRoutineEditor(){
       <button id="addRoutineExerciseTop" class="header-action">＋</button>
     </header>
     <main class="screen">
-      <div class="session-picker routine-tabs">
-        ${available.map(item=>`<button data-edit-session="${esc(item.sessionId)}" class="${item.sessionId===session?"active":""}">${esc(routineSessionRuntimeApi().displayName(item))}</button>`).join("")}
+      <div class="session-picker routine-tabs" role="tablist" aria-label="Sesiones de la rutina">
+        ${available.map(item=>`<button type="button" role="tab" aria-selected="${item.sessionId===session}" data-edit-session="${esc(item.sessionId)}" class="${item.sessionId===session?"active":""}">${esc(routineSessionRuntimeApi().displayName(item))}</button>`).join("")}
       </div>
       <section class="card">
         <div class="card-heading-row">
@@ -9532,7 +9521,7 @@ function renderCoachChat(){
         ${messages.length?messages.map(message=>`<article class="coach-chat-message ${esc(message.role)}">
           <div class="coach-chat-role">${message.role==="user"?"Tú":"Coach"}</div>
           <p>${esc(message.content).replace(/\n/g,"<br>")}</p>
-          ${message.proposalId?`<button class="secondary" data-open-chat-proposal="${message.proposalId}">Ver propuesta generada</button>`:""}
+          ${message.proposalId?`<button class="secondary" type="button" data-open-chat-proposal="${esc(message.proposalId)}">Ver propuesta generada</button>`:""}
           <small>${new Date(message.createdAt).toLocaleTimeString("es-ES",{hour:"2-digit",minute:"2-digit"})}</small>
         </article>`).join(""):`<section class="card coach-chat-empty">
           <h2>¿Qué quieres revisar?</h2>
@@ -10291,7 +10280,7 @@ function renderAccount(){
         <section class="card sync-v2-card">
           <div class="card-heading-row"><div><h2>Sincronización segura</h2><p class="subtle">Controla revisiones y evita sobrescribir cambios de otro dispositivo.</p></div><span class="mode-pill">v2</span></div>
           <div class="security-check-list">
-            <article class="ok"><span>✓</span><div><strong>Dispositivo identificado</strong><small>${esc(getDeviceId().slice(0,18))}…</small></div></article>
+            <article class="ok"><span>✓</span><div><strong>Dispositivo identificado</strong><small>Identidad local preparada</small></div></article>
             <article class="ok"><span>✓</span><div><strong>Revisión local</strong><small>${getLocalRevision()}</small></div></article>
             <article class="ok"><span>✓</span><div><strong>Última revisión remota</strong><small>${getLastRemoteRevision()}</small></div></article>
           </div>
@@ -11429,7 +11418,7 @@ function renderRoutineWorkflowConfirmation(model,proposal){
     const activation=model.reversibleActivation;
     return `<section class="routine-confirmation" role="dialog" aria-modal="false" aria-labelledby="routineRollbackTitle" tabindex="-1">
       <h2 id="routineRollbackTitle">Revertir a la rutina anterior</h2>
-      <p>Activación: ${esc(routineWorkflowDate(activation.activatedAt))} · propuesta ${esc(activation.proposalId)}.</p>
+      <p>Activación del ${esc(routineWorkflowDate(activation.activatedAt))}.</p>
       <p>Rutina actual: ${activation.current.sessionCount} sesiones. Se restaurarán ${activation.baseline.sessionCount} sesiones.</p>
       <p>Si modificaste la rutina posteriormente, GymOS bloqueará la reversión para proteger esos cambios.</p>
       <label class="routine-confirm-check"><input id="confirmRoutineRollbackCheck" type="checkbox" ${state.routineWorkflow.busy?"disabled":""}><span>Entiendo qué rutina se restaurará y quiero continuar.</span></label>
@@ -11639,11 +11628,17 @@ function bindRoutineWorkflowEvents(model,proposal,preparation){
   );
   const generate=document.getElementById("generateRoutineProposal");
   if(generate) generate.onclick=async()=>{
+    const ownerAtStart=routineWorkflowOwnerId();
     const started=window.GymOSRoutineWorkflowUI.beginOperation(state.routineWorkflow,"generating");
     if(!started.accepted) return;
     state.routineWorkflow=started.state;
     renderRoutineWorkflow();
     await Promise.resolve();
+    if(
+      currentRoutineOwnerOrNull()!==ownerAtStart||
+      state.routineWorkflow?.ownerId!==ownerAtStart||
+      state.routineWorkflow?.busy!=="generating"
+    ) return;
     try{
       const prepared=window.GymOSRoutineWorkflowUI.preparationModel(
         routineWorkflowGenerationSource(),routineWorkflowLabels()
@@ -11696,12 +11691,18 @@ function bindRoutineWorkflowEvents(model,proposal,preparation){
   };
   const confirmRejection=document.getElementById("confirmRoutineRejection");
   if(confirmRejection&&proposal) confirmRejection.onclick=async()=>{
+    const ownerAtStart=routineWorkflowOwnerId();
     const started=window.GymOSRoutineWorkflowUI.beginOperation(state.routineWorkflow,"rejecting");
     if(!started.accepted) return;
     const reason=document.getElementById("routineRejectionReason")?.value||"";
     state.routineWorkflow=started.state;
     renderRoutineWorkflow();
     await Promise.resolve();
+    if(
+      currentRoutineOwnerOrNull()!==ownerAtStart||
+      state.routineWorkflow?.ownerId!==ownerAtStart||
+      state.routineWorkflow?.busy!=="rejecting"
+    ) return;
     try{
       rejectStoredRoutineProposal(proposal.proposalId,reason);
       state.routineWorkflow=window.GymOSRoutineWorkflowUI.finishOperation(
@@ -11719,11 +11720,17 @@ function bindRoutineWorkflowEvents(model,proposal,preparation){
   if(confirmActivation&&proposal) confirmActivation.onclick=async()=>{
     const checkbox=document.getElementById("confirmRoutineActivationCheck");
     if(!checkbox?.checked) return;
+    const ownerAtStart=routineWorkflowOwnerId();
     const started=window.GymOSRoutineWorkflowUI.beginOperation(state.routineWorkflow,"activating");
     if(!started.accepted) return;
     state.routineWorkflow=started.state;
     renderRoutineWorkflow();
     await Promise.resolve();
+    if(
+      currentRoutineOwnerOrNull()!==ownerAtStart||
+      state.routineWorkflow?.ownerId!==ownerAtStart||
+      state.routineWorkflow?.busy!=="activating"
+    ) return;
     try{
       const result=activateStoredRoutineProposal(proposal.proposalId,{confirmed:true});
       state.routineWorkflow=result.ok
@@ -11745,11 +11752,17 @@ function bindRoutineWorkflowEvents(model,proposal,preparation){
   if(confirmRollback&&model.reversibleActivation) confirmRollback.onclick=async()=>{
     const checkbox=document.getElementById("confirmRoutineRollbackCheck");
     if(!checkbox?.checked) return;
+    const ownerAtStart=routineWorkflowOwnerId();
     const started=window.GymOSRoutineWorkflowUI.beginOperation(state.routineWorkflow,"rolling_back");
     if(!started.accepted) return;
     state.routineWorkflow=started.state;
     renderRoutineWorkflow();
     await Promise.resolve();
+    if(
+      currentRoutineOwnerOrNull()!==ownerAtStart||
+      state.routineWorkflow?.ownerId!==ownerAtStart||
+      state.routineWorkflow?.busy!=="rolling_back"
+    ) return;
     try{
       const result=rollbackStoredRoutineActivation(model.reversibleActivation.activationId);
       state.routineWorkflow=result.ok

@@ -462,7 +462,7 @@ test("integración de script, input y service worker",()=>{
   assert.ok(indexSource.indexOf("routine-activation.js")<indexSource.indexOf("routine-io.js"));
   assert.ok(indexSource.indexOf("routine-io.js")<indexSource.indexOf("routine-workflow-ui.js"));
   assert.match(indexSource,/id="routineFile"[^>]+\.csv/);
-  assert.match(workerSource,/phase-g/);
+  assert.match(workerSource,/phase-h1/);
   assert.match(workerSource,/routine-io\.js/);
   assert.match(workerSource,/fetch\(e\.request\)/);
   assert.equal((indexSource.match(/routine-io\.js/g)||[]).length,1);

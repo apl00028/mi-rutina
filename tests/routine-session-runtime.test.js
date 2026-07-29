@@ -187,13 +187,13 @@ test("el historial nuevo conserva rutina, sesión, nombre y compatibilidad legac
   assert.equal(legacy.legacySessionKey,"B");
 });
 
-test("la integración carga runtime antes de app y lo precachea con versión H3",()=>{
+test("la integración carga runtime antes de app y lo precachea con versión rc.1",()=>{
   assert.ok(indexSource.indexOf('src="routine-session-runtime.js"')>
     indexSource.indexOf('src="routine-session-migration.js"'));
   assert.ok(indexSource.indexOf('src="routine-session-runtime.js"')<
     indexSource.indexOf('src="app.js"'));
   assert.match(workerSource,/routine-session-runtime\.js/);
-  assert.match(workerSource,/phase-h3/);
+  assert.match(workerSource,/gymos-cache-4\.2\.0-rc\.1/);
 });
 
 test("Inicio, entrenamiento y finalización consumen sessionId",()=>{

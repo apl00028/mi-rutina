@@ -292,26 +292,37 @@
     if(typeof isAppAuthenticated!=="function"||!isAppAuthenticated()) return {status:"local"};
     const client=getSupabaseClient();
     if(!client) return {status:"local"};
+    const ownerId=currentRoutineOwnerOrNull();
+    const userId=state.syncUser.id;
+    const assertOwner=()=>{
+      assertActiveLocalOwner(ownerId);
+      if(state.syncUser?.id!==userId) throw new Error("owner_changed");
+    };
     try{
       const {data,error}=await client.from("daily_recovery")
         .select("id,date,sleep_hours,sleep_quality,energy,fatigue,stress,motivation,pain_level,pain_location,recovery_score,coach_message,notes,workout_id,checkin_id,source,created_at,updated_at")
-        .eq("user_id",state.syncUser.id)
+        .eq("user_id",userId)
         .order("date",{ascending:true});
+      assertOwner();
       if(error) throw error;
       const merged=new Map();
       [...(data||[]).map(normalizeEntry),...getEntries()].forEach(entry=>{
         const current=merged.get(entry.date);
         if(!current||new Date(entry.updatedAt)>=new Date(current.updatedAt)) merged.set(entry.date,entry);
       });
+      assertOwner();
       const entries=saveEntries([...merged.values()],false);
       if(entries.length){
+        assertOwner();
         const {error:writeError}=await client.from("daily_recovery")
-          .upsert(entries.map(remoteRow),{onConflict:"user_id,date"});
+          .upsert(entries.map(entry=>({...remoteRow(entry),user_id:userId})),{onConflict:"user_id,date"});
+        assertOwner();
         if(writeError) throw writeError;
       }
       const {data:remoteCheckins,error:checkinsError}=await client.from("recovery_checkins")
         .select("id,workout_id,user_id,workout_date,available_from,status,session,completed_at,created_at,updated_at")
-        .eq("user_id",state.syncUser.id);
+        .eq("user_id",userId);
+      assertOwner();
       if(checkinsError) throw checkinsError;
       const remoteCheckinMap=new Map((remoteCheckins||[]).map(checkin=>[String(checkin.id),checkin]));
       const checkins=mergeCheckins(remoteCheckins||[],false);
@@ -320,14 +331,16 @@
           const remote=remoteCheckinMap.get(checkin.id);
           return !remote||new Date(checkin.updatedAt)>new Date(remote.updated_at);
         });
+        assertOwner();
         const {error:writeCheckinsError}=pendingWrites.length
           ?await client.from("recovery_checkins").upsert(pendingWrites.map(checkin=>({
-          id:checkin.id,user_id:state.syncUser.id,workout_id:checkin.workoutId,
+          id:checkin.id,user_id:userId,workout_id:checkin.workoutId,
           workout_date:checkin.workoutDate,available_from:checkin.availableFrom,
           status:checkin.status,session:checkin.session,completed_at:checkin.completedAt,
           updated_at:checkin.updatedAt
         })),{onConflict:"id"})
           :{error:null};
+        assertOwner();
         if(writeCheckinsError) throw writeCheckinsError;
       }
       return {status:"synced",count:entries.length,checkins:checkins.length};

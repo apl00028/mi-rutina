@@ -396,21 +396,30 @@
   async function syncWithSupabase(){
     const client=typeof getSupabaseClient==="function"?getSupabaseClient():null;
     if(!client||typeof isAppAuthenticated!=="function"||!isAppAuthenticated()) return;
-    const {data,error}=await client.from("workout_analyses").select("*").eq("user_id",state.syncUser.id);
+    const ownerId=currentRoutineOwnerOrNull();
+    const userId=state.syncUser.id;
+    const assertOwner=()=>{
+      assertActiveLocalOwner(ownerId);
+      if(state.syncUser?.id!==userId) throw new Error("owner_changed");
+    };
+    const {data,error}=await client.from("workout_analyses").select("*").eq("user_id",userId);
+    assertOwner();
     if(error){
       if(["42P01","PGRST205"].includes(error.code)){console.warn("Workout analyses table is not installed; using user sync payload.");return;}
       throw error;
     }
     const remote=(data||[]).map(normalizeAnalysis);
+    assertOwner();
     const merged=mergeAnalyses(remote,false);
     if(!merged.length) return;
     const rows=merged.map(item=>({
-      id:item.id,user_id:state.syncUser.id,workout_id:item.workoutId,
+      id:item.id,user_id:userId,workout_id:item.workoutId,
       overall_status:item.overallStatus,short_title:item.shortTitle,short_message:item.shortMessage,
       structured_analysis:item.structuredAnalysis,ai_message:item.aiMessage,
       analysis_source:item.analysisSource,created_at:item.createdAt,updated_at:item.updatedAt
     }));
     const {error:writeError}=await client.from("workout_analyses").upsert(rows,{onConflict:"user_id,workout_id"});
+    assertOwner();
     if(writeError&&!["42P01","PGRST205"].includes(writeError.code)) throw writeError;
   }
 

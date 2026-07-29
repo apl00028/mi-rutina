@@ -1,4 +1,4 @@
-
+const GYMOS_VERSION="4.2.0-rc.1";
 const GYMOS_APPEARANCE_KEY="gymos:appearance";
 const GYMOS_FONT_SCALE_KEY="gymos:fontScale";
 const GYMOS_FONT_SCALES=["font-scale-sm","font-scale-md","font-scale-lg","font-scale-xl"];
@@ -858,7 +858,7 @@ function updateExerciseTechnicalNotes(id,notes){
   return true;
 }
 
-const GYMOS_BACKUP_VERSION="4.0.8";
+const GYMOS_BACKUP_VERSION=GYMOS_VERSION;
 const ROUTINE_PROPOSALS_KEY="gymos:routineProposals";
 const ACTIVE_ROUTINE_PROPOSAL_ID_KEY="gymos:activeRoutineProposalId";
 const ROUTINE_ACTIVATION_HISTORY_KEY="gymos:routineActivationHistory";
@@ -3361,6 +3361,36 @@ function resetRoutineSessionOwnerState(){
   state.coachSessionId=null;
   state.workoutDraftMessage=null;
   state.workoutDraftObservedIds=new Set();
+  sessions=[];
+  clearInterval(state.timerInterval);
+  state.timerInterval=null;
+  state.timerSeconds=0;
+  clearTimeout(state.syncTimer);
+  state.syncTimer=null;
+  state.syncInProgress=false;
+  state.completedWorkoutSummary=null;
+  state.workoutAnalysisId=null;
+  state.coachChatMessages=[];
+  state.nutritionPreview=null;
+  state.nutritionRecipeSuggestions=[];
+  state.professionalNutritionDraft=null;
+  state.professionalNutritionPlanId=null;
+  state.professionalNutritionMealId=null;
+  state.quickActionsDraft=null;
+  state.quickActionsEditorMessage=null;
+  state.bodySummaryDraft=null;
+  state.bodySummaryReturnFocus=null;
+  state.bodyFormMessage=null;
+  state.recoveryDraft=null;
+  state.recoveryResultDate=null;
+  state.recoveryCheckinId=null;
+  state.accountProfile=null;
+  state.accountProfileUserId=null;
+  state.accountIdentityDirty=false;
+  state.accountPasswordMessage=null;
+  state.accountManagementMessage=null;
+  state.onboardingDraft=null;
+  state.onboardingMessage=null;
 }
 function assertActiveLocalOwner(ownerId){
   const expected=window.GymOSProfileData.normalizeOwnerId(ownerId);
@@ -3402,6 +3432,8 @@ function finishLocalUserActivation(userId){
     ensureRoutineProposalState(ownerId);
     assertActiveLocalOwner(ownerId);
     ensureRoutineActivationState(ownerId);
+    assertActiveLocalOwner(ownerId);
+    sanitizeStoredSyncAudit();
     assertActiveLocalOwner(ownerId);
     if(migration.migrated) markLocalUpdated({schedule:false});
     assertActiveLocalOwner(ownerId);
@@ -3740,6 +3772,7 @@ let state = {
   bodyEntryOpen: false,
   bodySummaryEditorOpen: false,
   bodySummaryDraft: null,
+  bodySummaryReturnFocus: null,
   selectedBodyMetric: null,
   bodyMetricPeriod: "3m",
   bodyFormMessage: null,
@@ -4251,12 +4284,21 @@ function setLastRemoteRevision(value){localStorage.setItem(LAST_REMOTE_REVISION_
 function getSyncConflictPreference(){return localStorage.getItem("gymos:syncConflictMode")||"ask";}
 function setSyncConflictPreference(value){localStorage.setItem("gymos:syncConflictMode",value);}
 function getSyncAudit(){
-  try{const value=JSON.parse(localStorage.getItem(SYNC_AUDIT_KEY)||"[]");return Array.isArray(value)?value:[];}
+  try{
+    const value=JSON.parse(localStorage.getItem(SYNC_AUDIT_KEY)||"[]");
+    return Array.isArray(value)?value.map(({userId,deviceId,...entry})=>entry):[];
+  }
   catch(error){return [];}
+}
+function sanitizeStoredSyncAudit(){
+  const raw=localStorage.getItem(SYNC_AUDIT_KEY);
+  if(!raw) return;
+  const sanitized=JSON.stringify(getSyncAudit());
+  if(raw!==sanitized) localStorage.setItem(SYNC_AUDIT_KEY,sanitized);
 }
 function addSyncAudit(action,status,details={}){
   const items=getSyncAudit();
-  items.push({id:`audit-${Date.now().toString(36)}`,createdAt:new Date().toISOString(),action,status,userId:state.syncUser?.id||null,deviceId:getDeviceId(),details});
+  items.push({id:`audit-${Date.now().toString(36)}`,createdAt:new Date().toISOString(),action,status,details});
   localStorage.setItem(SYNC_AUDIT_KEY,JSON.stringify(items.slice(-100)));
 }
 function simpleChecksum(value){
@@ -4271,7 +4313,7 @@ function buildSyncEnvelope(){
   return {schemaVersion:2,revision,deviceId:getDeviceId(),updatedAt:new Date().toISOString(),checksum:simpleChecksum(payload),payload};
 }
 function syncSecurityState(){
-  return {authenticated:isAppAuthenticated(),deviceId:getDeviceId(),localRevision:getLocalRevision(),lastRemoteRevision:getLastRemoteRevision(),conflictMode:getSyncConflictPreference(),audit:getSyncAudit().slice(-10)};
+  return {authenticated:isAppAuthenticated(),deviceConfigured:Boolean(getDeviceId()),localRevision:getLocalRevision(),lastRemoteRevision:getLastRemoteRevision(),conflictMode:getSyncConflictPreference(),audit:getSyncAudit().slice(-10)};
 }
 async function chooseConflictResolution(remote){
   const mode=getSyncConflictPreference();
@@ -4333,8 +4375,9 @@ function scheduleAccountProfileLoad(userId){
 async function loadAccountIdentityProfile(userId=state.syncUser?.id){
   const client=getSupabaseClient();
   if(!client||!userId||!isAppAuthenticated()) return null;
+  const ownerId=currentRoutineOwnerOrNull();
   const {data,error}=await client.from("profiles").select("alias,avatar_key").eq("id",userId).maybeSingle();
-  if(state.syncUser?.id!==userId) return null;
+  if(state.syncUser?.id!==userId||currentRoutineOwnerOrNull()!==ownerId) return null;
   if(error){
     state.accountProfileStatus="error";
     if(state.screen==="account"){
@@ -4354,14 +4397,18 @@ async function loadAccountIdentityProfile(userId=state.syncUser?.id){
 async function saveAccountIdentityProfile(alias,avatarKey){
   const client=getSupabaseClient();
   if(!client||!isAppAuthenticated()) throw new Error("No hay una cuenta confirmada.");
+  const ownerId=currentRoutineOwnerOrNull();
+  const userId=state.syncUser.id;
   const normalizedAlias=normalizeAccountAlias(alias);
   const normalizedAvatar=validAccountAvatarKey(avatarKey);
   const {error}=await client.from("profiles").upsert({
-    id:state.syncUser.id,
+    id:userId,
     alias:normalizedAlias||null,
     avatar_key:normalizedAvatar,
     updated_at:new Date().toISOString()
   },{onConflict:"id"});
+  assertActiveLocalOwner(ownerId);
+  if(state.syncUser?.id!==userId) throw new Error("owner_changed");
   if(error) throw error;
   state.accountProfile={alias:normalizedAlias,avatarKey:normalizedAvatar};
   state.accountProfileStatus="loaded";
@@ -4642,11 +4689,11 @@ async function signOutSync(){
   if(client) await client.auth.signOut();
   resolveAuthenticatedAppState(null);
 }
-function bodyMeasurementToDatabase(row){
+function bodyMeasurementToDatabase(row,userId=state.syncUser?.id){
   const normalized=normalizeBodyMeasurement(row);
   const record={
     id:normalized.id,
-    user_id:state.syncUser?.id,
+    user_id:userId,
     measured_at:normalized.date,
     notes:normalized.notes||null,
     created_at:normalized.createdAt,
@@ -4669,7 +4716,14 @@ function bodyMeasurementsTableMissing(error){
 async function syncBodyMeasurementsWithSupabase(){
   const client=getSupabaseClient();
   if(!client||!isAppAuthenticated()) return;
-  const {data,error}=await client.from("body_measurements").select("*").eq("user_id",state.syncUser.id);
+  const ownerId=currentRoutineOwnerOrNull();
+  const userId=state.syncUser.id;
+  const assertOwner=()=>{
+    assertActiveLocalOwner(ownerId);
+    if(state.syncUser?.id!==userId) throw new Error("owner_changed");
+  };
+  const {data,error}=await client.from("body_measurements").select("*").eq("user_id",userId);
+  assertOwner();
   if(error){
     if(bodyMeasurementsTableMissing(error)){
       console.warn("Body measurements table is not installed; using encrypted user sync payload.");
@@ -4684,16 +4738,26 @@ async function syncBodyMeasurementsWithSupabase(){
     if(!local||new Date(remote.updatedAt)>=new Date(local.updatedAt)) merged.set(String(remote.id),remote);
   });
   const rows=[...merged.values()].sort((a,b)=>new Date(a.date)-new Date(b.date));
+  assertOwner();
   saveBodyHistory(rows,{markUpdated:false});
   if(!rows.length) return;
-  const {error:writeError}=await client.from("body_measurements").upsert(rows.map(bodyMeasurementToDatabase),{onConflict:"id,user_id"});
+  assertOwner();
+  const {error:writeError}=await client.from("body_measurements").upsert(
+    rows.map(row=>bodyMeasurementToDatabase(row,userId)),
+    {onConflict:"id,user_id"}
+  );
+  assertOwner();
   if(writeError&&!bodyMeasurementsTableMissing(writeError)) throw writeError;
 }
 async function deleteBodyMeasurementRemote(id){
   const client=getSupabaseClient();
   if(!client||!isAppAuthenticated()) return;
+  const ownerId=currentRoutineOwnerOrNull();
+  const userId=state.syncUser.id;
   try{
-    const {error}=await client.from("body_measurements").delete().eq("id",String(id)).eq("user_id",state.syncUser.id);
+    const {error}=await client.from("body_measurements").delete().eq("id",String(id)).eq("user_id",userId);
+    assertActiveLocalOwner(ownerId);
+    if(state.syncUser?.id!==userId) throw new Error("owner_changed");
     if(error&&!bodyMeasurementsTableMissing(error)) throw error;
   }catch(error){
     console.error("Body measurement deletion",error);
@@ -4703,13 +4767,26 @@ async function deleteBodyMeasurementRemote(id){
 async function syncNow(options={}){
   const client=getSupabaseClient();
   if(!client||!isAppAuthenticated()) throw new Error("Confirma tu correo antes de sincronizar.");
+  if(state.syncInProgress) return {direction:"busy"};
+  const ownerId=currentRoutineOwnerOrNull();
+  const userId=state.syncUser.id;
+  const assertOwner=()=>{
+    assertActiveLocalOwner(ownerId);
+    if(state.syncUser?.id!==userId) throw new Error("owner_changed");
+  };
+  state.syncInProgress=true;
   state.syncStatus="syncing";updateSyncIndicators();addSyncAudit("sync","started");
   try{
     await window.GymOSRecovery?.syncWithSupabase?.();
+    assertOwner();
     await window.GymOSProfessionalNutrition?.syncWithSupabase?.();
+    assertOwner();
     await syncBodyMeasurementsWithSupabase();
+    assertOwner();
     await window.GymOSWorkoutAnalysis?.syncWithSupabase?.();
-    const {data:remote,error:readError}=await client.from("gymos_sync").select("payload,revision,device_id,updated_at,checksum").eq("user_id",state.syncUser.id).maybeSingle();
+    assertOwner();
+    const {data:remote,error:readError}=await client.from("gymos_sync").select("payload,revision,device_id,updated_at,checksum").eq("user_id",userId).maybeSingle();
+    assertOwner();
     if(readError) throw readError;
     const remoteRevision=Number(remote?.revision||0);
     const localRevision=getLocalRevision();
@@ -4717,6 +4794,7 @@ async function syncNow(options={}){
     const conflict=remote && remoteRevision>lastRemote && localRevision>lastRemote && !options.forceUpload;
     if(conflict){
       const resolution=await chooseConflictResolution(remote);
+      assertOwner();
       addSyncAudit("conflict",resolution,{remoteRevision,localRevision});
       if(resolution==="remote"){
         applySyncPayload(remote.payload||{});setLocalRevision(remoteRevision);setLastRemoteRevision(remoteRevision);
@@ -4726,11 +4804,22 @@ async function syncNow(options={}){
       applySyncPayload(remote.payload||{});setLocalRevision(remoteRevision);setLastRemoteRevision(remoteRevision);
       localStorage.setItem("gymos:lastSyncAt",new Date().toISOString());state.syncStatus="connected";addSyncAudit("sync","downloaded",{revision:remoteRevision});updateSyncIndicators();return {direction:"download",revision:remoteRevision};
     }
+    assertOwner();
     const envelope=buildSyncEnvelope();
-    const {error:writeError}=await client.from("gymos_sync").upsert({user_id:state.syncUser.id,payload:envelope.payload,revision:envelope.revision,device_id:envelope.deviceId,checksum:envelope.checksum,updated_at:envelope.updatedAt},{onConflict:"user_id"});
+    const {error:writeError}=await client.from("gymos_sync").upsert({user_id:userId,payload:envelope.payload,revision:envelope.revision,device_id:envelope.deviceId,checksum:envelope.checksum,updated_at:envelope.updatedAt},{onConflict:"user_id"});
+    assertOwner();
     if(writeError) throw writeError;
     setLastRemoteRevision(envelope.revision);localStorage.setItem("gymos:lastSyncAt",new Date().toISOString());state.syncStatus="connected";addSyncAudit("sync","uploaded",{revision:envelope.revision});updateSyncIndicators();return {direction:"upload",revision:envelope.revision};
-  }catch(error){state.syncStatus="error";addSyncAudit("sync","error",{message:error.message});updateSyncIndicators();throw error;}
+  }catch(error){
+    if(currentRoutineOwnerOrNull()===ownerId&&state.syncUser?.id===userId){
+      state.syncStatus="error";addSyncAudit("sync","error",{
+        code:error?.code||"sync_failed",status:error?.status||null
+      });updateSyncIndicators();
+    }
+    throw error;
+  }finally{
+    state.syncInProgress=false;
+  }
 }
 
 async function autoSync(reason="automática"){
@@ -6529,14 +6618,16 @@ function renderHomeBodyCard(){
   </section>`;
 }
 function renderBodySummaryEditor(){
-  document.querySelector(".body-summary-editor-backdrop")?.remove();
+  const existing=document.querySelector(".body-summary-editor-backdrop");
+  if(!existing) state.bodySummaryReturnFocus=document.activeElement;
+  existing?.remove();
   const selected=Array.isArray(state.bodySummaryDraft)?state.bodySummaryDraft:getBodySummaryMetrics();
   state.bodySummaryDraft=selected.slice();
   const modal=document.createElement("div");
   modal.className="body-summary-editor-backdrop";
-  modal.innerHTML=`<section class="body-summary-editor" role="dialog" aria-modal="true" aria-labelledby="bodySummaryEditorTitle">
+  modal.innerHTML=`<section class="body-summary-editor" role="dialog" aria-modal="true" aria-labelledby="bodySummaryEditorTitle" aria-describedby="bodySummaryEditorHelp">
     <div class="card-heading-row">
-      <div><span class="section-kicker">INICIO</span><h2 id="bodySummaryEditorTitle">Editar resumen corporal</h2><p class="subtle">Elige exactamente cuatro métricas.</p></div>
+      <div><span class="section-kicker">INICIO</span><h2 id="bodySummaryEditorTitle">Editar resumen corporal</h2><p id="bodySummaryEditorHelp" class="subtle">Elige exactamente cuatro métricas.</p></div>
       <button type="button" class="icon-button" data-close-body-summary aria-label="Cerrar">×</button>
     </div>
     <div class="body-summary-picker">
@@ -6549,8 +6640,16 @@ function renderBodySummaryEditor(){
     <button type="button" class="primary full" data-save-body-summary ${selected.length===4?"":"disabled"}>Guardar resumen</button>
   </section>`;
   document.body.appendChild(modal);
-  modal.querySelector("[data-close-body-summary]").onclick=()=>{state.bodySummaryDraft=null;modal.remove();};
-  modal.onclick=event=>{if(event.target===modal){state.bodySummaryDraft=null;modal.remove();}};
+  const close=()=>{
+    const returnFocus=state.bodySummaryReturnFocus;
+    state.bodySummaryDraft=null;
+    state.bodySummaryReturnFocus=null;
+    modal.remove();
+    if(returnFocus?.isConnected) returnFocus.focus();
+  };
+  modal.querySelector("[data-close-body-summary]").onclick=close;
+  modal.onclick=event=>{if(event.target===modal) close();};
+  modal.onkeydown=event=>{if(event.key==="Escape"){event.preventDefault();close();}};
   modal.querySelectorAll("[data-body-summary-choice]").forEach(input=>input.onchange=()=>{
     const key=input.dataset.bodySummaryChoice;
     if(input.checked&&state.bodySummaryDraft.length<4) state.bodySummaryDraft.push(key);
@@ -6561,6 +6660,7 @@ function renderBodySummaryEditor(){
     if(state.bodySummaryDraft.length!==4) return;
     saveBodySummaryMetrics(state.bodySummaryDraft);
     state.bodySummaryDraft=null;
+    state.bodySummaryReturnFocus=null;
     modal.remove();
     renderHome();
     toast("Resumen corporal actualizado.");
@@ -10281,6 +10381,12 @@ function renderAccount(){
           showPasswordMessage("error","Tu sesión ya no es válida. Cierra sesión y vuelve a entrar.");
           return;
         }
+        const passwordOwnerId=currentRoutineOwnerOrNull();
+        const passwordUserId=state.syncUser.id;
+        const assertPasswordOwner=()=>{
+          assertActiveLocalOwner(passwordOwnerId);
+          if(state.syncUser?.id!==passwordUserId) throw new Error("owner_changed");
+        };
         let data,error;
         if(state.accountPasswordReauthRequired){
           ({data,error}=await client.auth.updateUser({
@@ -10292,13 +10398,7 @@ function renderAccount(){
             password:newPassword
           }));
         }
-        console.log("PASSWORD UPDATE RESULT",{
-          data,
-          error,
-          code:error?.code,
-          message:error?.message,
-          status:error?.status
-        });
+        assertPasswordOwner();
 
         if(error){
           const code=String(error.code||"").toLowerCase();
@@ -10306,16 +10406,12 @@ function renderAccount(){
           if(code==="same_password"||errorMessage.includes("same password")){
             showPasswordMessage("error","La nueva contraseña debe ser diferente de la actual.");
           }else if(code==="reauthentication_needed"||errorMessage.includes("reauthentication")){
-            const {data:reauthData,error:reauthError}=await client.auth.reauthenticate();
-            console.log("PASSWORD REAUTHENTICATION RESULT",{
-              data:reauthData,
-              error:reauthError,
-              code:reauthError?.code,
-              message:reauthError?.message,
-              status:reauthError?.status
-            });
+            const {error:reauthError}=await client.auth.reauthenticate();
+            assertPasswordOwner();
             if(reauthError){
-              console.error("PASSWORD REAUTHENTICATION ERROR",reauthError);
+              console.error("PASSWORD REAUTHENTICATION ERROR",{
+                code:reauthError.code,status:reauthError.status
+              });
               const reauthCode=String(reauthError.code||"").toLowerCase();
               if(["session_not_found","refresh_token_not_found","user_not_found"].includes(reauthCode)){
                 showPasswordMessage("error","Tu sesión ya no es válida. Cierra sesión y vuelve a entrar.");
@@ -10339,9 +10435,7 @@ function renderAccount(){
             showPasswordMessage("error",error.message||"La contraseña no cumple los requisitos de seguridad.");
           }else{
             console.error("PASSWORD UPDATE ERROR",{
-              error,
               code:error.code,
-              message:error.message,
               status:error.status
             });
             showPasswordMessage("error","No se pudo cambiar la contraseña.");
@@ -10350,7 +10444,7 @@ function renderAccount(){
         }
 
         if(!data?.user){
-          console.error("PASSWORD UPDATE ERROR: missing user",data);
+          console.error("PASSWORD UPDATE ERROR: missing user");
           showPasswordMessage("error","No se pudo cambiar la contraseña.");
           return;
         }
@@ -10358,12 +10452,14 @@ function renderAccount(){
         const {
           data:{session}
         }=await client.auth.getSession();
+        assertPasswordOwner();
         const {data:userData,error:userError}=await client.auth.getUser();
-        console.log("SESSION AFTER PASSWORD UPDATE",{
-          session,
-          user:userData?.user,
-          userError
-        });
+        assertPasswordOwner();
+        if(!session||userError||userData?.user?.id!==passwordUserId){
+          console.error("PASSWORD SESSION VERIFICATION ERROR",{
+            code:userError?.code,status:userError?.status
+          });
+        }
 
         const visibleNewPassword=document.getElementById("accountNewPassword")||newPasswordInput;
         const visibleConfirmation=document.getElementById("accountConfirmPassword")||confirmationInput;
@@ -10376,7 +10472,9 @@ function renderAccount(){
         state.accountPasswordReauthRequired=false;
         showPasswordMessage("success","Contraseña actualizada correctamente.");
       }catch(error){
-        console.error("UNEXPECTED PASSWORD UPDATE ERROR",error);
+        console.error("UNEXPECTED PASSWORD UPDATE ERROR",{
+          code:error?.code||error?.message,status:error?.status
+        });
         const code=String(error?.code||"").toLowerCase();
         if(code==="same_password"){
           showPasswordMessage("error","La nueva contraseña debe ser diferente de la actual.");

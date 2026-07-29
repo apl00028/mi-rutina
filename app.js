@@ -3746,6 +3746,7 @@ let state = {
   timerSeconds: 0,
   timerInterval: null,
   workoutSessionTimer: null,
+  workoutSessionTimerInterval: null,
   workoutExerciseIndex: 0,
   workoutSessionOverviewOpen: false,
   workoutTechniqueExpanded: false,
@@ -5225,7 +5226,11 @@ function emptyDraft(sessionId){
       updatedAt:new Date().toISOString()
     }:{}),
     session:session.legacySessionKey||id,
-    startedAt:Date.now(),
+    startedAt:null,
+    sessionTimer:routineSessionRuntimeApi().normalizeSessionTimer(null,{
+      ownerId:currentRoutineOwnerOrNull(),
+      sessionId:id
+    }),
     copiedFromLastSession:Boolean(last),
     exercises:session.exercises.map((item,exerciseIndex)=>{
       const previous=last?.exercises?.find(exercise=>
@@ -5287,6 +5292,11 @@ function getDraft(sessionId){
     draft=JSON.parse(localStorage.getItem(draftKey(resolved))||"null");
   }
   draft=draft||emptyDraft(resolved);
+  draft.sessionTimer=routineSessionRuntimeApi().normalizeSessionTimer(draft.sessionTimer,{
+    ownerId:draft.ownerId||currentRoutineOwnerOrNull(),
+    sessionId:draft.sessionId||resolved,
+    legacyStartedAt:draft.sessionTimer?null:draft.startedAt
+  });
   draft.exercises.forEach(ex=>{
     ex.series=ex.series.map(normalizeSeries);
     if(ex.targetRir===undefined) ex.targetRir="3-4";
@@ -5324,7 +5334,12 @@ function saveDraft(d){
       sessionId,
       session:legacySession||sessionId,
       sessionDefinitionHash:routineSessionMigrationApi().sessionDefinitionHash(canonical,sessionId),
-      startedAt:d.startedAt??existingDraft?.startedAt??Date.now(),
+      startedAt:d.startedAt??existingDraft?.startedAt??null,
+      sessionTimer:routineSessionRuntimeApi().normalizeSessionTimer(d.sessionTimer,{
+        ownerId,
+        sessionId,
+        legacyStartedAt:d.sessionTimer?null:(d.startedAt??existingDraft?.startedAt)
+      }),
       updatedAt:timestamp,
       sessionSnapshot:{
         label:session.label||String(session.order),name:session.name||"",
@@ -6023,6 +6038,7 @@ function navigateToScreen(screen){
     persistSelectedRoutineSession(
       state.selectedSessionId||localStorage.getItem(SELECTED_SESSION_ID_KEY)||available[0]
     );
+    ensureWorkoutSessionTimerStarted(resolveRuntimeSessionId());
   }
 
   state.screen=screen;
@@ -8149,39 +8165,50 @@ function sessionElapsedAccessible(milliseconds){
   return `Tiempo de sesión: ${hours?`${hours} ${hours===1?"hora":"horas"}, `:""}${minutes} ${minutes===1?"minuto":"minutos"} y ${seconds} ${seconds===1?"segundo":"segundos"}`;
 }
 function stopWorkoutSessionTimer(){
-  const timer=state?.workoutSessionTimer;
-  if(timer?.intervalId) clearInterval(timer.intervalId);
+  stopWorkoutSessionTimerDisplay();
   if(typeof state!=="undefined") state.workoutSessionTimer=null;
 }
 function updateWorkoutSessionElapsed(){
-  const timer=state.workoutSessionTimer;
-  if(!timer) return;
+  const context=state.workoutSessionTimer;
+  if(!context) return;
   const node=document.querySelector("[data-workout-session-elapsed]");
   if(
-    currentRoutineOwnerOrNull()!==timer.ownerId||
+    currentRoutineOwnerOrNull()!==context.ownerId||
     state.screen!=="workout"||
     !node||
-    node.dataset.draftId!==timer.draftId
+    node.dataset.draftId!==context.draftId
   ){
     stopWorkoutSessionTimer();
     return;
   }
-  const model=activeWorkoutApi().sessionElapsedModel({startedAt:timer.startedAt,now:Date.now()});
-  node.textContent=formatSessionElapsed(model.elapsedMs);
-  node.setAttribute("aria-label",sessionElapsedAccessible(model.elapsedMs));
+  const elapsed=routineSessionRuntimeApi().sessionTimerElapsedMs(context.sessionTimer);
+  node.textContent=formatSessionElapsed(elapsed);
+  node.setAttribute("datetime",`PT${Math.floor(elapsed/1000)}S`);
+  node.setAttribute("aria-label",sessionElapsedAccessible(elapsed));
+  const reset=document.querySelector("[data-workout-session-reset]");
+  if(reset) reset.hidden=elapsed<=0;
 }
-function startWorkoutSessionTimer({ownerId,draftId,startedAt}){
+function startWorkoutSessionTimer({ownerId,draftId,sessionId,sessionTimer}){
   const current=state.workoutSessionTimer;
-  if(current&&current.ownerId===ownerId&&current.draftId===draftId&&current.startedAt===startedAt&&current.intervalId){
+  const id=String(draftId||"");
+  if(
+    current&&current.ownerId===ownerId&&current.draftId===id&&
+    current.sessionId===sessionId
+  ){
+    current.sessionTimer=sessionTimer;
+    stopWorkoutSessionTimerDisplay();
     updateWorkoutSessionElapsed();
+    if(sessionTimer.status==="running"){
+      state.workoutSessionTimerInterval=setInterval(updateWorkoutSessionElapsed,1000);
+    }
     return;
   }
   stopWorkoutSessionTimer();
-  state.workoutSessionTimer={
-    ownerId,draftId:String(draftId||""),startedAt,
-    intervalId:setInterval(updateWorkoutSessionElapsed,1000)
-  };
+  state.workoutSessionTimer={ownerId,draftId:id,sessionId,sessionTimer};
   updateWorkoutSessionElapsed();
+  if(sessionTimer.status==="running"){
+    state.workoutSessionTimerInterval=setInterval(updateWorkoutSessionElapsed,1000);
+  }
 }
 function activeWorkoutExerciseKey(sessionId,exercise,index){
   return `${sessionId}:${activeWorkoutApi().exerciseIdentity(exercise,index)}`;
@@ -8383,6 +8410,57 @@ function activeWorkoutRecoveryGuidanceModel(entry,recoveryApi=globalThis.GymOSRe
     guidance:String(result.guidance||"Ajusta el esfuerzo según tus sensaciones reales.")
   };
 }
+function workoutSessionTimerForDraft(draft){
+  return routineSessionRuntimeApi().normalizeSessionTimer(draft?.sessionTimer,{
+    ownerId:draft?.ownerId||currentRoutineOwnerOrNull(),
+    sessionId:draft?.sessionId||resolveRuntimeSessionId(),
+    legacyStartedAt:draft?.sessionTimer?null:draft?.startedAt
+  });
+}
+function workoutSessionElapsedMs(draft,now=Date.now()){
+  return routineSessionRuntimeApi().sessionTimerElapsedMs(
+    workoutSessionTimerForDraft(draft),now
+  );
+}
+function setWorkoutSessionTimerAction(sessionId,action,now=Date.now()){
+  const draft=getDraft(sessionId);
+  const ownerId=currentRoutineOwnerOrNull();
+  const resolved=resolveRuntimeSessionId(sessionId);
+  const timer=routineSessionRuntimeApi().transitionSessionTimer(
+    workoutSessionTimerForDraft(draft),action,{ownerId,sessionId:resolved,now}
+  );
+  draft.sessionTimer=timer;
+  if(action==="reset") draft.startedAt=timer.startedAt;
+  else if((action==="start"||action==="resume")&&!draft.startedAt) draft.startedAt=now;
+  saveDraft(draft);
+  return draft;
+}
+function ensureWorkoutSessionTimerStarted(sessionId,now=Date.now()){
+  const draft=getDraft(sessionId);
+  if(!draft.exercises?.length) return draft;
+  const timer=workoutSessionTimerForDraft(draft);
+  if(timer.status!=="idle") return draft;
+  return setWorkoutSessionTimerAction(sessionId,"start",now);
+}
+function stopWorkoutSessionTimerDisplay(){
+  if(typeof state==="undefined") return;
+  clearInterval(state.workoutSessionTimerInterval);
+  state.workoutSessionTimerInterval=null;
+}
+function updateWorkoutSessionTimerDisplay(draft){
+  if(!draft) return;
+  updateWorkoutSessionElapsed();
+}
+function startWorkoutSessionTimerDisplay(draft){
+  if(!draft) return;
+  startWorkoutSessionTimer({
+    ownerId:draft.ownerId||currentRoutineOwnerOrNull(),
+    draftId:draft.draftId,
+    sessionId:draft.sessionId||resolveRuntimeSessionId(),
+    sessionTimer:workoutSessionTimerForDraft(draft)
+  });
+}
+
 function renderWorkout(){
   const s=resolveRuntimeSessionId();
   const api=activeWorkoutApi();
@@ -8392,11 +8470,11 @@ function renderWorkout(){
   if(!session){state.screen="home";renderHome();return;}
   const canonical=getCanonicalRoutine();
   const persisted=readHomeDraft(session,canonical);
-  const draft=getDraft(sessionId);
-  if(!persisted.draft||!draft.startedAt){
-    draft.startedAt=Date.now();
-    saveDraft(draft);
+  let draft=getDraft(sessionId);
+  if(!persisted.draft&&draft.exercises?.length){
+    draft=ensureWorkoutSessionTimerStarted(sessionId);
   }
+  const sessionTimer=workoutSessionTimerForDraft(draft);
   const totalExercises=draft.exercises.length;
   state.workoutExerciseIndex=Math.min(Math.max(0,state.workoutExerciseIndex||0),Math.max(0,totalExercises-1));
   const exerciseIndex=state.workoutExerciseIndex;
@@ -8404,12 +8482,20 @@ function renderWorkout(){
   const sessionName=routineSessionRuntimeApi().displayName(
     session,activeRoutineSessions().findIndex(item=>item.sessionId===sessionId)
   );
-  const header=api.activeWorkoutHeaderModel({
+  const headerBase=api.activeWorkoutHeaderModel({
     session:{...session,name:sessionName},exerciseIndex,totalExercises,
-    startedAt:draft.startedAt,now:Date.now()
+    startedAt:null,now:Date.now()
   });
-  const elapsed=header.elapsed.elapsedMs;
-  const elapsedForDisplay=header.elapsed.anomalous?0:elapsed;
+  const elapsed=workoutSessionElapsedMs(draft);
+  const elapsedAnomalous=elapsed>72*60*60*1000;
+  const elapsedForDisplay=elapsedAnomalous?0:elapsed;
+  const header={
+    ...headerBase,
+    elapsed:{available:true,elapsedMs:elapsed,anomalous:elapsedAnomalous}
+  };
+  const sessionTimerAction=sessionTimer.status==="running"
+    ?"Pausar"
+    :sessionTimer.status==="paused"?"Reanudar":"Iniciar";
   const last=lastWorkoutForSession(sessionId);
   const previous=exercise?previousExerciseForWorkout(last,exercise,exerciseIndex):null;
   const library=getExerciseLibrary();
@@ -8450,11 +8536,18 @@ function renderWorkout(){
         <button type="button" class="active-workout-progress-trigger" data-workout-session-overview aria-expanded="${state.workoutSessionOverviewOpen}" aria-controls="workoutSessionOverviewDialog">
           <strong>Ejercicio ${header.exerciseNumber} de ${header.totalExercises}</strong><span>Ver resumen de la sesión</span>
         </button>
-        <time data-workout-session-elapsed data-draft-id="${esc(String(draft.draftId||""))}" aria-label="${esc(header.elapsed.anomalous?"Tiempo de sesión pendiente de revisar":sessionElapsedAccessible(elapsedForDisplay))}">${header.elapsed.anomalous?"--:--":formatSessionElapsed(elapsedForDisplay)}</time>
+        <section class="active-workout-session-clock" aria-labelledby="activeWorkoutSessionClockLabel">
+          <span id="activeWorkoutSessionClockLabel">Tiempo de sesión</span>
+          <time data-workout-session-elapsed data-draft-id="${esc(String(draft.draftId||""))}" datetime="PT${Math.floor(elapsedForDisplay/1000)}S" aria-label="${esc(header.elapsed.anomalous?"Tiempo de sesión pendiente de revisar":sessionElapsedAccessible(elapsedForDisplay))}">${header.elapsed.anomalous?"--:--":formatSessionElapsed(elapsedForDisplay)}</time>
+          <div>
+            <button type="button" class="primary" data-workout-session-toggle>${sessionTimerAction}</button>
+            <button type="button" class="text-button" data-workout-session-reset ${elapsedForDisplay>0?"":"hidden"}>Reiniciar</button>
+          </div>
+        </section>
         <div class="active-workout-session-progress" role="progressbar" aria-label="Progreso por ejercicios" aria-valuemin="0" aria-valuemax="${header.totalExercises}" aria-valuenow="${header.exerciseNumber}"><span style="width:${header.progressPercentage}%"></span></div>
         ${header.focus?`<p>${esc(header.focus)}</p>`:""}
       </header>
-      ${header.elapsed.anomalous?`<section class="form-message info active-workout-old-draft" role="status"><p>Este borrador lleva abierto un periodo inusual. Conservamos todos sus datos, pero debes reiniciar el contador antes de finalizar.</p><button type="button" class="secondary" data-reset-workout-session-time>Retomar tiempo desde ahora</button></section>`:""}
+      ${header.elapsed.anomalous?`<section class="form-message info active-workout-old-draft" role="status"><p>Este borrador lleva abierto un periodo inusual. Conservamos todos sus datos, pero debes reiniciar el contador antes de finalizar.</p><button type="button" class="secondary" data-workout-session-reset>Retomar tiempo desde ahora</button></section>`:""}
       ${state.workoutInlineMessage?`<p class="form-message ${esc(state.workoutInlineMessage.type||"info")}" role="${state.workoutInlineMessage.type==="error"?"alert":"status"}">${esc(state.workoutInlineMessage.text)}</p>`:""}
       ${state.workoutDraftMessage?`<p class="workout-draft-message ${esc(state.workoutDraftMessage.type)}" role="${state.workoutDraftMessage.type==="warning"?"alert":"status"}">${esc(state.workoutDraftMessage.text)}</p>`:""}
       ${exercise?`<div class="active-workout-layout">
@@ -8507,7 +8600,7 @@ function renderWorkout(){
     ${nav("workout")}
   </div>`;
   if(!header.elapsed.anomalous) startWorkoutSessionTimer({
-    ownerId,draftId:String(draft.draftId||""),startedAt:draft.startedAt
+    ownerId,draftId:String(draft.draftId||""),sessionId,sessionTimer
   });
   else stopWorkoutSessionTimer();
   bindActiveWorkoutEvents({ownerId,sessionId,draftId:draft.draftId,exerciseIndex,key,resolution,elapsedAnomalous:header.elapsed.anomalous});
@@ -8601,9 +8694,23 @@ function bindActiveWorkoutEvents(context){
         state.workoutInlineMessage=null;
         state.screen="home";
         renderHome();
-      }else if(button.matches("[data-reset-workout-session-time]")){
-        persist(draft=>{draft.startedAt=Date.now();});
-        setActiveWorkoutMessage("success","El tiempo de esta sesión vuelve a contar desde ahora.");
+      }else if(button.matches("[data-workout-session-toggle]")){
+        const draft=getCurrent();
+        const timer=workoutSessionTimerForDraft(draft);
+        const action=timer.status==="running"?"pause":timer.status==="paused"?"resume":"start";
+        setWorkoutSessionTimerAction(context.sessionId,action);
+        setActiveWorkoutMessage(
+          "success",
+          action==="pause"?"Cronómetro de sesión pausado.":"Cronómetro de sesión en marcha."
+        );
+        renderWorkout();
+      }else if(button.matches("[data-workout-session-reset]")){
+        const draft=getCurrent();
+        if(workoutSessionElapsedMs(draft)>0&&!window.confirm(
+          "¿Reiniciar el cronómetro de sesión? Las series registradas no se modificarán."
+        )) return;
+        setWorkoutSessionTimerAction(context.sessionId,"reset");
+        setActiveWorkoutMessage("success","El cronómetro de sesión se ha reiniciado.");
         renderWorkout();
       }else if(button.matches("[data-workout-session-overview]")){
         state.workoutReturnFocusSelector="[data-workout-session-overview]";
@@ -8987,7 +9094,7 @@ function formatTimer(sec){return `${Math.floor(sec/60)}:${String(sec%60).padStar
 function updateTimerUI(){
   const a=document.getElementById("timerValue")||document.querySelector("[data-active-rest-time]"),b=document.getElementById("timerChip");
   if(a)a.textContent=formatTimer(state.timerSeconds);
-  if(b)b.textContent=state.timerSeconds?formatTimer(state.timerSeconds):"Descanso";
+  if(b)b.textContent=state.timerSeconds?`Descanso · ${formatTimer(state.timerSeconds)}`:"Temporizador de descanso";
 }
 function finishWorkout(){
   if(state.finishingWorkout) return;
@@ -9011,7 +9118,7 @@ function finishWorkout(){
   );
   const workout=routineSessionRuntimeApi().historyEntry({
     ownerId,routine:canonical,sessionId:s,draft:d,workoutId:Date.now(),
-    date:new Date().toISOString(),durationMs:Date.now()-(d.startedAt||Date.now()),
+    date:new Date().toISOString(),durationMs:workoutSessionElapsedMs(d),
     completedSeries:completed,exercises:completedExercises
   });
   workout.draftId=d.draftId;

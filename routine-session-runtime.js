@@ -95,6 +95,96 @@
   function lastWorkout(history,routine,sessionId){
     return list(history).find(workout=>historyMatchesSession(workout,routine,sessionId))||null;
   }
+  function validTimestamp(value){
+    if(value===null||value===undefined||value==="") return null;
+    const numeric=Number(value);
+    if(Number.isFinite(numeric)&&numeric>=0) return numeric;
+    const parsed=typeof value==="string"?Date.parse(value):NaN;
+    return Number.isFinite(parsed)&&parsed>=0?parsed:null;
+  }
+  function normalizeSessionTimer(timer,{
+    ownerId,sessionId,legacyStartedAt=null
+  }={}){
+    const owner=normalizeOwnerId(ownerId);
+    const session=text(sessionId);
+    if(!session) throw new Error("session_id_required");
+    const source=timer&&typeof timer==="object"?timer:{};
+    if(source.ownerId&&normalizeOwnerId(source.ownerId)!==owner){
+      throw new Error("session_timer_owner_mismatch");
+    }
+    if(source.sessionId&&text(source.sessionId)!==session){
+      throw new Error("session_timer_session_mismatch");
+    }
+    const elapsedMs=Math.max(0,Number.isFinite(Number(source.elapsedMs))
+      ?Math.round(Number(source.elapsedMs))
+      :0);
+    const legacyStart=validTimestamp(legacyStartedAt);
+    let status=["idle","running","paused"].includes(source.status)
+      ?source.status
+      :(source.running===true?"running":source.running===false&&elapsedMs>0?"paused":"idle");
+    let startedAt=validTimestamp(source.startedAt);
+    if(!timer&&legacyStart!==null){
+      status="running";
+      startedAt=legacyStart;
+    }
+    if(status==="running"&&startedAt===null) status=elapsedMs>0?"paused":"idle";
+    if(status!=="running") startedAt=null;
+    return {
+      ownerId:owner,
+      sessionId:session,
+      status,
+      running:status==="running",
+      elapsedMs,
+      startedAt
+    };
+  }
+  function sessionTimerElapsedMs(timer,now=Date.now()){
+    const elapsed=Math.max(0,Number(timer?.elapsedMs)||0);
+    const current=validTimestamp(now);
+    const started=validTimestamp(timer?.startedAt);
+    if(timer?.status!=="running"||started===null||current===null) return Math.round(elapsed);
+    return Math.round(elapsed+Math.max(0,current-started));
+  }
+  function transitionSessionTimer(timer,action,{
+    ownerId,sessionId,now=Date.now()
+  }={}){
+    const current=normalizeSessionTimer(timer,{ownerId,sessionId});
+    const timestamp=validTimestamp(now);
+    if(timestamp===null) throw new Error("invalid_timer_timestamp");
+    if(action==="start"||action==="resume"){
+      if(current.status==="running") return current;
+      return {
+        ...current,status:"running",running:true,startedAt:timestamp
+      };
+    }
+    if(action==="pause"){
+      if(current.status!=="running") return current;
+      return {
+        ...current,status:"paused",running:false,
+        elapsedMs:sessionTimerElapsedMs(current,timestamp),startedAt:null
+      };
+    }
+    if(action==="reset"){
+      const keepRunning=current.status==="running";
+      return {
+        ...current,
+        status:keepRunning?"running":"idle",
+        running:keepRunning,
+        elapsedMs:0,
+        startedAt:keepRunning?timestamp:null
+      };
+    }
+    throw new Error("invalid_timer_action");
+  }
+  function formatSessionTimer(elapsedMs){
+    const totalSeconds=Math.max(0,Math.floor((Number(elapsedMs)||0)/1000));
+    const seconds=String(totalSeconds%60).padStart(2,"0");
+    const totalMinutes=Math.floor(totalSeconds/60);
+    if(totalMinutes<60) return `${String(totalMinutes).padStart(2,"0")}:${seconds}`;
+    const hours=String(Math.floor(totalMinutes/60)).padStart(2,"0");
+    const minutes=String(totalMinutes%60).padStart(2,"0");
+    return `${hours}:${minutes}:${seconds}`;
+  }
   function validateDraftIdentity(draft,{ownerId,routine,sessionId}={}){
     const errors=[];
     let owner=null;
@@ -202,6 +292,7 @@
     orderedSessions,sessionById,sessionByLegacyKey,displayName,displayLabel,
     historySessionId,historyMatchesSession,selectedSessionId,nextSessionId,
     legacySelection,legacyShadow,lastWorkout,validateDraftIdentity,getDraft,
-    upsertDraft,removeDraft,historyEntry
+    upsertDraft,removeDraft,historyEntry,normalizeSessionTimer,
+    sessionTimerElapsedMs,transitionSessionTimer,formatSessionTimer
   });
 })(typeof window!=="undefined"?window:globalThis);

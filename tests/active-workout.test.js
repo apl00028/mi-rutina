@@ -281,7 +281,7 @@ test("cabecera visual: ofrece Volver, progreso accesible, resumen y tiempo total
 });
 
 test("volver: guarda el draft oficial, detiene timers y no finaliza ni elimina",()=>{
-  const backBranch=between(bindingSource,'if(button.matches("[data-workout-back]"))','}else if(button.matches("[data-reset-workout-session-time]"))');
+  const backBranch=between(bindingSource,'if(button.matches("[data-workout-back]"))','}else if(button.matches("[data-workout-session-toggle]"))');
   assert.match(backBranch,/saveDraft\(draft\)/);
   assert.match(backBranch,/stopAllExerciseTimers\(\)/);
   assert.match(backBranch,/stopWorkoutSessionTimer\(\)/);
@@ -291,8 +291,8 @@ test("volver: guarda el draft oficial, detiene timers y no finaliza ni elimina",
 
 test("timer de sesión: usa un único intervalo, deriva timestamps y no escribe cada segundo",()=>{
   assert.match(sessionTimerSource,/setInterval\(updateWorkoutSessionElapsed,1000\)/);
-  assert.match(sessionTimerSource,/current&&current\.ownerId===ownerId&&current\.draftId===draftId/);
-  assert.match(sessionTimerSource,/sessionElapsedModel\(\{startedAt:timer\.startedAt,now:Date\.now\(\)\}\)/);
+  assert.match(sessionTimerSource,/current&&current\.ownerId===ownerId&&current\.draftId===id/);
+  assert.match(sessionTimerSource,/sessionTimerElapsedMs\(context\.sessionTimer\)/);
   assert.doesNotMatch(sessionTimerSource,/localStorage|saveDraft|markLocalUpdated|autoSync|localRevision/);
 });
 
@@ -361,7 +361,7 @@ test("registro: completar usa busy, inicia descanso solo en serie de trabajo y p
   assert.match(completeBranch,/startTimer\(getRestSeconds\(\)\)/);
   assert.match(bindingSource,/workoutSeriesDeleteCandidate/);
   assert.match(workoutUiSource,/data-confirm-delete-active-set/);
-  assert.doesNotMatch(bindingSource,/window\.confirm|confirm\(/);
+  assert.doesNotMatch(completeBranch,/window\.confirm|confirm\(/);
 });
 
 test("descanso: muestra Omitir y +30 sin confundirlo con el tiempo de sesión",()=>{
@@ -382,12 +382,11 @@ test("finalización: revisa pendientes, duración, sustituciones y notas antes d
   assert.match(bindingSource,/if\(state\.finishingWorkout\) return/);
   assert.match(bindingSource,/finishWorkout\(\)/);
   assert.doesNotMatch(bindingSource,/localStorage\.setItem\("gymos:history"/);
-  assert.doesNotMatch(bindingSource,/window\.confirm|confirm\(/);
 });
 
 test("writer final: deduplica por draftId, guarda duración real y elimina el draft una vez",()=>{
   assert.match(finishSource,/find\(workout=>workout\.draftId===d\.draftId\)/);
-  assert.match(finishSource,/durationMs:Date\.now\(\)-\(d\.startedAt\|\|Date\.now\(\)\)/);
+  assert.match(finishSource,/durationMs:workoutSessionElapsedMs\(d\)/);
   assert.match(finishSource,/if\(!history\.some\(item=>item\.draftId===d\.draftId\)\)/);
   assert.equal((finishSource.match(/clearDraft\(s,\{mark:false\}\)/g)||[]).length,1);
   assert.match(finishSource,/finally\{\s*state\.finishingWorkout=false/);

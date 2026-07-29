@@ -391,10 +391,10 @@ test("cambio entre propietarios revalida registros y active ID",()=>{
   assert.equal(api.selectActiveProposalId([a,b],OWNER_A,"proposal-b"),"proposal-a");
   assert.equal(api.selectActiveProposalId([a,b],OWNER_B,"proposal-a"),"proposal-b");
   const activateSource=appSource.slice(
-    appSource.indexOf("function activateLocalUser"),
-    appSource.indexOf("function deactivateLocalUser")
+    appSource.indexOf("function finishLocalUserActivation"),
+    appSource.indexOf("function activateLocalUser")
   );
-  assert.match(activateSource,/ensureRoutineProposalState\(userId\)/);
+  assert.match(activateSource,/ensureRoutineProposalState\(ownerId\)/);
 });
 
 test("proposalId conflictivo conserva proposal original y devuelve incidencia",()=>{

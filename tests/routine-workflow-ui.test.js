@@ -506,7 +506,7 @@ test("25. orden final de scripts correcto",()=>{
 test("26. generador y workflow están incluidos en el service worker",()=>{
   assert.match(workerSource,/routine-generator\.js/);
   assert.match(workerSource,/routine-workflow-ui\.js/);
-  assert.match(workerSource,/phase-h1/);
+  assert.match(workerSource,/phase-h2/);
 });
 
 test("27. el módulo puro no accede a DOM, almacenamiento, red ni navegación",()=>{

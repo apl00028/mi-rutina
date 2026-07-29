@@ -116,6 +116,31 @@ const defaultSessions = {
   ]
 };
 
+const CANONICAL_ROUTINE_KEY="gymos:routine:canonical";
+const CANONICAL_DRAFTS_KEY="gymos:routineDrafts";
+const SELECTED_SESSION_ID_KEY="gymos:selectedSessionId";
+const SESSION_MODEL_MIGRATION_KEY="gymos:sessionModelMigration";
+
+function routineSessionMigrationApi(){
+  if(!window.GymOSRoutineSessionMigration){
+    throw new Error("El adaptador de sesiones no está disponible.");
+  }
+  return window.GymOSRoutineSessionMigration;
+}
+function secureSessionModelId(prefix){
+  let value;
+  if(globalThis.crypto?.randomUUID) value=globalThis.crypto.randomUUID();
+  else if(globalThis.crypto?.getRandomValues){
+    const bytes=new Uint8Array(16);
+    globalThis.crypto.getRandomValues(bytes);
+    bytes[6]=(bytes[6]&15)|64;
+    bytes[8]=(bytes[8]&63)|128;
+    value=[...bytes].map((byte,index)=>
+      `${[4,6,8,10].includes(index)?"-":""}${byte.toString(16).padStart(2,"0")}`
+    ).join("");
+  }else throw new Error("No hay una fuente criptográfica segura para crear identificadores.");
+  return `${prefix}-${value}`;
+}
 function normalizeRoutine(raw){
   const output={A:[],B:[],C:[]};
   ["A","B","C"].forEach(session=>{
@@ -142,7 +167,23 @@ function normalizeRoutine(raw){
   });
   return output;
 }
+function getCanonicalRoutine(){
+  const raw=localStorage.getItem(CANONICAL_ROUTINE_KEY);
+  if(raw===null) return null;
+  let parsed;
+  try{parsed=JSON.parse(raw);}
+  catch(_){throw new Error("La rutina canónica almacenada no es JSON válido.");}
+  const validation=window.GymOSRoutineSessionModel?.validateCanonicalRoutine(parsed);
+  if(!validation?.valid) throw new Error("La rutina canónica almacenada no es válida.");
+  return window.GymOSRoutineSessionModel.normalizeCanonicalRoutine(parsed);
+}
 function getRoutine(){
+  const canonical=getCanonicalRoutine();
+  if(canonical){
+    return normalizeRoutine(
+      window.GymOSRoutineSessionModel.canonicalToLegacyRuntimeView(canonical)
+    );
+  }
   const saved=JSON.parse(localStorage.getItem("gymos:routine")||"null");
   if(saved) return normalizeRoutine(saved);
   const converted={A:[],B:[],C:[]};
@@ -151,11 +192,99 @@ function getRoutine(){
   });
   return converted;
 }
-function saveRoutine(routine){
-  localStorage.setItem("gymos:routine",JSON.stringify(normalizeRoutine(routine)));
-  markLocalUpdated();
+function saveCanonicalRoutine(routine,{mark=true,writeLegacyShadow=true}={}){
+  const canonical=window.GymOSRoutineSessionModel.normalizeCanonicalRoutine(routine);
+  const shadow=writeLegacyShadow
+    ?window.GymOSRoutineSessionModel.canonicalToLegacyRuntimeView(canonical)
+    :null;
+  const before={
+    canonical:localStorage.getItem(CANONICAL_ROUTINE_KEY),
+    legacy:localStorage.getItem("gymos:routine")
+  };
+  try{
+    localStorage.setItem(CANONICAL_ROUTINE_KEY,JSON.stringify(canonical));
+    if(writeLegacyShadow) localStorage.setItem("gymos:routine",JSON.stringify(normalizeRoutine(shadow)));
+    const reread=getCanonicalRoutine();
+    if(window.GymOSRoutineSessionModel.canonicalRoutineHash(reread)!==
+      window.GymOSRoutineSessionModel.canonicalRoutineHash(canonical)){
+      throw new Error("canonical_write_validation_failed");
+    }
+    if(writeLegacyShadow){
+      const expectedLegacy=normalizeRoutine(shadow);
+      const storedLegacy=readStoredJson("gymos:routine");
+      if(!storedLegacy||routineSessionMigrationApi().stableStringify(
+        normalizeRoutine(storedLegacy)
+      )!==routineSessionMigrationApi().stableStringify(expectedLegacy)){
+        throw new Error("legacy_shadow_write_validation_failed");
+      }
+    }
+  }catch(error){
+    restoreStorageValue(CANONICAL_ROUTINE_KEY,before.canonical);
+    restoreStorageValue("gymos:routine",before.legacy);
+    throw error;
+  }
+  if(mark) markLocalUpdated();
+  return canonical;
 }
-let sessions=getRoutine();
+function saveRoutine(routine,{mark=true}={}){
+  const normalizedLegacy=normalizeRoutine(routine);
+  const canonical=getCanonicalRoutine();
+  if(!canonical){
+    localStorage.setItem("gymos:routine",JSON.stringify(normalizedLegacy));
+    if(mark) markLocalUpdated();
+    return normalizedLegacy;
+  }
+  const reconciled=routineSessionMigrationApi().reconcileLegacyRoutine({
+    canonicalRoutine:canonical,legacyRoutine:normalizedLegacy
+  });
+  if(!reconciled.ok){
+    const error=new Error(reconciled.message);
+    error.code=reconciled.code;
+    throw error;
+  }
+  if(!reconciled.changed&&
+    localStorage.getItem("gymos:routine")===JSON.stringify(normalizedLegacy)){
+    return normalizedLegacy;
+  }
+  const previous={
+    canonical:localStorage.getItem(CANONICAL_ROUTINE_KEY),
+    legacy:localStorage.getItem("gymos:routine"),
+    drafts:localStorage.getItem(CANONICAL_DRAFTS_KEY),
+    updatedAt:localStorage.getItem("gymos:updatedAt"),
+    syncPending:localStorage.getItem("gymos:syncPending"),
+    localRevision:localStorage.getItem("gymos:localRevision")
+  };
+  const ownerId=currentRoutineOwnerOrNull();
+  try{
+    if(ownerId) assertActiveLocalOwner(ownerId);
+    saveCanonicalRoutine(reconciled.canonicalRoutine,{mark:false,writeLegacyShadow:true});
+    const drafts=getCanonicalDrafts();
+    if(drafts){
+      const updated=routineSessionMigrationApi().markStaleDrafts(drafts,{
+        ownerId:currentRoutineOwnerOrNull(),canonicalRoutine:reconciled.canonicalRoutine
+      });
+      if(JSON.stringify(updated)!==JSON.stringify(drafts)){
+        localStorage.setItem(CANONICAL_DRAFTS_KEY,JSON.stringify(updated));
+      }
+      const validation=routineSessionMigrationApi().validateDraftContainer(updated,{
+        ownerId,canonicalRoutine:reconciled.canonicalRoutine
+      });
+      if(!validation.valid) throw new Error(`invalid_canonical_drafts:${validation.errors.join(",")}`);
+    }
+    if(ownerId) assertActiveLocalOwner(ownerId);
+    if(mark) markLocalUpdated();
+  }catch(error){
+    restoreStorageValue(CANONICAL_ROUTINE_KEY,previous.canonical);
+    restoreStorageValue("gymos:routine",previous.legacy);
+    restoreStorageValue(CANONICAL_DRAFTS_KEY,previous.drafts);
+    restoreStorageValue("gymos:updatedAt",previous.updatedAt);
+    restoreStorageValue("gymos:syncPending",previous.syncPending);
+    restoreStorageValue("gymos:localRevision",previous.localRevision);
+    throw error;
+  }
+  return reconciled.legacyRoutine;
+}
+let sessions=normalizeRoutine(defaultSessions);
 
 function getTrainingBlocks(){
   const raw=JSON.parse(localStorage.getItem("gymos:blocks")||"[]");
@@ -710,6 +839,13 @@ const ROUTINE_ACTIVATION_HISTORY_KEY="gymos:routineActivationHistory";
 const ACTIVE_ROUTINE_ACTIVATION_ID_KEY="gymos:activeRoutineActivationId";
 const GYMOS_BACKUP_KEYS=[
   "gymos:routine",
+  "gymos:routine:canonical",
+  "gymos:routineDrafts",
+  "gymos:selectedSessionId",
+  "gymos:sessionModelMigration",
+  "gymos:draft:A",
+  "gymos:draft:B",
+  "gymos:draft:C",
   "gymos:history",
   "gymos:bodyWeight",
   "gymos:body",
@@ -920,6 +1056,8 @@ function parseStoredJson(raw,fallback=null){
 function captureRoutineActivationStorage(ownerId){
   const keys=[
     "gymos:routine","gymos:selectedSession",
+    CANONICAL_ROUTINE_KEY,CANONICAL_DRAFTS_KEY,SELECTED_SESSION_ID_KEY,
+    SESSION_MODEL_MIGRATION_KEY,
     draftKey("A"),draftKey("B"),draftKey("C"),
     ROUTINE_ACTIVATION_HISTORY_KEY,ACTIVE_ROUTINE_ACTIVATION_ID_KEY,
     ROUTINE_PROPOSALS_KEY,ACTIVE_ROUTINE_PROPOSAL_ID_KEY,
@@ -942,49 +1080,104 @@ function scheduleRoutineActivationSync(){
   state.syncStatus=navigator.onLine?"pending":"offline";
   scheduleAutoSync();
 }
-function routineActivationBaseline(){
+function routineActivationBaseline(ownerId){
   const routineRaw=localStorage.getItem("gymos:routine");
   const selectedSessionRaw=localStorage.getItem("gymos:selectedSession");
   const draftsRaw=Object.fromEntries(["A","B","C"].map(session=>[
     session,localStorage.getItem(draftKey(session))
   ]));
+  const canonicalRoutineRaw=localStorage.getItem(CANONICAL_ROUTINE_KEY);
+  const canonicalDraftsRaw=localStorage.getItem(CANONICAL_DRAFTS_KEY);
+  const selectedSessionIdRaw=localStorage.getItem(SELECTED_SESSION_ID_KEY);
   return {
     currentRoutine:getRoutine(),
+    currentCanonicalRoutine:getCanonicalRoutine(),
     selectedSession:selectedSessionRaw||state.selectedSession||"A",
+    selectedSessionId:selectedSessionIdRaw,
     drafts:Object.fromEntries(Object.entries(draftsRaw).map(([session,raw])=>[
       session,parseStoredJson(raw,null)
     ])),
-    rawBaseline:{routine:routineRaw,selectedSession:selectedSessionRaw,drafts:draftsRaw}
+    canonicalDrafts:parseStoredJson(canonicalDraftsRaw,null),
+    rawBaseline:{
+      routine:routineRaw,selectedSession:selectedSessionRaw,drafts:draftsRaw,
+      canonicalRoutine:canonicalRoutineRaw,canonicalDrafts:canonicalDraftsRaw,
+      selectedSessionId:selectedSessionIdRaw,
+      migrationMetadata:localStorage.getItem(SESSION_MODEL_MIGRATION_KEY),
+      storage:captureRoutineActivationStorage(ownerId)
+    }
   };
 }
 function activateStoredRoutineProposal(proposalId,{
   ownerId=null,confirmed=false,timestamp=new Date().toISOString()
 }={}){
   const normalizedOwner=routineProposalOwnerId(ownerId);
+  assertActiveLocalOwner(normalizedOwner);
+  const preflightStorage=captureRoutineActivationStorage(normalizedOwner);
   const activations=getRoutineActivationRecords(normalizedOwner);
   const existing=activations.find(record=>
     record.proposalId===proposalId&&record.status==="activated"
   );
-  if(existing) return {ok:true,idempotent:true,activation:existing};
+  if(existing){
+    restoreRoutineActivationStorage(preflightStorage);
+    return {ok:true,idempotent:true,activation:existing};
+  }
   const proposalRecords=getRoutineProposalRecords(normalizedOwner);
   const proposalRecord=proposalRecords.find(record=>record.proposal.proposalId===proposalId);
-  const baseline=routineActivationBaseline();
+  const baseline=routineActivationBaseline(normalizedOwner);
   const plan=window.GymOSRoutineActivation.createActivationPlan({
     ownerId:normalizedOwner,proposalRecord,currentRoutine:baseline.currentRoutine,
-    selectedSession:baseline.selectedSession,drafts:baseline.drafts,
+    currentCanonicalRoutine:baseline.currentCanonicalRoutine,
+    selectedSession:baseline.selectedSession,selectedSessionId:baseline.selectedSessionId,
+    drafts:baseline.drafts,canonicalDrafts:baseline.canonicalDrafts,
+    targetRoutineId:secureSessionModelId("routine"),
     rawBaseline:baseline.rawBaseline,confirmed,timestamp
   });
-  if(!plan.ok) return plan;
+  if(!plan.ok){
+    restoreRoutineActivationStorage(preflightStorage);
+    return plan;
+  }
+  if(!plan.runtimeCompatible){
+    restoreRoutineActivationStorage(preflightStorage);
+    return {
+      ok:false,code:"runtime_not_ready",
+      message:"La rutina está preparada, pero el runtime visible todavía no admite más de tres sesiones.",
+      plan
+    };
+  }
   const historyBefore=localStorage.getItem("gymos:history");
   let activationResult;
   const transaction=window.GymOSRoutineActivation.executeTransaction({
     capture:()=>captureRoutineActivationStorage(normalizedOwner),
     restore:restoreRoutineActivationStorage
   },[
-    ()=>localStorage.setItem("gymos:routine",JSON.stringify(plan.routine)),
-    ()=>["A","B","C"].forEach(session=>localStorage.removeItem(draftKey(session))),
-    ()=>localStorage.setItem("gymos:selectedSession",plan.selectedSession),
     ()=>{
+      assertActiveLocalOwner(normalizedOwner);
+      saveCanonicalRoutine(plan.canonicalRoutine,{mark:false,writeLegacyShadow:true});
+    },
+    ()=>{
+      assertActiveLocalOwner(normalizedOwner);
+      ["A","B","C"].forEach(session=>localStorage.removeItem(draftKey(session)));
+      localStorage.setItem(
+        CANONICAL_DRAFTS_KEY,
+        JSON.stringify(routineSessionMigrationApi().emptyDraftContainer(plan.canonicalRoutine.routineId))
+      );
+    },
+    ()=>{
+      assertActiveLocalOwner(normalizedOwner);
+      localStorage.setItem("gymos:selectedSession",plan.selectedSession);
+      if(plan.selectedSessionId) localStorage.setItem(SELECTED_SESSION_ID_KEY,plan.selectedSessionId);
+      localStorage.setItem(SESSION_MODEL_MIGRATION_KEY,JSON.stringify({
+        schemaVersion:window.GymOSRoutineSessionModel.SCHEMA_VERSION,
+        migrationVersion:routineSessionMigrationApi().MIGRATION_VERSION,
+        ownerId:normalizedOwner,
+        routineId:plan.canonicalRoutine.routineId,
+        legacySessionMap:routineSessionMigrationApi().sessionMap(plan.canonicalRoutine),
+        completed:true,
+        validated:true
+      }));
+    },
+    ()=>{
+      assertActiveLocalOwner(normalizedOwner);
       activationResult=window.GymOSRoutineActivation.addActivationRecord(
         activations,plan.record,{
           ownerId:normalizedOwner,
@@ -997,20 +1190,25 @@ function activateStoredRoutineProposal(proposalId,{
       });
     },
     ()=>{
+      assertActiveLocalOwner(normalizedOwner);
       const nextProposals=window.GymOSRoutineProposals.transitionProposalLifecycle(
         proposalRecords,{ownerId:normalizedOwner,proposalId,status:"activated",timestamp}
       );
       saveRoutineProposalRecords(nextProposals,{ownerId:normalizedOwner,mark:false});
     },
     ()=>{
+      assertActiveLocalOwner(normalizedOwner);
       if(localStorage.getItem("gymos:history")!==historyBefore) throw new Error("history_changed");
       markRoutineActivationSyncPending(timestamp);
+      assertActiveLocalOwner(normalizedOwner);
       saveCurrentUserVault(normalizedOwner);
+      assertActiveLocalOwner(normalizedOwner);
     }
   ]);
   if(!transaction.ok) return transaction;
+  assertActiveLocalOwner(normalizedOwner);
   sessions=getRoutine();
-  state.selectedSession=plan.selectedSession;
+  persistSelectedRoutineSession(plan.selectedSession);
   scheduleRoutineActivationSync();
   return {ok:true,idempotent:false,activation:activationResult.record};
 }
@@ -1018,10 +1216,12 @@ function rollbackStoredRoutineActivation(activationId,{
   ownerId=null,timestamp=new Date().toISOString()
 }={}){
   const normalizedOwner=routineProposalOwnerId(ownerId);
+  assertActiveLocalOwner(normalizedOwner);
   const activations=getRoutineActivationRecords(normalizedOwner);
   const activation=activations.find(record=>record.activationId===activationId);
   const decision=window.GymOSRoutineActivation.rollbackDecision({
-    ownerId:normalizedOwner,activationRecord:activation,currentRoutine:getRoutine()
+    ownerId:normalizedOwner,activationRecord:activation,currentRoutine:getRoutine(),
+    currentCanonicalRoutine:getCanonicalRoutine()
   });
   if(!decision.ok){
     if(decision.code!=="routine_changed"||!activation) return decision;
@@ -1032,6 +1232,7 @@ function rollbackStoredRoutineActivation(activationId,{
       capture:()=>captureRoutineActivationStorage(normalizedOwner),
       restore:restoreRoutineActivationStorage
     },[()=>{
+      assertActiveLocalOwner(normalizedOwner);
       const updated=window.GymOSRoutineActivation.updateRecord(activations,blocked,{
         ownerId:normalizedOwner,activeActivationId:activationId
       });
@@ -1039,9 +1240,12 @@ function rollbackStoredRoutineActivation(activationId,{
         ownerId:normalizedOwner,mark:false,preferredActiveId:updated.activeActivationId
       });
       markRoutineActivationSyncPending(timestamp);
+      assertActiveLocalOwner(normalizedOwner);
       saveCurrentUserVault(normalizedOwner);
+      assertActiveLocalOwner(normalizedOwner);
     }]);
     if(!blockedTransaction.ok) return blockedTransaction;
+    assertActiveLocalOwner(normalizedOwner);
     scheduleRoutineActivationSync();
     return {...decision,activation:blocked};
   }
@@ -1053,12 +1257,50 @@ function rollbackStoredRoutineActivation(activationId,{
     capture:()=>captureRoutineActivationStorage(normalizedOwner),
     restore:restoreRoutineActivationStorage
   },[
-    ()=>restoreStorageValue("gymos:routine",activation.baseline.routineRaw),
-    ()=>restoreStorageValue("gymos:selectedSession",activation.baseline.selectedSessionRaw),
-    ()=>["A","B","C"].forEach(session=>
-      restoreStorageValue(draftKey(session),activation.baseline.draftsRaw?.[session]??null)
-    ),
     ()=>{
+      assertActiveLocalOwner(normalizedOwner);
+      if(Object.prototype.hasOwnProperty.call(activation.baseline,"canonicalRoutineRaw")){
+        restoreStorageValue(CANONICAL_ROUTINE_KEY,activation.baseline.canonicalRoutineRaw??null);
+      }
+    },
+    ()=>{
+      assertActiveLocalOwner(normalizedOwner);
+      restoreStorageValue("gymos:routine",activation.baseline.routineRaw);
+    },
+    ()=>{
+      assertActiveLocalOwner(normalizedOwner);
+      if(Object.prototype.hasOwnProperty.call(activation.baseline,"canonicalDraftsRaw")){
+        restoreStorageValue(CANONICAL_DRAFTS_KEY,activation.baseline.canonicalDraftsRaw??null);
+      }
+      if(Object.prototype.hasOwnProperty.call(activation.baseline,"selectedSessionIdRaw")){
+        restoreStorageValue(SELECTED_SESSION_ID_KEY,activation.baseline.selectedSessionIdRaw??null);
+      }
+      if(Object.prototype.hasOwnProperty.call(activation.baseline,"migrationMetadataRaw")){
+        restoreStorageValue(SESSION_MODEL_MIGRATION_KEY,activation.baseline.migrationMetadataRaw??null);
+      }
+    },
+    ()=>{
+      assertActiveLocalOwner(normalizedOwner);
+      restoreStorageValue("gymos:selectedSession",activation.baseline.selectedSessionRaw);
+    },
+    ()=>{
+      assertActiveLocalOwner(normalizedOwner);
+      ["A","B","C"].forEach(session=>
+        restoreStorageValue(draftKey(session),activation.baseline.draftsRaw?.[session]??null)
+      );
+    },
+    ()=>[
+      "gymos:updatedAt","gymos:syncPending","gymos:localRevision",
+      "gymos:lastRemoteRevision","gymos:lastSyncAt","gymos:lastSyncHash"
+    ].forEach(key=>{
+      assertActiveLocalOwner(normalizedOwner);
+      if(activation.baseline.storageRaw&&
+        Object.prototype.hasOwnProperty.call(activation.baseline.storageRaw,key)){
+        restoreStorageValue(key,activation.baseline.storageRaw[key]);
+      }
+    }),
+    ()=>{
+      assertActiveLocalOwner(normalizedOwner);
       rolledBack=window.GymOSRoutineActivation.markRolledBack(activation,timestamp);
       const updated=window.GymOSRoutineActivation.updateRecord(activations,rolledBack,{
         ownerId:normalizedOwner,activeActivationId:activationId
@@ -1068,6 +1310,7 @@ function rollbackStoredRoutineActivation(activationId,{
       });
     },
     ()=>{
+      assertActiveLocalOwner(normalizedOwner);
       const nextProposals=window.GymOSRoutineProposals.transitionProposalLifecycle(
         proposalRecords,{
           ownerId:normalizedOwner,proposalId:activation.proposalId,
@@ -1077,14 +1320,16 @@ function rollbackStoredRoutineActivation(activationId,{
       saveRoutineProposalRecords(nextProposals,{ownerId:normalizedOwner,mark:false});
     },
     ()=>{
+      assertActiveLocalOwner(normalizedOwner);
       if(localStorage.getItem("gymos:history")!==historyBefore) throw new Error("history_changed");
-      markRoutineActivationSyncPending(timestamp);
       saveCurrentUserVault(normalizedOwner);
+      assertActiveLocalOwner(normalizedOwner);
     }
   ]);
   if(!transaction.ok) return transaction;
+  assertActiveLocalOwner(normalizedOwner);
   sessions=getRoutine();
-  state.selectedSession=localStorage.getItem("gymos:selectedSession")||nextSuggestedSession();
+  persistSelectedRoutineSession(localStorage.getItem("gymos:selectedSession")||nextSuggestedSession());
   scheduleRoutineActivationSync();
   return {ok:true,idempotent:false,activation:rolledBack};
 }
@@ -1151,10 +1396,57 @@ function validateGymOSBackup(payload){
 function importGymOSBackup(payload,mode="merge"){
   const backup=validateGymOSBackup(payload);
   const ownerId=localStorage.getItem(LOCAL_OWNER_KEY)||(!AUTH_REQUIRED?"local":null);
+  const normalizedOwner=window.GymOSProfileData.normalizeOwnerId(ownerId);
+  assertActiveLocalOwner(normalizedOwner);
+  const importBefore=captureRoutineSessionStartupStorage(normalizedOwner);
+  try{
+  const incomingSessionKeys=[
+    CANONICAL_ROUTINE_KEY,CANONICAL_DRAFTS_KEY,SELECTED_SESSION_ID_KEY,
+    SESSION_MODEL_MIGRATION_KEY
+  ];
+  if(incomingSessionKeys.some(key=>Object.hasOwn(backup.storage,key))){
+    const incomingMetadata=parseStoredJson(
+      backup.storage[SESSION_MODEL_MIGRATION_KEY]??null,null
+    );
+    const incomingCanonical=parseStoredJson(
+      backup.storage[CANONICAL_ROUTINE_KEY]??null,null
+    );
+    const incomingDrafts=parseStoredJson(
+      backup.storage[CANONICAL_DRAFTS_KEY]??null,null
+    );
+    const incomingLegacy=parseStoredJson(
+      backup.storage["gymos:routine"]??null,null
+    );
+    const validation=window.GymOSRoutineSessionModel.validateCanonicalRoutine(incomingCanonical);
+    const draftValidation=routineSessionMigrationApi().validateDraftContainer(
+      incomingDrafts,{ownerId:normalizedOwner,canonicalRoutine:incomingCanonical}
+    );
+    const metadataMatches=incomingMetadata?.ownerId===normalizedOwner&&
+      incomingMetadata?.completed===true&&incomingMetadata?.validated===true&&
+      incomingMetadata?.migrationVersion===routineSessionMigrationApi().MIGRATION_VERSION&&
+      incomingMetadata?.routineId===incomingCanonical?.routineId&&
+      routineSessionMigrationApi().stableStringify(incomingMetadata?.legacySessionMap||{})===
+        routineSessionMigrationApi().stableStringify(
+          validation.valid?routineSessionMigrationApi().sessionMap(incomingCanonical):{}
+        );
+    const shadowMatches=validation.valid&&incomingCanonical.sessions.length<=3&&
+      routineSessionMigrationApi().legacyRoutineEquivalent(
+        incomingLegacy,
+        window.GymOSRoutineSessionModel.canonicalToLegacyRuntimeView(incomingCanonical)
+      );
+    if(!validation.valid||incomingCanonical.sessions.length>3||
+      !draftValidation.valid||!metadataMatches||!shadowMatches){
+      throw new Error("La copia canónica pertenece a otro propietario o no es válida.");
+    }
+  }
   if(mode==="replace"){
-    GYMOS_BACKUP_KEYS.forEach(key=>localStorage.removeItem(key));
+    GYMOS_BACKUP_KEYS.forEach(key=>{
+      assertActiveLocalOwner(normalizedOwner);
+      localStorage.removeItem(key);
+    });
   }
   Object.entries(backup.storage).forEach(([key,value])=>{
+    assertActiveLocalOwner(normalizedOwner);
     if(!GYMOS_BACKUP_KEYS.includes(key)) return;
     if(key==="gymos:routineActivationHistory"){
       try{
@@ -1233,10 +1525,18 @@ function importGymOSBackup(payload,mode="merge"){
   if(localStorage.getItem("gymos:routineActivationHistory")){
     ensureRoutineActivationState(ownerId);
   }
+  ensureRoutineSessionMigration({ownerId,mark:false});
+  assertActiveLocalOwner(normalizedOwner);
   ensureProfileDataMigration({ownerId,mark:false});
   ensureExerciseDomainMigration({ownerId,mark:false,force:true});
+  assertActiveLocalOwner(normalizedOwner);
   saveCurrentUserVault(ownerId);
+  assertActiveLocalOwner(normalizedOwner);
   sessions=getRoutine();
+  }catch(error){
+    restoreRoutineSessionStartupStorage(importBefore,normalizedOwner);
+    throw error;
+  }
 }
 function readJsonFile(file){
   return new Promise((resolve,reject)=>{
@@ -2116,7 +2416,10 @@ function clearDeveloperLogs(){
   localStorage.removeItem(APP_LOGS_KEY);
 }
 function storageDiagnostics(){
-  const keys=Object.keys(localStorage).filter(key=>key.startsWith("gymos:"));
+  const internalPrefixes=window.GymOSProfileData?.MIGRATION_INTERNAL_KEY_PREFIXES||[];
+  const keys=Object.keys(localStorage).filter(key=>
+    key.startsWith("gymos:")&&!internalPrefixes.some(prefix=>key.startsWith(prefix))
+  );
   const rows=keys.map(key=>{
     const value=localStorage.getItem(key)||"";
     return {key,size:new Blob([value]).size};
@@ -2568,6 +2871,210 @@ function ensureLegacyTrainingSetupMigration(options={}){
     legacyProfile:options.legacyProfile||getOnboardingProfile()
   });
 }
+function sessionModelMigrationBackupKey(ownerId){
+  if(!window.GymOSProfileData) throw new Error("El modelo de perfil no está disponible.");
+  return window.GymOSProfileData.sessionModelMigrationBackupKey(ownerId);
+}
+function readStoredJson(key){
+  const raw=localStorage.getItem(key);
+  if(raw===null) return null;
+  try{return JSON.parse(raw);}
+  catch(_){return null;}
+}
+function getCanonicalDrafts(){
+  const value=readStoredJson(CANONICAL_DRAFTS_KEY);
+  return value&&typeof value==="object"?value:null;
+}
+function writeLegacyDraftShadows(canonicalRoutine,container){
+  ["A","B","C"].forEach(key=>{
+    const session=canonicalRoutine?.sessions?.find(item=>item.legacySessionKey===key);
+    const draft=session?container?.draftsBySessionId?.[session.sessionId]:null;
+    if(draft) localStorage.setItem(
+      draftKey(key),
+      typeof draft.legacyRaw==="string"?draft.legacyRaw:JSON.stringify(draft)
+    );
+    else localStorage.removeItem(draftKey(key));
+  });
+}
+function selectedSessionIdForLegacy(
+  legacySession,canonical=getCanonicalRoutine(),{preserveCurrent=false}={}
+){
+  if(!canonical) return null;
+  return routineSessionMigrationApi().selectedSessionId(
+    canonical,legacySession,preserveCurrent?localStorage.getItem(SELECTED_SESSION_ID_KEY):null
+  );
+}
+function persistSelectedRoutineSession(legacySession,{mark=false}={}){
+  const selected=validSelectedRoutineSession(legacySession);
+  localStorage.setItem("gymos:selectedSession",selected);
+  const canonical=getCanonicalRoutine();
+  const id=selectedSessionIdForLegacy(selected,canonical);
+  if(id) localStorage.setItem(SELECTED_SESSION_ID_KEY,id);
+  else localStorage.removeItem(SELECTED_SESSION_ID_KEY);
+  if(typeof state!=="undefined"){
+    state.selectedSession=selected;
+    state.selectedSessionId=id;
+  }
+  if(mark) markLocalUpdated();
+  return {selectedSession:selected,selectedSessionId:id};
+}
+function ensureRoutineSessionMigration(options={}){
+  if(!window.GymOSRoutineSessionModel||!window.GymOSRoutineSessionMigration){
+    throw new Error("El modelo canónico de sesiones no está disponible.");
+  }
+  const requested=options.ownerId||localStorage.getItem(LOCAL_OWNER_KEY)||(!AUTH_REQUIRED?"local":null);
+  const ownerId=window.GymOSProfileData.normalizeOwnerId(requested);
+  if(localStorage.getItem(LOCAL_OWNER_KEY)!==ownerId&&ownerId!=="local"){
+    throw new Error("owner_not_active");
+  }
+  const api=routineSessionMigrationApi();
+  const canonicalRaw=localStorage.getItem(CANONICAL_ROUTINE_KEY);
+  const canonical=canonicalRaw===null?null:readStoredJson(CANONICAL_ROUTINE_KEY);
+  if(canonicalRaw!==null&&!canonical) throw new Error("invalid_existing_canonical");
+  const canonicalDraftsRaw=localStorage.getItem(CANONICAL_DRAFTS_KEY);
+  const canonicalDrafts=canonicalDraftsRaw===null?null:readStoredJson(CANONICAL_DRAFTS_KEY);
+  if(canonicalDraftsRaw!==null&&!canonicalDrafts) throw new Error("invalid_existing_canonical_drafts");
+  const metadata=readStoredJson(SESSION_MODEL_MIGRATION_KEY);
+  const legacyRoutineRaw=localStorage.getItem("gymos:routine");
+  const legacyRoutine=legacyRoutineRaw===null
+    ?normalizeRoutine(defaultSessions)
+    :readStoredJson("gymos:routine");
+  if(!legacyRoutine) throw new Error("invalid_legacy_routine");
+  const legacyDraftsRaw=Object.fromEntries(["A","B","C"].map(key=>[
+    key,localStorage.getItem(draftKey(key))
+  ]));
+  const sessionIds={},draftIds={};
+  let routineId=null;
+  if(canonicalRaw===null){
+    if(localStorage.getItem(SESSION_MODEL_MIGRATION_KEY)!==null){
+      throw new Error("incomplete_migration_marker");
+    }
+    routineId=secureSessionModelId("routine");
+    ["A","B","C"].forEach(key=>{
+      if(Array.isArray(legacyRoutine[key])&&legacyRoutine[key].length){
+        sessionIds[key]=secureSessionModelId("session");
+      }
+      if(legacyDraftsRaw[key]!==null) draftIds[key]=secureSessionModelId("draft");
+    });
+  }else{
+    ["A","B","C"].forEach(key=>{
+      if(legacyDraftsRaw[key]===null) return;
+      const session=canonical?.sessions?.find(item=>item.legacySessionKey===key);
+      const hasCanonicalDraft=Boolean(
+        session&&canonicalDrafts?.draftsBySessionId?.[session.sessionId]
+      );
+      const hasOrphan=Boolean(canonicalDrafts?.orphanedLegacyDrafts?.[key]);
+      if(!hasCanonicalDraft&&!hasOrphan) draftIds[key]=secureSessionModelId("draft");
+    });
+  }
+  const plan=api.createMigrationPlan({
+    ownerId,legacyRoutine,canonicalRoutine:canonical,canonicalDrafts,
+    legacyDraftsRaw,
+    legacySelection:localStorage.getItem("gymos:selectedSession")||"A",
+    selectedSessionId:localStorage.getItem(SELECTED_SESSION_ID_KEY),
+    migrationMetadata:metadata,routineId,sessionIds,draftIds,
+    migrationVersion:api.MIGRATION_VERSION,
+    timestamp:options.timestamp||new Date().toISOString()
+  });
+  if(!plan.ok){
+    const error=new Error(plan.message);
+    error.code=plan.code;
+    throw error;
+  }
+  if(!plan.changed) return {migrated:false,ownerId,plan};
+  const validation=api.validateMigrationPlan(plan,{ownerId});
+  if(!validation.valid) throw new Error(`invalid_session_migration:${validation.errors.join(",")}`);
+  const backupKey=window.GymOSProfileData.migrateSessionModelMigrationBackup(ownerId);
+  const affected=[
+    CANONICAL_ROUTINE_KEY,CANONICAL_DRAFTS_KEY,SELECTED_SESSION_ID_KEY,
+    SESSION_MODEL_MIGRATION_KEY,"gymos:routine","gymos:selectedSession",
+    draftKey("A"),draftKey("B"),draftKey("C"),
+    ROUTINE_ACTIVATION_HISTORY_KEY,ACTIVE_ROUTINE_ACTIVATION_ID_KEY,
+    "gymos:history",
+    "gymos:updatedAt","gymos:localUpdatedAt","gymos:syncPending","gymos:localRevision",
+    `${LOCAL_VAULT_PREFIX}${ownerId}`
+  ];
+  const expectedRaw=Object.fromEntries(affected.map(key=>[key,localStorage.getItem(key)]));
+  const rawState=Object.fromEntries(affected.map(key=>[key,localStorage.getItem(key)]));
+  const snapshot=api.captureRawSnapshot(rawState,affected);
+  const historyBefore=localStorage.getItem("gymos:history");
+  const functionalWrites=api.buildMigrationWrites(plan);
+  let writes=functionalWrites;
+  let createdBackupRaw=null;
+  if(localStorage.getItem(backupKey)===null){
+    createdBackupRaw=JSON.stringify({
+      format:"gymos-h2-pre-migration-v1",
+      migrationVersion:api.MIGRATION_VERSION,
+      snapshot
+    });
+    writes={
+      [backupKey]:createdBackupRaw,
+      ...functionalWrites
+    };
+    expectedRaw[backupKey]=null;
+  }
+  const transaction=api.executeRawTransaction({
+    ownerId,expectedRaw,writes,failAt:options.failAt,
+    adapter:{
+      getRaw:key=>localStorage.getItem(key),
+      setRaw:(key,value)=>localStorage.setItem(key,value),
+      remove:key=>localStorage.removeItem(key),
+      currentOwner:()=>localStorage.getItem(LOCAL_OWNER_KEY)||(!AUTH_REQUIRED?"local":null)
+    }
+  });
+  if(!transaction.ok){
+    if(createdBackupRaw!==null){
+      try{localStorage.setItem(backupKey,createdBackupRaw);}
+      catch(_){}
+    }
+    const error=new Error(transaction.message);
+    error.code=transaction.code;
+    error.details=transaction;
+    throw error;
+  }
+  if(localStorage.getItem("gymos:history")!==historyBefore){
+    Object.entries(transaction.before).forEach(([key,raw])=>restoreStorageValue(key,raw));
+    throw new Error("history_changed");
+  }
+  const storedPlan=api.createMigrationPlan({
+    ownerId,
+    legacyRoutine:readStoredJson("gymos:routine"),
+    canonicalRoutine:readStoredJson(CANONICAL_ROUTINE_KEY),
+    canonicalDrafts:readStoredJson(CANONICAL_DRAFTS_KEY),
+    legacyDraftsRaw:Object.fromEntries(["A","B","C"].map(key=>[
+      key,localStorage.getItem(draftKey(key))
+    ])),
+    legacySelection:localStorage.getItem("gymos:selectedSession"),
+    selectedSessionId:localStorage.getItem(SELECTED_SESSION_ID_KEY),
+    migrationMetadata:readStoredJson(SESSION_MODEL_MIGRATION_KEY),
+    migrationVersion:api.MIGRATION_VERSION
+  });
+  if(!storedPlan.ok||storedPlan.changed){
+    Object.entries(transaction.before).forEach(([key,raw])=>{
+      if(key!==backupKey) restoreStorageValue(key,raw);
+    });
+    throw new Error("session_migration_post_validation_failed");
+  }
+  try{
+    if(window.GymOSProfileData.normalizeOwnerId(
+      localStorage.getItem(LOCAL_OWNER_KEY)||(!AUTH_REQUIRED?"local":null)
+    )!==ownerId) throw new Error("owner_changed");
+    if(options.mark!==false) markLocalUpdated();
+    if(window.GymOSProfileData.normalizeOwnerId(
+      localStorage.getItem(LOCAL_OWNER_KEY)||(!AUTH_REQUIRED?"local":null)
+    )!==ownerId) throw new Error("owner_changed");
+    if(typeof state!=="undefined"){
+      state.selectedSession=plan.legacySelectedSession;
+      state.selectedSessionId=plan.selectedSessionId;
+    }
+  }catch(error){
+    Object.entries(transaction.before).forEach(([key,raw])=>{
+      if(key!==backupKey) restoreStorageValue(key,raw);
+    });
+    throw error;
+  }
+  return {migrated:true,ownerId,plan};
+}
 
 function exerciseDomainMigrationBackupKey(ownerId){
   if(!window.GymOSProfileData) throw new Error("El modelo de perfil no esta disponible.");
@@ -2679,8 +3186,12 @@ function clearCurrentUserData(){
 }
 
 function saveCurrentUserVault(userId){
-  if(!userId) return;
-  localStorage.setItem(`${LOCAL_VAULT_PREFIX}${userId}`,JSON.stringify(snapshotCurrentLocalData()));
+  if(!userId) return false;
+  const key=`${LOCAL_VAULT_PREFIX}${userId}`;
+  const raw=JSON.stringify(snapshotCurrentLocalData());
+  if(localStorage.getItem(key)===raw) return false;
+  localStorage.setItem(key,raw);
+  return true;
 }
 
 function loadUserVault(userId){
@@ -2710,19 +3221,72 @@ function resetExerciseLibraryOwnerState(){
   state.exerciseLibrarySearchRefocus=false;
   state.exerciseSubstitution=null;
 }
+function assertActiveLocalOwner(ownerId){
+  const expected=window.GymOSProfileData.normalizeOwnerId(ownerId);
+  const current=window.GymOSProfileData.normalizeOwnerId(
+    localStorage.getItem(LOCAL_OWNER_KEY)||(!AUTH_REQUIRED?"local":null)
+  );
+  if(current!==expected) throw new Error("owner_changed");
+  return expected;
+}
+function captureRoutineSessionStartupStorage(ownerId){
+  const keys=[...new Set([
+    ...localDataKeys(),
+    "gymos:updatedAt","gymos:localUpdatedAt","gymos:syncPending",
+    "gymos:localRevision",`${LOCAL_VAULT_PREFIX}${ownerId}`
+  ])];
+  return Object.fromEntries(keys.map(key=>[key,localStorage.getItem(key)]));
+}
+function restoreRoutineSessionStartupStorage(snapshot,ownerId){
+  const internalKeys=new Set(window.GymOSProfileData.migrationInternalKeys(ownerId));
+  Object.entries(snapshot).forEach(([key,raw])=>{
+    if(!internalKeys.has(key)) restoreStorageValue(key,raw);
+  });
+}
+function finishLocalUserActivation(userId){
+  const ownerId=assertActiveLocalOwner(userId);
+  const before=captureRoutineSessionStartupStorage(ownerId);
+  let migration;
+  try{
+    migration=ensureRoutineSessionMigration({ownerId,mark:false});
+    assertActiveLocalOwner(ownerId);
+    ensureProfileDataMigration({ownerId,mark:false});
+    assertActiveLocalOwner(ownerId);
+    ensureLegacyTrainingSetupMigration({ownerId,mark:false});
+    assertActiveLocalOwner(ownerId);
+    ensureExerciseDomainMigration({ownerId,mark:false});
+    assertActiveLocalOwner(ownerId);
+    ensureExerciseLibraryWorkflowMigration();
+    assertActiveLocalOwner(ownerId);
+    ensureRoutineProposalState(ownerId);
+    assertActiveLocalOwner(ownerId);
+    ensureRoutineActivationState(ownerId);
+    assertActiveLocalOwner(ownerId);
+    if(migration.migrated) markLocalUpdated({schedule:false});
+    assertActiveLocalOwner(ownerId);
+    saveCurrentUserVault(ownerId);
+    assertActiveLocalOwner(ownerId);
+    sessions=getRoutine();
+    const selected=localStorage.getItem("gymos:selectedSession")||nextSuggestedSession();
+    state.selectedSession=validSelectedRoutineSession(selected);
+    state.selectedSessionId=selectedSessionIdForLegacy(
+      state.selectedSession,getCanonicalRoutine()
+    );
+    if(migration.migrated) scheduleAutoSync();
+    return migration;
+  }catch(error){
+    clearTimeout(state.syncTimer);
+    state.syncTimer=null;
+    restoreRoutineSessionStartupStorage(before,ownerId);
+    throw error;
+  }
+}
 
 function activateLocalUser(userId){
   if(!userId) return;
   const previous=localStorage.getItem(LOCAL_OWNER_KEY);
   if(previous===userId){
-    ensureProfileDataMigration({ownerId:userId,mark:false});
-    ensureLegacyTrainingSetupMigration({ownerId:userId,mark:false});
-    ensureExerciseDomainMigration({ownerId:userId,mark:false});
-    ensureExerciseLibraryWorkflowMigration();
-    ensureRoutineProposalState(userId);
-    ensureRoutineActivationState(userId);
-    saveCurrentUserVault(userId);
-    return;
+    return finishLocalUserActivation(userId);
   }
 
   if(previous){
@@ -2738,14 +3302,7 @@ function activateLocalUser(userId){
   }
   localStorage.setItem(LOCAL_OWNER_KEY,userId);
   resetExerciseLibraryOwnerState();
-  ensureProfileDataMigration({ownerId:userId,mark:false});
-  ensureLegacyTrainingSetupMigration({ownerId:userId,mark:false});
-  ensureExerciseDomainMigration({ownerId:userId,mark:false});
-  ensureExerciseLibraryWorkflowMigration();
-  ensureRoutineProposalState(userId);
-  ensureRoutineActivationState(userId);
-  saveCurrentUserVault(userId);
-  state.selectedSession=localStorage.getItem("gymos:selectedSession")||nextSuggestedSession();
+  return finishLocalUserActivation(userId);
 }
 
 function deactivateLocalUser(){
@@ -2970,6 +3527,7 @@ function renderEmailVerificationGate(user=state.syncUser){
 let state = {
   screen: "home",
   selectedSession: localStorage.getItem("gymos:selectedSession") || nextSuggestedSession(),
+  selectedSessionId: localStorage.getItem(SELECTED_SESSION_ID_KEY),
   timerSeconds: 0,
   timerInterval: null,
   expandedHistoryId: null,
@@ -3328,11 +3886,11 @@ function getDeviceName(){
 function saveDeviceName(value){
   localStorage.setItem("gymos:deviceName",(value||"").trim()||defaultDeviceName());
 }
-function markLocalUpdated(){
+function markLocalUpdated({schedule=true}={}){
   if(state.applyingRemote) return;
   localStorage.setItem("gymos:updatedAt",new Date().toISOString());
   localStorage.setItem("gymos:syncPending","1");
-  if(isAppAuthenticated()){
+  if(schedule&&isAppAuthenticated()){
     state.syncStatus=navigator.onLine?"pending":"offline";
     scheduleAutoSync();
   }
@@ -3356,6 +3914,10 @@ function buildSyncPayload(){
     deviceName:getDeviceName(),
     history:getHistory(),
     routine:getRoutine(),
+    canonicalRoutine:getCanonicalRoutine(),
+    canonicalDrafts:getCanonicalDrafts(),
+    selectedSessionId:localStorage.getItem(SELECTED_SESSION_ID_KEY),
+    sessionModelMigration:readStoredJson(SESSION_MODEL_MIGRATION_KEY),
     body:getBodyHistory(),
     body_summary_metrics:getBodySummaryMetrics(),
     selectedSession:localStorage.getItem("gymos:selectedSession")||"A",
@@ -3393,7 +3955,79 @@ function applySyncPayload(payload){
   state.applyingRemote=true;
   try{
   if(Array.isArray(payload.history)) saveHistory(payload.history);
-  if(payload.routine){saveRoutine(payload.routine);sessions=getRoutine();}
+  let canonicalAccepted=false;
+  const canonicalProvided=Boolean(payload.canonicalRoutine);
+  if(payload.canonicalRoutine){
+    const ownerId=currentRoutineOwnerOrNull();
+    const validation=window.GymOSRoutineSessionModel.validateCanonicalRoutine(payload.canonicalRoutine);
+    const remoteMetadata=payload.sessionModelMigration;
+    const ownerMatches=ownerId&&remoteMetadata?.ownerId===ownerId;
+    const draftValidation=payload.canonicalDrafts
+      ?routineSessionMigrationApi().validateDraftContainer(
+        payload.canonicalDrafts,{ownerId,canonicalRoutine:payload.canonicalRoutine}
+      )
+      :{valid:false};
+    const metadataMatches=remoteMetadata?.completed===true&&
+      remoteMetadata?.validated===true&&
+      remoteMetadata?.routineId===payload.canonicalRoutine.routineId&&
+      window.GymOSRoutineProposals.stableStringify(remoteMetadata?.legacySessionMap||{})===
+        window.GymOSRoutineProposals.stableStringify(
+          routineSessionMigrationApi().sessionMap(payload.canonicalRoutine)
+        );
+    const remoteShadow=validation.valid&&payload.canonicalRoutine.sessions.length<=3
+      ?window.GymOSRoutineSessionModel.canonicalToLegacyRuntimeView(payload.canonicalRoutine)
+      :null;
+    const remoteShadowMatches=!payload.routine||(
+      remoteShadow&&routineSessionMigrationApi().legacyRoutineEquivalent(
+        payload.routine,remoteShadow
+      )
+    );
+    if(
+      validation.valid&&draftValidation.valid&&ownerMatches&&metadataMatches&&remoteShadowMatches&&
+      payload.canonicalRoutine.sessions.length<=3
+    ){
+      const localCanonical=getCanonicalRoutine();
+      const localShadowMatches=!localCanonical||routineSessionMigrationApi().legacyRoutineEquivalent(
+        readStoredJson("gymos:routine")||{},window.GymOSRoutineSessionModel.canonicalToLegacyRuntimeView(localCanonical)
+      );
+      const syncDecision=localShadowMatches
+        ?routineSessionMigrationApi().canonicalSyncDecision(
+          localCanonical,payload.canonicalRoutine
+        )
+        :{accept:false,code:"local_legacy_shadow_conflict"};
+      if(!syncDecision.accept){
+        console.warn("Canonical routine sync conflict",{code:syncDecision.code});
+      }else{
+        saveCanonicalRoutine(payload.canonicalRoutine,{mark:false,writeLegacyShadow:true});
+        localStorage.setItem(CANONICAL_DRAFTS_KEY,JSON.stringify(payload.canonicalDrafts));
+        writeLegacyDraftShadows(payload.canonicalRoutine,payload.canonicalDrafts);
+        localStorage.setItem(SESSION_MODEL_MIGRATION_KEY,JSON.stringify(remoteMetadata));
+        const remoteSelected=routineSessionMigrationApi().selectedSessionId(
+          payload.canonicalRoutine,payload.selectedSession,payload.selectedSessionId
+        );
+        if(remoteSelected){
+          localStorage.setItem(SELECTED_SESSION_ID_KEY,remoteSelected);
+          const remoteLegacy=routineSessionMigrationApi().legacySelection(
+            payload.canonicalRoutine,remoteSelected
+          );
+          if(remoteLegacy) localStorage.setItem("gymos:selectedSession",remoteLegacy);
+        }
+        canonicalAccepted=true;
+      }
+    }else{
+      console.warn("Canonical routine sync rejected",{
+        code:payload.canonicalRoutine.sessions?.length>3
+          ?"runtime_not_ready"
+          :validation.valid&&remoteShadowMatches
+            ?"invalid_remote_session_state"
+            :validation.valid?"remote_legacy_shadow_conflict":"invalid_remote_canonical"
+      });
+    }
+  }
+  if(payload.routine&&!canonicalAccepted&&!canonicalProvided){
+    saveRoutine(payload.routine,{mark:false});sessions=getRoutine();
+  }
+  else if(canonicalAccepted) sessions=getRoutine();
   if(Array.isArray(payload.body)) saveBodyHistory(payload.body);
   if(Array.isArray(payload.body_summary_metrics)) saveBodySummaryMetrics(payload.body_summary_metrics,{markUpdated:false});
   if(Array.isArray(payload.exerciseLibrary)&&payload.exerciseLibrary.length){
@@ -3424,16 +4058,16 @@ function applySyncPayload(payload){
       hidden:Boolean(payload.quick_actions_hidden)
     },{markUpdated:false});
   }
-  if(["A","B","C"].includes(payload.selectedSession)){
+  if(!canonicalAccepted&&["A","B","C"].includes(payload.selectedSession)){
     const selected=validSelectedRoutineSession(payload.selectedSession);
-    localStorage.setItem("gymos:selectedSession",selected);
-    state.selectedSession=selected;
+    persistSelectedRoutineSession(selected);
   }
   if([60,90,120,180].includes(Number(payload.restSeconds))) saveRestSeconds(Number(payload.restSeconds));
   if(Number(payload.weeklyGoal)>=1&&Number(payload.weeklyGoal)<=7) saveWeeklyGoal(Number(payload.weeklyGoal));
   if(Array.isArray(payload.blocks)) saveTrainingBlocks(payload.blocks);
   if(payload.activeBlockId) localStorage.setItem("gymos:activeBlockId",payload.activeBlockId);
     const importedProfileData=window.GymOSProfileData?.importSyncData?.(payload,{mark:false});
+    ensureRoutineSessionMigration({ownerId:currentRoutineOwnerOrNull(),mark:false});
     if(!importedProfileData) ensureProfileDataMigration({mark:false});
     ensureExerciseDomainMigration({mark:false,force:true});
     localStorage.setItem("gymos:updatedAt",payload.updatedAt||new Date().toISOString());
@@ -3621,11 +4255,19 @@ function resolveAuthenticatedAppState(session,pendingUser=null){
   return "signed-out";
 }
 function hasLocalUserData(){
+  let storedRoutine=null,storedCanonical=null;
+  try{storedRoutine=JSON.parse(localStorage.getItem("gymos:routine")||"null");}
+  catch(_){}
+  try{storedCanonical=JSON.parse(localStorage.getItem(CANONICAL_ROUTINE_KEY)||"null");}
+  catch(_){}
   return getHistory().length>0||
     getBodyHistory().length>0||
     getNutritionEntries().length>0||
     getHealthEntries().length>0||
-    Object.values(getRoutine()||{}).some(items=>Array.isArray(items)&&items.length>0);
+    Object.values(storedRoutine||{}).some(items=>Array.isArray(items)&&items.length>0)||
+    Boolean(storedCanonical?.sessions?.some(session=>
+      Array.isArray(session?.exercises)&&session.exercises.length>0
+    ));
 }
 function localMigrationStatus(){
   return localStorage.getItem("gymos:accountMigrationStatus")||"pending";
@@ -4121,8 +4763,101 @@ function getDraft(s){
   });
   return draft;
 }
-function saveDraft(d){ localStorage.setItem(draftKey(d.session), JSON.stringify(d)); }
-function clearDraft(s){ localStorage.removeItem(draftKey(s)); }
+function saveDraft(d){
+  const legacySession=d?.session;
+  const legacyRaw=JSON.stringify(d);
+  const canonical=getCanonicalRoutine();
+  const ownerId=currentRoutineOwnerOrNull();
+  if(!canonical||!ownerId){
+    localStorage.setItem(draftKey(legacySession),legacyRaw);
+    return;
+  }
+  const session=canonical.sessions.find(item=>item.legacySessionKey===legacySession);
+  if(!session) throw new Error("draft_session_not_found");
+  const previousLegacy=localStorage.getItem(draftKey(legacySession));
+  const previousCanonical=localStorage.getItem(CANONICAL_DRAFTS_KEY);
+  const previousUpdatedAt=localStorage.getItem("gymos:updatedAt");
+  const previousSyncPending=localStorage.getItem("gymos:syncPending");
+  const previousLocalRevision=localStorage.getItem("gymos:localRevision");
+  try{
+    const existing=getCanonicalDrafts()||
+      routineSessionMigrationApi().emptyDraftContainer(canonical.routineId);
+    const existingDraft=existing.draftsBySessionId?.[session.sessionId];
+    const migrated=routineSessionMigrationApi().migrateLegacyDrafts({
+      ownerId,canonicalRoutine:canonical,
+      legacyDraftsRaw:{[legacySession]:legacyRaw},
+      draftIds:{[legacySession]:existingDraft?.draftId||secureSessionModelId("draft")},
+      timestamp:new Date().toISOString()
+    });
+    const next=JSON.parse(JSON.stringify(existing));
+    next.schemaVersion=migrated.schemaVersion;
+    next.routineId=canonical.routineId;
+    next.draftsBySessionId=next.draftsBySessionId||{};
+    next.orphanedLegacyDrafts=next.orphanedLegacyDrafts||{};
+    next.draftsBySessionId[session.sessionId]=migrated.draftsBySessionId[session.sessionId];
+    delete next.orphanedLegacyDrafts[legacySession];
+    const validation=routineSessionMigrationApi().validateDraftContainer(next,{
+      ownerId,canonicalRoutine:canonical
+    });
+    if(!validation.valid) throw new Error(`invalid_canonical_draft:${validation.errors.join(",")}`);
+    if(currentRoutineOwnerOrNull()!==ownerId) throw new Error("owner_changed");
+    localStorage.setItem(draftKey(legacySession),legacyRaw);
+    localStorage.setItem(CANONICAL_DRAFTS_KEY,JSON.stringify(next));
+    if(localStorage.getItem(draftKey(legacySession))!==legacyRaw){
+      throw new Error("legacy_draft_write_validation_failed");
+    }
+    const storedContainer=getCanonicalDrafts();
+    const storedValidation=routineSessionMigrationApi().validateDraftContainer(storedContainer,{
+      ownerId,canonicalRoutine:canonical
+    });
+    if(!storedValidation.valid||
+      storedContainer.draftsBySessionId?.[session.sessionId]?.legacyRaw!==legacyRaw){
+      throw new Error("canonical_draft_write_validation_failed");
+    }
+    if(currentRoutineOwnerOrNull()!==ownerId) throw new Error("owner_changed");
+    markLocalUpdated();
+  }catch(error){
+    restoreStorageValue(draftKey(legacySession),previousLegacy);
+    restoreStorageValue(CANONICAL_DRAFTS_KEY,previousCanonical);
+    restoreStorageValue("gymos:updatedAt",previousUpdatedAt);
+    restoreStorageValue("gymos:syncPending",previousSyncPending);
+    restoreStorageValue("gymos:localRevision",previousLocalRevision);
+    throw error;
+  }
+}
+function clearDraft(s,{mark=true}={}){
+  const previousLegacy=localStorage.getItem(draftKey(s));
+  const previousCanonical=localStorage.getItem(CANONICAL_DRAFTS_KEY);
+  const previousUpdatedAt=localStorage.getItem("gymos:updatedAt");
+  const previousSyncPending=localStorage.getItem("gymos:syncPending");
+  const previousLocalRevision=localStorage.getItem("gymos:localRevision");
+  const ownerId=currentRoutineOwnerOrNull();
+  try{
+    if(ownerId) assertActiveLocalOwner(ownerId);
+    localStorage.removeItem(draftKey(s));
+    const canonical=getCanonicalRoutine(),container=getCanonicalDrafts();
+    if(canonical&&container){
+      const session=canonical.sessions.find(item=>item.legacySessionKey===s);
+      const next=JSON.parse(JSON.stringify(container));
+      if(session) delete next.draftsBySessionId?.[session.sessionId];
+      delete next.orphanedLegacyDrafts?.[s];
+      localStorage.setItem(CANONICAL_DRAFTS_KEY,JSON.stringify(next));
+      const validation=routineSessionMigrationApi().validateDraftContainer(next,{
+        ownerId,canonicalRoutine:canonical
+      });
+      if(!validation.valid) throw new Error(`invalid_canonical_draft:${validation.errors.join(",")}`);
+    }
+    if(ownerId) assertActiveLocalOwner(ownerId);
+    if(mark) markLocalUpdated();
+  }catch(error){
+    restoreStorageValue(draftKey(s),previousLegacy);
+    restoreStorageValue(CANONICAL_DRAFTS_KEY,previousCanonical);
+    restoreStorageValue("gymos:updatedAt",previousUpdatedAt);
+    restoreStorageValue("gymos:syncPending",previousSyncPending);
+    restoreStorageValue("gymos:localRevision",previousLocalRevision);
+    throw error;
+  }
+}
 function lastWorkoutForSession(s){ return getHistory().find(w=>w.session===s); }
 function parseRepRange(target){
   const nums=(target.match(/\d+/g)||[]).map(Number);
@@ -4464,8 +5199,7 @@ function navigateToScreen(screen){
       toast("No hay una sesión disponible para entrenar");
       return;
     }
-    state.selectedSession=selected;
-    localStorage.setItem("gymos:selectedSession",selected);
+    persistSelectedRoutineSession(selected);
   }
 
   state.screen=screen;
@@ -5571,8 +6305,7 @@ function changeQuickActionSession(){
   const available=availableRoutineSessions();
   if(!available.length) return;
   state.selectedSession=available[(available.indexOf(state.selectedSession)+1)%available.length];
-  localStorage.setItem("gymos:selectedSession",state.selectedSession);
-  markLocalUpdated();
+  persistSelectedRoutineSession(state.selectedSession,{mark:true});
   renderHome();
   toast(`Sesión ${state.selectedSession} seleccionada`);
 }
@@ -5975,7 +6708,7 @@ function renderHome(){
     const availableSessions=availableRoutineSessions();
     if(!availableSessions.length) return;
     state.selectedSession=availableSessions[(availableSessions.indexOf(state.selectedSession)+1)%availableSessions.length];
-    localStorage.setItem("gymos:selectedSession",state.selectedSession);
+    persistSelectedRoutineSession(state.selectedSession);
     renderHome();
   };
   document.getElementById("homePrimaryAction").onclick=()=>{
@@ -6348,7 +7081,7 @@ function finishWorkout(){
   );
   const workout={id:Date.now(),date:new Date().toISOString(),session:s,
     durationMs:Date.now()-(d.startedAt||Date.now()),completedSeries:completed,exercises:completedExercises};
-  const h=getHistory();h.unshift(workout);saveHistory(h);clearDraft(s);
+  const h=getHistory();h.unshift(workout);saveHistory(h);clearDraft(s,{mark:false});
   const workoutAnalysis=window.GymOSWorkoutAnalysis?.analyzeAndSave?.(workout,{force:true});
   if(workoutAnalysis) window.GymOSWorkoutAnalysis?.maybeGenerateAiNarrative?.(workoutAnalysis);
   const newRecords=recordsForWorkout(workout);
@@ -6356,7 +7089,7 @@ function finishWorkout(){
   state.selectedSession=availableSessions.length
     ?availableSessions[(availableSessions.indexOf(s)+1)%availableSessions.length]
     :"A";
-  localStorage.setItem("gymos:selectedSession",state.selectedSession);
+  persistSelectedRoutineSession(state.selectedSession);
   clearInterval(state.timerInterval);state.timerSeconds=0;
   window.GymOSRecovery?.createPendingCheckin?.(workout);
   state.completedWorkoutSummary=workout;
@@ -11840,7 +12573,11 @@ function exportData(){
       C:JSON.parse(localStorage.getItem(draftKey("C"))||"null")
     },
     selectedSession:state.selectedSession,
+    selectedSessionId:localStorage.getItem(SELECTED_SESSION_ID_KEY),
     routine:getRoutine(),
+    canonicalRoutine:getCanonicalRoutine(),
+    canonicalDrafts:getCanonicalDrafts(),
+    sessionModelMigration:readStoredJson(SESSION_MODEL_MIGRATION_KEY),
     body:getBodyHistory(),
     restSeconds:getRestSeconds(),
     weeklyGoal:getWeeklyGoal(),
@@ -11878,12 +12615,33 @@ importFile.onchange=async()=>{
     if(data.activeBlockId) localStorage.setItem("gymos:activeBlockId",data.activeBlockId);
     if(Array.isArray(data.routineProposals)) importRoutineProposalSyncData(data,{mark:false});
     if(Array.isArray(data.routineActivationHistory)) importRoutineActivationSyncData(data,{mark:false});
-    if(data.routine){saveRoutine(data.routine);sessions=getRoutine();}
+    if(data.canonicalRoutine&&data.sessionModelMigration){
+      const ownerId=currentRoutineOwnerOrNull();
+      const validation=window.GymOSRoutineSessionModel.validateCanonicalRoutine(data.canonicalRoutine);
+      if(
+        validation.valid&&data.canonicalRoutine.sessions.length<=3&&
+        data.sessionModelMigration.ownerId===ownerId
+      ){
+        saveCanonicalRoutine(data.canonicalRoutine,{mark:false});
+        if(data.canonicalDrafts){
+          const draftValidation=routineSessionMigrationApi().validateDraftContainer(
+            data.canonicalDrafts,{ownerId,canonicalRoutine:data.canonicalRoutine}
+          );
+          if(draftValidation.valid){
+            localStorage.setItem(CANONICAL_DRAFTS_KEY,JSON.stringify(data.canonicalDrafts));
+            writeLegacyDraftShadows(data.canonicalRoutine,data.canonicalDrafts);
+          }
+        }
+        localStorage.setItem(SESSION_MODEL_MIGRATION_KEY,JSON.stringify(data.sessionModelMigration));
+        if(data.selectedSessionId) localStorage.setItem(SELECTED_SESSION_ID_KEY,data.selectedSessionId);
+      }
+    }else if(data.routine){saveRoutine(data.routine,{mark:false});}
+    sessions=getRoutine();
     ["A","B","C"].forEach(s=>{
       if(data.drafts&&data.drafts[s])localStorage.setItem(draftKey(s),JSON.stringify(data.drafts[s]));
     });
     state.selectedSession=validSelectedRoutineSession(data.selectedSession||nextSuggestedSession());
-    localStorage.setItem("gymos:selectedSession",state.selectedSession);
+    persistSelectedRoutineSession(state.selectedSession);
     const importedProfileData=window.GymOSProfileData?.importSyncData?.(data,{mark:false});
     if(!importedProfileData) ensureProfileDataMigration({mark:false});
     ensureExerciseDomainMigration({mark:false,force:true});

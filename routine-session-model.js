@@ -268,7 +268,7 @@
     };
     return stableHash(structural);
   }
-  function legacyEntries(legacyRoutine){
+  function legacyEntries(legacyRoutine,sessionMetadata={}){
     if(!isRecord(legacyRoutine)){
       throw new RoutineSessionModelError("invalid_legacy_routine","La rutina legacy debe ser un objeto.");
     }
@@ -278,7 +278,10 @@
       if(!Array.isArray(exercises)){
         throw new RoutineSessionModelError("invalid_legacy_session",`La sesión ${key} debe ser un array.`);
       }
-      return exercises.length?{key,order:index+1,exercises}:null;
+      const metadata=isRecord(sessionMetadata?.[key])?sessionMetadata[key]:null;
+      return exercises.length||metadata
+        ?{key,order:index+1,exercises,metadata}
+        :null;
     }).filter(Boolean);
   }
   function createLegacyMigrationPlan({
@@ -308,7 +311,14 @@
     if(!Number.isInteger(revision)||revision<1){
       throw new RoutineSessionModelError("invalid_revision","revision debe ser un entero positivo.");
     }
-    const sessions=legacyEntries(legacyRoutine).map(entry=>{
+    const embeddedSessionMetadata=isRecord(legacyRoutine.sessionMetadata)
+      ?legacyRoutine.sessionMetadata
+      :{};
+    const effectiveSessionMetadata={
+      ...cloneSerializable(embeddedSessionMetadata),
+      ...(isRecord(sessionMetadata)?cloneSerializable(sessionMetadata):{})
+    };
+    const sessions=legacyEntries(legacyRoutine,effectiveSessionMetadata).map(entry=>{
       const sessionId=sessionIds[entry.key];
       if(!validText(sessionId,{required:true,max:LIMITS.id})){
         throw new RoutineSessionModelError(
@@ -317,7 +327,7 @@
           [issue("missing_legacy_session_id",`$.sessionIds.${entry.key}`,`Falta el ID de ${entry.key}.`)]
         );
       }
-      const metadata=isRecord(sessionMetadata[entry.key])?cloneSerializable(sessionMetadata[entry.key]):{};
+      const metadata=isRecord(entry.metadata)?cloneSerializable(entry.metadata):{};
       delete metadata.sessionId;
       delete metadata.order;
       delete metadata.exercises;
@@ -334,7 +344,13 @@
         legacySessionKey:entry.key
       };
     });
-    const safeRoutineMetadata=isRecord(routineMetadata)?cloneSerializable(routineMetadata):{};
+    const legacyRoutineMetadata=Object.fromEntries(
+      Object.entries(legacyRoutine).filter(([key])=>!["A","B","C"].includes(key))
+    );
+    const safeRoutineMetadata={
+      ...cloneSerializable(legacyRoutineMetadata),
+      ...(isRecord(routineMetadata)?cloneSerializable(routineMetadata):{})
+    };
     delete safeRoutineMetadata.schemaVersion;
     delete safeRoutineMetadata.routineId;
     delete safeRoutineMetadata.revision;
@@ -369,9 +385,24 @@
         "El runtime legacy no admite más de tres sesiones."
       );
     }
-    const view={};
-    normalized.sessions.forEach((session,index)=>{
-      view[deriveSessionLabel(index+1)]=cloneSerializable(session.exercises);
+    const view=Object.fromEntries(
+      Object.entries(normalized).filter(([key])=>
+        !["schemaVersion","routineId","revision","sessions"].includes(key)
+      ).map(([key,value])=>[key,cloneSerializable(value)])
+    );
+    const usedKeys=new Set();
+    normalized.sessions.forEach(session=>{
+      const key=session.legacySessionKey||(
+        session.order<=3?deriveSessionLabel(session.order):null
+      );
+      if(!["A","B","C"].includes(key)||usedKeys.has(key)){
+        throw new RoutineSessionModelError(
+          "legacy_runtime_incompatible",
+          "El runtime legacy solo admite los órdenes A, B y C."
+        );
+      }
+      usedKeys.add(key);
+      view[key]=cloneSerializable(session.exercises);
     });
     return view;
   }

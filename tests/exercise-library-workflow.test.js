@@ -6,7 +6,7 @@ const vm=require("node:vm");
 
 const root=path.join(__dirname,"..");
 const sources=[
-  "exercise-domain.js","profile-data.js","routine-generator.js",
+  "exercise-domain.js","profile-data.js","routine-session-model.js","routine-generator.js",
   "routine-proposals.js","routine-activation.js","exercise-library-workflow.js"
 ].map(name=>[name,fs.readFileSync(path.join(root,name),"utf8")]);
 const appSource=fs.readFileSync(path.join(root,"app.js"),"utf8");
@@ -454,14 +454,14 @@ test("módulo puro no accede a DOM, storage, red, timers ni librerías externas"
     assert.equal(source.includes(forbidden),false,forbidden);
   }
 });
-test("integración declara script una vez, orden correcto y caché phase-h1",()=>{
+test("integración declara script una vez, orden correcto y caché phase-h2",()=>{
   const io=indexSource.indexOf('src="routine-io.js"');
   const libraryIndex=indexSource.indexOf('src="exercise-library-workflow.js"');
   const workflow=indexSource.indexOf('src="routine-workflow-ui.js"');
   assert.ok(io>=0&&libraryIndex>io&&workflow>libraryIndex);
   assert.equal((indexSource.match(/exercise-library-workflow\.js/g)||[]).length,1);
   assert.equal((workerSource.match(/exercise-library-workflow\.js/g)||[]).length,1);
-  assert.match(workerSource,/phase-h1/);
+  assert.match(workerSource,/phase-h2/);
 });
 test("interfaz no usa onclick inline ni muestra JSON técnico en biblioteca",()=>{
   const start=appSource.lastIndexOf("function renderExerciseLibrary()");
@@ -648,6 +648,7 @@ test("propuesta compatible llega a createActivationPlan",()=>{
   const record=ctx.GymOSRoutineProposals.createProposalRecord({ownerId:OWNER_A,proposal,currentRoutine:current,timestamp:T2});
   const result=ctx.GymOSRoutineActivation.createActivationPlan({
     ownerId:OWNER_A,proposalRecord:record,currentRoutine:current,selectedSession:"A",
+    targetRoutineId:"routine-target-fixed",
     drafts:{A:null,B:null,C:null},rawBaseline:{routine:JSON.stringify(current),selectedSession:"A",drafts:{A:null,B:null,C:null}},
     confirmed:true,timestamp:T2
   });

@@ -6,6 +6,7 @@ const vm=require("node:vm");
 
 const root=path.join(__dirname,"..");
 const moduleSource=fs.readFileSync(path.join(root,"routine-io.js"),"utf8");
+const sessionModelSource=fs.readFileSync(path.join(root,"routine-session-model.js"),"utf8");
 const proposalsSource=fs.readFileSync(path.join(root,"routine-proposals.js"),"utf8");
 const activationSource=fs.readFileSync(path.join(root,"routine-activation.js"),"utf8");
 const workflowSource=fs.readFileSync(path.join(root,"routine-workflow-ui.js"),"utf8");
@@ -462,7 +463,7 @@ test("integración de script, input y service worker",()=>{
   assert.ok(indexSource.indexOf("routine-activation.js")<indexSource.indexOf("routine-io.js"));
   assert.ok(indexSource.indexOf("routine-io.js")<indexSource.indexOf("routine-workflow-ui.js"));
   assert.match(indexSource,/id="routineFile"[^>]+\.csv/);
-  assert.match(workerSource,/phase-h1/);
+  assert.match(workerSource,/phase-h2/);
   assert.match(workerSource,/routine-io\.js/);
   assert.match(workerSource,/fetch\(e\.request\)/);
   assert.equal((indexSource.match(/routine-io\.js/g)||[]).length,1);
@@ -513,6 +514,7 @@ test("la propuesta importada encaja en persistencia C y queda pendiente",()=>{
   context.window=context;
   context.globalThis=context;
   vm.createContext(context);
+  vm.runInContext(sessionModelSource,context,{filename:"routine-session-model.js"});
   vm.runInContext(proposalsSource,context,{filename:"routine-proposals.js"});
   vm.runInContext(moduleSource,context,{filename:"routine-io.js"});
   const api=context.GymOSRoutineIO;
@@ -555,6 +557,7 @@ test("contrato completo llega desde archivo hasta createActivationPlan",()=>{
   context.window=context;
   context.globalThis=context;
   vm.createContext(context);
+  vm.runInContext(sessionModelSource,context,{filename:"routine-session-model.js"});
   vm.runInContext(proposalsSource,context,{filename:"routine-proposals.js"});
   vm.runInContext(activationSource,context,{filename:"routine-activation.js"});
   vm.runInContext(workflowSource,context,{filename:"routine-workflow-ui.js"});
@@ -598,6 +601,7 @@ test("contrato completo llega desde archivo hasta createActivationPlan",()=>{
   );
   const activation=plain(context.GymOSRoutineActivation.createActivationPlan({
     ownerId:OWNER_A,proposalRecord:recovered,currentRoutine,
+    targetRoutineId:"routine-target-fixed",
     selectedSession:"A",drafts:{A:null,B:null,C:null},
     rawBaseline:{},confirmed:true,timestamp:"2026-07-28T11:00:00.000Z"
   }));
@@ -631,7 +635,7 @@ test("contrato completo llega desde archivo hasta createActivationPlan",()=>{
     confirmed:true,timestamp:"2026-07-28T11:00:00.000Z"
   }));
   assert.equal(blocked.ok,false);
-  assert.equal(blocked.code,"activation_incompatible");
+  assert.equal(blocked.code,"proposal_requires_review");
   assert.equal(JSON.stringify(currentRoutine),beforeRoutine);
   assert.equal(JSON.stringify(history),beforeHistory);
 });

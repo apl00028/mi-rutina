@@ -414,10 +414,10 @@
     if(writeError&&!["42P01","PGRST205"].includes(writeError.code)) throw writeError;
   }
 
-  window.GymOSWorkoutAnalysis={
+  window.GymOSWorkoutAnalysis=Object.freeze({
     STORAGE_KEY,STATUS_LABELS,ACTION_LABELS,
     analyzeWorkout,analyzeAndSave,ensureAnalyses,getAnalyses,getForWorkout,
     saveAnalyses,mergeAnalyses,deleteForWorkout,minimalAiPayload,
     requestAiNarrative,maybeGenerateAiNarrative,syncWithSupabase
-  };
+  });
 })();

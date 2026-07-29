@@ -24,10 +24,14 @@ function applyAppearancePreference(value=getAppearancePreference()){
   document.documentElement.dataset.theme=resolved;
   document.documentElement.classList.remove("theme-light","theme-dark","theme-system");
   document.documentElement.classList.add(`theme-${next}`);
-  localStorage.setItem(GYMOS_APPEARANCE_KEY,next);
+  if(localStorage.getItem(GYMOS_APPEARANCE_KEY)!==next){
+    localStorage.setItem(GYMOS_APPEARANCE_KEY,next);
+  }
   try{
     const current=JSON.parse(localStorage.getItem("gymos:appPreferences")||"{}");
-    localStorage.setItem("gymos:appPreferences",JSON.stringify({...current,theme:next}));
+    if(current.theme!==next){
+      localStorage.setItem("gymos:appPreferences",JSON.stringify({...current,theme:next}));
+    }
   }catch(_){}
   updateAppearanceButton(next);
 }
@@ -59,10 +63,14 @@ function applyFontScalePreference(value=getFontScalePreference()){
   const next=GYMOS_FONT_SCALES.includes(value)?value:"font-scale-md";
   document.documentElement.classList.add(next);
   document.documentElement.dataset.fontScale=scaleMap[next];
-  localStorage.setItem(GYMOS_FONT_SCALE_KEY,next);
+  if(localStorage.getItem(GYMOS_FONT_SCALE_KEY)!==next){
+    localStorage.setItem(GYMOS_FONT_SCALE_KEY,next);
+  }
   try{
     const current=JSON.parse(localStorage.getItem("gymos:appPreferences")||"{}");
-    localStorage.setItem("gymos:appPreferences",JSON.stringify({...current,fontScale:scaleMap[next]}));
+    if(current.fontScale!==scaleMap[next]){
+      localStorage.setItem("gymos:appPreferences",JSON.stringify({...current,fontScale:scaleMap[next]}));
+    }
   }catch(_){}
   updateFontScaleButton(next);
 }
@@ -546,6 +554,7 @@ function estimatedOneRepMax(weight,reps){
   const w=Number(weight)||0;
   const r=Number(reps)||0;
   if(w<=0||r<=0) return 0;
+  // Una repetición completada ya es una medición directa del 1RM.
   if(r===1) return w;
   return w*(1+r/30);
 }
@@ -3350,6 +3359,8 @@ function resetRoutineSessionOwnerState(){
   state.routineFileChooser=null;
   state.routineFileBusy=null;
   state.coachSessionId=null;
+  state.workoutDraftMessage=null;
+  state.workoutDraftObservedIds=new Set();
 }
 function assertActiveLocalOwner(ownerId){
   const expected=window.GymOSProfileData.normalizeOwnerId(ownerId);
@@ -3740,6 +3751,8 @@ let state = {
   recoveryCheckinId: null,
   completedWorkoutSummary: null,
   workoutAnalysisId: null,
+  workoutDraftMessage: null,
+  workoutDraftObservedIds: new Set(),
   aiSettingsMessage: null,
   routineWorkflow: null,
   routineImport: null,
@@ -4984,13 +4997,31 @@ function getDraft(sessionId){
   const canonical=getCanonicalRoutine();
   const resolved=resolveRuntimeSessionId(sessionId);
   let draft=null;
+  state.workoutDraftMessage=null;
   if(canonical){
     draft=routineSessionRuntimeApi().getDraft(getCanonicalDrafts(),{
       ownerId:currentRoutineOwnerOrNull(),routine:canonical,sessionId:resolved
     });
-    if(draft&&routineSessionMigrationApi().draftStatus(draft,{
-      ownerId:currentRoutineOwnerOrNull(),canonicalRoutine:canonical
-    }).status!=="current") draft=null;
+    if(draft){
+      const persistedDraftId=draft.draftId;
+      const shouldAnnounce=!state.workoutDraftObservedIds.has(persistedDraftId);
+      const status=routineSessionMigrationApi().draftStatus(draft,{
+        ownerId:currentRoutineOwnerOrNull(),canonicalRoutine:canonical
+      });
+      if(status.status!=="current"){
+        if(shouldAnnounce) state.workoutDraftMessage={
+            type:"warning",
+            text:"Este borrador pertenece a una versión anterior de la sesión. Se conserva para revisión y no se ha mezclado con la rutina actual."
+          };
+        draft=null;
+      }else if(shouldAnnounce){
+        state.workoutDraftMessage={
+          type:"info",
+          text:"Se ha recuperado el progreso guardado de esta sesión."
+        };
+      }
+      if(shouldAnnounce&&persistedDraftId) state.workoutDraftObservedIds.add(persistedDraftId);
+    }
   }else{
     draft=JSON.parse(localStorage.getItem(draftKey(resolved))||"null");
   }
@@ -5060,6 +5091,7 @@ function saveDraft(d){
     }
     if(currentRoutineOwnerOrNull()!==ownerId) throw new Error("owner_changed");
     markLocalUpdated();
+    state.workoutDraftMessage=null;
   }catch(error){
     if(legacySession) restoreStorageValue(draftKey(legacySession),previousLegacy);
     restoreStorageValue(CANONICAL_DRAFTS_KEY,previousCanonical);
@@ -5269,10 +5301,6 @@ function totalCurrentWeekVolume(){
 }
 function compactNumber(value){
   return new Intl.NumberFormat("es-ES",{maximumFractionDigits:0}).format(value);
-}
-function estimatedOneRepMax(weight,reps){
-  if(!weight||!reps) return 0;
-  return weight*(1+reps/30);
 }
 function allExercisePerformances(name,excludeWorkoutId=null){
   const performances=[];
@@ -5495,6 +5523,9 @@ function bindNav(){
 }
 function toast(msg){
   const el=document.createElement("div"); el.className="toast"; el.textContent=msg;
+  el.setAttribute("role","status");
+  el.setAttribute("aria-live","polite");
+  el.setAttribute("aria-atomic","true");
   document.body.appendChild(el); setTimeout(()=>el.remove(),1800);
 }
 
@@ -7174,6 +7205,8 @@ function renderWorkout(){
   const d=getDraft(s),last=lastWorkoutForSession(s);
   const done=d.exercises.reduce((n,e)=>n+e.series.filter(x=>x.done).length,0);
   const total=d.exercises.reduce((sum,e)=>sum+e.series.length,0);
+  const progress=total?Math.min(100,(done/total)*100):0;
+  const emptySession=d.exercises.length===0;
   app.innerHTML=`<div class="app-shell">
     <main class="screen">
       <div class="workout-header">
@@ -7181,8 +7214,10 @@ function renderWorkout(){
           <div><div class="subtle">Entrenamiento activo</div><h1>${esc(sessionName)} · ${done}/${total} series</h1></div>
           <button id="timerChip" class="timer-chip">${state.timerSeconds?formatTimer(state.timerSeconds):"Descanso"}</button>
         </div>
-        <div class="progress"><span style="width:${(done/total)*100}%"></span></div>
+        <div class="progress"><span style="width:${progress}%"></span></div>
       </div>
+      ${state.workoutDraftMessage?`<p class="workout-draft-message ${esc(state.workoutDraftMessage.type)}" role="${state.workoutDraftMessage.type==="warning"?"alert":"status"}">${esc(state.workoutDraftMessage.text)}</p>`:""}
+      ${emptySession?`<section class="workout-empty-state" role="status"><h2>Esta sesión no tiene ejercicios</h2><p>Vuelve a Mi rutina para añadir ejercicios antes de empezar.</p><button type="button" id="openRoutineFromEmptyWorkout" class="secondary">Ir a Mi rutina</button></section>`:""}
       ${d.copiedFromLastSession ? `
         <div class="prefill-banner">
           <div><strong>Pesos preparados</strong><span>Se han copiado de tu último ${esc(sessionName.toLocaleLowerCase("es"))}.</span></div>
@@ -7261,7 +7296,7 @@ function renderWorkout(){
       <div class="timer-main"><div><div class="subtle">Descanso</div><div id="timerValue" class="timer-value">${formatTimer(state.timerSeconds)}</div></div><button id="closeTimer" class="secondary">Cerrar</button></div>
       <div class="timer-actions"><button class="secondary" data-time="60">60 s</button><button class="secondary" data-time="90">90 s</button><button class="secondary" data-time="120">120 s</button><button class="secondary" data-time="180">180 s</button></div>
     </div>
-    <footer class="sticky-actions"><div class="sticky-actions-inner"><button id="backHome" class="secondary">Salir</button><button id="finishWorkout" class="primary">Finalizar</button></div></footer>
+    <footer class="sticky-actions"><div class="sticky-actions-inner"><button id="backHome" class="secondary">Salir</button><button id="finishWorkout" class="primary" ${emptySession?"disabled":""}>Finalizar</button></div></footer>
   </div>`;
 
   document.querySelectorAll("[data-exercise]").forEach(card=>{
@@ -7321,6 +7356,10 @@ function renderWorkout(){
     toast("Pesos vaciados");
   };
   document.getElementById("backHome").onclick=()=>{stopAllExerciseTimers();state.screen="home";renderHome();};
+  const openRoutineFromEmptyWorkout=document.getElementById("openRoutineFromEmptyWorkout");
+  if(openRoutineFromEmptyWorkout) openRoutineFromEmptyWorkout.onclick=()=>{
+    stopAllExerciseTimers();state.screen="routine";renderRoutine();
+  };
   document.getElementById("finishWorkout").onclick=()=>{stopAllExerciseTimers();finishWorkout();};
   document.getElementById("timerChip").onclick=()=>document.getElementById("timerPanel").classList.remove("hidden");
   document.getElementById("closeTimer").onclick=()=>document.getElementById("timerPanel").classList.add("hidden");
@@ -7540,7 +7579,7 @@ function renderEditWorkout(){
   document.getElementById("cancelEditWorkout").onclick=()=>{state.screen="history";renderHistory();};
   document.getElementById("saveEditedWorkout").onclick=()=>{
     const dateValue=document.getElementById("editWorkoutDate").value;
-    if(!dateValue){alert("Selecciona una fecha válida.");return;}
+    if(!dateValue){toast("Selecciona una fecha válida.");return;}
     edited.date=new Date(dateValue).toISOString();
     edited.completedSeries=edited.exercises.reduce((sum,e)=>sum+workingSeries(e.series).filter(s=>s.done).length,0);
     const history=getHistory().map(w=>w.id===edited.id?edited:w);
@@ -7956,7 +7995,7 @@ function editExerciseModal(session,index=null){
 
   document.getElementById("saveExercise").onclick=()=>{
     const name=document.getElementById("reName").value.trim();
-    if(!name){alert("Escribe el nombre del ejercicio.");return;}
+    if(!name){toast("Escribe el nombre del ejercicio.");return;}
     const value={
       name,
       target:document.getElementById("reTarget").value.trim()||"8–10 reps",
@@ -8154,7 +8193,7 @@ function renderRoutineEditor(){
     if(target===null) return;
     const dest=available[Number(target.trim())-1]?.sessionId;
     if(!dest){toast("Selecciona una sesión válida.");return;}
-    if(dest===session){alert("Selecciona una sesión diferente.");return;}
+    if(dest===session){toast("Selecciona una sesión diferente.");return;}
     const destination=canonicalSessionByRef(dest);
     if(destination.exercises.length&&!confirm(`${routineSessionRuntimeApi().displayName(destination)} ya contiene ejercicios. ¿Sustituirlos?`)) return;
     saveCanonicalSessionExercises(dest,exercises.map(item=>({...item})));
@@ -8377,8 +8416,8 @@ function renderBlockEditor(){
   const save=()=>{
     const name=document.getElementById("blockName").value.trim();
     const startDate=document.getElementById("blockStart").value;
-    if(!name){alert("Escribe un nombre para el bloque.");return;}
-    if(!startDate){alert("Selecciona una fecha de inicio.");return;}
+    if(!name){toast("Escribe un nombre para el bloque.");return;}
+    if(!startDate){toast("Selecciona una fecha de inicio.");return;}
     const weeks=Number(document.getElementById("blockWeeks").value);
     let deloadWeek=Number(document.getElementById("blockDeload").value);
     if(deloadWeek>weeks) deloadWeek=weeks;
@@ -8667,236 +8706,6 @@ function renderExerciseAnalytics(){
 }
 
 
-function renderExerciseLibrary(){
-  const items=getExerciseLibrary();
-  const muscles=["Todos",...new Set(items.map(item=>item.muscle).filter(Boolean))];
-  const equipment=["Todos",...new Set(items.map(item=>item.equipment).filter(Boolean))];
-  const filtered=exerciseLibraryFilters(items,state.libraryQuery,state.libraryMuscle,state.libraryEquipment,state.libraryFavoritesOnly);
-
-  app.innerHTML=`<div class="app-shell">
-    <header class="topbar">
-      <button id="backExerciseLibrary" class="back-button">←</button>
-      <div><div class="brand">Biblioteca</div><div class="subtle">${items.length} ejercicios disponibles</div></div>
-      <button id="newLibraryExercise" class="header-action">＋</button>
-    </header>
-    <main class="screen">
-      <section class="card library-filter-card">
-        <label class="library-search"><span>Buscar</span><input id="librarySearch" type="search" value="${esc(state.libraryQuery)}" placeholder="Ejercicio, músculo o material"></label>
-        <div class="library-filter-grid">
-          <label><span>Grupo muscular</span><select id="libraryMuscle">${muscles.map(value=>`<option value="${esc(value)}" ${state.libraryMuscle===value?"selected":""}>${esc(value)}</option>`).join("")}</select></label>
-          <label><span>Equipamiento</span><select id="libraryEquipment">${equipment.map(value=>`<option value="${esc(value)}" ${state.libraryEquipment===value?"selected":""}>${esc(value)}</option>`).join("")}</select></label>
-        </div>
-        <label class="favorite-filter"><input id="libraryFavoritesOnly" type="checkbox" ${state.libraryFavoritesOnly?"checked":""}><span>Mostrar solo favoritos</span></label>
-      </section>
-
-      <section class="library-results-header"><strong>${filtered.length} resultados</strong><button id="resetLibraryFilters" class="text-button">Limpiar filtros</button></section>
-
-      <section class="exercise-library-list">
-        ${filtered.length?filtered.map(item=>`<article class="card exercise-library-card">
-          <div class="exercise-library-card-top">
-            <div><div class="exercise-library-title-row"><h2>${esc(item.name)}</h2>${item.custom?'<span class="custom-pill">Propio</span>':""}</div>
-            <p class="subtle">${esc(item.muscle)} · ${esc(item.equipment)} · ${esc(item.type)}</p></div>
-            <button class="favorite-button ${item.favorite?"active":""}" data-favorite-exercise="${item.id}" aria-label="Favorito">★</button>
-          </div>
-          ${item.notes?`<p class="exercise-library-notes">${esc(item.notes)}</p>`:""}
-          <div class="library-session-actions">${["A","B","C"].map(session=>`<button class="secondary" data-add-library-exercise="${item.id}" data-target-session="${session}">Añadir a ${session}</button>`).join("")}</div>
-          <div class="settings-actions compact-actions">
-            <button class="secondary" data-open-exercise-detail="${item.id}">Ver ficha</button>
-            ${item.custom?`<button class="secondary" data-edit-library-exercise="${item.id}">Editar</button>`:""}
-            ${item.custom?`<button class="danger-soft" data-delete-library-exercise="${item.id}">Eliminar</button>`:""}
-          </div>
-        </article>`).join(""):`<section class="card empty-library-state"><h2>Sin resultados</h2><p class="subtle">Prueba con otros filtros o crea un ejercicio personalizado.</p></section>`}
-      </section>
-    </main>${nav("settings")}
-  </div>`;
-
-  const rerender=()=>{
-    state.libraryQuery=document.getElementById("librarySearch")?.value||"";
-    state.libraryMuscle=document.getElementById("libraryMuscle")?.value||"Todos";
-    state.libraryEquipment=document.getElementById("libraryEquipment")?.value||"Todos";
-    state.libraryFavoritesOnly=Boolean(document.getElementById("libraryFavoritesOnly")?.checked);
-    renderExerciseLibrary();
-  };
-  document.getElementById("backExerciseLibrary").onclick=()=>{state.screen="settings";renderSettings();};
-  document.getElementById("newLibraryExercise").onclick=()=>{state.editingLibraryExerciseId=null;state.screen="exerciseLibraryEditor";renderExerciseLibraryEditor();};
-  document.getElementById("librarySearch").oninput=rerender;
-  document.getElementById("libraryMuscle").onchange=rerender;
-  document.getElementById("libraryEquipment").onchange=rerender;
-  document.getElementById("libraryFavoritesOnly").onchange=rerender;
-  document.getElementById("resetLibraryFilters").onclick=()=>{state.libraryQuery="";state.libraryMuscle="Todos";state.libraryEquipment="Todos";state.libraryFavoritesOnly=false;renderExerciseLibrary();};
-  document.querySelectorAll("[data-favorite-exercise]").forEach(button=>button.onclick=()=>{
-    const library=getExerciseLibrary(); const item=library.find(x=>x.id===button.dataset.favoriteExercise);
-    if(item) item.favorite=!item.favorite;
-    saveExerciseLibrary(library); renderExerciseLibrary();
-  });
-  document.querySelectorAll("[data-add-library-exercise]").forEach(button=>button.onclick=()=>{
-    const item=getExerciseLibrary().find(x=>x.id===button.dataset.addLibraryExercise);
-    if(!item) return;
-    addExerciseToRoutine(button.dataset.targetSession,item);
-    toast(`${item.name} añadido a la sesión ${button.dataset.targetSession}`);
-  });
-  document.querySelectorAll("[data-open-exercise-detail]").forEach(button=>button.onclick=()=>{
-    state.selectedLibraryExerciseId=button.dataset.openExerciseDetail;
-    state.screen="exerciseDetail";
-    renderExerciseDetail();
-  });
-  document.querySelectorAll("[data-edit-library-exercise]").forEach(button=>button.onclick=()=>{
-    state.editingLibraryExerciseId=button.dataset.editLibraryExercise;state.screen="exerciseLibraryEditor";renderExerciseLibraryEditor();
-  });
-  document.querySelectorAll("[data-delete-library-exercise]").forEach(button=>button.onclick=()=>{
-    const library=getExerciseLibrary(); const item=library.find(x=>x.id===button.dataset.deleteLibraryExercise);
-    if(!item||!item.custom) return;
-    state.exerciseLibraryDeleteCandidate=item.id;renderExerciseLibrary();
-  });
-  bindNav();
-}
-
-function renderExerciseLibraryEditor(){
-  const library=getExerciseLibrary();
-  const existing=library.find(item=>item.id===state.editingLibraryExerciseId);
-  const exercise=existing||{name:"",muscle:"Pecho",equipment:"Mancuernas",type:"Hipertrofia",favorite:false,custom:true,notes:""};
-
-  app.innerHTML=`<div class="app-shell">
-    <header class="topbar">
-      <button id="backLibraryEditor" class="back-button">←</button>
-      <div><div class="brand">${existing?"Editar ejercicio":"Nuevo ejercicio"}</div><div class="subtle">Biblioteca GymOS</div></div>
-      <button id="saveLibraryExerciseTop" class="header-action">Guardar</button>
-    </header>
-    <main class="screen">
-      <section class="card library-editor-form">
-        <label><span>Nombre</span><input id="libraryExerciseName" value="${esc(exercise.name)}" placeholder="Ej. Press en máquina"></label>
-        <div class="routine-editor-grid">
-          <label><span>Grupo muscular</span><input id="libraryExerciseMuscle" value="${esc(exercise.muscle)}" placeholder="Pecho"></label>
-          <label><span>Equipamiento</span><input id="libraryExerciseEquipment" value="${esc(exercise.equipment)}" placeholder="Máquina"></label>
-        </div>
-        <label><span>Tipo</span><select id="libraryExerciseType">${["Fuerza","Hipertrofia","Core","Cardio","Movilidad","Otro"].map(value=>`<option value="${value}" ${exercise.type===value?"selected":""}>${value}</option>`).join("")}</select></label>
-        <label><span>Notas técnicas</span><textarea id="libraryExerciseNotes" rows="5" placeholder="Recordatorios de ejecución">${esc(exercise.notes||"")}</textarea></label>
-        <label class="favorite-filter"><input id="libraryExerciseFavorite" type="checkbox" ${exercise.favorite?"checked":""}><span>Marcar como favorito</span></label>
-        <button id="saveLibraryExerciseBottom" class="primary full">${existing?"Guardar cambios":"Crear ejercicio"}</button>
-      </section>
-    </main>
-  </div>`;
-
-  const save=()=>{
-    const name=document.getElementById("libraryExerciseName").value.trim();
-    if(!name){toast("Escribe un nombre para el ejercicio");return;}
-    const updated={
-      id:existing?.id||makeExerciseId(name),name,
-      muscle:document.getElementById("libraryExerciseMuscle").value.trim()||"Sin categoría",
-      equipment:document.getElementById("libraryExerciseEquipment").value.trim()||"Sin material",
-      type:document.getElementById("libraryExerciseType").value,
-      notes:document.getElementById("libraryExerciseNotes").value.trim(),
-      favorite:Boolean(document.getElementById("libraryExerciseFavorite").checked),
-      custom:existing?Boolean(existing.custom):true
-    };
-    saveExerciseLibrary(existing?library.map(item=>item.id===existing.id?updated:item):[...library,updated]);
-    toast(existing?"Ejercicio actualizado":"Ejercicio creado");
-    state.screen="exerciseLibrary";renderExerciseLibrary();
-  };
-  document.getElementById("backLibraryEditor").onclick=()=>{state.screen="exerciseLibrary";renderExerciseLibrary();};
-  document.getElementById("saveLibraryExerciseTop").onclick=save;
-  document.getElementById("saveLibraryExerciseBottom").onclick=save;
-}
-
-
-
-function renderExerciseDetail(){
-  const item=getExerciseLibrary().find(exercise=>exercise.id===state.selectedLibraryExerciseId);
-  if(!item){
-    state.screen="exerciseLibrary";
-    renderExerciseLibrary();
-    return;
-  }
-  const stats=exerciseDetailStats(item.name);
-  const recent=stats.rows.slice(0,20);
-  const bestWeight=stats.bestWeight?`${stats.bestWeight.toLocaleString("es-ES")} kg`:"—";
-  const best1RM=stats.best1RM?`${Math.round(stats.best1RM*10)/10} kg`:"—";
-  const totalVolume=stats.totalVolume?`${Math.round(stats.totalVolume).toLocaleString("es-ES")} kg`:"—";
-
-  app.innerHTML=`<div class="app-shell">
-    <header class="topbar">
-      <button id="backExerciseDetail" class="back-button">←</button>
-      <div><div class="brand">${esc(item.name)}</div><div class="subtle">Ficha técnica e historial</div></div>
-      <button id="editExerciseFromDetail" class="header-action">Editar</button>
-    </header>
-    <main class="screen">
-      <section class="card exercise-profile-card">
-        <div class="exercise-profile-heading">
-          <div>
-            <h2>${esc(item.name)}</h2>
-            <p class="subtle">${esc(item.muscle)} · ${esc(item.equipment)} · ${esc(item.type)}</p>
-          </div>
-          <span class="favorite-profile ${item.favorite?"active":""}">★</span>
-        </div>
-        <div class="exercise-profile-tags">
-          <span>${esc(item.muscle)}</span><span>${esc(item.equipment)}</span><span>${esc(item.type)}</span>
-        </div>
-      </section>
-
-      <section class="analytics-grid exercise-detail-stats">
-        <article class="stat-card"><span>Mejor peso</span><strong>${bestWeight}</strong></article>
-        <article class="stat-card"><span>1RM estimado</span><strong>${best1RM}</strong></article>
-        <article class="stat-card"><span>Series registradas</span><strong>${stats.totalSets}</strong></article>
-        <article class="stat-card"><span>Volumen acumulado</span><strong>${totalVolume}</strong></article>
-      </section>
-
-      <section class="card">
-        <div class="card-heading-row">
-          <div><h2>Notas técnicas</h2><p class="subtle">Recordatorios visibles para este ejercicio.</p></div>
-        </div>
-        <textarea id="exerciseTechnicalNotes" class="technical-notes-area" rows="5" placeholder="Ej. Mantener escápulas retraídas, controlar la bajada...">${esc(item.notes||"")}</textarea>
-        <button id="saveExerciseTechnicalNotes" class="primary full">Guardar notas</button>
-      </section>
-
-      <section class="card">
-        <div class="card-heading-row">
-          <div><h2>Historial de rendimiento</h2><p class="subtle">${stats.totalSets?`${stats.totalSets} series registradas`:"Todavía no hay datos"}</p></div>
-        </div>
-        <div class="exercise-history-table">
-          ${recent.length?recent.map(row=>`<article>
-            <div>
-              <strong>${row.weight.toLocaleString("es-ES")} kg × ${row.reps}</strong>
-              <span>${row.date?new Date(row.date).toLocaleDateString("es-ES"):"Sin fecha"}${row.session?` · Sesión ${esc(row.session)}`:""} · Serie ${row.set}</span>
-            </div>
-            <div class="exercise-history-metrics">
-              <span>${Math.round(row.volume).toLocaleString("es-ES")} kg vol.</span>
-              <span>1RM ${Math.round(row.estimated1RM*10)/10} kg</span>
-              ${row.rir!==null?`<span>RIR ${esc(row.rir)}</span>`:""}
-              ${row.rpe!==null?`<span>RPE ${esc(row.rpe)}</span>`:""}
-            </div>
-          </article>`).join(""):`<div class="routine-empty"><strong>Sin historial todavía</strong><p>Cuando entrenes este ejercicio, aquí aparecerán tus cargas, repeticiones y estimaciones.</p></div>`}
-        </div>
-      </section>
-
-      <section class="card">
-        <h2>Añadir a una sesión</h2>
-        <p class="subtle">Se añadirá con 3 series y un rango inicial de 8–12 repeticiones.</p>
-        <div class="library-session-actions">
-          ${["A","B","C"].map(session=>`<button class="secondary" data-detail-add-session="${session}">Añadir a ${session}</button>`).join("")}
-        </div>
-      </section>
-    </main>
-  </div>`;
-
-  document.getElementById("backExerciseDetail").onclick=()=>{state.screen="exerciseLibrary";renderExerciseLibrary();};
-  document.getElementById("editExerciseFromDetail").onclick=()=>{
-    state.editingLibraryExerciseId=item.id;
-    state.screen="exerciseLibraryEditor";
-    renderExerciseLibraryEditor();
-  };
-  document.getElementById("saveExerciseTechnicalNotes").onclick=()=>{
-    const notes=document.getElementById("exerciseTechnicalNotes").value;
-    if(updateExerciseTechnicalNotes(item.id,notes)){
-      toast("Notas técnicas guardadas");
-      renderExerciseDetail();
-    }
-  };
-  document.querySelectorAll("[data-detail-add-session]").forEach(button=>button.onclick=()=>{
-    addExerciseToRoutine(button.dataset.detailAddSession,item);
-    toast(`${item.name} añadido a la sesión ${button.dataset.detailAddSession}`);
-  });
-}
-
 function renderSubstitutionHistory(){
   const history=getExerciseSubstitutions();
   app.innerHTML=`<div class="app-shell">
@@ -9063,7 +8872,7 @@ function renderHealth(){
       renderHealth();
     }catch(error){
       addDeveloperLog("error","Error importando datos de salud",error.message);
-      alert(error.message);
+      toast(error.message||"No se pudo importar el archivo de salud.");
     }
   };
 }
@@ -9576,7 +9385,7 @@ function renderCoachChat(){
       await sendCoachChatMessage(value);
       renderCoachChat();
     }catch(error){
-      alert(error.message||"No se pudo enviar el mensaje.");
+      toast(error.message||"No se pudo enviar el mensaje.");
       button.disabled=false;
       button.textContent="Enviar";
       input.disabled=false;
@@ -9709,7 +9518,7 @@ function renderCoach(){
       state.screen="coachProposal";
       renderCoachProposal();
     }catch(error){
-      alert(error.message||"No se pudo consultar el backend.");
+      toast(error.message||"No se pudo consultar el backend.");
     }
   };
   const latestButton=document.getElementById("openLatestProposal");
@@ -10155,7 +9964,7 @@ async function renderDeveloperMode(){
       toast("Coach conectado");
     }catch(error){
       addDeveloperLog("error","Error de conexión con Coach",error.message);
-      alert(error.message);
+      toast(error.message||"No se pudo completar la prueba de Coach.");
     }
     renderDeveloperMode();
   };
@@ -10166,7 +9975,7 @@ async function renderDeveloperMode(){
       toast("Sincronización completada");
     }catch(error){
       addDeveloperLog("error","Error de sincronización",error.message);
-      alert(error.message);
+      toast(error.message||"No se pudo completar la sincronización.");
     }
     renderDeveloperMode();
   };
@@ -12983,7 +12792,7 @@ importFile.onchange=async()=>{
     const ownerId=localStorage.getItem(LOCAL_OWNER_KEY)||(!AUTH_REQUIRED?"local":null);
     saveCurrentUserVault(ownerId);
     toast("Copia importada");renderSettings();
-  }catch{alert("El archivo no es una copia válida de GymOS.");}
+  }catch{toast("El archivo no es una copia válida de GymOS.");}
   importFile.value="";
 };
 

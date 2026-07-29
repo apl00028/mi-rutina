@@ -623,7 +623,7 @@
     };
   }
 
-  window.GymOSRecovery={
+  window.GymOSRecovery=Object.freeze({
     storageKey:STORAGE_KEY,
     providers:PROVIDERS,
     getEntries,
@@ -647,7 +647,7 @@
     registerProvider,
     importFromProvider,
     syncWithSupabase
-  };
+  });
   window.renderRecoveryCenter=renderRecoveryCenter;
   window.renderWorkoutComplete=renderWorkoutComplete;
 })();

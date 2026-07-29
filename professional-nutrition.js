@@ -589,10 +589,10 @@
     renderImport();
   }
 
-  window.GymOSProfessionalNutrition={
+  window.GymOSProfessionalNutrition=Object.freeze({
     storageKey:STORAGE_KEY,getPlans,savePlans,mergePlans,parseProfessionalNutritionFile,
     adaptProfessionalMealTemplate,equivalentTemplates,syncWithSupabase,handleFileSelection
-  };
+  });
   window.adaptProfessionalMealTemplate=adaptProfessionalMealTemplate;
   window.renderProfessionalNutritionLibrary=renderLibrary;
   window.renderProfessionalNutritionImport=renderImport;

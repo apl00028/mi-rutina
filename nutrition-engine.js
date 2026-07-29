@@ -89,5 +89,5 @@
     return [...list.values()];
   }
 
-  window.GymOSNutritionEngine={activityFactors:ACTIVITY_FACTORS,calculateNutritionNeeds,suggestRecipes,shoppingList};
+window.GymOSNutritionEngine=Object.freeze({activityFactors:ACTIVITY_FACTORS,calculateNutritionNeeds,suggestRecipes,shoppingList});
 })();

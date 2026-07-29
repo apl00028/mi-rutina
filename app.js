@@ -561,7 +561,15 @@ function getExerciseLibrary(){
   localStorage.setItem(EXERCISE_LIBRARY_KEY,JSON.stringify(defaults));
   return defaults;
 }
-function saveExerciseLibrary(items,{mark=true,touchUpdatedAt=true,setSchema=true}={}){
+function saveExerciseLibrary(items,{mark=true,touchUpdatedAt=true,setSchema=true,ownerId=null}={}){
+  if(ownerId!==null){
+    const normalizedOwner=window.GymOSProfileData.normalizeOwnerId(ownerId);
+    if(currentRoutineOwnerOrNull()!==normalizedOwner) throw new Error("exercise_library_owner_changed");
+    const foreignCustom=(Array.isArray(items)?items:[]).find(item=>
+      (item?.custom===true||item?.source==="custom")&&item.ownerId&&item.ownerId!==normalizedOwner
+    );
+    if(foreignCustom) throw new Error("exercise_library_owner_mismatch");
+  }
   const timestamp=new Date().toISOString();
   const normalized=window.GymOSExerciseDomain
     ?window.GymOSExerciseDomain.migrateExerciseLibrary(items,{timestamp,touchUpdatedAt}).library
@@ -572,6 +580,17 @@ function saveExerciseLibrary(items,{mark=true,touchUpdatedAt=true,setSchema=true
   }
   if(mark) markLocalUpdated();
   return normalized;
+}
+function ensureExerciseLibraryWorkflowMigration(){
+  const api=window.GymOSExerciseLibraryWorkflow;
+  if(!api) return false;
+  const ownerId=currentRoutineOwnerOrNull();
+  if(!ownerId) return false;
+  const current=getExerciseLibrary();
+  const migrated=api.migrateArchived(current);
+  if(!migrated.changed) return false;
+  saveExerciseLibrary(migrated.library,{mark:false,touchUpdatedAt:false,ownerId});
+  return true;
 }
 function makeExerciseId(name){
   const base=String(name||"ejercicio").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"")
@@ -1074,11 +1093,16 @@ function getFavoriteExercises(){
   return getExerciseLibrary().filter(item=>Boolean(item.favorite));
 }
 function setExerciseFavorite(id,value){
+  const ownerId=currentRoutineOwnerOrNull();
+  if(!ownerId) return false;
   const library=getExerciseLibrary();
   const item=library.find(exercise=>exercise.id===id);
   if(!item) return false;
-  item.favorite=Boolean(value);
-  saveExerciseLibrary(library);
+  if(item.custom&&item.ownerId&&item.ownerId!==ownerId) return false;
+  const result=window.GymOSExerciseLibraryWorkflow?.favoriteUpdate(item,value);
+  if(!result?.changed) return true;
+  Object.assign(item,result.exercise);
+  saveExerciseLibrary(library,{touchUpdatedAt:false,ownerId});
   return true;
 }
 function favoriteExerciseUsage(name){
@@ -2524,6 +2548,8 @@ const routineFile = document.getElementById("routineFile");
 const AUTH_REQUIRED=true;
 const LOCAL_OWNER_KEY="gymos:localDataOwnerId";
 const LOCAL_VAULT_PREFIX="gymos:userVault:";
+let exerciseLibrarySearchDebounceTimer=null;
+let exerciseLibrarySearchDebounceVersion=0;
 const AUTH_CONFIGURED=()=>Boolean(getSyncConfig().url&&getSyncConfig().key);
 
 function ensureProfileDataMigration(options={}){
@@ -2668,6 +2694,23 @@ function loadUserVault(userId){
   }
 }
 
+function resetExerciseLibraryOwnerState(){
+  if(typeof state==="undefined") return;
+  cancelExerciseLibrarySearchDebounce();
+  const clean=window.GymOSExerciseLibraryWorkflow?.clearOwnerUiState?.()||{};
+  state.exerciseLibraryFilters=clean.filters||null;
+  state.selectedLibraryExerciseId=null;
+  state.editingLibraryExerciseId=null;
+  state.exerciseLibraryDeleteCandidate=null;
+  state.exerciseLibraryMessage=null;
+  state.exerciseLibraryBusy=null;
+  state.exerciseLibraryAdvancedOpen=false;
+  state.exerciseLibraryEditBaseline=null;
+  state.exerciseLibraryFormDraft=null;
+  state.exerciseLibrarySearchRefocus=false;
+  state.exerciseSubstitution=null;
+}
+
 function activateLocalUser(userId){
   if(!userId) return;
   const previous=localStorage.getItem(LOCAL_OWNER_KEY);
@@ -2675,6 +2718,7 @@ function activateLocalUser(userId){
     ensureProfileDataMigration({ownerId:userId,mark:false});
     ensureLegacyTrainingSetupMigration({ownerId:userId,mark:false});
     ensureExerciseDomainMigration({ownerId:userId,mark:false});
+    ensureExerciseLibraryWorkflowMigration();
     ensureRoutineProposalState(userId);
     ensureRoutineActivationState(userId);
     saveCurrentUserVault(userId);
@@ -2693,9 +2737,11 @@ function activateLocalUser(userId){
     }
   }
   localStorage.setItem(LOCAL_OWNER_KEY,userId);
+  resetExerciseLibraryOwnerState();
   ensureProfileDataMigration({ownerId:userId,mark:false});
   ensureLegacyTrainingSetupMigration({ownerId:userId,mark:false});
   ensureExerciseDomainMigration({ownerId:userId,mark:false});
+  ensureExerciseLibraryWorkflowMigration();
   ensureRoutineProposalState(userId);
   ensureRoutineActivationState(userId);
   saveCurrentUserVault(userId);
@@ -2707,6 +2753,7 @@ function deactivateLocalUser(){
   if(current) saveCurrentUserVault(current);
   clearCurrentUserData();
   localStorage.removeItem(LOCAL_OWNER_KEY);
+  resetExerciseLibraryOwnerState();
 }
 
 function deleteOwnerLocalData(ownerId,{removeOwner=false}={}){
@@ -2958,6 +3005,15 @@ let state = {
   libraryMuscle: "Todos",
   libraryEquipment: "Todos",
   libraryFavoritesOnly: false,
+  exerciseLibraryFilters: null,
+  exerciseLibraryMessage: null,
+  exerciseLibraryBusy: null,
+  exerciseLibraryDeleteCandidate: null,
+  exerciseLibraryAdvancedOpen: false,
+  exerciseLibraryEditBaseline: null,
+  exerciseLibraryFormDraft: null,
+  exerciseLibrarySearchRefocus: false,
+  exerciseSubstitution: null,
   editingLibraryExerciseId: null,
   selectedLibraryExerciseId: null,
   favoritesSort: "name",
@@ -4389,6 +4445,7 @@ function nav(active){
 let globalNavigationBound=false;
 
 function navigateToScreen(screen){
+  if(screen!=="exerciseLibrary") cancelExerciseLibrarySearchDebounce();
   try{
     stopAllExerciseTimers();
   }catch(error){
@@ -5125,6 +5182,7 @@ function renderOnboarding(){
 
 function render(){
   applyAppPreferences();
+  if(state.screen!=="exerciseLibrary") cancelExerciseLibrarySearchDebounce();
 
   if(AUTH_REQUIRED&&!AUTH_CONFIGURED()){
     renderAuthConfigurationRequired();
@@ -5183,6 +5241,7 @@ function render(){
   else if(state.screen==="exerciseAnalytics") renderExerciseAnalytics();
   else if(state.screen==="exerciseLibrary") renderExerciseLibrary();
   else if(state.screen==="exerciseLibraryEditor") renderExerciseLibraryEditor();
+  else if(state.screen==="exerciseSubstitution") renderExerciseSubstitution();
   else if(state.screen==="substitutionHistory") renderSubstitutionHistory();
   else if(state.screen==="exerciseDetail") renderExerciseDetail();
   else if(state.screen==="favoriteExercises") renderFavoriteExercises();
@@ -6123,8 +6182,14 @@ function renderWorkout(){
         const timed=isTimedExercise(ex);
         return `
         <section class="exercise-card ${timed?"timed-exercise-card":""}" data-exercise="${i}">
-          <h2>${ex.name}</h2>
+          <h2>${esc(ex.name)}</h2>
           <div class="target">Objetivo: ${ex.target} · RIR ${esc(ex.targetRir||"sin definir")}</div>
+          <div class="exercise-context-actions">
+            ${ex.substitution?.mode==="temporary"
+              ?`<button type="button" class="text-button" data-undo-exercise-substitution="${i}">Volver al ejercicio planificado</button>`
+              :`<button type="button" class="text-button" data-temporary-exercise-substitution="${i}">Cambiar solo hoy</button>`}
+            <button type="button" class="text-button" data-permanent-exercise-substitution="${i}">Cambiar en mi rutina</button>
+          </div>
           ${timed?`<div class="timed-exercise-note">Ejercicio por tiempo: inicia y detén el cronómetro en cada serie.</div>`:""}
           ${last?.exercises?.[i]?`<div class="last-session"><strong>Última vez:</strong> ${last.exercises[i].series.map(x=>{
             const normalized=normalizeSeries(x);
@@ -6177,7 +6242,7 @@ function renderWorkout(){
               <label class="warmup-toggle"><input type="checkbox" data-warmup="${j}" ${x.warmup?"checked":""}><span>Cal.</span></label>
               <button class="complete-btn ${x.done?"done":""}" data-done="${j}">${x.done?"✓":""}</button>
             </div>`).join("")}
-          <textarea data-notes="${i}" placeholder="Notas">${ex.notes||""}</textarea>
+          <textarea data-notes="${i}" placeholder="Notas">${esc(ex.notes||"")}</textarea>
           <label class="workout-discomfort-field"><span>Molestias durante el ejercicio</span><input data-discomfort="${i}" value="${esc(ex.discomfort||"")}" placeholder="Déjalo vacío si no hubo molestias"></label>
         </section>`;
       }).join("")}
@@ -6250,6 +6315,15 @@ function renderWorkout(){
   document.getElementById("timerChip").onclick=()=>document.getElementById("timerPanel").classList.remove("hidden");
   document.getElementById("closeTimer").onclick=()=>document.getElementById("timerPanel").classList.add("hidden");
   document.querySelectorAll("[data-time]").forEach(b=>b.onclick=()=>startTimer(Number(b.dataset.time)));
+  document.querySelectorAll("[data-temporary-exercise-substitution]").forEach(button=>button.onclick=()=>{
+    openExerciseSubstitution("temporary",Number(button.dataset.temporaryExerciseSubstitution));
+  });
+  document.querySelectorAll("[data-permanent-exercise-substitution]").forEach(button=>button.onclick=()=>{
+    openExerciseSubstitution("permanent",Number(button.dataset.permanentExerciseSubstitution));
+  });
+  document.querySelectorAll("[data-undo-exercise-substitution]").forEach(button=>button.onclick=()=>{
+    undoCurrentExerciseSubstitution(Number(button.dataset.undoExerciseSubstitution));
+  });
 }
 
 function startTimer(sec){
@@ -6269,8 +6343,11 @@ function updateTimerUI(){
 function finishWorkout(){
   const s=state.selectedSession,d=getDraft(s);
   const completed=d.exercises.reduce((n,e)=>n+workingSeries(e.series).filter(x=>x.done).length,0);
+  const completedExercises=d.exercises.map(exercise=>
+    window.GymOSExerciseLibraryWorkflow?.historyExercise?.(exercise)||exercise
+  );
   const workout={id:Date.now(),date:new Date().toISOString(),session:s,
-    durationMs:Date.now()-(d.startedAt||Date.now()),completedSeries:completed,exercises:d.exercises};
+    durationMs:Date.now()-(d.startedAt||Date.now()),completedSeries:completed,exercises:completedExercises};
   const h=getHistory();h.unshift(workout);saveHistory(h);clearDraft(s);
   const workoutAnalysis=window.GymOSWorkoutAnalysis?.analyzeAndSave?.(workout,{force:true});
   if(workoutAnalysis) window.GymOSWorkoutAnalysis?.maybeGenerateAiNarrative?.(workoutAnalysis);
@@ -6320,10 +6397,10 @@ function renderHistory(){
             <div class="chevron">›</div>
           </div>
           ${state.expandedHistoryId===w.id?`<div class="history-detail">
-            ${w.exercises.map(e=>`<div class="exercise-summary"><strong>${e.name}</strong><span>${e.series.map(x=>{
+            ${w.exercises.map(e=>`<div class="exercise-summary"><strong>${esc(e.name)}</strong>${e.substitution?.mode==="temporary"?`<small>Realizado en lugar de ${esc(e.substitution.plannedExerciseName||"el ejercicio planificado")}</small>`:""}<span>${e.series.map(x=>{
               const s=normalizeSeries(x);
               return s.weight||s.reps?`${s.warmup?"Cal. ":""}${s.weight||"—"} × ${s.reps||"—"}${s.rir!==""?` · RIR ${s.rir}`:""}`:"—";
-            }).join(" · ")}</span>${e.notes?`<small>${e.notes}</small>`:""}</div>`).join("")}
+            }).join(" · ")}</span>${e.notes?`<small>${esc(e.notes)}</small>`:""}</div>`).join("")}
             <div class="history-actions">
               <button class="secondary" data-edit-workout="${w.id}">Editar sesión</button>
               <button class="danger-button" data-delete-workout="${w.id}">Eliminar</button>
@@ -6371,7 +6448,7 @@ function renderEditWorkout(){
       </section>
       ${workout.exercises.map((ex,i)=>`
         <section class="exercise-card" data-edit-exercise="${i}">
-          <h2>${ex.name}</h2>
+          <h2>${esc(ex.name)}</h2>
           <div class="target">Objetivo: ${esc(ex.target||"Sin rango")} · RIR ${esc(ex.targetRir||"sin registrar")}</div>
           <div class="series-header series-header-v18"><span></span><span>Peso</span><span>Reps</span><span>RIR</span><span>Cal.</span><span></span></div>
           ${ex.series.map((x,j)=>`
@@ -6386,7 +6463,7 @@ function renderEditWorkout(){
               <label class="warmup-toggle"><input type="checkbox" data-edit-warmup="${j}" ${x.warmup?"checked":""}><span>Cal.</span></label>
               <button class="complete-btn ${x.done?"done":""}" data-edit-done="${j}">${x.done?"✓":""}</button>
             </div>`).join("")}
-          <textarea data-edit-notes="${i}" placeholder="Notas">${ex.notes||""}</textarea>
+          <textarea data-edit-notes="${i}" placeholder="Notas">${esc(ex.notes||"")}</textarea>
           <label class="workout-discomfort-field"><span>Molestias durante el ejercicio</span><input data-edit-discomfort="${i}" value="${esc(ex.discomfort||"")}" placeholder="Déjalo vacío si no hubo molestias"></label>
         </section>`).join("")}
     </main>
@@ -7582,7 +7659,7 @@ function renderExerciseLibrary(){
           <div class="library-session-actions">${["A","B","C"].map(session=>`<button class="secondary" data-add-library-exercise="${item.id}" data-target-session="${session}">Añadir a ${session}</button>`).join("")}</div>
           <div class="settings-actions compact-actions">
             <button class="secondary" data-open-exercise-detail="${item.id}">Ver ficha</button>
-            <button class="secondary" data-edit-library-exercise="${item.id}">Editar</button>
+            ${item.custom?`<button class="secondary" data-edit-library-exercise="${item.id}">Editar</button>`:""}
             ${item.custom?`<button class="danger-soft" data-delete-library-exercise="${item.id}">Eliminar</button>`:""}
           </div>
         </article>`).join(""):`<section class="card empty-library-state"><h2>Sin resultados</h2><p class="subtle">Prueba con otros filtros o crea un ejercicio personalizado.</p></section>`}
@@ -7625,8 +7702,8 @@ function renderExerciseLibrary(){
   });
   document.querySelectorAll("[data-delete-library-exercise]").forEach(button=>button.onclick=()=>{
     const library=getExerciseLibrary(); const item=library.find(x=>x.id===button.dataset.deleteLibraryExercise);
-    if(!item||!item.custom||!confirm(`¿Eliminar "${item.name}" de la biblioteca?`)) return;
-    saveExerciseLibrary(library.filter(x=>x.id!==item.id));toast("Ejercicio eliminado");renderExerciseLibrary();
+    if(!item||!item.custom) return;
+    state.exerciseLibraryDeleteCandidate=item.id;renderExerciseLibrary();
   });
   bindNav();
 }
@@ -10670,6 +10747,699 @@ function renderRoutineWorkflow(){
   if(state.routineWorkflow.confirmation) document.querySelector(".routine-confirmation")?.focus();
 }
 
+function exerciseLibraryWorkflowApi(){
+  if(!window.GymOSExerciseLibraryWorkflow) throw new Error("El módulo de biblioteca no está disponible.");
+  return window.GymOSExerciseLibraryWorkflow;
+}
+function exerciseLibraryOwner(){
+  const owner=currentRoutineOwnerOrNull();
+  if(!owner) throw new Error("No se pudo comprobar el propietario de la biblioteca.");
+  return owner;
+}
+function exerciseLibraryContext(){
+  const profile=window.GymOSProfileData;
+  return {
+    ownerId:exerciseLibraryOwner(),
+    userProfile:profile?.getUserProfile?.()||{},
+    currentLifeState:profile?.getCurrentLifeState?.()||null
+  };
+}
+function exerciseLibraryFilterState(){
+  const api=exerciseLibraryWorkflowApi();
+  state.exerciseLibraryFilters=api.normalizeFilters(state.exerciseLibraryFilters||{});
+  return state.exerciseLibraryFilters;
+}
+function exerciseLibraryMessageHtml(){
+  const message=state.exerciseLibraryMessage;
+  if(!message) return `<div class="library-live-region" aria-live="polite"></div>`;
+  return `<div class="form-message ${message.type==="success"?"success":"error"}" role="${message.type==="success"?"status":"alert"}">${esc(message.text)}</div>`;
+}
+function exerciseSelectOptions(values,current){
+  const api=exerciseLibraryWorkflowApi();
+  return [`<option value="all">Todos</option>`,...values.map(value=>
+    `<option value="${esc(value)}" ${current===api.normalizeFilters({category:value}).category?"selected":""}>${esc(api.label(value))}</option>`
+  )].join("");
+}
+function exerciseUsageById(){
+  const usage={};
+  getHistory().forEach(workout=>(workout.exercises||[]).forEach(exercise=>{
+    const id=exercise.exerciseId||exercise.id;
+    if(!id) return;
+    const row=usage[id]||{count:0,lastDate:null};
+    row.count+=(exercise.series||[]).length;
+    row.lastDate=!row.lastDate||String(workout.date)>row.lastDate?workout.date:row.lastDate;
+    usage[id]=row;
+  }));
+  return usage;
+}
+function exerciseStatusLabel(status){
+  return status==="ready"?"Listo":status==="archived"?"Archivado":"Requiere revisión";
+}
+function cancelExerciseLibrarySearchDebounce(){
+  exerciseLibrarySearchDebounceVersion+=1;
+  if(exerciseLibrarySearchDebounceTimer!==null){
+    clearTimeout(exerciseLibrarySearchDebounceTimer);
+    exerciseLibrarySearchDebounceTimer=null;
+  }
+}
+function scheduleExerciseLibrarySearchUpdate(ownerId){
+  cancelExerciseLibrarySearchDebounce();
+  const version=exerciseLibrarySearchDebounceVersion;
+  exerciseLibrarySearchDebounceTimer=setTimeout(()=>{
+    exerciseLibrarySearchDebounceTimer=null;
+    if(version!==exerciseLibrarySearchDebounceVersion) return;
+    if(state.screen!=="exerciseLibrary"||currentRoutineOwnerOrNull()!==ownerId) return;
+    state.exerciseLibrarySearchRefocus=true;
+    renderExerciseLibrary();
+  },200);
+}
+function renderExerciseLibrary(){
+  cancelExerciseLibrarySearchDebounce();
+  ensureExerciseLibraryWorkflowMigration();
+  const api=exerciseLibraryWorkflowApi(),items=getExerciseLibrary();
+  const filters=exerciseLibraryFilterState();
+  const options=api.filterOptions(items);
+  const filtered=api.filterExercises(items,filters,{usage:exerciseUsageById()});
+  const context=exerciseLibraryContext();
+  const cards=filtered.map(item=>api.cardModel(item,context));
+  app.innerHTML=`<div class="app-shell exercise-library-shell">
+    <header class="topbar">
+      <button id="backExerciseLibrary" class="back-button" type="button" aria-label="Volver">←</button>
+      <div><div class="brand">Biblioteca de ejercicios</div><div class="subtle">Busca, consulta y organiza tus ejercicios.</div></div>
+      <button id="newLibraryExercise" class="header-action" type="button">Crear</button>
+    </header>
+    <main class="screen">
+      ${exerciseLibraryMessageHtml()}
+      <section class="card library-filter-card">
+        <label class="library-search" for="librarySearch"><span>Buscar ejercicios</span>
+          <input id="librarySearch" type="search" value="${esc(filters.query)}" placeholder="Nombre, alias, músculo o equipamiento">
+        </label>
+        ${filters.query?`<button id="clearLibrarySearch" class="text-button" type="button" aria-label="Limpiar búsqueda">Limpiar búsqueda</button>`:""}
+        <div class="library-filter-grid phase-g-filter-grid">
+          <label><span>Categoría</span><select id="libraryCategory">${exerciseSelectOptions(options.categories,filters.category)}</select></label>
+          <label><span>Patrón</span><select id="libraryPattern">${exerciseSelectOptions(options.patterns,filters.pattern)}</select></label>
+          <label><span>Músculo</span><select id="libraryMuscle">${exerciseSelectOptions(options.muscles,filters.muscle)}</select></label>
+          <label><span>Equipamiento</span><select id="libraryEquipment">${exerciseSelectOptions(options.equipment,filters.equipment)}</select></label>
+          <label><span>Dificultad</span><select id="libraryDifficulty">${exerciseSelectOptions(options.difficulties,filters.difficulty)}</select></label>
+          <label><span>Estado</span><select id="libraryStatus">
+            <option value="all" ${filters.status==="all"?"selected":""}>Todos</option>
+            <option value="ready" ${filters.status==="ready"?"selected":""}>Listo</option>
+            <option value="needs_review" ${filters.status==="needs_review"?"selected":""}>Requiere revisión</option>
+          </select></label>
+          <label><span>Ordenar</span><select id="librarySort">
+            <option value="name" ${filters.sort==="name"?"selected":""}>Nombre</option>
+            <option value="favorites" ${filters.sort==="favorites"?"selected":""}>Favoritos primero</option>
+            <option value="used" ${filters.sort==="used"?"selected":""}>Más utilizados</option>
+            <option value="recent" ${filters.sort==="recent"?"selected":""}>Recientemente añadidos</option>
+          </select></label>
+        </div>
+        <div class="library-toggle-filters">
+          <label><input id="libraryFavoritesOnly" type="checkbox" ${filters.favorites?"checked":""}><span>Favoritos</span></label>
+          <label><input id="libraryCustomOnly" type="checkbox" ${filters.custom?"checked":""}><span>Personalizados</span></label>
+          <label><input id="libraryArchivedOnly" type="checkbox" ${filters.archived?"checked":""}><span>Archivados</span></label>
+        </div>
+        <button id="resetLibraryFilters" class="text-button" type="button">Limpiar filtros</button>
+      </section>
+      <div class="library-results-header"><strong>${cards.length} resultados</strong><span>${items.length} en tu biblioteca</span></div>
+      <section class="exercise-library-list phase-g-library-list">
+        ${cards.length?cards.map(card=>`<article class="card exercise-library-card ${card.archived?"is-archived":""}">
+          <div class="exercise-library-card-top">
+            <button type="button" class="exercise-card-open" data-open-exercise-detail="${esc(card.id)}">
+              <span class="exercise-library-title-row"><strong>${esc(card.name)}</strong><span class="custom-pill">${esc(card.origin)}</span></span>
+              <span class="subtle">${esc(card.category)} · ${esc(card.pattern)}</span>
+            </button>
+            <button type="button" class="favorite-button ${card.favorite?"active":""}" data-favorite-exercise="${esc(card.id)}" aria-label="${card.favorite?"Quitar de favoritos":"Añadir a favoritos"}">★</button>
+          </div>
+          <div class="exercise-card-tags">
+            ${card.muscles.map(value=>`<span>${esc(value)}</span>`).join("")}
+            ${card.equipment.map(value=>`<span>${esc(value)}</span>`).join("")}
+          </div>
+          <div class="exercise-card-meta"><span>${esc(card.recordTypes.join(", "))}</span><span>${esc(card.difficulty)}</span><span class="${card.status==="ready"?"ready":"review"}">${esc(exerciseStatusLabel(card.status))}</span></div>
+          ${card.warning?`<p class="exercise-context-warning">${esc(card.warning)}</p>`:""}
+          <div class="settings-actions compact-actions">
+            <button type="button" class="secondary" data-open-exercise-detail="${esc(card.id)}">Ver detalles</button>
+            ${card.origin==="Personalizado"?`<button type="button" class="secondary" data-edit-library-exercise="${esc(card.id)}">Editar</button>
+              <button type="button" class="text-button" data-remove-library-exercise="${esc(card.id)}">${card.archived?"Restaurar":"Gestionar"}</button>`:""}
+          </div>
+        </article>`).join(""):`<section class="card empty-library-state"><h2>Sin resultados</h2><p class="subtle">Prueba otros filtros o crea un ejercicio personalizado.</p></section>`}
+      </section>
+      ${renderExerciseRemovalConfirmation()}
+    </main>${nav("settings")}
+  </div>`;
+  const readFilters=()=>api.normalizeFilters({
+    query:document.getElementById("librarySearch")?.value||"",
+    category:document.getElementById("libraryCategory")?.value,
+    pattern:document.getElementById("libraryPattern")?.value,
+    muscle:document.getElementById("libraryMuscle")?.value,
+    equipment:document.getElementById("libraryEquipment")?.value,
+    difficulty:document.getElementById("libraryDifficulty")?.value,
+    status:document.getElementById("libraryStatus")?.value,
+    sort:document.getElementById("librarySort")?.value,
+    favorites:document.getElementById("libraryFavoritesOnly")?.checked,
+    custom:document.getElementById("libraryCustomOnly")?.checked,
+    archived:document.getElementById("libraryArchivedOnly")?.checked
+  });
+  const rerender=()=>{
+    cancelExerciseLibrarySearchDebounce();
+    state.exerciseLibraryFilters=readFilters();
+    renderExerciseLibrary();
+  };
+  const search=document.getElementById("librarySearch");
+  search.oninput=()=>{
+    state.exerciseLibraryFilters=readFilters();
+    scheduleExerciseLibrarySearchUpdate(context.ownerId);
+  };
+  search.onkeydown=event=>{
+    if(event.key!=="Enter") return;
+    event.preventDefault();
+    state.exerciseLibraryFilters=readFilters();
+    cancelExerciseLibrarySearchDebounce();
+    state.exerciseLibrarySearchRefocus=true;
+    renderExerciseLibrary();
+  };
+  document.getElementById("backExerciseLibrary").onclick=()=>{
+    cancelExerciseLibrarySearchDebounce();state.screen="settings";renderSettings();
+  };
+  document.getElementById("newLibraryExercise").onclick=()=>{
+    cancelExerciseLibrarySearchDebounce();
+    state.editingLibraryExerciseId=null;state.exerciseLibraryEditBaseline=null;
+    state.exerciseLibraryFormDraft=null;
+    state.screen="exerciseLibraryEditor";renderExerciseLibraryEditor();
+  };
+  ["libraryCategory","libraryPattern","libraryMuscle","libraryEquipment","libraryDifficulty","libraryStatus","librarySort","libraryFavoritesOnly","libraryCustomOnly","libraryArchivedOnly"]
+    .forEach(id=>document.getElementById(id).onchange=rerender);
+  const clearSearch=document.getElementById("clearLibrarySearch");
+  if(clearSearch) clearSearch.onclick=()=>{
+    cancelExerciseLibrarySearchDebounce();
+    state.exerciseLibraryFilters=api.normalizeFilters({...exerciseLibraryFilterState(),query:""});
+    state.exerciseLibrarySearchRefocus=true;
+    renderExerciseLibrary();
+  };
+  document.getElementById("resetLibraryFilters").onclick=()=>{
+    cancelExerciseLibrarySearchDebounce();
+    state.exerciseLibraryFilters=api.normalizeFilters();
+    renderExerciseLibrary();
+  };
+  document.querySelectorAll("[data-open-exercise-detail]").forEach(button=>button.onclick=()=>{
+    cancelExerciseLibrarySearchDebounce();
+    state.selectedLibraryExerciseId=button.dataset.openExerciseDetail;state.screen="exerciseDetail";renderExerciseDetail();
+  });
+  document.querySelectorAll("[data-edit-library-exercise]").forEach(button=>button.onclick=()=>{
+    const current=getExerciseLibrary().find(item=>item.id===button.dataset.editLibraryExercise);
+    if(!current?.custom) return;
+    state.editingLibraryExerciseId=current.id;state.exerciseLibraryEditBaseline=current.updatedAt||null;
+    state.exerciseLibraryFormDraft=null;
+    cancelExerciseLibrarySearchDebounce();
+    state.screen="exerciseLibraryEditor";renderExerciseLibraryEditor();
+  });
+  document.querySelectorAll("[data-favorite-exercise]").forEach(button=>button.onclick=async()=>{
+    if(state.exerciseLibraryBusy) return;
+    const owner=exerciseLibraryOwner(),current=getExerciseLibrary().find(item=>item.id===button.dataset.favoriteExercise);
+    if(!current) return;
+    state.exerciseLibraryBusy="favorite";button.disabled=true;
+    try{
+      if(owner!==exerciseLibraryOwner()) return;
+      setExerciseFavorite(current.id,!current.favorite);
+      state.exerciseLibraryMessage={type:"success",text:current.favorite?"Eliminado de favoritos.":"Añadido a favoritos."};
+    }finally{state.exerciseLibraryBusy=null;}
+    renderExerciseLibrary();
+  });
+  document.querySelectorAll("[data-remove-library-exercise]").forEach(button=>button.onclick=()=>{
+    const exercise=getExerciseLibrary().find(item=>item.id===button.dataset.removeLibraryExercise);
+    if(!exercise?.custom) return;
+    if(exercise.archived){restoreLibraryExercise(exercise.id);return;}
+    state.exerciseLibraryDeleteCandidate=exercise.id;renderExerciseLibrary();
+  });
+  const cancel=document.getElementById("cancelExerciseRemoval");
+  if(cancel) cancel.onclick=()=>{state.exerciseLibraryDeleteCandidate=null;renderExerciseLibrary();};
+  const confirmRemoval=document.getElementById("confirmExerciseRemoval");
+  if(confirmRemoval) confirmRemoval.onclick=()=>applyExerciseRemoval();
+  bindNav();
+  if(state.exerciseLibrarySearchRefocus){
+    state.exerciseLibrarySearchRefocus=false;
+    search.focus();
+    search.setSelectionRange(search.value.length,search.value.length);
+  }
+}
+function exerciseReferenceSources(){
+  const drafts={};
+  ["A","B","C"].forEach(key=>{
+    try{drafts[key]=JSON.parse(localStorage.getItem(draftKey(key))||"null");}catch(_){drafts[key]=null;}
+  });
+  return {
+    routine:getRoutine(),history:getHistory(),drafts,
+    proposals:getRoutineProposalRecords(),activations:getRoutineActivationRecords(),
+    library:getExerciseLibrary()
+  };
+}
+function renderExerciseRemovalConfirmation(){
+  const id=state.exerciseLibraryDeleteCandidate;
+  if(!id) return "";
+  const api=exerciseLibraryWorkflowApi(),exercise=getExerciseLibrary().find(item=>item.id===id);
+  if(!exercise?.custom) return "";
+  const references=api.referenceSummary(id,exerciseReferenceSources());
+  const policy=api.removalPolicy(exercise,references);
+  const types={
+    routine:"rutina activa",history:"historial",drafts:"entrenamiento en curso",
+    proposals:"propuestas",activations:"activaciones y rollback",
+    alternatives:"alternativas",favorites:"favoritos"
+  };
+  return `<section class="card destructive-confirmation" role="alertdialog" aria-modal="true" tabindex="-1" aria-labelledby="exerciseRemovalTitle">
+    <h2 id="exerciseRemovalTitle">${policy.action==="archive"?"Archivar ejercicio":"Eliminar ejercicio"}</h2>
+    <p><strong>${esc(exercise.name)}</strong></p>
+    ${references.total?`<p>Se han encontrado ${references.total} referencias: ${references.types.map(type=>`${types[type]} (${references.counts[type]})`).join(", ")}.</p>
+      <p>Se archivará para conservar los registros antiguos y dejará de recomendarse.</p>`
+      :`<p>No tiene referencias. La eliminación será definitiva para este propietario.</p>`}
+    <div class="settings-actions"><button id="cancelExerciseRemoval" class="secondary" type="button">Cancelar</button>
+      <button id="confirmExerciseRemoval" class="danger-button" type="button">${policy.action==="archive"?"Archivar ejercicio":"Eliminar definitivamente"}</button></div>
+  </section>`;
+}
+async function applyExerciseRemoval(){
+  if(state.exerciseLibraryBusy) return;
+  const api=exerciseLibraryWorkflowApi(),owner=exerciseLibraryOwner(),id=state.exerciseLibraryDeleteCandidate;
+  const library=getExerciseLibrary(),exercise=library.find(item=>item.id===id);
+  if(!exercise?.custom||(exercise.ownerId&&exercise.ownerId!==owner)) return;
+  state.exerciseLibraryBusy="remove";
+  try{
+    const references=api.referenceSummary(id,exerciseReferenceSources());
+    const policy=api.removalPolicy(exercise,references);
+    if(owner!==exerciseLibraryOwner()) return;
+    if(policy.action==="archive"){
+      const result=api.archiveExercise(exercise,{timestamp:new Date().toISOString()});
+      saveExerciseLibrary(library.map(item=>item.id===id?result.exercise:item),{
+        touchUpdatedAt:false,ownerId:owner
+      });
+      state.exerciseLibraryMessage={type:"success",text:"Ejercicio archivado. Sus referencias se conservan."};
+    }else if(policy.action==="delete"){
+      saveExerciseLibrary(library.filter(item=>item.id!==id),{touchUpdatedAt:false,ownerId:owner});
+      state.exerciseLibraryMessage={type:"success",text:"Ejercicio eliminado definitivamente."};
+    }
+    state.exerciseLibraryDeleteCandidate=null;
+  }finally{state.exerciseLibraryBusy=null;}
+  renderExerciseLibrary();
+}
+async function restoreLibraryExercise(id){
+  if(state.exerciseLibraryBusy) return;
+  const api=exerciseLibraryWorkflowApi(),owner=exerciseLibraryOwner();
+  const library=getExerciseLibrary(),exercise=library.find(item=>item.id===id);
+  if(!exercise?.custom||(exercise.ownerId&&exercise.ownerId!==owner)) return;
+  state.exerciseLibraryBusy="restore";
+  try{
+    if(owner!==exerciseLibraryOwner()) return;
+    const result=api.restoreExercise(exercise,{timestamp:new Date().toISOString()});
+    if(result.changed) saveExerciseLibrary(library.map(item=>item.id===id?result.exercise:item),{
+      touchUpdatedAt:false,ownerId:owner
+    });
+    state.exerciseLibraryMessage={type:"success",text:"Ejercicio restaurado."};
+  }finally{state.exerciseLibraryBusy=null;}
+  renderExerciseLibrary();
+}
+function csvField(value){return (Array.isArray(value)?value:[]).join(", ");}
+function parseListField(id){return (document.getElementById(id)?.value||"").split(",").map(value=>value.trim()).filter(Boolean);}
+function renderExerciseLibraryEditor(){
+  const api=exerciseLibraryWorkflowApi(),domainApi=window.GymOSExerciseDomain;
+  const library=getExerciseLibrary(),existing=library.find(item=>item.id===state.editingLibraryExerciseId);
+  if(existing&&!existing.custom){state.screen="exerciseLibrary";renderExerciseLibrary();return;}
+  const exercise=state.exerciseLibraryFormDraft||existing||{
+    name:"",aliases:[],category:"strength",movementPattern:"horizontal_push",
+    primaryMuscles:[],secondaryMuscles:[],requiredEquipment:[],trainingLocations:["gym"],
+    difficulty:"beginner",recordTypes:["weight_reps"],defaultPrescription:{sets:3,repRange:{min:8,max:12},targetRir:{min:2,max:3},restSeconds:90},
+    instructions:{short:"",setup:[],execution:[],breathing:"",stopIf:[]},notes:""
+  };
+  app.innerHTML=`<div class="app-shell exercise-library-shell">
+    <header class="topbar"><button id="backLibraryEditor" class="back-button" type="button" aria-label="Volver">←</button>
+      <div><div class="brand">${existing?"Editar ejercicio":"Crear ejercicio"}</div><div class="subtle">Los campos de seguridad incompletos requieren revisión.</div></div></header>
+    <main class="screen">
+      ${exerciseLibraryMessageHtml()}
+      <section class="card library-editor-form">
+        <label for="libraryExerciseName"><span>Nombre</span><input id="libraryExerciseName" maxlength="160" value="${esc(exercise.name)}" required></label>
+        <label for="libraryExerciseAliases"><span>Alias opcionales</span><input id="libraryExerciseAliases" value="${esc(csvField(exercise.aliases))}" placeholder="Separados por comas"></label>
+        <div class="routine-editor-grid">
+          <label><span>Categoría</span><select id="libraryExerciseCategory">${domainApi.EXERCISE_CATEGORIES.map(value=>`<option value="${value}" ${exercise.category===value?"selected":""}>${esc(api.label(value))}</option>`).join("")}</select></label>
+          <label><span>Patrón de movimiento</span><select id="libraryExercisePattern">${domainApi.MOVEMENT_PATTERNS.map(value=>`<option value="${value}" ${exercise.movementPattern===value?"selected":""}>${esc(api.label(value))}</option>`).join("")}</select></label>
+          <label><span>Dificultad</span><select id="libraryExerciseDifficulty">${domainApi.EXPERIENCE_LEVELS.map(value=>`<option value="${value}" ${exercise.difficulty===value?"selected":""}>${esc(api.label(value))}</option>`).join("")}</select></label>
+          <label><span>Tipo de registro</span><select id="libraryExerciseRecordType">${domainApi.RECORD_TYPES.map(value=>`<option value="${value}" ${(exercise.recordTypes||[])[0]===value?"selected":""}>${esc(api.label(value))}</option>`).join("")}</select></label>
+        </div>
+        <label><span>Músculos principales</span><input id="libraryExercisePrimaryMuscles" value="${esc(csvField(exercise.primaryMuscles))}" placeholder="chest, triceps"></label>
+        <label><span>Músculos secundarios</span><input id="libraryExerciseSecondaryMuscles" value="${esc(csvField(exercise.secondaryMuscles))}"></label>
+        <label><span>Equipamiento necesario</span><input id="libraryExerciseEquipment" value="${esc(csvField(exercise.requiredEquipment))}" placeholder="bodyweight, dumbbells"></label>
+        <label><span>Lugar de entrenamiento</span><input id="libraryExerciseLocations" value="${esc(csvField(exercise.trainingLocations))}" placeholder="gym, home"></label>
+        <fieldset class="library-prescription-fields"><legend>Prescripción predeterminada</legend>
+          <label><span>Series</span><input id="libraryExerciseSets" type="number" min="1" max="10" value="${Number(exercise.defaultPrescription?.sets)||3}"></label>
+          <label><span>Repeticiones mín.</span><input id="libraryExerciseRepMin" type="number" min="1" max="100" value="${Number(exercise.defaultPrescription?.repRange?.min)||8}"></label>
+          <label><span>Repeticiones máx.</span><input id="libraryExerciseRepMax" type="number" min="1" max="100" value="${Number(exercise.defaultPrescription?.repRange?.max)||12}"></label>
+          <label><span>Descanso (s)</span><input id="libraryExerciseRest" type="number" min="15" max="600" value="${Number(exercise.defaultPrescription?.restSeconds)||90}"></label>
+        </fieldset>
+        <label><span>Instrucciones breves</span><textarea id="libraryExerciseInstructions" rows="3">${esc(exercise.instructions?.short||"")}</textarea></label>
+        <label><span>Notas</span><textarea id="libraryExerciseNotes" maxlength="1000" rows="3">${esc(exercise.notes||"")}</textarea></label>
+        <button id="toggleExerciseAdvanced" class="secondary full" type="button" aria-expanded="${state.exerciseLibraryAdvancedOpen}">${state.exerciseLibraryAdvancedOpen?"Ocultar opciones avanzadas":"Mostrar opciones avanzadas"}</button>
+        ${state.exerciseLibraryAdvancedOpen?`<div class="library-advanced-fields">
+          <label><span>Complejidad técnica (1–5)</span><input id="libraryExerciseComplexity" type="number" min="1" max="5" value="${Number(exercise.technicalComplexity)||1}"></label>
+          <label><span>Demanda de estabilidad (1–5)</span><input id="libraryExerciseStability" type="number" min="1" max="5" value="${Number(exercise.stabilityDemand)||1}"></label>
+          <label><span>Demanda de equilibrio (1–5)</span><input id="libraryExerciseBalance" type="number" min="1" max="5" value="${Number(exercise.balanceDemand)||1}"></label>
+          <label><span>Posiciones corporales</span><input id="libraryExercisePositions" value="${esc(csvField(exercise.bodyPositions))}"></label>
+          <label><span>Tipos de carga</span><input id="libraryExerciseLoading" value="${esc(csvField(exercise.loadingTypes))}"></label>
+          <label><span>Grupos de sustitución</span><input id="libraryExerciseGroups" value="${esc(csvField(exercise.substitutionGroups))}"></label>
+          <label><span>Precauciones</span><input id="libraryExerciseCautions" value="${esc(csvField(exercise.cautionFlags))}"></label>
+          <label><span>Exclusiones</span><input id="libraryExerciseExclusions" value="${esc(csvField(exercise.exclusionFlags))}"></label>
+          <label><input id="libraryExerciseUnilateral" type="checkbox" ${exercise.unilateral?"checked":""}><span>Unilateral</span></label>
+          <label><input id="libraryExerciseSupported" type="checkbox" ${exercise.supported?"checked":""}><span>Con apoyo</span></label>
+        </div>`:""}
+        <button id="saveLibraryExercise" class="primary full" type="button" ${state.exerciseLibraryBusy?"disabled":""}>${state.exerciseLibraryBusy==="save"?"Guardando…":existing?"Guardar cambios":"Crear ejercicio"}</button>
+      </section>
+    </main>
+  </div>`;
+  document.getElementById("backLibraryEditor").onclick=()=>{state.screen="exerciseLibrary";renderExerciseLibrary();};
+  document.getElementById("toggleExerciseAdvanced").onclick=()=>{
+    state.exerciseLibraryFormDraft=libraryExerciseFormValue();
+    state.exerciseLibraryAdvancedOpen=!state.exerciseLibraryAdvancedOpen;
+    renderExerciseLibraryEditor();
+  };
+  document.getElementById("saveLibraryExercise").onclick=()=>saveLibraryExerciseForm();
+  document.getElementById("libraryExerciseName")?.focus();
+}
+function libraryExerciseFormValue(){
+  const existing=getExerciseLibrary().find(item=>item.id===state.editingLibraryExerciseId);
+  const base=state.exerciseLibraryFormDraft||existing||{};
+  const numberOrBase=(id,key)=>{
+    const element=document.getElementById(id);
+    return element?Number(element.value)||undefined:base[key];
+  };
+  const listOrBase=(id,key)=>document.getElementById(id)?parseListField(id):(base[key]||[]);
+  return {
+    name:document.getElementById("libraryExerciseName")?.value,
+    aliases:parseListField("libraryExerciseAliases"),
+    category:document.getElementById("libraryExerciseCategory")?.value,
+    movementPattern:document.getElementById("libraryExercisePattern")?.value,
+    primaryMuscles:parseListField("libraryExercisePrimaryMuscles"),
+    secondaryMuscles:parseListField("libraryExerciseSecondaryMuscles"),
+    requiredEquipment:parseListField("libraryExerciseEquipment"),
+    trainingLocations:parseListField("libraryExerciseLocations"),
+    difficulty:document.getElementById("libraryExerciseDifficulty")?.value,
+    recordTypes:[document.getElementById("libraryExerciseRecordType")?.value],
+    defaultPrescription:{
+      sets:Number(document.getElementById("libraryExerciseSets")?.value),
+      repRange:{min:Number(document.getElementById("libraryExerciseRepMin")?.value),max:Number(document.getElementById("libraryExerciseRepMax")?.value)},
+      targetRir:{min:2,max:3},restSeconds:Number(document.getElementById("libraryExerciseRest")?.value)
+    },
+    instructions:{...(base.instructions||{}),short:document.getElementById("libraryExerciseInstructions")?.value},
+    notes:document.getElementById("libraryExerciseNotes")?.value,
+    technicalComplexity:numberOrBase("libraryExerciseComplexity","technicalComplexity"),
+    stabilityDemand:numberOrBase("libraryExerciseStability","stabilityDemand"),
+    balanceDemand:numberOrBase("libraryExerciseBalance","balanceDemand"),
+    bodyPositions:listOrBase("libraryExercisePositions","bodyPositions"),
+    loadingTypes:listOrBase("libraryExerciseLoading","loadingTypes"),
+    substitutionGroups:listOrBase("libraryExerciseGroups","substitutionGroups"),
+    cautionFlags:listOrBase("libraryExerciseCautions","cautionFlags"),
+    exclusionFlags:listOrBase("libraryExerciseExclusions","exclusionFlags"),
+    pregnancy:base.pregnancy||{},
+    unilateral:document.getElementById("libraryExerciseUnilateral")
+      ?Boolean(document.getElementById("libraryExerciseUnilateral").checked):Boolean(base.unilateral),
+    supported:document.getElementById("libraryExerciseSupported")
+      ?Boolean(document.getElementById("libraryExerciseSupported").checked):Boolean(base.supported)
+  };
+}
+function exerciseValidationMessage(code){
+  return {
+    exercise_name_required:"Escribe un nombre.",exercise_name_too_long:"El nombre es demasiado largo.",
+    invalid_category:"Selecciona una categoría válida.",invalid_movement_pattern:"Selecciona un patrón válido.",
+    invalid_record_type:"Selecciona un tipo de registro válido.",exercise_id_immutable:"El identificador no puede modificarse.",
+    metadata_out_of_range:"Revisa los valores avanzados.",duplicate_name:"Ya existe otro ejercicio con ese nombre.",
+    primary_muscles_review_required:"Añade al menos un músculo principal.",
+    equipment_review_required:"Añade el equipamiento necesario.",
+    instructions_review_required:"Añade instrucciones antes de usarlo en recomendaciones.",
+    pregnancy_review_required:"La información de embarazo necesita revisión."
+  }[code]||"Revisa los datos del ejercicio.";
+}
+function createExerciseIdentitySeed(){
+  const secureCrypto=globalThis.crypto;
+  if(typeof secureCrypto?.randomUUID==="function") return secureCrypto.randomUUID();
+  if(typeof secureCrypto?.getRandomValues==="function"){
+    const values=new Uint32Array(4);
+    secureCrypto.getRandomValues(values);
+    return [...values].map(value=>value.toString(16).padStart(8,"0")).join("-");
+  }
+  throw new Error("secure_identity_seed_unavailable");
+}
+async function saveLibraryExerciseForm(){
+  if(state.exerciseLibraryBusy) return;
+  const api=exerciseLibraryWorkflowApi(),owner=exerciseLibraryOwner();
+  const form=libraryExerciseFormValue();
+  state.exerciseLibraryFormDraft=form;
+  state.exerciseLibraryBusy="save";renderExerciseLibraryEditor();
+  try{
+    const library=getExerciseLibrary();
+    const existing=library.find(item=>item.id===state.editingLibraryExerciseId);
+    if(existing&&existing.updatedAt!==state.exerciseLibraryEditBaseline) throw new Error("edit_conflict");
+    if(owner!==exerciseLibraryOwner()) return;
+    const timestamp=new Date().toISOString();
+    const seed=createExerciseIdentitySeed();
+    const result=api.buildCustomExercise(form,{ownerId:owner,library,existing,timestamp,idSeed:seed});
+    if(!result.valid){
+      state.exerciseLibraryMessage={type:"error",text:result.errors.map(exerciseValidationMessage).join(" ")};
+      return;
+    }
+    if(owner!==exerciseLibraryOwner()) return;
+    const currentLibrary=getExerciseLibrary(),currentExisting=currentLibrary.find(item=>item.id===existing?.id);
+    if(existing&&currentExisting?.updatedAt!==state.exerciseLibraryEditBaseline) throw new Error("edit_conflict");
+    if(result.changed) saveExerciseLibrary(existing
+      ?currentLibrary.map(item=>item.id===existing.id?result.exercise:item)
+      :[...currentLibrary,result.exercise],{touchUpdatedAt:false,ownerId:owner});
+    state.exerciseLibraryMessage={
+      type:"success",
+      text:result.warnings.length
+        ?`Ejercicio guardado como “Requiere revisión”. ${result.warnings.map(exerciseValidationMessage).join(" ")}`
+        :(existing?"Ejercicio actualizado.":"Ejercicio creado.")
+    };
+    state.editingLibraryExerciseId=null;state.exerciseLibraryEditBaseline=null;state.exerciseLibraryFormDraft=null;state.screen="exerciseLibrary";
+  }catch(error){
+    state.exerciseLibraryMessage={type:"error",text:error?.message==="edit_conflict"
+      ?"El ejercicio cambió en otro lugar. Vuelve a abrirlo antes de guardar."
+      :"No se pudo guardar el ejercicio."};
+  }finally{state.exerciseLibraryBusy=null;}
+  state.screen==="exerciseLibrary"?renderExerciseLibrary():renderExerciseLibraryEditor();
+}
+function renderExerciseDetail(){
+  const api=exerciseLibraryWorkflowApi(),item=getExerciseLibrary().find(exercise=>exercise.id===state.selectedLibraryExerciseId);
+  if(!item){state.screen="exerciseLibrary";renderExerciseLibrary();return;}
+  const detail=api.detailModel(item,exerciseLibraryContext());
+  const lines=(values,empty="Sin información")=>values?.length?`<ul>${values.map(value=>`<li>${esc(value)}</li>`).join("")}</ul>`:`<p class="subtle">${empty}</p>`;
+  app.innerHTML=`<div class="app-shell exercise-library-shell">
+    <header class="topbar"><button id="backExerciseDetail" class="back-button" type="button" aria-label="Volver">←</button>
+      <div><div class="brand">${esc(detail.name)}</div><div class="subtle">${esc(detail.origin)} · ${esc(exerciseStatusLabel(detail.status))}</div></div>
+      ${detail.editable?`<button id="editExerciseFromDetail" class="header-action" type="button">Editar</button>`:""}
+    </header>
+    <main class="screen">
+      <section class="card exercise-profile-card">
+        <div class="exercise-profile-heading"><div><h1 tabindex="-1">${esc(detail.name)}</h1><p>${esc(detail.category)} · ${esc(detail.pattern)}</p></div>
+          <button id="favoriteExerciseDetail" type="button" class="favorite-button ${detail.favorite?"active":""}" aria-label="${detail.favorite?"Quitar de favoritos":"Añadir a favoritos"}">★</button></div>
+        <div class="exercise-card-tags">${detail.muscles.map(value=>`<span>${esc(value)}</span>`).join("")}${detail.equipment.map(value=>`<span>${esc(value)}</span>`).join("")}</div>
+        ${detail.warning?`<p class="exercise-context-warning">${esc(detail.warning)}</p>`:""}
+      </section>
+      <section class="card exercise-detail-grid">
+        <div><span>Subpatrón</span><strong>${esc(detail.subpattern)}</strong></div>
+        <div><span>Músculos secundarios</span><strong>${esc(detail.secondaryMuscles.join(", ")||"Sin especificar")}</strong></div>
+        <div><span>Ubicaciones</span><strong>${esc(detail.locations.join(", ")||"Sin especificar")}</strong></div>
+        <div><span>Dificultad</span><strong>${esc(detail.difficulty)}</strong></div>
+        <div><span>Registro</span><strong>${esc(detail.recordTypes.join(", "))}</strong></div>
+        <div><span>Prescripción</span><strong>${Number(detail.prescription.sets)||"—"} series · ${Number(detail.prescription.restSeconds)||"—"} s</strong></div>
+      </section>
+      <section class="card"><h2>Instrucciones</h2><p>${esc(detail.instructions.short||"Sin instrucciones breves.")}</p>
+        <h3>Preparación</h3>${lines(detail.instructions.setup)}
+        <h3>Ejecución</h3>${lines(detail.instructions.execution)}
+        <h3>Respiración</h3><p>${esc(detail.instructions.breathing||"Sin indicaciones específicas.")}</p>
+        <h3>Señales para detenerse</h3>${lines(detail.instructions.stopIf,"Detente si aparece dolor o malestar inesperado.")}</section>
+      <section class="card"><h2>Seguridad y restricciones</h2>${lines(detail.warnings,"No hay advertencias específicas registradas.")}
+        ${detail.pregnancy?`<p class="subtle">Embarazo: información conservadora. Debe revisarse según etapa y situación individual.</p>`:""}</section>
+      <section class="card"><h2>Alternativas conocidas</h2>${lines(detail.alternatives.map(id=>getExerciseLibrary().find(exercise=>exercise.id===id)?.name||api.label(id)))}</section>
+    </main>
+  </div>`;
+  document.getElementById("backExerciseDetail").onclick=()=>{state.screen="exerciseLibrary";renderExerciseLibrary();};
+  const edit=document.getElementById("editExerciseFromDetail");
+  if(edit) edit.onclick=()=>{state.editingLibraryExerciseId=item.id;state.exerciseLibraryEditBaseline=item.updatedAt||null;state.exerciseLibraryFormDraft=null;state.screen="exerciseLibraryEditor";renderExerciseLibraryEditor();};
+  document.getElementById("favoriteExerciseDetail").onclick=event=>{
+    if(state.exerciseLibraryBusy) return;
+    const owner=exerciseLibraryOwner();
+    state.exerciseLibraryBusy="favorite";
+    event.currentTarget.disabled=true;
+    try{
+      if(owner!==exerciseLibraryOwner()) return;
+      if(setExerciseFavorite(item.id,!item.favorite)) renderExerciseDetail();
+    }finally{
+      state.exerciseLibraryBusy=null;
+    }
+  };
+  document.querySelector("main h1")?.focus?.();
+}
+function findLibraryExerciseForRuntime(runtimeExercise){
+  const library=getExerciseLibrary();
+  const id=runtimeExercise?.exerciseId||runtimeExercise?.id;
+  if(id){
+    const exact=library.find(item=>item.id===id);
+    if(exact) return exact;
+  }
+  const normalize=window.GymOSExerciseDomain.normalizeToken;
+  const key=normalize(runtimeExercise?.name);
+  const matches=library.filter(item=>normalize(item.name)===key||item.aliases?.some(alias=>normalize(alias)===key));
+  return matches.length===1?matches[0]:null;
+}
+function resetSubstitutionTimers(session,index){
+  Object.keys(state.exerciseTimers||{}).filter(key=>key.startsWith(`${session}:${index}:`)).forEach(key=>{
+    const timer=state.exerciseTimers[key];if(timer?.intervalId) clearInterval(timer.intervalId);delete state.exerciseTimers[key];
+  });
+}
+function openExerciseSubstitution(mode,exerciseIndex){
+  const api=exerciseLibraryWorkflowApi(),owner=exerciseLibraryOwner(),session=state.selectedSession;
+  const source=mode==="temporary"?getDraft(session):(getRoutine()[session]||[]);
+  const exercise=mode==="temporary"?source.exercises?.[exerciseIndex]:source[exerciseIndex];
+  const original=findLibraryExerciseForRuntime(exercise);
+  if(!original){toast("Este ejercicio todavía no tiene una ficha inequívoca en la biblioteca.");return;}
+  if(mode==="temporary"&&api.hasExerciseResults(exercise)){
+    toast("No puedes cambiar este ejercicio porque ya has empezado a registrarlo.");return;
+  }
+  const baselineHash=window.GymOSRoutineProposals.routineHash(getRoutine());
+  const draftHash=window.GymOSRoutineProposals.stableHash(getDraft(session));
+  state.exerciseSubstitution={ownerId:owner,mode,session,exerciseIndex,originalExerciseId:original.id,baselineHash,draftHash,selectedId:null,reason:"",showAll:false,busy:null,message:null};
+  state.screen="exerciseSubstitution";renderExerciseSubstitution();
+}
+function substitutionAlternatives(){
+  const flow=state.exerciseSubstitution,original=getExerciseLibrary().find(item=>item.id===flow?.originalExerciseId);
+  if(!flow||!original) return {available:[],unavailable:[],errors:["exercise_not_found"]};
+  const knownIds=getHistory().flatMap(workout=>(workout.exercises||[]).map(exercise=>exercise.exerciseId||exercise.id).filter(Boolean));
+  return exerciseLibraryWorkflowApi().evaluateAlternatives(original,getExerciseLibrary(),{
+    ...exerciseLibraryContext(),knownExerciseIds:knownIds
+  });
+}
+function substitutionBlockedLabel(code){
+  return {
+    archived:"Está archivado.",needs_review:"Su ficha necesita revisión.",
+    invalid_exercise:"La ficha no es válida.",equipment_or_location_unavailable:"Requiere otro equipamiento o ubicación.",
+    exercise_avoided:"Está en tu lista de ejercicios evitados.",
+    record_type_incompatible:"Usa un tipo de registro incompatible.",
+    owner_mismatch:"Pertenece a otro propietario.",pregnancy_not_reviewed:"No está revisado para el estado vital actual.",
+    pregnancy_prohibited:"No está disponible para el estado vital actual.",
+    pregnancy_risk_unknown:"Falta información de seguridad."
+  }[code]||"No está disponible por una restricción.";
+}
+function renderAlternativeCard(row,selectable){
+  const api=exerciseLibraryWorkflowApi(),exercise=row.exercise;
+  return `<article class="card substitution-option ${selectable&&state.exerciseSubstitution.selectedId===exercise.id?"selected":""}">
+    <div><h3>${esc(exercise.name)}</h3><p>${esc(api.label(exercise.movementPattern))} · ${esc(exercise.primaryMuscles.map(api.label).join(", "))}</p></div>
+    <div class="exercise-card-tags">${exercise.requiredEquipment.map(value=>`<span>${esc(api.label(value))}</span>`).join("")}<span>${esc(api.label(exercise.difficulty))}</span><span>${esc(exercise.recordTypes.map(api.label).join(", "))}</span></div>
+    <p><strong>${esc(row.label)}</strong> ${esc(row.reasons.join(" "))}</p>
+    ${row.warnings.length?`<p class="exercise-context-warning">${esc(row.warnings.map(api.label).join(" "))}</p>`:""}
+    ${selectable?`<button type="button" class="secondary full" data-select-substitute="${esc(exercise.id)}">Elegir alternativa</button>`
+      :`<p class="unavailable-reason">${esc(row.blocked.map(substitutionBlockedLabel).join(" "))}</p>`}
+  </article>`;
+}
+function renderExerciseSubstitution(){
+  const flow=state.exerciseSubstitution;
+  if(!flow||flow.ownerId!==currentRoutineOwnerOrNull()){state.exerciseSubstitution=null;state.screen="workout";renderWorkout();return;}
+  const original=getExerciseLibrary().find(item=>item.id===flow.originalExerciseId);
+  const alternatives=substitutionAlternatives();
+  const available=flow.showAll?alternatives.available:alternatives.available.slice(0,10);
+  const selected=getExerciseLibrary().find(item=>item.id===flow.selectedId);
+  app.innerHTML=`<div class="app-shell exercise-library-shell">
+    <header class="topbar"><button id="backExerciseSubstitution" class="back-button" type="button" aria-label="Volver">←</button>
+      <div><div class="brand">${flow.mode==="temporary"?"Cambiar solo hoy":"Cambiar en mi rutina"}</div><div class="subtle">${esc(original?.name||"Ejercicio")}</div></div></header>
+    <main class="screen">
+      ${flow.message?`<div class="form-message error" role="alert">${esc(flow.message)}</div>`:`<div aria-live="polite"></div>`}
+      <section class="card"><h2>Elige una alternativa</h2><p>${flow.mode==="temporary"
+        ?"Solo cambiará el entrenamiento actual. La rutina seguirá intacta."
+        :"Se creará una propuesta completa para revisar y activar de forma segura."}</p></section>
+      ${alternatives.errors.length?`<section class="card form-message error" role="alert">La biblioteca contiene identificadores duplicados y debe corregirse antes de continuar.</section>`:""}
+      <section class="substitution-options">${available.map(row=>renderAlternativeCard(row,true)).join("")||`<div class="card empty">No hay alternativas compatibles disponibles.</div>`}</section>
+      ${alternatives.available.length>10&&!flow.showAll?`<button id="showMoreAlternatives" class="secondary full" type="button">Ver más alternativas</button>`:""}
+      ${alternatives.unavailable.length?`<details class="card"><summary>No disponibles (${alternatives.unavailable.length})</summary><div class="substitution-options unavailable">${alternatives.unavailable.slice(0,10).map(row=>renderAlternativeCard(row,false)).join("")}</div></details>`:""}
+      ${selected?`<section class="card substitution-selection-summary"><h2>Comparación</h2>
+        <div class="substitution-compare"><div><span>Actual</span><strong>${esc(original.name)}</strong><p>${esc(exerciseLibraryWorkflowApi().label(original.movementPattern))}</p></div>
+        <div><span>Propuesto</span><strong>${esc(selected.name)}</strong><p>${esc(exerciseLibraryWorkflowApi().label(selected.movementPattern))}</p></div></div>
+        <label for="substitutionReason"><span>Motivo opcional</span><textarea id="substitutionReason" maxlength="500">${esc(flow.reason||"")}</textarea></label>
+        <button id="applyExerciseSubstitution" class="primary full" type="button" ${flow.busy?"disabled":""}>${flow.busy?"Guardando…":flow.mode==="temporary"?"Cambiar solo hoy":"Crear propuesta"}</button>
+      </section>`:""}
+    </main>
+  </div>`;
+  document.getElementById("backExerciseSubstitution").onclick=()=>{state.exerciseSubstitution=null;state.screen="workout";renderWorkout();};
+  document.querySelectorAll("[data-select-substitute]").forEach(button=>button.onclick=()=>{flow.selectedId=button.dataset.selectSubstitute;renderExerciseSubstitution();});
+  const more=document.getElementById("showMoreAlternatives");if(more) more.onclick=()=>{flow.showAll=true;renderExerciseSubstitution();};
+  const apply=document.getElementById("applyExerciseSubstitution");
+  if(apply) apply.onclick=()=>{flow.reason=document.getElementById("substitutionReason")?.value||"";applyExerciseLibrarySubstitution();};
+}
+async function applyExerciseLibrarySubstitution(){
+  const flow=state.exerciseSubstitution;
+  if(!flow||flow.busy) return;
+  const api=exerciseLibraryWorkflowApi(),owner=exerciseLibraryOwner();
+  if(owner!==flow.ownerId) return;
+  const library=getExerciseLibrary(),original=library.find(item=>item.id===flow.originalExerciseId),replacement=library.find(item=>item.id===flow.selectedId);
+  if(!original||!replacement) return;
+  const ranked=substitutionAlternatives().available.find(row=>row.exercise.id===replacement.id);
+  if(!ranked){flow.message="La alternativa ya no está disponible.";renderExerciseSubstitution();return;}
+  flow.busy=flow.mode;renderExerciseSubstitution();
+  try{
+    if(owner!==exerciseLibraryOwner()) return;
+    if(flow.mode==="temporary"){
+      const current=getDraft(flow.session);
+      if(window.GymOSRoutineProposals.stableHash(current)!==flow.draftHash) throw new Error("draft_changed");
+      const result=api.temporarySubstitution({
+        draft:current,session:flow.session,exerciseIndex:flow.exerciseIndex,
+        original,replacement,reason:flow.reason,timestamp:new Date().toISOString()
+      });
+      if(!result.ok) throw new Error(result.code);
+      if(owner!==exerciseLibraryOwner()) return;
+      saveDraft(result.draft);resetSubstitutionTimers(flow.session,flow.exerciseIndex);
+      state.exerciseSubstitution=null;state.screen="workout";renderWorkout();toast("Cambio aplicado solo a este entrenamiento.");
+      return;
+    }
+    const currentRoutine=getRoutine(),currentHash=window.GymOSRoutineProposals.routineHash(currentRoutine);
+    if(currentHash!==flow.baselineHash) throw new Error("baseline_changed");
+    const currentItem=currentRoutine[flow.session]?.[flow.exerciseIndex];
+    if(findLibraryExerciseForRuntime(currentItem)?.id!==original.id) throw new Error("baseline_changed");
+    const compatibility=window.GymOSRoutineGenerator.validateExerciseCompatibility({
+      exercise:replacement,userProfile:window.GymOSProfileData.getUserProfile(),
+      currentLifeState:window.GymOSProfileData.getCurrentLifeState()
+    });
+    const timestamp=new Date().toISOString();
+    const proposal=api.permanentSubstitutionProposal({
+      ownerId:owner,routine:currentRoutine,baselineHash:currentHash,sessionId:flow.session,
+      exerciseIndex:flow.exerciseIndex,original,replacement,reason:flow.reason,generatedAt:timestamp,compatibility
+    });
+    if(owner!==exerciseLibraryOwner()||window.GymOSRoutineProposals.routineHash(getRoutine())!==currentHash) throw new Error("baseline_changed");
+    const existing=api.findExistingSubstitution(getRoutineProposalRecords(owner),owner,proposal.source.substitutionFingerprint);
+    const persisted=existing?{record:existing,created:false}:persistRoutineProposal(proposal,{ownerId:owner,timestamp});
+    ensureRoutineWorkflowState();
+    state.routineWorkflow=window.GymOSRoutineWorkflowUI.finishOperation(
+      window.GymOSRoutineWorkflowUI.setFlowView(state.routineWorkflow,"review",persisted.record.proposal.proposalId),
+      {type:"success",text:persisted.created?"Sustitución guardada como propuesta pendiente.":"Esta sustitución ya existía y se ha recuperado."}
+    );
+    state.exerciseSubstitution=null;state.screen="routineWorkflow";renderRoutineWorkflow();
+  }catch(error){
+    flow.message={
+      exercise_already_started:"No puedes cambiar este ejercicio porque ya has empezado a registrarlo.",
+      record_type_incompatible:"El tipo de registro no permite un cambio rápido.",
+      draft_changed:"El entrenamiento cambió. Vuelve a abrir la sustitución.",
+      baseline_changed:"La rutina cambió. Vuelve a abrir la sustitución."
+    }[error?.message]||"No se pudo aplicar la sustitución.";
+  }finally{
+    if(state.exerciseSubstitution===flow) flow.busy=null;
+  }
+  if(state.exerciseSubstitution===flow){
+    renderExerciseSubstitution();
+  }
+}
+async function undoCurrentExerciseSubstitution(exerciseIndex){
+  if(state.exerciseLibraryBusy) return;
+  const api=exerciseLibraryWorkflowApi(),owner=exerciseLibraryOwner(),session=state.selectedSession;
+  state.exerciseLibraryBusy="undo";
+  try{
+    const current=getDraft(session),result=api.undoTemporarySubstitution({draft:current,session,exerciseIndex});
+    if(!result.ok){toast("No puedes deshacer el cambio porque ya has empezado a registrarlo.");return;}
+    if(owner!==exerciseLibraryOwner()) return;
+    if(!result.idempotent) saveDraft(result.draft);
+    resetSubstitutionTimers(session,exerciseIndex);renderWorkout();
+    if(!result.idempotent) toast("Ejercicio planificado restaurado.");
+  }finally{state.exerciseLibraryBusy=null;}
+}
+
 function renderSettings(){
   app.innerHTML=`<div class="app-shell">
     <header class="topbar"><div><div class="brand">Ajustes</div><div class="subtle">GymOS v4.0.8 · Tema claro y tamaño corregidos</div></div></header>
@@ -10883,8 +11653,8 @@ function renderSettings(){
       </section>
       <section class="card">
         <h2>Biblioteca de ejercicios</h2>
-        <p class="subtle">Busca ejercicios, marca favoritos y añade ejercicios propios a tus sesiones.</p>
-        <button id="openExerciseLibrary" class="primary full">Abrir biblioteca</button>
+        <p class="subtle">Busca, consulta y organiza ejercicios GymOS y personalizados.</p>
+        <button id="openExerciseLibrary" class="secondary full">Abrir biblioteca</button>
       </section>
       <section class="card">
         <h2>Análisis global</h2>

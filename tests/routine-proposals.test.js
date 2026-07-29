@@ -239,12 +239,12 @@ test("19. detecta cambio de orden",()=>{
   assert.equal(api.compareRoutineProposal(current,value).summary.orderChanges,2);
 });
 
-test("20. propuestas de 4 a 6 días no son activables por runtime actual",()=>{
+test("20. propuestas de 4 a 6 días son activables por runtime H3",()=>{
   const api=loadApi();
   [4,5,6].forEach(days=>{
     const result=api.activationCompatibility(proposal(`p-${days}`,days));
-    assert.equal(result.compatible,false);
-    assert.match(result.reasons[0],/tres sesiones/);
+    assert.equal(result.compatible,true);
+    assert.equal(result.reasons.length,0);
   });
   assert.equal(api.activationCompatibility(proposal("p-2",2)).compatible,true);
   assert.equal(api.activationCompatibility(proposal("p-3",3)).compatible,true);

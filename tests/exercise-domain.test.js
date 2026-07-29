@@ -393,6 +393,9 @@ test("aplicar dos veces el mismo payload conserva igualdad serializada exacta",(
     ensureProfileDataMigration:()=>{},
     ensureRoutineSessionMigration:()=>({migrated:false}),
     currentRoutineOwnerOrNull:()=>ownerId,
+    assertActiveLocalOwner:value=>value,
+    captureRoutineSessionStartupStorage:()=>localStorage.snapshot(),
+    restoreRoutineSessionStartupStorage:()=>{},
     sessions:null
   };
   vm.createContext(context);
@@ -442,6 +445,6 @@ test("aplicar dos veces el mismo payload conserva igualdad serializada exacta",(
 
 test("el modulo se carga antes de app y queda incluido en la cache PWA",()=>{
   assert.ok(indexSource.indexOf("exercise-domain.js")<indexSource.indexOf("app.js"));
-  assert.match(serviceWorkerSource,/gymos-cache-4\.2\.0-alpha\.1/);
+  assert.match(serviceWorkerSource,/gymos-cache-4\.2\.0-phase-h3/);
   assert.match(serviceWorkerSource,/exercise-domain\.js/);
 });

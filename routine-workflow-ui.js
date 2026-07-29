@@ -213,16 +213,27 @@
     return {valid:missing.length===0,missing:unique(missing)};
   }
   function routineSummary(routine){
-    const sessions=["A","B","C"].filter(key=>list(routine?.[key]).length).map(key=>{
-      const exercises=list(routine[key]);
-      const metadata=exercises[0]?.sessionMetadata||{};
-      return {
-        key,
-        name:text(metadata.name)||`Sesión ${key}`,
-        focus:text(metadata.focus)||null,
-        exerciseCount:exercises.length
-      };
-    });
+    const sessions=Array.isArray(routine?.sessions)
+      ?routine.sessions.slice().sort((a,b)=>
+        (Number(a?.order)||Number.MAX_SAFE_INTEGER)-
+        (Number(b?.order)||Number.MAX_SAFE_INTEGER)||
+        text(a?.sessionId).localeCompare(text(b?.sessionId),"en")
+      ).map((session,index)=>({
+        key:text(session.sessionId),
+        name:text(session.name)||`Sesión ${text(session.label)||index+1}`,
+        focus:text(session.focus)||null,
+        exerciseCount:list(session.exercises).length
+      }))
+      :["A","B","C"].filter(key=>list(routine?.[key]).length).map(key=>{
+        const exercises=list(routine[key]);
+        const metadata=exercises[0]?.sessionMetadata||{};
+        return {
+          key,
+          name:text(metadata.name)||`Sesión ${key}`,
+          focus:text(metadata.focus)||null,
+          exerciseCount:exercises.length
+        };
+      });
     return {
       sessionCount:sessions.length,
       sessions,
@@ -460,8 +471,12 @@
         activationId:activation.activationId,
         proposalId:activation.proposalId,
         activatedAt:activation.activatedAt,
-        current:routineSummary(activation.activated?.routine),
-        baseline:routineSummary(activation.baseline?.routine),
+        current:routineSummary(
+          activation.activated?.canonicalRoutine||activation.activated?.routine
+        ),
+        baseline:routineSummary(
+          activation.baseline?.canonicalRoutine||activation.baseline?.routine
+        ),
         blockedReason:activation.rollback?.blockedReason||null
       }:null,
       blockedActivation:blocked?{

@@ -187,14 +187,14 @@
     const sessionErrors=validateProposalSessions(proposal);
     const canonicalCompatible=!sessionErrors.includes("incompatible_session_count");
     const activationEngineCompatible=canonicalCompatible&&sessionErrors.length===0;
-    const runtimeCompatible=activationEngineCompatible&&count<=3;
+    const runtimeCompatible=activationEngineCompatible;
     return {
       canonicalCompatible,
       activationEngineCompatible,
       runtimeCompatible,
       compatibleNow:runtimeCompatible,
       sessionCount:count,
-      code:runtimeCompatible?null:count>3?"runtime_not_ready":"activation_incompatible"
+      code:runtimeCompatible?null:"activation_incompatible"
     };
   }
   function validateActivationRequest({
@@ -262,14 +262,16 @@
     });
     if(!canonicalTarget.ok) return canonicalTarget;
     const runtimeCompatible=validation.compatibility.runtimeCompatible;
-    const mapped=runtimeCompatible
-      ?{
-        routine:sessionModel().canonicalToLegacyRuntimeView(canonicalTarget.routine),
-        sessionMapping:Object.fromEntries(canonicalTarget.routine.sessions.map((session,index)=>[
-          session.sessionId,sessionModel().deriveSessionLabel(index+1)
-        ]))
-      }
-      :{routine:null,sessionMapping:{}};
+    const mapped={
+      routine:global.GymOSRoutineSessionRuntime
+        ?global.GymOSRoutineSessionRuntime.legacyShadow(canonicalTarget.routine)
+        :canonicalTarget.routine.sessions.length<=3
+          ?sessionModel().canonicalToLegacyRuntimeView(canonicalTarget.routine)
+          :{A:[],B:[],C:[]},
+      sessionMapping:Object.fromEntries(canonicalTarget.routine.sessions.map(session=>[
+        session.sessionId,session.legacySessionKey||null
+      ]))
+    };
     const id=activationId(
       validation.ownerId,proposalRecord.proposal.proposalId,effectiveTimestamp
     );
@@ -324,13 +326,13 @@
       ok:true,record,
       routine:clone(mapped.routine),
       canonicalRoutine:clone(canonicalTarget.routine),
-      selectedSession:runtimeCompatible?"A":null,
+      selectedSession:canonicalTarget.routine.sessions[0]?.legacySessionKey||null,
       selectedSessionId:canonicalTarget.routine.sessions[0]?.sessionId||null,
       canonicalCompatible:validation.compatibility.canonicalCompatible,
       activationEngineCompatible:validation.compatibility.activationEngineCompatible,
       runtimeCompatible,
       compatibleNow:runtimeCompatible,
-      applicationError:runtimeCompatible?null:"runtime_not_ready"
+      applicationError:null
     };
   }
   function validateRecord(record,ownerId){
@@ -348,6 +350,22 @@
     if(!text(record?.baseline?.routineHash)) errors.push("baseline_hash_required");
     if(!text(record?.activated?.canonicalRoutineHash)&&!text(record?.activated?.routineHash)){
       errors.push("activated_hash_required");
+    }
+    if(record?.activated?.canonicalRoutine){
+      const validation=sessionModel().validateCanonicalRoutine(record.activated.canonicalRoutine);
+      if(!validation.valid) errors.push("invalid_activated_canonical_routine");
+      else if(
+        sessionModel().canonicalRoutineHash(record.activated.canonicalRoutine)!==
+        record.activated.canonicalRoutineHash
+      ) errors.push("activated_canonical_hash_mismatch");
+    }
+    if(record?.baseline?.canonicalRoutine){
+      const validation=sessionModel().validateCanonicalRoutine(record.baseline.canonicalRoutine);
+      if(!validation.valid) errors.push("invalid_baseline_canonical_routine");
+      else if(
+        sessionModel().canonicalRoutineHash(record.baseline.canonicalRoutine)!==
+        record.baseline.canonicalRoutineHash
+      ) errors.push("baseline_canonical_hash_mismatch");
     }
     if(record?.status==="activated"&&record?.rollback?.available!==true){
       errors.push("activated_must_be_reversible");

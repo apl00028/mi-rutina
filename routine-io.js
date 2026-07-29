@@ -557,11 +557,8 @@
     if(missingPatterns.length){
       warnings.push(issue("missing_patterns","Faltan patrones de movimiento obligatorios; la propuesta requiere revisión.",{severity:"warning"}));
     }
-    if(orderedSessions.length>3){
-      warnings.push(issue("runtime_session_limit","La rutina se conserva completa, pero el runtime actual solo activa 2 o 3 sesiones.",{severity:"warning"}));
-    }
     const reviewRequired=orderedSessions.some(session=>session.compatibilityReview)||
-      missingPatterns.length>0||orderedSessions.length>3;
+      missingPatterns.length>0;
     if(!global.GymOSRoutineProposals?.activationCompatibility){
       throw new Error("GymOSRoutineProposals is required.");
     }
@@ -656,11 +653,14 @@
       const exercises=session?list(session.exercises):list(routine?.[key]);
       if(!exercises.length) return;
       const metadata=session||exercises[0]?.sessionMetadata||{};
+      const sessionLabel=session
+        ?text(session.name||session.label)||`Session ${String.fromCharCode(65+sessionIndex)}`
+        :text(key)||String.fromCharCode(65+sessionIndex);
       exercises.forEach((item,index)=>{
         const prescription=item.prescription||{};
         rows.push({
           templateVersion:ROUTINE_TEMPLATE_VERSION,
-          session:text(key)||String.fromCharCode(65+sessionIndex),
+          session:session?.legacySessionKey||String.fromCharCode(65+sessionIndex),
           sessionName:text(metadata.name||metadata.label)||`Sesión ${text(key)||String.fromCharCode(65+sessionIndex)}`,
           focus:text(metadata.focus),
           durationMin:Number(metadata.estimatedDurationMin||metadata.durationMin)||"",

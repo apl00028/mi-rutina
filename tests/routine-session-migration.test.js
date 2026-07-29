@@ -446,7 +446,7 @@ for(const days of [2,3,4,5,6]){
       Array.from({length:days},(_,index)=>`proposal-session-${index+1}`)
     );
     assert.equal(result.activationEngineCompatible,true);
-    assert.equal(result.runtimeCompatible,days<=3);
+    assert.equal(result.runtimeCompatible,true);
   });
 }
 
@@ -481,13 +481,13 @@ test("planes de dos y tres producen sombra legacy aplicable",()=>{
   });
 });
 
-test("planes de cuatro a seis devuelven runtime_not_ready sin sombra truncada",()=>{
+test("planes de cuatro a seis habilitan runtime canónico sin crear claves D/E/F",()=>{
   [4,5,6].forEach(days=>{
     const {result}=activationPlan(days);
     assert.equal(result.ok,true);
-    assert.equal(result.applicationError,"runtime_not_ready");
-    assert.equal(result.routine,null);
-    assert.equal(result.record.activated.runtimeCompatible,false);
+    assert.equal(result.applicationError,null);
+    assert.deepEqual(Object.keys(result.routine),["A","B","C"]);
+    assert.equal(result.record.activated.runtimeCompatible,true);
     assert.equal(result.record.activated.canonicalRoutine.sessions.length,days);
   });
 });
@@ -498,19 +498,20 @@ test("la compatibilidad distingue modelo, motor, runtime y activación actual",(
   assert.deepEqual(plain(fields),{
     canonicalCompatible:true,
     activationEngineCompatible:true,
-    runtimeCompatible:false,
-    compatibleNow:false,
+    runtimeCompatible:true,
+    compatibleNow:true,
     sessionCount:4,
-    code:"runtime_not_ready"
+    code:null
   });
 });
 
-test("aplicación visible bloquea runtime_not_ready antes de capturar historial o escribir",()=>{
+test("aplicación visible activa el plan canónico mediante una transacción",()=>{
   const functionStart=appSource.indexOf("function activateStoredRoutineProposal");
   const functionEnd=appSource.indexOf("function rollbackStoredRoutineActivation",functionStart);
   const source=appSource.slice(functionStart,functionEnd);
-  assert.ok(source.indexOf("if(!plan.runtimeCompatible)")<source.indexOf('const historyBefore=localStorage.getItem("gymos:history")'));
-  assert.match(source,/code:"runtime_not_ready"/);
+  assert.doesNotMatch(source,/code:"runtime_not_ready"/);
+  assert.match(source,/saveCanonicalRoutine\(plan\.canonicalRoutine/);
+  assert.match(source,/executeTransaction/);
 });
 
 test("snapshot de activación contiene canónico, drafts y selecciones raw",()=>{
@@ -609,12 +610,13 @@ test("sincronización repetida no genera IDs ni ejecuta migración desde buildSy
   assert.doesNotMatch(source,/secureSessionModelId|ensureRoutineSessionMigration|markLocalUpdated/);
 });
 
-test("getRoutine deriva A/B/C y saveRoutine reconcilia conservando IDs",()=>{
+test("getRoutine mantiene una sombra A/B/C y el dominio canónico conserva IDs",()=>{
   const getSource=appSource.slice(
     appSource.indexOf("function getRoutine()"),
     appSource.indexOf("let sessions=getRoutine")
   );
-  assert.match(getSource,/canonicalToLegacyRuntimeView/);
+  assert.match(getSource,/routineSessionRuntimeApi\(\)\.legacyShadow/);
+  assert.match(appSource,/function activeRoutineForComparison\(\)/);
   assert.match(getSource,/reconcileLegacyRoutine/);
   assert.match(getSource,/saveCanonicalRoutine/);
 });
@@ -625,7 +627,7 @@ test("draft runtime escribe sombra legacy y contenedor canónico en una operaci�
     appSource.indexOf("function lastWorkoutForSession")
   );
   assert.match(source,/CANONICAL_DRAFTS_KEY/);
-  assert.match(source,/migrateLegacyDrafts/);
+  assert.match(source,/routineSessionRuntimeApi\(\)\.upsertDraft/);
   assert.match(source,/restoreStorageValue/);
 });
 
@@ -679,9 +681,10 @@ test("script H2 aparece una vez y respeta el orden de dependencias",()=>{
   assert.ok(indexSource.indexOf("routine-session-migration.js")<indexSource.indexOf("routine-generator.js"));
 });
 
-test("service worker incluye H2 una vez sin cambiar la estrategia fetch",()=>{
+test("service worker incluye H2 y H3 una vez sin cambiar la estrategia fetch",()=>{
   assert.equal((workerSource.match(/routine-session-migration\.js/g)||[]).length,1);
-  assert.match(workerSource,/gymos-cache-4\.2\.0-alpha\.1-phase-h2/);
+  assert.equal((workerSource.match(/routine-session-runtime\.js/g)||[]).length,1);
+  assert.match(workerSource,/gymos-cache-4\.2\.0-phase-h3/);
   assert.equal((workerSource.match(/addEventListener\("fetch"/g)||[]).length,1);
   assert.match(workerSource,/fetch\(e\.request\)/);
 });
@@ -872,7 +875,7 @@ test("saveRoutine y drafts validan doble representación y restauran controles",
   const draftSource=appSource.slice(
     appSource.indexOf("function saveDraft("),appSource.indexOf("function lastWorkoutForSession")
   );
-  assert.match(draftSource,/legacy_draft_write_validation_failed/);
+  assert.match(draftSource,/routineSessionRuntimeApi\(\)\.upsertDraft/);
   assert.match(draftSource,/canonical_draft_write_validation_failed/);
   assert.match(draftSource,/localRevision/);
 });
@@ -912,18 +915,16 @@ test("login, recarga, cambio directo y logout respetan el límite propietario-va
   assert.doesNotMatch(appSource.slice(0,appSource.indexOf("function activateLocalUser")),/let sessions=getRoutine\(\)/);
 });
 
-test("planes runtime 4–6 restauran el preflight raw antes de cualquier efecto",()=>{
+test("planes runtime 4–6 conservan preflight y aplican transaccionalmente",()=>{
   const source=appSource.slice(
     appSource.indexOf("function activateStoredRoutineProposal"),
     appSource.indexOf("function rollbackStoredRoutineActivation")
   );
   const capture=source.indexOf("const preflightStorage=captureRoutineActivationStorage");
-  const incompatible=source.indexOf("if(!plan.runtimeCompatible)");
-  const restore=source.indexOf("restoreRoutineActivationStorage(preflightStorage)",incompatible);
   const transaction=source.indexOf("executeTransaction");
   const mark=source.indexOf("markRoutineActivationSyncPending");
-  assert.ok(capture>=0&&capture<incompatible);
-  assert.ok(incompatible<restore&&restore<transaction&&transaction<mark);
+  assert.ok(capture>=0&&capture<transaction&&transaction<mark);
+  assert.doesNotMatch(source,/runtime_not_ready/);
 });
 
 test("el backup H2 no entra en diagnósticos visibles",()=>{
@@ -945,7 +946,7 @@ test("importación H2 valida el paquete completo y revierte raw ante cualquier f
     /validateDraftContainer\(/,
     /metadataMatches/,
     /legacyRoutineEquivalent\(/,
-    /incomingCanonical\.sessions\.length>3/,
+    /routineSessionRuntimeApi\(\)\.legacyShadow\(incomingCanonical\)/,
     /captureRoutineSessionStartupStorage\(normalizedOwner\)/,
     /restoreRoutineSessionStartupStorage\(importBefore,normalizedOwner\)/,
     /assertActiveLocalOwner\(normalizedOwner\)/,

@@ -75,6 +75,8 @@
       availableFrom:String(checkin.availableFrom??checkin.available_from??""),
       status:checkin.status==="completed"?"completed":"pending",
       session:String(checkin.session||""),
+      sessionId:String(checkin.sessionId??checkin.session_id??""),
+      sessionName:String(checkin.sessionName??checkin.session_name??""),
       completedAt:checkin.completedAt??checkin.completed_at??null,
       createdAt:checkin.createdAt??checkin.created_at??new Date().toISOString(),
       updatedAt:checkin.updatedAt??checkin.updated_at??new Date().toISOString()
@@ -114,6 +116,8 @@
       availableFrom:nextLocalDate(workout.date),
       status:"pending",
       session:workout.session,
+      sessionId:workout.sessionId||"",
+      sessionName:workout.sessionName||"",
       createdAt:new Date().toISOString(),
       updatedAt:new Date().toISOString()
     });
@@ -401,7 +405,7 @@
     app.innerHTML=`<div class="app-shell">
       <header class="topbar recovery-topbar"><div><div class="brand">Recovery Center</div><div class="subtle">Check-in diario · menos de 30 segundos</div></div><button id="closeRecovery" class="text-button">Cerrar</button></header>
       <main class="screen recovery-screen">
-        ${linkedCheckin?`<section class="recovery-workout-context"><span class="section-kicker">EVALUACIÓN PENDIENTE</span><h1>Recuperación de Sesión ${esc(linkedCheckin.session)}</h1><p>${esc(workoutWhen)}</p></section>`:""}
+        ${linkedCheckin?`<section class="recovery-workout-context"><span class="section-kicker">EVALUACIÓN PENDIENTE</span><h1>Recuperación de ${esc(linkedCheckin.sessionName||`Sesión ${linkedCheckin.session}`)}</h1><p>${esc(workoutWhen)}</p></section>`:""}
         <form id="recoveryCheckinForm" class="recovery-checkin">
           <section class="recovery-question">
             <span class="section-kicker">1 DE 8</span><h2>¿Cuántas horas has dormido?</h2>
@@ -543,12 +547,12 @@
           <div class="recovery-coach-message"><span>Recomendación del Coach</span><strong>${esc(featured.coachMessage)}</strong></div>
           <button id="editRecoveryCheckin" class="secondary full">${featured.date===today?"Actualizar check-in":"Registrar recuperación de hoy"}</button>
         </section>`:pending?`<section class="recovery-empty-state">
-          <span class="section-kicker">SESIÓN ${esc(pending.session)}</span>
+          <span class="section-kicker">${esc((pending.sessionName||`Sesión ${pending.session}`).toLocaleUpperCase("es"))}</span>
           <h1>¿Cómo has recuperado?</h1>
           <p>Evalúa el sueño posterior a la sesión, la fatiga, la energía, las molestias y el estrés.</p>
           <button id="startRecoveryCheckin" class="primary full">Revisar recuperación</button>
         </section>`:upcoming?`<section class="recovery-empty-state recovery-immediate-guidance">
-          <span class="section-kicker">SESIÓN ${esc(upcoming.session)} COMPLETADA</span>
+          <span class="section-kicker">${esc((upcoming.sessionName||`Sesión ${upcoming.session}`).toLocaleUpperCase("es"))} COMPLETADA</span>
           <h1>Ahora toca recuperarte</h1>
           <p>Come bien. Hidrátate. Descansa.</p>
           <small>El check-in de sueño y Recovery Score estará disponible mañana.</small>
@@ -597,7 +601,7 @@
           <span class="section-kicker">SESIÓN COMPLETADA</span>
           <h1>Ahora toca recuperar</h1>
           <p>Come bien, hidrátate y descansa.</p>
-          ${workout?`<div class="workout-complete-meta">Sesión ${esc(workout.session)} · ${formatDuration(workout.durationMs)}</div>`:""}
+          ${workout?`<div class="workout-complete-meta">${esc(workout.sessionName||`Sesión ${workout.session}`)} · ${formatDuration(workout.durationMs)}</div>`:""}
           <button id="reviewRecoveryAfterWorkout" class="primary full">Revisar recuperación</button>
           <div class="workout-complete-links"><button id="viewCompletedWorkout" class="text-button">Ver entrenamiento</button><button id="backHomeAfterWorkout" class="text-button">Volver a Inicio</button></div>
         </section>

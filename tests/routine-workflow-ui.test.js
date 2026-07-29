@@ -125,9 +125,9 @@ function record(api,value=proposal(),options={}){
       changes:[{type:"exercise_added",message:"Se añade un ejercicio."}]
     },
     activationCompatibility:{
-      compatible:options.compatible??value.sessions.length<=3,
+      compatible:options.compatible??(value.sessions.length>=2&&value.sessions.length<=6),
       sessionCount:value.sessions.length,
-      reasons:value.sessions.length>3?["Solo se admiten tres sesiones."]:[]
+      reasons:value.sessions.length>6?["Se admiten entre dos y seis sesiones."]:[]
     }
   };
 }
@@ -300,13 +300,13 @@ test("10. reviewRequired no permite activar",()=>{
   assert.equal(model.canActivate,false);
 });
 
-test("11. cuatro sesiones resultan incompatibles",()=>{
+test("11. cuatro sesiones compatibles pueden llegar a confirmación",()=>{
   const {ui,proposals}=loadApi(),value=proposal("four",4);
-  const model=ui.proposalViewModel(record({proposals},value,{compatible:false}),{
+  const model=ui.proposalViewModel(record({proposals},value),{
     ownerId:OWNER_A,currentRoutine:routine()
   });
-  assert.equal(model.status,"incompatible");
-  assert.equal(model.canActivate,false);
+  assert.equal(model.status,"pending_review");
+  assert.equal(model.canActivate,true);
 });
 
 test("12. una propuesta compatible de dos sesiones llega a confirmación",()=>{
@@ -506,7 +506,7 @@ test("25. orden final de scripts correcto",()=>{
 test("26. generador y workflow están incluidos en el service worker",()=>{
   assert.match(workerSource,/routine-generator\.js/);
   assert.match(workerSource,/routine-workflow-ui\.js/);
-  assert.match(workerSource,/phase-h2/);
+  assert.match(workerSource,/phase-h3/);
 });
 
 test("27. el módulo puro no accede a DOM, almacenamiento, red ni navegación",()=>{
@@ -525,7 +525,7 @@ test("28. la interfaz solo usa APIs centrales para operaciones funcionales",()=>
     "persistRoutineProposal(","rejectStoredRoutineProposal(",
     "activateStoredRoutineProposal(","rollbackStoredRoutineActivation(",
     "getRoutineProposalRecords(","getRoutineActivationRecords(",
-    "getRoutine(","getExerciseLibrary("
+    "activeRoutineForComparison(","getExerciseLibrary("
   ].forEach(call=>assert.ok(workflow.includes(call),call));
   assert.doesNotMatch(
     workflow,

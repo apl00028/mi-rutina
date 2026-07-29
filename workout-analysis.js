@@ -76,9 +76,15 @@
     const typeA=normalizeName(current?.type),typeB=normalizeName(previous?.type);
     return !(typeA&&typeB&&typeA!==typeB);
   }
+  function sameWorkoutSession(left,right){
+    if(left?.sessionId||right?.sessionId){
+      return Boolean(left?.sessionId&&right?.sessionId&&left.sessionId===right.sessionId);
+    }
+    return left?.session===right?.session;
+  }
   function previousComparableWorkout(workout,history){
     return (history||[])
-      .filter(item=>String(item.id)!==String(workout.id)&&item.session===workout.session&&new Date(item.date)<new Date(workout.date))
+      .filter(item=>String(item.id)!==String(workout.id)&&sameWorkoutSession(item,workout)&&new Date(item.date)<new Date(workout.date))
       .sort((a,b)=>new Date(b.date)-new Date(a.date))[0]||null;
   }
   function percentChange(current,previous){
@@ -219,7 +225,9 @@
     if(results.some(item=>item.missing_data.includes("discomfort"))) warnings.push({code:"missing_discomfort",message:"Las sesiones antiguas no tienen un campo específico de molestias."});
     discomfort.forEach(item=>warnings.push({code:"discomfort",exercise:item.exercise,message:`Molestia registrada en ${item.exercise}.`}));
     const duration=Number(workout?.durationMs||0);
-    const comparableDurations=(history||[]).filter(item=>item.session===workout.session&&String(item.id)!==String(workout.id)).slice(0,5).map(item=>Number(item.durationMs||0)).filter(Boolean);
+    const comparableDurations=(history||[]).filter(item=>
+      sameWorkoutSession(item,workout)&&String(item.id)!==String(workout.id)
+    ).slice(0,5).map(item=>Number(item.durationMs||0)).filter(Boolean);
     if(duration&&comparableDurations.length){
       const average=comparableDurations.reduce((sum,value)=>sum+value,0)/comparableDurations.length;
       if(duration<average*.5||duration>average*1.8) warnings.push({code:"unusual_duration",message:"La duración fue poco habitual respecto a sesiones comparables."});

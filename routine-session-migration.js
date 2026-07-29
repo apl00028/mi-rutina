@@ -67,7 +67,7 @@
     return model().canonicalRoutineHash({
       schemaVersion:normalized.schemaVersion,
       routineId:normalized.routineId,
-      revision:normalized.revision,
+      revision:1,
       sessions:[selected]
     });
   }
@@ -80,9 +80,13 @@
     if(record(container)){
       if(container.schemaVersion!==model().SCHEMA_VERSION) errors.push("invalid_schema_version");
       if(!text(container.routineId)) errors.push("routine_id_required");
+      if(canonicalRoutine&&container.routineId!==canonicalRoutine.routineId){
+        errors.push("container_routine_mismatch");
+      }
       if(!record(container.draftsBySessionId)) errors.push("invalid_drafts_map");
       if(!record(container.orphanedLegacyDrafts)) errors.push("invalid_orphans_map");
       const knownIds=new Set(canonicalRoutine?.sessions?.map(session=>session.sessionId)||[]);
+      const draftIds=new Set();
       Object.entries(container.draftsBySessionId||{}).forEach(([key,draft])=>{
         if(!record(draft)) errors.push(`invalid_draft:${key}`);
         else{
@@ -90,6 +94,8 @@
           if(draft.routineId!==container.routineId) errors.push(`draft_routine_mismatch:${key}`);
           if(normalizedOwner&&draft.ownerId!==normalizedOwner) errors.push(`draft_owner_mismatch:${key}`);
           if(!text(draft.draftId)) errors.push(`draft_id_required:${key}`);
+          else if(draftIds.has(draft.draftId)) errors.push(`duplicate_draft_id:${key}`);
+          else draftIds.add(draft.draftId);
           if(!Array.isArray(draft.exercises)) errors.push(`draft_exercises_required:${key}`);
           if(canonicalRoutine&&!knownIds.has(key)) warnings.push(`orphaned_session:${key}`);
         }
@@ -236,6 +242,15 @@
     });
     return same(normalize(left),normalize(right));
   }
+  function canonicalLegacyShadow(canonicalRoutine){
+    const shadow={A:[],B:[],C:[]};
+    model().sortSessions(canonicalRoutine?.sessions||[]).forEach(session=>{
+      if(LEGACY_SESSION_KEYS.includes(session.legacySessionKey)){
+        shadow[session.legacySessionKey]=clone(session.exercises);
+      }
+    });
+    return shadow;
+  }
   function reconcileCanonicalDraftShadows({
     ownerId,canonicalRoutine,canonicalDrafts,legacyDraftsRaw={},draftIds={},timestamp
   }={}){
@@ -354,7 +369,7 @@
         });
       }
       const canonical=model().normalizeCanonicalRoutine(canonicalRoutine);
-      const canonicalShadow=model().canonicalToLegacyRuntimeView(canonical);
+      const canonicalShadow=canonicalLegacyShadow(canonical);
       if(!legacyRoutineEquivalent(legacyRoutine,canonicalShadow)){
         return incident(
           "routine_shadow_conflict",
@@ -408,7 +423,7 @@
         changed:!complete,
         existingCanonical:true,
         canonicalRoutine:canonical,
-        legacyRoutine:model().canonicalToLegacyRuntimeView(canonical),
+        legacyRoutine:canonicalLegacyShadow(canonical),
         canonicalDrafts:clone(drafts),
         selectedSessionId:selection,
         legacySelectedSession:legacySelectionForPlan(canonical,selection),
@@ -452,7 +467,7 @@
     };
   }
   function legacySelectionForPlan(canonicalRoutine,sessionId){
-    return legacySelection(canonicalRoutine,sessionId)||"A";
+    return legacyKeyForSession(canonicalRoutine,sessionId);
   }
   function validateMigrationPlan(plan,{ownerId}={}){
     const errors=[];
@@ -567,7 +582,7 @@
     MIGRATION_VERSION,STORAGE_KEYS,LEGACY_SESSION_KEYS,
     normalizeOwnerId,parseRaw,stableStringify,sessionMap,sessionDefinitionHash,
     validateDraftContainer,emptyDraftContainer,migrateLegacyDrafts,
-    legacyDraftShadowsMatch,legacyRoutineEquivalent,reconcileCanonicalDraftShadows,
+    legacyDraftShadowsMatch,legacyRoutineEquivalent,canonicalLegacyShadow,reconcileCanonicalDraftShadows,
     draftStatus,markStaleDrafts,selectedSessionId,legacySelection,
     reconcileLegacyRoutine,canonicalSyncDecision,createMigrationPlan,validateMigrationPlan,
     captureRawSnapshot,restoreRawSnapshot,buildMigrationWrites,executeRawTransaction

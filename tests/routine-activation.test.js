@@ -111,14 +111,14 @@ test("2. activa una propuesta compatible de tres sesiones",()=>{
   assert.equal(result.routine.C.length,1);
 });
 
-test("3. prepara cuatro días pero marca el runtime como no disponible",()=>{
+test("3. prepara cuatro días para el runtime dinámico",()=>{
   const api=loadApi(),value=proposal("p-4",4),proposalRecord=record(api,value);
   const result=plan(api,{proposal:value,record:proposalRecord});
   assert.equal(result.ok,true);
-  assert.equal(result.runtimeCompatible,false);
-  assert.equal(result.applicationError,"runtime_not_ready");
+  assert.equal(result.runtimeCompatible,true);
+  assert.equal(result.applicationError,null);
   assert.equal(result.canonicalRoutine.sessions.length,4);
-  assert.equal(result.routine,null);
+  assert.deepEqual(Object.keys(result.routine),["A","B","C"]);
 });
 
 test("4. rechaza una propuesta stale",()=>{

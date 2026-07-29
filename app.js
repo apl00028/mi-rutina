@@ -127,6 +127,12 @@ function routineSessionMigrationApi(){
   }
   return window.GymOSRoutineSessionMigration;
 }
+function routineSessionRuntimeApi(){
+  if(!window.GymOSRoutineSessionRuntime){
+    throw new Error("El runtime canónico de sesiones no está disponible.");
+  }
+  return window.GymOSRoutineSessionRuntime;
+}
 function secureSessionModelId(prefix){
   let value;
   if(globalThis.crypto?.randomUUID) value=globalThis.crypto.randomUUID();
@@ -180,9 +186,7 @@ function getCanonicalRoutine(){
 function getRoutine(){
   const canonical=getCanonicalRoutine();
   if(canonical){
-    return normalizeRoutine(
-      window.GymOSRoutineSessionModel.canonicalToLegacyRuntimeView(canonical)
-    );
+    return normalizeRoutine(routineSessionRuntimeApi().legacyShadow(canonical));
   }
   const saved=JSON.parse(localStorage.getItem("gymos:routine")||"null");
   if(saved) return normalizeRoutine(saved);
@@ -195,7 +199,7 @@ function getRoutine(){
 function saveCanonicalRoutine(routine,{mark=true,writeLegacyShadow=true}={}){
   const canonical=window.GymOSRoutineSessionModel.normalizeCanonicalRoutine(routine);
   const shadow=writeLegacyShadow
-    ?window.GymOSRoutineSessionModel.canonicalToLegacyRuntimeView(canonical)
+    ?routineSessionRuntimeApi().legacyShadow(canonical)
     :null;
   const before={
     canonical:localStorage.getItem(CANONICAL_ROUTINE_KEY),
@@ -339,12 +343,28 @@ function blockWeekWorkouts(block,weekNumber){
 }
 
 function defaultSessionPlan(count){
-  const sequence=["A","B","C","A","B","C","A"];
-  return sequence.slice(0,Math.max(1,Math.min(7,Number(count)||3)));
+  const available=activeRoutineSessions().map(session=>session.sessionId);
+  if(!available.length) return [];
+  return Array.from(
+    {length:Math.max(1,Math.min(7,Number(count)||available.length))},
+    (_,index)=>available[index%available.length]
+  );
 }
 function blockSessionPlan(block){
-  const plan=Array.isArray(block.sessionPlan)?block.sessionPlan.filter(x=>["A","B","C"].includes(x)):[];
+  const available=activeRoutineSessions();
+  const validIds=new Set(available.map(session=>session.sessionId));
+  const plan=Array.isArray(block.sessionPlan)?block.sessionPlan.map(value=>
+    validIds.has(value)
+      ?value
+      :available.find(session=>session.legacySessionKey===value)?.sessionId||null
+  ).filter(Boolean):[];
   return plan.length===Number(block.sessionsPerWeek)?plan:defaultSessionPlan(block.sessionsPerWeek);
+}
+function workoutRuntimeSessionId(workout){
+  if(workout?.sessionId) return workout.sessionId;
+  return activeRoutineSessions().find(session=>
+    session.legacySessionKey===(workout?.legacySessionKey||workout?.session)
+  )?.sessionId||null;
 }
 function blockWeekWorkoutRows(block,weekNumber){
   const start=dateOnly(block.startDate);
@@ -364,9 +384,10 @@ function blockWeekSessionSummary(block,weekNumber){
   const remaining=[...plan];
   const matched=[];
   workouts.forEach(workout=>{
-    const index=remaining.indexOf(workout.session);
+    const id=workoutRuntimeSessionId(workout);
+    const index=remaining.indexOf(id);
     if(index>=0){
-      matched.push(workout.session);
+      matched.push(id);
       remaining.splice(index,1);
     }
   });
@@ -486,9 +507,10 @@ function blockAnalytics(block){
   const totalVolume=Math.round(workouts.reduce((sum,w)=>sum+workoutVolume(w),0));
   const totalMinutes=workouts.reduce((sum,w)=>sum+workoutDurationMinutes(w),0);
   const avgMinutes=workouts.length?Math.round(totalMinutes/workouts.length):0;
-  const bySession=["A","B","C"].map(session=>({
-    session,
-    count:workouts.filter(w=>w.session===session).length
+  const bySession=activeRoutineSessions().map(session=>({
+    session:session.sessionId,
+    name:routineSessionRuntimeApi().displayName(session),
+    count:workouts.filter(workout=>workoutRuntimeSessionId(workout)===session.sessionId).length
   }));
   const bestSets=workouts.map(workoutBestSet).filter(Boolean).sort((a,b)=>b.score-a.score);
   const weekly=Array.from({length:Number(block.weeks||4)},(_,i)=>{
@@ -736,11 +758,11 @@ function exerciseLibraryFilters(items,query,muscle,equipment,favoritesOnly){
     return matchesQuery&&matchesMuscle&&matchesEquipment&&matchesFavorite;
   });
 }
-function addExerciseToRoutine(sessionKey,exercise){
-  const routine=getRoutine();
-  const key=["A","B","C"].includes(sessionKey)?sessionKey:"A";
-  if(!Array.isArray(routine[key])) routine[key]=[];
-  routine[key].push({
+function addExerciseToRoutine(sessionRef,exercise){
+  const session=canonicalSessionByRef(sessionRef)||activeRoutineSessions()[0];
+  if(!session) throw new Error("session_not_found");
+  const items=JSON.parse(JSON.stringify(session.exercises||[]));
+  items.push({
     name:exercise.name,
     sets:3,
     reps:"8-12",
@@ -748,7 +770,7 @@ function addExerciseToRoutine(sessionKey,exercise){
     increment:2.5,
     notes:exercise.notes||""
   });
-  saveRoutine(routine);
+  saveCanonicalSessionExercises(session.sessionId,items);
 }
 
 const EXERCISE_SUBSTITUTIONS_KEY="gymos:exerciseSubstitutions";
@@ -939,7 +961,7 @@ function saveRoutineProposalRecords(records,{ownerId=null,mark=true,preferredAct
 function persistRoutineProposal(proposal,{ownerId=null,timestamp=new Date().toISOString(),mark=true}={}){
   const normalizedOwner=routineProposalOwnerId(ownerId);
   const result=window.GymOSRoutineProposals.storeProposal(getRoutineProposalRecords(normalizedOwner),{
-    ownerId:normalizedOwner,proposal,currentRoutine:getRoutine(),timestamp,
+    ownerId:normalizedOwner,proposal,currentRoutine:activeRoutineForComparison(),timestamp,
     activeProposalId:localStorage.getItem(ACTIVE_ROUTINE_PROPOSAL_ID_KEY)
   });
   saveRoutineProposalRecords(result.records,{
@@ -1090,7 +1112,8 @@ function routineActivationBaseline(ownerId){
   const canonicalDraftsRaw=localStorage.getItem(CANONICAL_DRAFTS_KEY);
   const selectedSessionIdRaw=localStorage.getItem(SELECTED_SESSION_ID_KEY);
   return {
-    currentRoutine:getRoutine(),
+    currentRoutine:activeRoutineForComparison(),
+    currentLegacyRoutine:getRoutine(),
     currentCanonicalRoutine:getCanonicalRoutine(),
     selectedSession:selectedSessionRaw||state.selectedSession||"A",
     selectedSessionId:selectedSessionIdRaw,
@@ -1103,7 +1126,10 @@ function routineActivationBaseline(ownerId){
       canonicalRoutine:canonicalRoutineRaw,canonicalDrafts:canonicalDraftsRaw,
       selectedSessionId:selectedSessionIdRaw,
       migrationMetadata:localStorage.getItem(SESSION_MODEL_MIGRATION_KEY),
-      storage:captureRoutineActivationStorage(ownerId)
+      storage:Object.fromEntries([
+        "gymos:updatedAt","gymos:syncPending","gymos:localRevision",
+        "gymos:lastRemoteRevision","gymos:lastSyncAt","gymos:lastSyncHash"
+      ].map(key=>[key,localStorage.getItem(key)]))
     }
   };
 }
@@ -1124,6 +1150,12 @@ function activateStoredRoutineProposal(proposalId,{
   const proposalRecords=getRoutineProposalRecords(normalizedOwner);
   const proposalRecord=proposalRecords.find(record=>record.proposal.proposalId===proposalId);
   const baseline=routineActivationBaseline(normalizedOwner);
+  if(
+    proposalRecord?.baseline?.routineHash===
+    window.GymOSRoutineProposals.routineHash(baseline.currentLegacyRoutine)
+  ){
+    baseline.currentRoutine=baseline.currentLegacyRoutine;
+  }
   const plan=window.GymOSRoutineActivation.createActivationPlan({
     ownerId:normalizedOwner,proposalRecord,currentRoutine:baseline.currentRoutine,
     currentCanonicalRoutine:baseline.currentCanonicalRoutine,
@@ -1135,14 +1167,6 @@ function activateStoredRoutineProposal(proposalId,{
   if(!plan.ok){
     restoreRoutineActivationStorage(preflightStorage);
     return plan;
-  }
-  if(!plan.runtimeCompatible){
-    restoreRoutineActivationStorage(preflightStorage);
-    return {
-      ok:false,code:"runtime_not_ready",
-      message:"La rutina está preparada, pero el runtime visible todavía no admite más de tres sesiones.",
-      plan
-    };
   }
   const historyBefore=localStorage.getItem("gymos:history");
   let activationResult;
@@ -1164,7 +1188,8 @@ function activateStoredRoutineProposal(proposalId,{
     },
     ()=>{
       assertActiveLocalOwner(normalizedOwner);
-      localStorage.setItem("gymos:selectedSession",plan.selectedSession);
+      if(plan.selectedSession) localStorage.setItem("gymos:selectedSession",plan.selectedSession);
+      else localStorage.removeItem("gymos:selectedSession");
       if(plan.selectedSessionId) localStorage.setItem(SELECTED_SESSION_ID_KEY,plan.selectedSessionId);
       localStorage.setItem(SESSION_MODEL_MIGRATION_KEY,JSON.stringify({
         schemaVersion:window.GymOSRoutineSessionModel.SCHEMA_VERSION,
@@ -1208,7 +1233,7 @@ function activateStoredRoutineProposal(proposalId,{
   if(!transaction.ok) return transaction;
   assertActiveLocalOwner(normalizedOwner);
   sessions=getRoutine();
-  persistSelectedRoutineSession(plan.selectedSession);
+  persistSelectedRoutineSession(plan.selectedSessionId);
   scheduleRoutineActivationSync();
   return {ok:true,idempotent:false,activation:activationResult.record};
 }
@@ -1220,7 +1245,7 @@ function rollbackStoredRoutineActivation(activationId,{
   const activations=getRoutineActivationRecords(normalizedOwner);
   const activation=activations.find(record=>record.activationId===activationId);
   const decision=window.GymOSRoutineActivation.rollbackDecision({
-    ownerId:normalizedOwner,activationRecord:activation,currentRoutine:getRoutine(),
+    ownerId:normalizedOwner,activationRecord:activation,currentRoutine:activeRoutineForComparison(),
     currentCanonicalRoutine:getCanonicalRoutine()
   });
   if(!decision.ok){
@@ -1329,7 +1354,11 @@ function rollbackStoredRoutineActivation(activationId,{
   if(!transaction.ok) return transaction;
   assertActiveLocalOwner(normalizedOwner);
   sessions=getRoutine();
-  persistSelectedRoutineSession(localStorage.getItem("gymos:selectedSession")||nextSuggestedSession());
+  persistSelectedRoutineSession(
+    localStorage.getItem(SELECTED_SESSION_ID_KEY)||
+    localStorage.getItem("gymos:selectedSession")||
+    nextSuggestedSession()
+  );
   scheduleRoutineActivationSync();
   return {ok:true,idempotent:false,activation:rolledBack};
 }
@@ -1352,8 +1381,9 @@ function setExerciseFavorite(id,value){
 }
 function favoriteExerciseUsage(name){
   const key=normalizeExerciseName(name);
-  const routine=getRoutine();
-  const sessionsUsed=["A","B","C"].filter(session=>(routine[session]||[]).some(item=>normalizeExerciseName(item.name)===key));
+  const sessionsUsed=activeRoutineSessions()
+    .filter(session=>(session.exercises||[]).some(item=>normalizeExerciseName(item.name)===key))
+    .map(session=>session.name||session.label||session.sessionId);
   const historyRows=exerciseTrainingHistory(name);
   return {
     sessions:sessionsUsed,
@@ -1429,12 +1459,11 @@ function importGymOSBackup(payload,mode="merge"){
         routineSessionMigrationApi().stableStringify(
           validation.valid?routineSessionMigrationApi().sessionMap(incomingCanonical):{}
         );
-    const shadowMatches=validation.valid&&incomingCanonical.sessions.length<=3&&
+    const shadowMatches=!incomingLegacy||(validation.valid&&
       routineSessionMigrationApi().legacyRoutineEquivalent(
-        incomingLegacy,
-        window.GymOSRoutineSessionModel.canonicalToLegacyRuntimeView(incomingCanonical)
-      );
-    if(!validation.valid||incomingCanonical.sessions.length>3||
+        incomingLegacy,routineSessionRuntimeApi().legacyShadow(incomingCanonical)
+      ));
+    if(!validation.valid||
       !draftValidation.valid||!metadataMatches||!shadowMatches){
       throw new Error("La copia canónica pertenece a otro propietario o no es válida.");
     }
@@ -1471,7 +1500,9 @@ function importGymOSBackup(payload,mode="merge"){
             Array.isArray(incoming)?incoming:[],
             {timestamp:new Date().toISOString()}
           );
-          saveExerciseLibrary(merged.library,{mark:false,touchUpdatedAt:false,setSchema:false});
+          saveExerciseLibrary(merged.library,{
+            mark:false,touchUpdatedAt:false,setSchema:false,ownerId:normalizedOwner
+          });
           return;
         }catch(error){}
       }
@@ -1608,10 +1639,9 @@ function lastCompletedWorkouts(limit=12){
     .slice(0,limit);
 }
 function coachExerciseSummary(){
-  const routine=getRoutine();
   const rows=[];
-  ["A","B","C"].forEach(session=>{
-    (routine[session]||[]).forEach((item,index)=>{
+  activeRoutineSessions().forEach(session=>{
+    (session.exercises||[]).forEach((item,index)=>{
       const history=exerciseTrainingHistory(item.name);
       const recent=history.slice(0,6);
       const avgRir=recent.filter(row=>row.rir!==null&&row.rir!=="").length
@@ -1621,7 +1651,8 @@ function coachExerciseSummary(){
       const older=history.slice(6,12);
       const bestOlder=Math.max(0,...older.map(row=>row.estimated1RM||0));
       rows.push({
-        session,index,name:item.name,sets:Number(item.sets||0),target:item.target||item.reps||"",
+        session:session.sessionId,sessionName:routineSessionRuntimeApi().displayName(session),
+        index,name:item.name,sets:Number(item.sets||0),target:item.target||item.reps||"",
         increment:Number(item.increment||0),avgRir,bestRecent,bestOlder,
         trend:bestOlder>0?(bestRecent-bestOlder)/bestOlder:null,
         historyCount:history.length,
@@ -1644,6 +1675,7 @@ function createLocalCoachProposal(){
         changes.push({
           type:"progression",
           session:item.session,
+          sessionName:item.sessionName,
           index:item.index,
           exercise:item.name,
           field:"increment",
@@ -1655,6 +1687,7 @@ function createLocalCoachProposal(){
         changes.push({
           type:"fatigue",
           session:item.session,
+          sessionName:item.sessionName,
           index:item.index,
           exercise:item.name,
           field:"sets",
@@ -1668,6 +1701,7 @@ function createLocalCoachProposal(){
       changes.push({
         type:"stagnation",
         session:item.session,
+        sessionName:item.sessionName,
         index:item.index,
         exercise:item.name,
         field:"increment",
@@ -1687,6 +1721,7 @@ function createLocalCoachProposal(){
         changes.push({
           type:"deload",
           session:item.session,
+          sessionName:item.sessionName,
           index:item.index,
           exercise:item.name,
           field:"sets",
@@ -1724,7 +1759,7 @@ function createLocalCoachProposal(){
 }
 function applyCoachProposal(proposal){
   if(!proposal||proposal.status!=="pending") return false;
-  const routine=JSON.parse(JSON.stringify(getRoutine()));
+  const routine=JSON.parse(JSON.stringify(activeRoutineForComparison()));
   const snapshot={
     id:`snapshot-${Date.now().toString(36)}`,
     proposalId:proposal.id,
@@ -1736,13 +1771,18 @@ function applyCoachProposal(proposal){
   saveCoachSnapshots(snapshots.slice(0,20));
 
   proposal.changes.forEach(change=>{
-    const item=routine[change.session]?.[change.index];
+    const item=Array.isArray(routine.sessions)
+      ?routine.sessions.find(session=>session.sessionId===change.session)?.exercises?.[change.index]
+      :routine[change.session]?.[change.index];
     if(!item||normalizeExerciseName(item.name)!==normalizeExerciseName(change.exercise)) return;
     item[change.field]=change.to;
     item.coachAdjustedAt=new Date().toISOString();
     item.coachReason=change.reason;
   });
-  saveRoutine(routine);
+  if(Array.isArray(routine.sessions)){
+    routine.revision=(Number(routine.revision)||1)+1;
+    saveCanonicalRoutineMutation(routine);
+  }else saveRoutine(routine);
   sessions=getRoutine();
 
   const proposals=getCoachProposals();
@@ -1767,7 +1807,8 @@ function undoLastCoachChange(){
   const snapshots=getCoachSnapshots();
   const latest=snapshots[0];
   if(!latest?.routine) return false;
-  saveRoutine(latest.routine);
+  if(Array.isArray(latest.routine.sessions)) saveCanonicalRoutineMutation(latest.routine);
+  else saveRoutine(latest.routine);
   sessions=getRoutine();
   saveCoachSnapshots(snapshots.slice(1));
   const proposals=getCoachProposals();
@@ -1784,7 +1825,7 @@ function coachContextPayload(){
     version:"3.9.1",
     generatedAt:new Date().toISOString(),
     settings:getCoachSettings(),
-    routine:getRoutine(),
+    routine:activeRoutineForComparison(),
     recentWorkouts:lastCompletedWorkouts(12),
     exerciseSummary:coachExerciseSummary(),
     bodyWeight:getBodyWeightEntries?.()||[],
@@ -2684,7 +2725,7 @@ function coachChatContext(){
     version:"3.2.0",
     generatedAt:new Date().toISOString(),
     goal:getCoachSettings().goal,
-    routine:getRoutine(),
+    routine:activeRoutineForComparison(),
     recentWorkouts:lastCompletedWorkouts(8),
     exerciseSummary:summaries,
     fatigue:fatigueAssessment(),
@@ -2795,9 +2836,70 @@ function suggestedSubstitutes(currentName,query="",equipment="Todos",favoritesOn
     .filter(item=>!favoritesOnly||item.favorite)
     .sort((a,b)=>b.score-a.score||a.name.localeCompare(b.name,"es"));
 }
+function canonicalSessionByRef(sessionRef){
+  const canonical=getCanonicalRoutine();
+  if(!canonical) return null;
+  return routineSessionRuntimeApi().sessionById(canonical,sessionRef)||
+    routineSessionRuntimeApi().sessionByLegacyKey(canonical,sessionRef);
+}
+function saveCanonicalSessionExercises(sessionRef,exercises,{mark=true}={}){
+  const ownerId=currentRoutineOwnerOrNull();
+  const canonical=getCanonicalRoutine();
+  const session=canonicalSessionByRef(sessionRef);
+  if(!ownerId||!canonical||!session) throw new Error("session_not_found");
+  const before=captureRoutineSessionStartupStorage(ownerId);
+  try{
+    assertActiveLocalOwner(ownerId);
+    const next=JSON.parse(JSON.stringify(canonical));
+    const target=next.sessions.find(item=>item.sessionId===session.sessionId);
+    target.exercises=JSON.parse(JSON.stringify(exercises));
+    next.revision=canonical.revision+1;
+    saveCanonicalRoutine(next,{mark:false,writeLegacyShadow:true});
+    const drafts=getCanonicalDrafts();
+    if(drafts){
+      const updated=routineSessionMigrationApi().markStaleDrafts(drafts,{
+        ownerId,canonicalRoutine:next
+      });
+      localStorage.setItem(CANONICAL_DRAFTS_KEY,JSON.stringify(updated));
+      writeLegacyDraftShadows(next,updated);
+    }
+    assertActiveLocalOwner(ownerId);
+    if(mark) markLocalUpdated();
+    sessions=getRoutine();
+    return next;
+  }catch(error){
+    restoreRoutineSessionStartupStorage(before,ownerId);
+    throw error;
+  }
+}
+function saveCanonicalRoutineMutation(routine,{mark=true}={}){
+  const ownerId=currentRoutineOwnerOrNull();
+  if(!ownerId) throw new Error("owner_required");
+  const before=captureRoutineSessionStartupStorage(ownerId);
+  try{
+    assertActiveLocalOwner(ownerId);
+    const next=saveCanonicalRoutine(routine,{mark:false,writeLegacyShadow:true});
+    const drafts=getCanonicalDrafts();
+    if(drafts){
+      const updated=routineSessionMigrationApi().markStaleDrafts(drafts,{
+        ownerId,canonicalRoutine:next
+      });
+      localStorage.setItem(CANONICAL_DRAFTS_KEY,JSON.stringify(updated));
+      writeLegacyDraftShadows(next,updated);
+    }
+    assertActiveLocalOwner(ownerId);
+    if(mark) markLocalUpdated();
+    sessions=getRoutine();
+    return next;
+  }catch(error){
+    restoreRoutineSessionStartupStorage(before,ownerId);
+    throw error;
+  }
+}
 function applyExerciseSubstitution(session,index,replacement,reason){
-  const routine=JSON.parse(JSON.stringify(getRoutine()));
-  const current=routine[session]?.[index];
+  const sessionModel=canonicalSessionByRef(session);
+  const exercises=JSON.parse(JSON.stringify(sessionModel?.exercises||[]));
+  const current=exercises[index];
   if(!current||!replacement) return false;
   const next={
     ...current,
@@ -2806,15 +2908,15 @@ function applyExerciseSubstitution(session,index,replacement,reason){
     substitutionReason:reason||"",
     notes:current.notes||replacement.notes||""
   };
-  routine[session][index]=next;
-  saveRoutine(routine);
-  sessions=getRoutine();
+  exercises[index]=next;
+  saveCanonicalSessionExercises(session,exercises);
 
   const history=getExerciseSubstitutions();
   history.unshift({
     id:`sub-${Date.now().toString(36)}`,
     date:new Date().toISOString(),
-    session,
+    session:sessionModel.legacySessionKey||sessionModel.label,
+    sessionId:sessionModel.sessionId,
     from:current.name,
     to:replacement.name,
     reason:reason||"",
@@ -2824,17 +2926,17 @@ function applyExerciseSubstitution(session,index,replacement,reason){
   return true;
 }
 function revertLastSubstitution(session,index){
-  const routine=JSON.parse(JSON.stringify(getRoutine()));
-  const current=routine[session]?.[index];
+  const sessionModel=canonicalSessionByRef(session);
+  const exercises=JSON.parse(JSON.stringify(sessionModel?.exercises||[]));
+  const current=exercises[index];
   if(!current?.substitutionOf) return false;
-  routine[session][index]={
+  exercises[index]={
     ...current,
     name:current.substitutionOf
   };
-  delete routine[session][index].substitutionOf;
-  delete routine[session][index].substitutionReason;
-  saveRoutine(routine);
-  sessions=getRoutine();
+  delete exercises[index].substitutionOf;
+  delete exercises[index].substitutionReason;
+  saveCanonicalSessionExercises(session,exercises);
   return true;
 }
 function formatBlockDate(value){
@@ -2904,19 +3006,35 @@ function selectedSessionIdForLegacy(
     canonical,legacySession,preserveCurrent?localStorage.getItem(SELECTED_SESSION_ID_KEY):null
   );
 }
-function persistSelectedRoutineSession(legacySession,{mark=false}={}){
-  const selected=validSelectedRoutineSession(legacySession);
-  localStorage.setItem("gymos:selectedSession",selected);
+function persistSelectedRoutineSession(candidate,{mark=false}={}){
   const canonical=getCanonicalRoutine();
-  const id=selectedSessionIdForLegacy(selected,canonical);
-  if(id) localStorage.setItem(SELECTED_SESSION_ID_KEY,id);
-  else localStorage.removeItem(SELECTED_SESSION_ID_KEY);
+  if(canonical){
+    const byId=routineSessionRuntimeApi().sessionById(canonical,candidate);
+    const byLegacy=routineSessionRuntimeApi().sessionByLegacyKey(canonical,candidate);
+    const current=routineSessionRuntimeApi().sessionById(
+      canonical,localStorage.getItem(SELECTED_SESSION_ID_KEY)
+    );
+    const session=byId||byLegacy||current||routineSessionRuntimeApi().orderedSessions(canonical)[0];
+    const id=session?.sessionId||null;
+    if(id) localStorage.setItem(SELECTED_SESSION_ID_KEY,id);
+    else localStorage.removeItem(SELECTED_SESSION_ID_KEY);
+    if(session?.legacySessionKey) localStorage.setItem("gymos:selectedSession",session.legacySessionKey);
+    else localStorage.removeItem("gymos:selectedSession");
+    if(typeof state!=="undefined"){
+      state.selectedSession=session?.legacySessionKey||session?.label||"A";
+      state.selectedSessionId=id;
+    }
+    if(mark) markLocalUpdated();
+    return {selectedSession:session?.legacySessionKey||null,selectedSessionId:id};
+  }
+  const selected=validSelectedRoutineSession(candidate);
+  localStorage.setItem("gymos:selectedSession",selected);
   if(typeof state!=="undefined"){
     state.selectedSession=selected;
-    state.selectedSessionId=id;
+    state.selectedSessionId=null;
   }
   if(mark) markLocalUpdated();
-  return {selectedSession:selected,selectedSessionId:id};
+  return {selectedSession:selected,selectedSessionId:null};
 }
 function ensureRoutineSessionMigration(options={}){
   if(!window.GymOSRoutineSessionModel||!window.GymOSRoutineSessionMigration){
@@ -3221,6 +3339,21 @@ function resetExerciseLibraryOwnerState(){
   state.exerciseLibrarySearchRefocus=false;
   state.exerciseSubstitution=null;
 }
+function resetRoutineSessionOwnerState(){
+  if(typeof state==="undefined") return;
+  stopAllExerciseTimers();
+  state.selectedSession=null;
+  state.selectedSessionId=null;
+  state.editingSession=null;
+  state.finishingWorkout=false;
+  state.completedWorkoutSummary=null;
+  state.expandedHistoryId=null;
+  state.editWorkoutId=null;
+  state.routineWorkflow=null;
+  state.routineImport=null;
+  state.routineFileBusy=null;
+  state.coachSessionId=null;
+}
 function assertActiveLocalOwner(ownerId){
   const expected=window.GymOSProfileData.normalizeOwnerId(ownerId);
   const current=window.GymOSProfileData.normalizeOwnerId(
@@ -3267,10 +3400,10 @@ function finishLocalUserActivation(userId){
     saveCurrentUserVault(ownerId);
     assertActiveLocalOwner(ownerId);
     sessions=getRoutine();
-    const selected=localStorage.getItem("gymos:selectedSession")||nextSuggestedSession();
-    state.selectedSession=validSelectedRoutineSession(selected);
-    state.selectedSessionId=selectedSessionIdForLegacy(
-      state.selectedSession,getCanonicalRoutine()
+    persistSelectedRoutineSession(
+      localStorage.getItem(SELECTED_SESSION_ID_KEY)||
+      localStorage.getItem("gymos:selectedSession")||
+      nextSuggestedSession()
     );
     if(migration.migrated) scheduleAutoSync();
     return migration;
@@ -3302,6 +3435,7 @@ function activateLocalUser(userId){
   }
   localStorage.setItem(LOCAL_OWNER_KEY,userId);
   resetExerciseLibraryOwnerState();
+  resetRoutineSessionOwnerState();
   return finishLocalUserActivation(userId);
 }
 
@@ -3311,6 +3445,7 @@ function deactivateLocalUser(){
   clearCurrentUserData();
   localStorage.removeItem(LOCAL_OWNER_KEY);
   resetExerciseLibraryOwnerState();
+  resetRoutineSessionOwnerState();
 }
 
 function deleteOwnerLocalData(ownerId,{removeOwner=false}={}){
@@ -3572,6 +3707,7 @@ let state = {
   exerciseLibraryFormDraft: null,
   exerciseLibrarySearchRefocus: false,
   exerciseSubstitution: null,
+  finishingWorkout: false,
   editingLibraryExerciseId: null,
   selectedLibraryExerciseId: null,
   favoritesSort: "name",
@@ -3913,7 +4049,7 @@ function buildSyncPayload(){
     deviceId:getDeviceId(),
     deviceName:getDeviceName(),
     history:getHistory(),
-    routine:getRoutine(),
+    routine:activeRoutineForComparison(),
     canonicalRoutine:getCanonicalRoutine(),
     canonicalDrafts:getCanonicalDrafts(),
     selectedSessionId:localStorage.getItem(SELECTED_SESSION_ID_KEY),
@@ -3952,8 +4088,12 @@ function buildSyncPayload(){
 }
 function applySyncPayload(payload){
   if(!payload||typeof payload!=="object") throw new Error("Copia remota no válida.");
+  const ownerAtStart=currentRoutineOwnerOrNull();
+  if(!ownerAtStart) throw new Error("owner_not_active");
+  const before=captureRoutineSessionStartupStorage(ownerAtStart);
   state.applyingRemote=true;
   try{
+  assertActiveLocalOwner(ownerAtStart);
   if(Array.isArray(payload.history)) saveHistory(payload.history);
   let canonicalAccepted=false;
   const canonicalProvided=Boolean(payload.canonicalRoutine);
@@ -3974,8 +4114,8 @@ function applySyncPayload(payload){
         window.GymOSRoutineProposals.stableStringify(
           routineSessionMigrationApi().sessionMap(payload.canonicalRoutine)
         );
-    const remoteShadow=validation.valid&&payload.canonicalRoutine.sessions.length<=3
-      ?window.GymOSRoutineSessionModel.canonicalToLegacyRuntimeView(payload.canonicalRoutine)
+    const remoteShadow=validation.valid
+      ?routineSessionRuntimeApi().legacyShadow(payload.canonicalRoutine)
       :null;
     const remoteShadowMatches=!payload.routine||(
       remoteShadow&&routineSessionMigrationApi().legacyRoutineEquivalent(
@@ -3983,12 +4123,11 @@ function applySyncPayload(payload){
       )
     );
     if(
-      validation.valid&&draftValidation.valid&&ownerMatches&&metadataMatches&&remoteShadowMatches&&
-      payload.canonicalRoutine.sessions.length<=3
+      validation.valid&&draftValidation.valid&&ownerMatches&&metadataMatches&&remoteShadowMatches
     ){
       const localCanonical=getCanonicalRoutine();
       const localShadowMatches=!localCanonical||routineSessionMigrationApi().legacyRoutineEquivalent(
-        readStoredJson("gymos:routine")||{},window.GymOSRoutineSessionModel.canonicalToLegacyRuntimeView(localCanonical)
+        readStoredJson("gymos:routine")||{},routineSessionRuntimeApi().legacyShadow(localCanonical)
       );
       const syncDecision=localShadowMatches
         ?routineSessionMigrationApi().canonicalSyncDecision(
@@ -3996,7 +4135,9 @@ function applySyncPayload(payload){
         )
         :{accept:false,code:"local_legacy_shadow_conflict"};
       if(!syncDecision.accept){
-        console.warn("Canonical routine sync conflict",{code:syncDecision.code});
+        const error=new Error(syncDecision.code||"canonical_sync_conflict");
+        error.code=syncDecision.code||"canonical_sync_conflict";
+        throw error;
       }else{
         saveCanonicalRoutine(payload.canonicalRoutine,{mark:false,writeLegacyShadow:true});
         localStorage.setItem(CANONICAL_DRAFTS_KEY,JSON.stringify(payload.canonicalDrafts));
@@ -4011,27 +4152,33 @@ function applySyncPayload(payload){
             payload.canonicalRoutine,remoteSelected
           );
           if(remoteLegacy) localStorage.setItem("gymos:selectedSession",remoteLegacy);
+          else localStorage.removeItem("gymos:selectedSession");
         }
         canonicalAccepted=true;
       }
     }else{
-      console.warn("Canonical routine sync rejected",{
-        code:payload.canonicalRoutine.sessions?.length>3
-          ?"runtime_not_ready"
-          :validation.valid&&remoteShadowMatches
-            ?"invalid_remote_session_state"
-            :validation.valid?"remote_legacy_shadow_conflict":"invalid_remote_canonical"
-      });
+      const code=validation.valid&&remoteShadowMatches
+        ?"invalid_remote_session_state"
+        :validation.valid?"remote_legacy_shadow_conflict":"invalid_remote_canonical";
+      const error=new Error(code);
+      error.code=code;
+      throw error;
     }
   }
   if(payload.routine&&!canonicalAccepted&&!canonicalProvided){
     saveRoutine(payload.routine,{mark:false});sessions=getRoutine();
   }
-  else if(canonicalAccepted) sessions=getRoutine();
+  else if(canonicalAccepted){
+    sessions=getRoutine();
+    persistSelectedRoutineSession(localStorage.getItem(SELECTED_SESSION_ID_KEY));
+  }
   if(Array.isArray(payload.body)) saveBodyHistory(payload.body);
   if(Array.isArray(payload.body_summary_metrics)) saveBodySummaryMetrics(payload.body_summary_metrics,{markUpdated:false});
   if(Array.isArray(payload.exerciseLibrary)&&payload.exerciseLibrary.length){
-    saveExerciseLibrary(payload.exerciseLibrary,{mark:false,touchUpdatedAt:false,setSchema:false});
+    saveExerciseLibrary(payload.exerciseLibrary,{
+      mark:false,touchUpdatedAt:false,setSchema:false,
+      ownerId:currentRoutineOwnerOrNull()
+    });
   }
   if(Array.isArray(payload.routineProposals)){
     importRoutineProposalSyncData(payload,{mark:false});
@@ -4072,6 +4219,10 @@ function applySyncPayload(payload){
     ensureExerciseDomainMigration({mark:false,force:true});
     localStorage.setItem("gymos:updatedAt",payload.updatedAt||new Date().toISOString());
     localStorage.removeItem("gymos:syncPending");
+    assertActiveLocalOwner(ownerAtStart);
+  }catch(error){
+    restoreRoutineSessionStartupStorage(before,ownerAtStart);
+    throw error;
   }finally{
     state.applyingRemote=false;
   }
@@ -4713,27 +4864,113 @@ function shiftMonth(monthString,delta){
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`;
 }
 function nextSuggestedSession(){
-  const available=availableRoutineSessions();
-  if(!available.length) return "A";
-  const h = JSON.parse(localStorage.getItem("gymos:history") || "[]");
-  if(!h.length||!available.includes(h[0].session)) return available[0];
-  return available[(available.indexOf(h[0].session)+1)%available.length];
+  const canonical=getCanonicalRoutine();
+  if(!canonical){
+    const available=availableRoutineSessions();
+    if(!available.length) return "A";
+    const history=JSON.parse(localStorage.getItem("gymos:history")||"[]");
+    if(!history.length||!available.includes(history[0].session)) return available[0];
+    return available[(available.indexOf(history[0].session)+1)%available.length];
+  }
+  const id=routineSessionRuntimeApi().selectedSessionId({
+    routine:canonical,history:getHistory()
+  });
+  const session=routineSessionRuntimeApi().sessionById(canonical,id);
+  return session?.legacySessionKey||session?.label||"A";
 }
-function availableRoutineSessions(routine=sessions){
-  return ["A","B","C"].filter(session=>Array.isArray(routine?.[session])&&routine[session].length>0);
+function activeRoutineSessions(){
+  const canonical=getCanonicalRoutine();
+  if(canonical) return routineSessionRuntimeApi().orderedSessions(canonical);
+  return ["A","B","C"].filter(key=>Array.isArray(sessions?.[key])&&sessions[key].length)
+    .map((key,index)=>({
+      sessionId:`legacy-${key}`,legacySessionKey:key,label:key,name:`Sesión ${key}`,
+      focus:"",order:index+1,estimatedDurationMinutes:null,exercises:sessions[key]
+    }));
 }
-function validSelectedRoutineSession(candidate,routine=sessions){
-  const available=availableRoutineSessions(routine);
-  return available.includes(candidate)?candidate:(available[0]||"A");
+function activeRoutineSession(sessionId=state?.selectedSessionId){
+  const canonical=getCanonicalRoutine();
+  if(canonical) return routineSessionRuntimeApi().sessionById(canonical,sessionId);
+  return activeRoutineSessions().find(session=>
+    session.sessionId===sessionId||session.legacySessionKey===state?.selectedSession
+  )||null;
+}
+function activeRoutineForComparison(){
+  return getCanonicalRoutine()||getRoutine();
+}
+function availableRoutineSessions(){
+  return activeRoutineSessions().map(session=>session.sessionId);
+}
+function validSelectedRoutineSession(candidate){
+  const canonical=getCanonicalRoutine();
+  if(!canonical){
+    const available=["A","B","C"].filter(key=>Array.isArray(sessions?.[key])&&sessions[key].length);
+    return available.includes(candidate)?candidate:(available[0]||"A");
+  }
+  const byId=routineSessionRuntimeApi().sessionById(canonical,candidate);
+  const byLegacy=routineSessionRuntimeApi().sessionByLegacyKey(canonical,candidate);
+  const selected=byId||byLegacy||routineSessionRuntimeApi().orderedSessions(canonical)[0]||null;
+  return selected?.legacySessionKey||selected?.label||"A";
 }
 function draftKey(s){ return `gymos:draft:${s}`; }
-function emptyDraft(s){
-  const last = lastWorkoutForSession(s);
+function resolveRuntimeSessionId(candidate=null){
+  const canonical=getCanonicalRoutine();
+  if(!canonical) return candidate||state?.selectedSession||"A";
+  return routineSessionRuntimeApi().selectedSessionId({
+    routine:canonical,
+    preferredSessionId:candidate||state?.selectedSessionId||localStorage.getItem(SELECTED_SESSION_ID_KEY),
+    legacySelection:state?.selectedSession||localStorage.getItem("gymos:selectedSession"),
+    history:getHistory()
+  });
+}
+function selectRoutineSession(sessionId,{mark=false}={}){
+  const canonical=getCanonicalRoutine();
+  if(!canonical) return persistSelectedRoutineSession(sessionId,{mark});
+  const selectedId=resolveRuntimeSessionId(sessionId);
+  const session=routineSessionRuntimeApi().sessionById(canonical,selectedId);
+  if(!session) throw new Error("session_not_found");
+  localStorage.setItem(SELECTED_SESSION_ID_KEY,selectedId);
+  if(session.legacySessionKey) localStorage.setItem("gymos:selectedSession",session.legacySessionKey);
+  else localStorage.removeItem("gymos:selectedSession");
+  state.selectedSessionId=selectedId;
+  state.selectedSession=session.legacySessionKey||session.label||String(session.order);
+  if(mark) markLocalUpdated();
+  return {selectedSession:state.selectedSession,selectedSessionId:selectedId};
+}
+function emptyDraft(sessionId){
+  const canonical=getCanonicalRoutine();
+  const session=canonical
+    ?routineSessionRuntimeApi().sessionById(canonical,resolveRuntimeSessionId(sessionId))
+    :activeRoutineSession(sessionId);
+  if(!session) throw new Error("draft_session_not_found");
+  const id=session.sessionId;
+  const last=lastWorkoutForSession(id);
   return {
-    session:s,
+    ...(canonical?{
+      draftId:secureSessionModelId("draft"),
+      ownerId:currentRoutineOwnerOrNull(),
+      routineId:canonical.routineId,
+      routineRevision:canonical.revision,
+      sessionId:id,
+      sessionDefinitionHash:routineSessionMigrationApi().sessionDefinitionHash(canonical,id),
+      sessionSnapshot:{
+        label:session.label||String(session.order),
+        name:session.name||"",
+        focus:session.focus||"",
+        order:session.order,
+        legacySessionKey:session.legacySessionKey||null
+      },
+      updatedAt:new Date().toISOString()
+    }:{}),
+    session:session.legacySessionKey||id,
     startedAt:Date.now(),
     copiedFromLastSession:Boolean(last),
-    exercises:sessions[s].map((item,exerciseIndex)=>({
+    exercises:session.exercises.map((item,exerciseIndex)=>{
+      const previous=last?.exercises?.find(exercise=>
+        (item.exerciseId||item.id)&&
+        (exercise.exerciseId||exercise.id)===(item.exerciseId||item.id)
+      )||last?.exercises?.[exerciseIndex];
+      return {
+      ...JSON.parse(JSON.stringify(item)),
       name:item.name,
       target:item.target,
       sets:item.sets,
@@ -4743,7 +4980,7 @@ function emptyDraft(s){
       variant:item.variant||"",
       targetRir:item.targetRir||"3-4",
       series:Array.from({length:item.sets},(_,seriesIndex)=>({
-        weight:last?.exercises?.[exerciseIndex]?.series?.[seriesIndex]?.weight || "",
+        weight:previous?.series?.[seriesIndex]?.weight ?? "",
         reps:"",
         rir:"",
         warmup:false,
@@ -4751,11 +4988,24 @@ function emptyDraft(s){
       })),
       notes:"",
       discomfort:""
-    }))
+    };})
   };
 }
-function getDraft(s){
-  const draft=JSON.parse(localStorage.getItem(draftKey(s))||"null")||emptyDraft(s);
+function getDraft(sessionId){
+  const canonical=getCanonicalRoutine();
+  const resolved=resolveRuntimeSessionId(sessionId);
+  let draft=null;
+  if(canonical){
+    draft=routineSessionRuntimeApi().getDraft(getCanonicalDrafts(),{
+      ownerId:currentRoutineOwnerOrNull(),routine:canonical,sessionId:resolved
+    });
+    if(draft&&routineSessionMigrationApi().draftStatus(draft,{
+      ownerId:currentRoutineOwnerOrNull(),canonicalRoutine:canonical
+    }).status!=="current") draft=null;
+  }else{
+    draft=JSON.parse(localStorage.getItem(draftKey(resolved))||"null");
+  }
+  draft=draft||emptyDraft(resolved);
   draft.exercises.forEach(ex=>{
     ex.series=ex.series.map(normalizeSeries);
     if(ex.targetRir===undefined) ex.targetRir="3-4";
@@ -4764,60 +5014,65 @@ function getDraft(s){
   return draft;
 }
 function saveDraft(d){
-  const legacySession=d?.session;
-  const legacyRaw=JSON.stringify(d);
   const canonical=getCanonicalRoutine();
   const ownerId=currentRoutineOwnerOrNull();
   if(!canonical||!ownerId){
-    localStorage.setItem(draftKey(legacySession),legacyRaw);
+    localStorage.setItem(draftKey(d?.session),JSON.stringify(d));
     return;
   }
-  const session=canonical.sessions.find(item=>item.legacySessionKey===legacySession);
+  const sessionId=resolveRuntimeSessionId(d?.sessionId||d?.session);
+  const session=routineSessionRuntimeApi().sessionById(canonical,sessionId);
   if(!session) throw new Error("draft_session_not_found");
-  const previousLegacy=localStorage.getItem(draftKey(legacySession));
+  const legacySession=session.legacySessionKey||null;
+  const previousLegacy=legacySession?localStorage.getItem(draftKey(legacySession)):null;
   const previousCanonical=localStorage.getItem(CANONICAL_DRAFTS_KEY);
   const previousUpdatedAt=localStorage.getItem("gymos:updatedAt");
   const previousSyncPending=localStorage.getItem("gymos:syncPending");
   const previousLocalRevision=localStorage.getItem("gymos:localRevision");
   try{
-    const existing=getCanonicalDrafts()||
-      routineSessionMigrationApi().emptyDraftContainer(canonical.routineId);
-    const existingDraft=existing.draftsBySessionId?.[session.sessionId];
-    const migrated=routineSessionMigrationApi().migrateLegacyDrafts({
-      ownerId,canonicalRoutine:canonical,
-      legacyDraftsRaw:{[legacySession]:legacyRaw},
-      draftIds:{[legacySession]:existingDraft?.draftId||secureSessionModelId("draft")},
-      timestamp:new Date().toISOString()
+    assertActiveLocalOwner(ownerId);
+    const existing=getCanonicalDrafts()||routineSessionMigrationApi().emptyDraftContainer(canonical.routineId);
+    const existingDraft=existing.draftsBySessionId?.[sessionId];
+    const timestamp=new Date().toISOString();
+    const nextDraft={
+      ...JSON.parse(JSON.stringify(d)),
+      draftId:d.draftId||existingDraft?.draftId||secureSessionModelId("draft"),
+      ownerId,
+      routineId:canonical.routineId,
+      routineRevision:canonical.revision,
+      sessionId,
+      session:legacySession||sessionId,
+      sessionDefinitionHash:routineSessionMigrationApi().sessionDefinitionHash(canonical,sessionId),
+      startedAt:d.startedAt??existingDraft?.startedAt??Date.now(),
+      updatedAt:timestamp,
+      sessionSnapshot:{
+        label:session.label||String(session.order),name:session.name||"",
+        focus:session.focus||"",order:session.order,
+        legacySessionKey:legacySession
+      }
+    };
+    if(legacySession) nextDraft.legacyRaw=JSON.stringify({
+      ...nextDraft,session:legacySession
     });
-    const next=JSON.parse(JSON.stringify(existing));
-    next.schemaVersion=migrated.schemaVersion;
-    next.routineId=canonical.routineId;
-    next.draftsBySessionId=next.draftsBySessionId||{};
-    next.orphanedLegacyDrafts=next.orphanedLegacyDrafts||{};
-    next.draftsBySessionId[session.sessionId]=migrated.draftsBySessionId[session.sessionId];
-    delete next.orphanedLegacyDrafts[legacySession];
-    const validation=routineSessionMigrationApi().validateDraftContainer(next,{
-      ownerId,canonicalRoutine:canonical
+    else delete nextDraft.legacyRaw;
+    const next=routineSessionRuntimeApi().upsertDraft(existing,nextDraft,{
+      ownerId,routine:canonical
     });
-    if(!validation.valid) throw new Error(`invalid_canonical_draft:${validation.errors.join(",")}`);
+    if(legacySession) delete next.orphanedLegacyDrafts?.[legacySession];
     if(currentRoutineOwnerOrNull()!==ownerId) throw new Error("owner_changed");
-    localStorage.setItem(draftKey(legacySession),legacyRaw);
     localStorage.setItem(CANONICAL_DRAFTS_KEY,JSON.stringify(next));
-    if(localStorage.getItem(draftKey(legacySession))!==legacyRaw){
-      throw new Error("legacy_draft_write_validation_failed");
-    }
+    if(legacySession) localStorage.setItem(draftKey(legacySession),nextDraft.legacyRaw);
     const storedContainer=getCanonicalDrafts();
     const storedValidation=routineSessionMigrationApi().validateDraftContainer(storedContainer,{
       ownerId,canonicalRoutine:canonical
     });
-    if(!storedValidation.valid||
-      storedContainer.draftsBySessionId?.[session.sessionId]?.legacyRaw!==legacyRaw){
+    if(!storedValidation.valid||!storedContainer.draftsBySessionId?.[sessionId]){
       throw new Error("canonical_draft_write_validation_failed");
     }
     if(currentRoutineOwnerOrNull()!==ownerId) throw new Error("owner_changed");
     markLocalUpdated();
   }catch(error){
-    restoreStorageValue(draftKey(legacySession),previousLegacy);
+    if(legacySession) restoreStorageValue(draftKey(legacySession),previousLegacy);
     restoreStorageValue(CANONICAL_DRAFTS_KEY,previousCanonical);
     restoreStorageValue("gymos:updatedAt",previousUpdatedAt);
     restoreStorageValue("gymos:syncPending",previousSyncPending);
@@ -4825,8 +5080,12 @@ function saveDraft(d){
     throw error;
   }
 }
-function clearDraft(s,{mark=true}={}){
-  const previousLegacy=localStorage.getItem(draftKey(s));
+function clearDraft(sessionId,{mark=true}={}){
+  const canonical=getCanonicalRoutine();
+  const resolved=resolveRuntimeSessionId(sessionId);
+  const session=canonical?routineSessionRuntimeApi().sessionById(canonical,resolved):null;
+  const legacySession=session?.legacySessionKey||(!canonical?resolved:null);
+  const previousLegacy=legacySession?localStorage.getItem(draftKey(legacySession)):null;
   const previousCanonical=localStorage.getItem(CANONICAL_DRAFTS_KEY);
   const previousUpdatedAt=localStorage.getItem("gymos:updatedAt");
   const previousSyncPending=localStorage.getItem("gymos:syncPending");
@@ -4834,13 +5093,13 @@ function clearDraft(s,{mark=true}={}){
   const ownerId=currentRoutineOwnerOrNull();
   try{
     if(ownerId) assertActiveLocalOwner(ownerId);
-    localStorage.removeItem(draftKey(s));
-    const canonical=getCanonicalRoutine(),container=getCanonicalDrafts();
+    if(legacySession) localStorage.removeItem(draftKey(legacySession));
+    const container=getCanonicalDrafts();
     if(canonical&&container){
-      const session=canonical.sessions.find(item=>item.legacySessionKey===s);
-      const next=JSON.parse(JSON.stringify(container));
-      if(session) delete next.draftsBySessionId?.[session.sessionId];
-      delete next.orphanedLegacyDrafts?.[s];
+      const next=routineSessionRuntimeApi().removeDraft(container,{
+        ownerId,routine:canonical,sessionId:resolved
+      });
+      if(legacySession) delete next.orphanedLegacyDrafts?.[legacySession];
       localStorage.setItem(CANONICAL_DRAFTS_KEY,JSON.stringify(next));
       const validation=routineSessionMigrationApi().validateDraftContainer(next,{
         ownerId,canonicalRoutine:canonical
@@ -4850,7 +5109,7 @@ function clearDraft(s,{mark=true}={}){
     if(ownerId) assertActiveLocalOwner(ownerId);
     if(mark) markLocalUpdated();
   }catch(error){
-    restoreStorageValue(draftKey(s),previousLegacy);
+    if(legacySession) restoreStorageValue(draftKey(legacySession),previousLegacy);
     restoreStorageValue(CANONICAL_DRAFTS_KEY,previousCanonical);
     restoreStorageValue("gymos:updatedAt",previousUpdatedAt);
     restoreStorageValue("gymos:syncPending",previousSyncPending);
@@ -4858,7 +5117,15 @@ function clearDraft(s,{mark=true}={}){
     throw error;
   }
 }
-function lastWorkoutForSession(s){ return getHistory().find(w=>w.session===s); }
+function lastWorkoutForSession(sessionId){
+  const canonical=getCanonicalRoutine();
+  if(canonical){
+    return routineSessionRuntimeApi().lastWorkout(
+      getHistory(),canonical,resolveRuntimeSessionId(sessionId)
+    );
+  }
+  return getHistory().find(workout=>workout.session===sessionId);
+}
 function parseRepRange(target){
   const nums=(target.match(/\d+/g)||[]).map(Number);
   if(!nums.length) return null;
@@ -4953,7 +5220,7 @@ function formatDate(iso){
   return new Intl.DateTimeFormat("es-ES",{day:"numeric",month:"long",year:"numeric"}).format(new Date(iso));
 }
 function allExerciseNames(){
-  return [...new Set(Object.values(sessions).flat().map(item=>item.name))];
+  return [...new Set(activeRoutineSessions().flatMap(session=>session.exercises).map(item=>item.name))];
 }
 function getExerciseHistory(name){
   const rows=[];
@@ -5104,7 +5371,8 @@ function recordsForWorkout(workout){
   return records;
 }
 function progressionStatus(name){
-  const routineItem=Object.values(sessions).flat().find(x=>x.name===name);
+  const routineItem=activeRoutineSessions().flatMap(session=>session.exercises)
+    .find(item=>item.name===name);
   const history=getExerciseHistory(name);
   if(!history.length) return {
     level:"neutral",
@@ -5190,16 +5458,15 @@ function navigateToScreen(screen){
 
   if(screen==="workout"){
     const available=availableRoutineSessions();
-    const selected=validSelectedRoutineSession(
-      state.selectedSession||localStorage.getItem("gymos:selectedSession")
-    );
     if(!available.length){
       state.screen="home";
       renderHome();
       toast("No hay una sesión disponible para entrenar");
       return;
     }
-    persistSelectedRoutineSession(selected);
+    persistSelectedRoutineSession(
+      state.selectedSessionId||localStorage.getItem(SELECTED_SESSION_ID_KEY)||available[0]
+    );
   }
 
   state.screen=screen;
@@ -6035,8 +6302,8 @@ const HOME_HERO_IMAGE_SOURCE={
       ||null;
   }
 };
-function homeSessionProfile(sessionKey=state.selectedSession){
-  const names=(sessions[sessionKey]||[])
+function homeSessionProfile(session=activeRoutineSession(resolveRuntimeSessionId())){
+  const names=(session?.exercises||[])
     .map(exercise=>String(exercise.name||"").normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase());
   if(!names.length){
     return {focus:"Recuperación y movilidad",heroType:"rest"};
@@ -6147,8 +6414,14 @@ function homeDashboardState(now,week){
   };
 }
 function homeDashboardHero(dashboard,sessionProfile,plannedDuration,plannedExercises){
+  const selected=activeRoutineSession(resolveRuntimeSessionId());
+  const selectedName=selected
+    ?routineSessionRuntimeApi().displayName(
+      selected,activeRoutineSessions().findIndex(item=>item.sessionId===selected.sessionId)
+    )
+    :"Sesión";
   let kicker="HOY";
-  let title=`Sesión ${state.selectedSession}`;
+  let title=selectedName;
   let purposeLabel="OBJETIVO";
   let purpose=homeTrainingObjective(sessionProfile);
   let meta=`<span>${plannedDuration} min</span><i aria-hidden="true">·</i><span>${plannedExercises} ${plannedExercises===1?"ejercicio":"ejercicios"}</span>`;
@@ -6169,12 +6442,12 @@ function homeDashboardHero(dashboard,sessionProfile,plannedDuration,plannedExerc
     title="Ahora toca recuperar";
     purposeLabel="AHORA";
     purpose=hour>=20?"Prioriza una buena noche de sueño.":"Repón energía e hidrátate.";
-    meta=`<span>Come bien, hidrátate y prioriza el descanso.</span><i aria-hidden="true">·</i><span>Sesión ${esc(dashboard.latestWorkout?.session||"")} completada hoy</span>`;
+    meta=`<span>Come bien, hidrátate y prioriza el descanso.</span><i aria-hidden="true">·</i><span>${esc(dashboard.latestWorkout?.sessionName||`Sesión ${dashboard.latestWorkout?.session||""}`)} completada hoy</span>`;
     primary="Revisar recuperación";
     secondary="Ver entrenamiento →";
   }else if(dashboard.mode==="return"){
     kicker="HOY";
-    title=`Sesión ${state.selectedSession}`;
+    title=selectedName;
     purposeLabel="ENFOQUE";
     purpose=sessionProfile.focus;
     meta=`<span>${dashboard.daysSinceTraining} días desde la última sesión</span><i aria-hidden="true">·</i><span>${plannedDuration} min</span>`;
@@ -6304,10 +6577,11 @@ function openQuickActionScreen(screen,selector=null){
 function changeQuickActionSession(){
   const available=availableRoutineSessions();
   if(!available.length) return;
-  state.selectedSession=available[(available.indexOf(state.selectedSession)+1)%available.length];
-  persistSelectedRoutineSession(state.selectedSession,{mark:true});
+  const current=resolveRuntimeSessionId();
+  const next=available[(available.indexOf(current)+1)%available.length];
+  persistSelectedRoutineSession(next,{mark:true});
   renderHome();
-  toast(`Sesión ${state.selectedSession} seleccionada`);
+  toast(`${routineSessionRuntimeApi().displayName(activeRoutineSession(next))} seleccionada`);
 }
 function openQuickActionTimer(){
   openQuickActionScreen("workout");
@@ -6343,7 +6617,10 @@ const QUICK_ACTIONS_REGISTRY=Object.freeze({
   progress:{label:"Progreso",icon:"↗",action:()=>openQuickActionScreen("progressDashboard")},
   coach:{label:"Coach",icon:"✦",context:quickActionCoachContext,action:()=>openQuickActionScreen("coach")},
   workout_history:{label:"Historial",pickerLabel:"Historial de entrenamientos",icon:"↶",action:()=>openQuickActionScreen("history")},
-  change_session:{label:"Cambiar sesión",icon:"⇄",context:()=>`Sesión ${state.selectedSession}`,action:changeQuickActionSession},
+  change_session:{label:"Cambiar sesión",icon:"⇄",context:()=>{
+    const selected=activeRoutineSession(resolveRuntimeSessionId());
+    return selected?routineSessionRuntimeApi().displayName(selected):"Sesión";
+  },action:changeQuickActionSession},
   timer:{label:"Temporizador",icon:"◷",action:openQuickActionTimer},
   sports_profile:{label:"Perfil deportivo",icon:"◇",action:()=>openTrainingProfileEditor(1,{returnScreen:"settings"})},
   account:{label:"Cuenta",icon:"○",action:()=>openQuickActionScreen("account")},
@@ -6633,12 +6910,12 @@ function renderHomeRecoveryStatus(dashboard){
     const dismissed=window.GymOSRecovery.reminderDismissed(pending);
     if(dismissed){
       return `<section class="home-recovery-status recovery-reminder-compact">
-        <div><span class="section-kicker">RECUPERACIÓN PENDIENTE</span><strong>Sesión ${esc(pending.session)}</strong><small>Disponible durante todo el día.</small></div>
+        <div><span class="section-kicker">RECUPERACIÓN PENDIENTE</span><strong>${esc(pending.sessionName||`Sesión ${pending.session}`)}</strong><small>Disponible durante todo el día.</small></div>
         <button class="text-button" type="button" data-open-recovery-checkin="${esc(pending.id)}">Revisar →</button>
       </section>`;
     }
     return `<section class="home-recovery-priority">
-      <span class="section-kicker">PENDIENTE REGISTRAR RECUPERACIÓN · SESIÓN ${esc(pending.session)}</span>
+      <span class="section-kicker">PENDIENTE REGISTRAR RECUPERACIÓN · ${esc((pending.sessionName||`Sesión ${pending.session}`).toLocaleUpperCase("es"))}</span>
       <h2>¿Cómo has recuperado de la sesión de ayer?</h2>
       <p>Completa un check-in de 20–30 segundos.</p>
       <div><button class="primary" type="button" data-open-recovery-checkin="${esc(pending.id)}">Revisar recuperación</button><button class="text-button" type="button" data-dismiss-recovery-checkin="${esc(pending.id)}">Ahora no</button></div>
@@ -6657,8 +6934,12 @@ function renderHomeRecoveryStatus(dashboard){
 }
 
 function renderHome(){
-  const plannedDuration=Math.max(1,Number(getOnboardingProfile()?.duration)||45);
-  const plannedExercises=sessions[state.selectedSession].length;
+  const selectedSession=activeRoutineSession(resolveRuntimeSessionId());
+  const plannedDuration=Math.max(
+    1,Number(selectedSession?.estimatedDurationMinutes)||
+    Number(getOnboardingProfile()?.duration)||45
+  );
+  const plannedExercises=selectedSession?.exercises?.length||0;
   const now=new Date();
   const sessionProfile=homeSessionProfile();
   const greetingName=homeGreetingName();
@@ -6707,8 +6988,9 @@ function renderHome(){
   const cycleHomeSession=()=>{
     const availableSessions=availableRoutineSessions();
     if(!availableSessions.length) return;
-    state.selectedSession=availableSessions[(availableSessions.indexOf(state.selectedSession)+1)%availableSessions.length];
-    persistSelectedRoutineSession(state.selectedSession);
+    const current=resolveRuntimeSessionId();
+    const next=availableSessions[(availableSessions.indexOf(current)+1)%availableSessions.length];
+    persistSelectedRoutineSession(next);
     renderHome();
   };
   document.getElementById("homePrimaryAction").onclick=()=>{
@@ -6894,21 +7176,27 @@ function stopAllExerciseTimers(){
 }
 
 function renderWorkout(){
-  const s=state.selectedSession,d=getDraft(s),last=lastWorkoutForSession(s);
+  const s=resolveRuntimeSessionId();
+  const session=activeRoutineSession(s);
+  if(!session){state.screen="home";renderHome();return;}
+  const sessionName=routineSessionRuntimeApi().displayName(
+    session,activeRoutineSessions().findIndex(item=>item.sessionId===s)
+  );
+  const d=getDraft(s),last=lastWorkoutForSession(s);
   const done=d.exercises.reduce((n,e)=>n+e.series.filter(x=>x.done).length,0);
   const total=d.exercises.reduce((sum,e)=>sum+e.series.length,0);
   app.innerHTML=`<div class="app-shell">
     <main class="screen">
       <div class="workout-header">
         <div class="workout-title-row">
-          <div><div class="subtle">Entrenamiento activo</div><h1>Sesión ${s} · ${done}/${total} series</h1></div>
+          <div><div class="subtle">Entrenamiento activo</div><h1>${esc(sessionName)} · ${done}/${total} series</h1></div>
           <button id="timerChip" class="timer-chip">${state.timerSeconds?formatTimer(state.timerSeconds):"Descanso"}</button>
         </div>
         <div class="progress"><span style="width:${(done/total)*100}%"></span></div>
       </div>
       ${d.copiedFromLastSession ? `
         <div class="prefill-banner">
-          <div><strong>Pesos preparados</strong><span>Se han copiado de tu última sesión ${s}.</span></div>
+          <div><strong>Pesos preparados</strong><span>Se han copiado de tu último ${esc(sessionName.toLocaleLowerCase("es"))}.</span></div>
           <button id="clearPrefilledWeights" class="text-button">Vaciar pesos</button>
         </div>` : ""}
       ${d.exercises.map((ex,i)=>{
@@ -7074,33 +7362,67 @@ function updateTimerUI(){
   if(b)b.textContent=state.timerSeconds?formatTimer(state.timerSeconds):"Descanso";
 }
 function finishWorkout(){
-  const s=state.selectedSession,d=getDraft(s);
+  if(state.finishingWorkout) return;
+  const ownerId=currentRoutineOwnerOrNull();
+  const canonical=getCanonicalRoutine();
+  const s=resolveRuntimeSessionId();
+  const d=getDraft(s);
+  if(!ownerId||!canonical) throw new Error("canonical_runtime_required");
+  const existing=getHistory().find(workout=>workout.draftId===d.draftId);
+  if(existing){
+    state.completedWorkoutSummary=existing;
+    state.screen="workoutComplete";
+    renderWorkoutComplete();
+    return;
+  }
+  state.finishingWorkout=true;
   const completed=d.exercises.reduce((n,e)=>n+workingSeries(e.series).filter(x=>x.done).length,0);
   const completedExercises=d.exercises.map(exercise=>
     window.GymOSExerciseLibraryWorkflow?.historyExercise?.(exercise)||exercise
   );
-  const workout={id:Date.now(),date:new Date().toISOString(),session:s,
-    durationMs:Date.now()-(d.startedAt||Date.now()),completedSeries:completed,exercises:completedExercises};
-  const h=getHistory();h.unshift(workout);saveHistory(h);clearDraft(s,{mark:false});
-  const workoutAnalysis=window.GymOSWorkoutAnalysis?.analyzeAndSave?.(workout,{force:true});
-  if(workoutAnalysis) window.GymOSWorkoutAnalysis?.maybeGenerateAiNarrative?.(workoutAnalysis);
-  const newRecords=recordsForWorkout(workout);
-  const availableSessions=availableRoutineSessions();
-  state.selectedSession=availableSessions.length
-    ?availableSessions[(availableSessions.indexOf(s)+1)%availableSessions.length]
-    :"A";
-  persistSelectedRoutineSession(state.selectedSession);
-  clearInterval(state.timerInterval);state.timerSeconds=0;
-  window.GymOSRecovery?.createPendingCheckin?.(workout);
-  state.completedWorkoutSummary=workout;
-  state.screen="workoutComplete";
+  const workout=routineSessionRuntimeApi().historyEntry({
+    ownerId,routine:canonical,sessionId:s,draft:d,workoutId:Date.now(),
+    date:new Date().toISOString(),durationMs:Date.now()-(d.startedAt||Date.now()),
+    completedSeries:completed,exercises:completedExercises
+  });
+  workout.draftId=d.draftId;
+  workout.routineRevision=canonical.revision;
+  const before=captureRoutineSessionStartupStorage(ownerId);
+  try{
+    assertActiveLocalOwner(ownerId);
+    const history=getHistory();
+    if(!history.some(item=>item.draftId===d.draftId)){
+      localStorage.setItem("gymos:history",JSON.stringify([workout,...history]));
+    }
+    clearDraft(s,{mark:false});
+    const next=routineSessionRuntimeApi().nextSessionId(canonical,s);
+    persistSelectedRoutineSession(next);
+    assertActiveLocalOwner(ownerId);
+    markLocalUpdated({schedule:false});
+    assertActiveLocalOwner(ownerId);
+    saveCurrentUserVault(ownerId);
+    assertActiveLocalOwner(ownerId);
+  }catch(error){
+    restoreRoutineSessionStartupStorage(before,ownerId);
+    state.finishingWorkout=false;
+    throw error;
+  }
+  let newRecords=[];
+  try{
+    const workoutAnalysis=window.GymOSWorkoutAnalysis?.analyzeAndSave?.(workout,{force:true});
+    if(workoutAnalysis) window.GymOSWorkoutAnalysis?.maybeGenerateAiNarrative?.(workoutAnalysis);
+    newRecords=recordsForWorkout(workout);
+    clearInterval(state.timerInterval);state.timerSeconds=0;
+    window.GymOSRecovery?.createPendingCheckin?.(workout);
+    state.completedWorkoutSummary=workout;
+    state.screen="workoutComplete";
+  }finally{
+    state.finishingWorkout=false;
+  }
   renderWorkoutComplete();
   autoSync("entrenamiento finalizado");
-  if(newRecords.length){
-    showRecordsCelebration(newRecords);
-  }else{
-    toast(`Sesión ${s} guardada`);
-  }
+  if(newRecords.length) showRecordsCelebration(newRecords);
+  else toast(`${workout.sessionName} guardada`);
 }
 function showRecordsCelebration(records){
   const modal=document.createElement("div");
@@ -7126,7 +7448,7 @@ function renderHistory(){
       ${h.length?h.map(w=>`
         <section class="card" data-history="${w.id}">
           <div class="history-item">
-            <div><strong>Sesión ${w.session}</strong><small>${formatDate(w.date)} · ${formatDuration(w.durationMs)} · ${w.completedSeries} series efectivas</small></div>
+            <div><strong>${esc(w.sessionName||`Sesión ${w.session||w.legacySessionKey||""}`)}</strong><small>${formatDate(w.date)} · ${formatDuration(w.durationMs)} · ${w.completedSeries} series efectivas</small></div>
             <div class="chevron">›</div>
           </div>
           ${state.expandedHistoryId===w.id?`<div class="history-detail">
@@ -7173,7 +7495,7 @@ function renderEditWorkout(){
   workout.exercises.forEach(ex=>ex.series=ex.series.map(normalizeSeries));
 
   app.innerHTML=`<div class="app-shell">
-    <header class="topbar"><div><div class="brand">Editar sesión ${workout.session}</div><div class="subtle">${formatDate(workout.date)}</div></div></header>
+    <header class="topbar"><div><div class="brand">Editar ${esc(workout.sessionName||`sesión ${workout.session||""}`)}</div><div class="subtle">${formatDate(workout.date)}</div></div></header>
     <main class="screen">
       <section class="card">
         <label class="select-label">Fecha y hora</label>
@@ -7607,10 +7929,11 @@ function esc(value){
   return String(value??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[c]));
 }
 function editExerciseModal(session,index=null){
-  const routine=JSON.parse(JSON.stringify(getRoutine()));
+  const sessionModel=canonicalSessionByRef(session);
+  const exercises=JSON.parse(JSON.stringify(sessionModel?.exercises||[]));
   const current=index===null
     ? {name:"",target:"8–10 reps",sets:3,increment:2.5,type:"peso"}
-    : routine[session][index];
+    : exercises[index];
 
   const layer=document.createElement("div");
   layer.className="routine-modal-layer";
@@ -7652,10 +7975,9 @@ function editExerciseModal(session,index=null){
       increment:Math.max(0,Number(document.getElementById("reIncrement").value)||0),
       type:document.getElementById("reType").value
     };
-    if(index===null) routine[session].push(value);
-    else routine[session][index]=value;
-    saveRoutine(routine);
-    sessions=getRoutine();
+    if(index===null) exercises.push(value);
+    else exercises[index]=value;
+    saveCanonicalSessionExercises(session,exercises);
     close();
     toast(index===null?"Ejercicio añadido":"Ejercicio actualizado");
     renderRoutineEditor();
@@ -7664,9 +7986,8 @@ function editExerciseModal(session,index=null){
   const remove=document.getElementById("removeExercise");
   if(remove) remove.onclick=()=>{
     if(!confirm(`¿Eliminar "${current.name}"?`)) return;
-    routine[session].splice(index,1);
-    saveRoutine(routine);
-    sessions=getRoutine();
+    exercises.splice(index,1);
+    saveCanonicalSessionExercises(session,exercises);
     close();
     toast("Ejercicio eliminado");
     renderRoutineEditor();
@@ -7674,8 +7995,7 @@ function editExerciseModal(session,index=null){
 }
 
 function substituteExerciseModal(session,index){
-  const routine=getRoutine();
-  const current=routine[session]?.[index];
+  const current=canonicalSessionByRef(session)?.exercises?.[index];
   if(!current) return;
   const library=getExerciseLibrary();
   const equipmentOptions=["Todos",...new Set(library.map(item=>item.equipment).filter(Boolean))];
@@ -7758,32 +8078,37 @@ function substituteExerciseModal(session,index){
 }
 
 function moveRoutineExercise(session,index,direction){
-  const routine=JSON.parse(JSON.stringify(getRoutine()));
+  const exercises=JSON.parse(JSON.stringify(canonicalSessionByRef(session)?.exercises||[]));
   const target=index+direction;
-  if(target<0||target>=routine[session].length) return;
-  [routine[session][index],routine[session][target]]=[routine[session][target],routine[session][index]];
-  saveRoutine(routine);
-  sessions=getRoutine();
+  if(target<0||target>=exercises.length) return;
+  [exercises[index],exercises[target]]=[exercises[target],exercises[index]];
+  saveCanonicalSessionExercises(session,exercises);
   renderRoutineEditor();
 }
 function renderRoutineEditor(){
-  const session=state.editingSession||"A";
-  const routine=getRoutine();
-  const exercises=routine[session]||[];
+  const available=activeRoutineSessions();
+  const selected=canonicalSessionByRef(state.editingSession)||available[0]||null;
+  if(!selected){state.screen="settings";renderSettings();return;}
+  const session=selected.sessionId;
+  state.editingSession=session;
+  const exercises=selected.exercises||[];
+  const sessionName=routineSessionRuntimeApi().displayName(
+    selected,available.findIndex(item=>item.sessionId===session)
+  );
 
   app.innerHTML=`<div class="app-shell">
     <header class="topbar">
       <button id="backRoutineEditor" class="back-button">←</button>
-      <div><div class="brand">Editor de rutina</div><div class="subtle">Sesiones A, B y C</div></div>
+      <div><div class="brand">Editor de rutina</div><div class="subtle">${available.length} sesiones</div></div>
       <button id="addRoutineExerciseTop" class="header-action">＋</button>
     </header>
     <main class="screen">
       <div class="session-picker routine-tabs">
-        ${["A","B","C"].map(s=>`<button data-edit-session="${s}" class="${s===session?"active":""}">Sesión ${s}</button>`).join("")}
+        ${available.map(item=>`<button data-edit-session="${esc(item.sessionId)}" class="${item.sessionId===session?"active":""}">${esc(routineSessionRuntimeApi().displayName(item))}</button>`).join("")}
       </div>
       <section class="card">
         <div class="card-heading-row">
-          <div><h2>Sesión ${session}</h2><p class="subtle">${exercises.length} ejercicios</p></div>
+          <div><h2>${esc(sessionName)}</h2><p class="subtle">${exercises.length} ejercicios</p></div>
           <button id="addRoutineExercise" class="primary small-button">＋ Añadir</button>
         </div>
         <div class="routine-edit-list">
@@ -7835,27 +8160,23 @@ function renderRoutineEditor(){
   document.querySelectorAll("[data-down]").forEach(b=>b.onclick=()=>moveRoutineExercise(session,Number(b.dataset.down),1));
 
   document.getElementById("copyRoutineSession").onclick=()=>{
-    const target=prompt(`¿A qué sesión quieres copiar la sesión ${session}? Escribe A, B o C.`);
+    const choices=available.map((item,index)=>`${index+1}. ${routineSessionRuntimeApi().displayName(item)}`).join("\n");
+    const target=prompt(`¿A qué sesión quieres copiar ${sessionName}?\n${choices}\nEscribe el número.`);
     if(target===null) return;
-    const dest=target.trim().toUpperCase();
-    if(!["A","B","C"].includes(dest)){alert("Escribe A, B o C.");return;}
+    const dest=available[Number(target.trim())-1]?.sessionId;
+    if(!dest){toast("Selecciona una sesión válida.");return;}
     if(dest===session){alert("Selecciona una sesión diferente.");return;}
-    if(routine[dest].length&&!confirm(`La sesión ${dest} ya contiene ejercicios. ¿Sustituirlos?`)) return;
-    const next=JSON.parse(JSON.stringify(routine));
-    next[dest]=next[session].map(x=>({...x}));
-    saveRoutine(next);
-    sessions=getRoutine();
+    const destination=canonicalSessionByRef(dest);
+    if(destination.exercises.length&&!confirm(`${routineSessionRuntimeApi().displayName(destination)} ya contiene ejercicios. ¿Sustituirlos?`)) return;
+    saveCanonicalSessionExercises(dest,exercises.map(item=>({...item})));
     state.editingSession=dest;
-    toast(`Sesión ${session} copiada a ${dest}`);
+    toast(`${sessionName} copiada`);
     renderRoutineEditor();
   };
   document.getElementById("clearRoutineSession").onclick=()=>{
     if(!exercises.length) return;
-    if(!confirm(`¿Vaciar toda la sesión ${session}?`)) return;
-    const next=JSON.parse(JSON.stringify(routine));
-    next[session]=[];
-    saveRoutine(next);
-    sessions=getRoutine();
+    if(!confirm(`¿Vaciar toda ${sessionName}?`)) return;
+    saveCanonicalSessionExercises(session,[]);
     toast("Sesión vaciada");
     renderRoutineEditor();
   };
@@ -8008,7 +8329,7 @@ function renderBlockEditor(){
           <span class="field-label">Orden semanal de sesiones</span>
           <div id="sessionPlanSlots" class="session-plan-slots">
             ${blockSessionPlan(block).map((session,index)=>`<label><span>Día ${index+1}</span><select data-plan-slot="${index}">
-              ${["A","B","C"].map(s=>`<option value="${s}" ${s===session?"selected":""}>Sesión ${s}</option>`).join("")}
+              ${activeRoutineSessions().map(item=>`<option value="${esc(item.sessionId)}" ${item.sessionId===session?"selected":""}>${esc(routineSessionRuntimeApi().displayName(item))}</option>`).join("")}
             </select></label>`).join("")}
           </div>
           <p class="subtle">Define el orden previsto. Las sesiones se marcan como completadas al registrarlas.</p>
@@ -8061,7 +8382,7 @@ function renderBlockEditor(){
     const count=Number(document.getElementById("blockSessions").value);
     const container=document.getElementById("sessionPlanSlots");
     container.innerHTML=defaultSessionPlan(count).map((session,index)=>`<label><span>Día ${index+1}</span><select data-plan-slot="${index}">
-      ${["A","B","C"].map(s=>`<option value="${s}" ${s===session?"selected":""}>Sesión ${s}</option>`).join("")}
+      ${activeRoutineSessions().map(item=>`<option value="${esc(item.sessionId)}" ${item.sessionId===session?"selected":""}>${esc(routineSessionRuntimeApi().displayName(item))}</option>`).join("")}
     </select></label>`).join("");
   };
   const save=()=>{
@@ -8180,7 +8501,7 @@ function renderBlockAnalytics(){
         <h2>Entrenamientos por sesión</h2>
         <div class="session-stat-list">
           ${data.bySession.map(item=>`<div>
-            <span>Sesión ${item.session}</span>
+            <span>${esc(item.name)}</span>
             <div class="weekly-bar-track"><div style="width:${Math.round((item.count/maxWorkouts)*100)}%"></div></div>
             <strong>${item.count}</strong>
           </div>`).join("")}
@@ -9448,7 +9769,7 @@ function renderWorkoutAnalysisDetail(){
   app.innerHTML=`<div class="app-shell">
     <header class="topbar">
       <button id="backWorkoutAnalysis" class="back-button" aria-label="Volver a Coach">←</button>
-      <div><div class="brand">Análisis de Sesión ${esc(workout?.session||"")}</div><div class="subtle">${formatDate(item.workoutDate)} · ${item.analysisSource==="ai"?"Explicación con IA":item.analysisSource==="local_fallback"?"IA no disponible · fallback local":"Motor de reglas"}</div></div><span></span>
+      <div><div class="brand">Análisis de ${esc(workout?.sessionName||`Sesión ${workout?.session||""}`)}</div><div class="subtle">${formatDate(item.workoutDate)} · ${item.analysisSource==="ai"?"Explicación con IA":item.analysisSource==="local_fallback"?"IA no disponible · fallback local":"Motor de reglas"}</div></div><span></span>
     </header>
     <main class="screen workout-analysis-screen">
       <section class="workout-analysis-hero">
@@ -9548,7 +9869,7 @@ function renderCoachProposal(){
       <section class="coach-change-list">
         ${proposal.changes.length?proposal.changes.map(change=>`<article class="card coach-change-card">
           <div class="coach-change-heading">
-            <div><strong>${esc(change.exercise)}</strong><span>Sesión ${esc(change.session)}</span></div>
+            <div><strong>${esc(change.exercise)}</strong><span>${esc(change.sessionName||`Sesión ${change.session}`)}</span></div>
             <span class="coach-change-type">${esc(change.type)}</span>
           </div>
           <div class="coach-change-values">
@@ -9627,7 +9948,7 @@ function renderFavoriteExercises(){
               <span>${usage.lastDate?`Último uso: ${new Date(usage.lastDate).toLocaleDateString("es-ES")}`:"Sin uso registrado"}</span>
             </div>
             <div class="library-session-actions">
-              ${["A","B","C"].map(session=>`<button class="secondary" data-favorite-add="${item.id}" data-target-session="${session}">Añadir a ${session}</button>`).join("")}
+              ${activeRoutineSessions().map(session=>`<button class="secondary" data-favorite-add="${item.id}" data-target-session="${esc(session.sessionId)}">Añadir a ${esc(routineSessionRuntimeApi().displayName(session))}</button>`).join("")}
             </div>
             <button class="secondary full" data-favorite-detail="${item.id}">Ver ficha</button>
           </article>`;
@@ -9647,7 +9968,7 @@ function renderFavoriteExercises(){
     const item=getExerciseLibrary().find(exercise=>exercise.id===button.dataset.favoriteAdd);
     if(!item) return;
     addExerciseToRoutine(button.dataset.targetSession,item);
-    toast(`${item.name} añadido a la sesión ${button.dataset.targetSession}`);
+    toast(`${item.name} añadido a ${routineSessionRuntimeApi().displayName(canonicalSessionByRef(button.dataset.targetSession))}`);
   });
   document.querySelectorAll("[data-favorite-detail]").forEach(button=>button.onclick=()=>{
     state.selectedLibraryExerciseId=button.dataset.favoriteDetail;
@@ -10542,7 +10863,7 @@ function exportCurrentRoutineFile(format,expectedOwnerId=null){
   if(expectedOwnerId&&currentRoutineOwnerOrNull()!==expectedOwnerId){
     throw new Error("La cuenta activa ha cambiado. Vuelve a solicitar la exportación.");
   }
-  const rows=api.exportRoutineRows(getRoutine());
+  const rows=api.exportRoutineRows(activeRoutineForComparison());
   if(!rows.length) throw new Error("Todavía no hay ejercicios que exportar.");
   const fileName=api.exportFileName("routine",format,new Date());
   if(format==="csv"){
@@ -10661,7 +10982,7 @@ async function handleRoutineFileSelection(file){
   });
   const ownerAtStart=currentRoutineOwnerOrNull();
   if(!ownerAtStart){routineFile.value="";return;}
-  const baselineHash=window.GymOSRoutineProposals.routineHash(getRoutine());
+  const baselineHash=window.GymOSRoutineProposals.routineHash(activeRoutineForComparison());
   const operationId=++routineImportReadSequence;
   state.routineFileBusy="reading";
   state.routineFileChooser=null;
@@ -10847,7 +11168,7 @@ function routineWorkflowGenerationSource(){
     activeGoalCycle:profileApi.getActiveGoalCycle(),
     activeTrainingPhase:profileApi.getActiveTrainingPhase(),
     exerciseLibrary:getExerciseLibrary(),
-    currentRoutine:getRoutine(),
+    currentRoutine:activeRoutineForComparison(),
     workoutHistory:getHistory(),
     generationPreferences:{
       preferredExerciseIds:getFavoriteExercises().map(exercise=>exercise.id),
@@ -10860,7 +11181,7 @@ function routineWorkflowSummary(){
   const ownerId=routineWorkflowOwnerId();
   return window.GymOSRoutineWorkflowUI.workflowSummaryModel({
     ownerId,
-    currentRoutine:getRoutine(),
+    currentRoutine:activeRoutineForComparison(),
     proposalRecords:getRoutineProposalRecords(ownerId),
     activationRecords:getRoutineActivationRecords(ownerId),
     activeProposalId:null,
@@ -10887,7 +11208,7 @@ function routineWorkflowBlockerLabel(code){
     proposal_not_pending:"La propuesta ya no está pendiente.",
     proposal_stale:"La rutina cambió desde que se generó la propuesta.",
     baseline_mismatch:"La rutina actual ya no coincide con la utilizada al generar.",
-    activation_incompatible:"El runtime actual solo admite dos o tres sesiones.",
+    activation_incompatible:"La propuesta contiene una estructura de sesiones no compatible.",
     review_required:"La propuesta requiere revisión.",
     unresolved_questions:"Hay preguntas pendientes.",
     missing_patterns:"Faltan patrones obligatorios.",
@@ -11209,7 +11530,7 @@ function bindRoutineWorkflowEvents(model,proposal,preparation){
       renderRoutineWorkflow();
       return;
     }
-    const currentBaselineHash=window.GymOSRoutineProposals.routineHash(getRoutine());
+    const currentBaselineHash=window.GymOSRoutineProposals.routineHash(activeRoutineForComparison());
     if(currentBaselineHash!==state.routineImport.baselineHash){
       state.routineImport.status="stale";
       state.routineImport.errorCode="baseline_changed";
@@ -11224,7 +11545,7 @@ function bindRoutineWorkflowEvents(model,proposal,preparation){
     try{
       const api=routineIoApi();
       const ownerId=routineWorkflowOwnerId();
-      const baselineHash=window.GymOSRoutineProposals.routineHash(getRoutine());
+      const baselineHash=window.GymOSRoutineProposals.routineHash(activeRoutineForComparison());
       if(ownerId!==ownerIdAtPreview||baselineHash!==currentBaselineHash){
         throw new Error("import_context_changed");
       }
@@ -11456,7 +11777,7 @@ function renderRoutineWorkflow(){
     record=>record.proposal.proposalId===selectedId
   )||null;
   const proposal=window.GymOSRoutineWorkflowUI.proposalViewModel(selectedRecord,{
-    ownerId:model.ownerId,currentRoutine:getRoutine(),labels:routineWorkflowLabels()
+    ownerId:model.ownerId,currentRoutine:activeRoutineForComparison(),labels:routineWorkflowLabels()
   });
   const preparation=window.GymOSRoutineWorkflowUI.preparationModel(
     routineWorkflowGenerationSource(),routineWorkflowLabels()
@@ -11715,12 +12036,9 @@ function renderExerciseLibrary(){
   }
 }
 function exerciseReferenceSources(){
-  const drafts={};
-  ["A","B","C"].forEach(key=>{
-    try{drafts[key]=JSON.parse(localStorage.getItem(draftKey(key))||"null");}catch(_){drafts[key]=null;}
-  });
   return {
-    routine:getRoutine(),history:getHistory(),drafts,
+    routine:activeRoutineForComparison(),history:getHistory(),
+    drafts:getCanonicalDrafts()||{},
     proposals:getRoutineProposalRecords(),activations:getRoutineActivationRecords(),
     library:getExerciseLibrary()
   };
@@ -12022,15 +12340,15 @@ function resetSubstitutionTimers(session,index){
   });
 }
 function openExerciseSubstitution(mode,exerciseIndex){
-  const api=exerciseLibraryWorkflowApi(),owner=exerciseLibraryOwner(),session=state.selectedSession;
-  const source=mode==="temporary"?getDraft(session):(getRoutine()[session]||[]);
-  const exercise=mode==="temporary"?source.exercises?.[exerciseIndex]:source[exerciseIndex];
+  const api=exerciseLibraryWorkflowApi(),owner=exerciseLibraryOwner(),session=resolveRuntimeSessionId();
+  const source=mode==="temporary"?getDraft(session):activeRoutineSession(session);
+  const exercise=mode==="temporary"?source.exercises?.[exerciseIndex]:source?.exercises?.[exerciseIndex];
   const original=findLibraryExerciseForRuntime(exercise);
   if(!original){toast("Este ejercicio todavía no tiene una ficha inequívoca en la biblioteca.");return;}
   if(mode==="temporary"&&api.hasExerciseResults(exercise)){
     toast("No puedes cambiar este ejercicio porque ya has empezado a registrarlo.");return;
   }
-  const baselineHash=window.GymOSRoutineProposals.routineHash(getRoutine());
+  const baselineHash=window.GymOSRoutineProposals.routineHash(activeRoutineForComparison());
   const draftHash=window.GymOSRoutineProposals.stableHash(getDraft(session));
   state.exerciseSubstitution={ownerId:owner,mode,session,exerciseIndex,originalExerciseId:original.id,baselineHash,draftHash,selectedId:null,reason:"",showAll:false,busy:null,message:null};
   state.screen="exerciseSubstitution";renderExerciseSubstitution();
@@ -12123,9 +12441,12 @@ async function applyExerciseLibrarySubstitution(){
       state.exerciseSubstitution=null;state.screen="workout";renderWorkout();toast("Cambio aplicado solo a este entrenamiento.");
       return;
     }
-    const currentRoutine=getRoutine(),currentHash=window.GymOSRoutineProposals.routineHash(currentRoutine);
+    const currentRoutine=activeRoutineForComparison();
+    const currentHash=window.GymOSRoutineProposals.routineHash(currentRoutine);
     if(currentHash!==flow.baselineHash) throw new Error("baseline_changed");
-    const currentItem=currentRoutine[flow.session]?.[flow.exerciseIndex];
+    const currentItem=Array.isArray(currentRoutine.sessions)
+      ?currentRoutine.sessions.find(session=>session.sessionId===flow.session)?.exercises?.[flow.exerciseIndex]
+      :currentRoutine[flow.session]?.[flow.exerciseIndex];
     if(findLibraryExerciseForRuntime(currentItem)?.id!==original.id) throw new Error("baseline_changed");
     const compatibility=window.GymOSRoutineGenerator.validateExerciseCompatibility({
       exercise:replacement,userProfile:window.GymOSProfileData.getUserProfile(),
@@ -12136,7 +12457,7 @@ async function applyExerciseLibrarySubstitution(){
       ownerId:owner,routine:currentRoutine,baselineHash:currentHash,sessionId:flow.session,
       exerciseIndex:flow.exerciseIndex,original,replacement,reason:flow.reason,generatedAt:timestamp,compatibility
     });
-    if(owner!==exerciseLibraryOwner()||window.GymOSRoutineProposals.routineHash(getRoutine())!==currentHash) throw new Error("baseline_changed");
+    if(owner!==exerciseLibraryOwner()||window.GymOSRoutineProposals.routineHash(activeRoutineForComparison())!==currentHash) throw new Error("baseline_changed");
     const existing=api.findExistingSubstitution(getRoutineProposalRecords(owner),owner,proposal.source.substitutionFingerprint);
     const persisted=existing?{record:existing,created:false}:persistRoutineProposal(proposal,{ownerId:owner,timestamp});
     ensureRoutineWorkflowState();
@@ -12161,7 +12482,7 @@ async function applyExerciseLibrarySubstitution(){
 }
 async function undoCurrentExerciseSubstitution(exerciseIndex){
   if(state.exerciseLibraryBusy) return;
-  const api=exerciseLibraryWorkflowApi(),owner=exerciseLibraryOwner(),session=state.selectedSession;
+  const api=exerciseLibraryWorkflowApi(),owner=exerciseLibraryOwner(),session=resolveRuntimeSessionId();
   state.exerciseLibraryBusy="undo";
   try{
     const current=getDraft(session),result=api.undoTemporarySubstitution({draft:current,session,exerciseIndex});
@@ -12619,7 +12940,7 @@ importFile.onchange=async()=>{
       const ownerId=currentRoutineOwnerOrNull();
       const validation=window.GymOSRoutineSessionModel.validateCanonicalRoutine(data.canonicalRoutine);
       if(
-        validation.valid&&data.canonicalRoutine.sessions.length<=3&&
+        validation.valid&&
         data.sessionModelMigration.ownerId===ownerId
       ){
         saveCanonicalRoutine(data.canonicalRoutine,{mark:false});
@@ -12640,8 +12961,9 @@ importFile.onchange=async()=>{
     ["A","B","C"].forEach(s=>{
       if(data.drafts&&data.drafts[s])localStorage.setItem(draftKey(s),JSON.stringify(data.drafts[s]));
     });
-    state.selectedSession=validSelectedRoutineSession(data.selectedSession||nextSuggestedSession());
-    persistSelectedRoutineSession(state.selectedSession);
+    persistSelectedRoutineSession(
+      data.selectedSessionId||data.selectedSession||nextSuggestedSession()
+    );
     const importedProfileData=window.GymOSProfileData?.importSyncData?.(data,{mark:false});
     if(!importedProfileData) ensureProfileDataMigration({mark:false});
     ensureExerciseDomainMigration({mark:false,force:true});

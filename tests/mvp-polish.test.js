@@ -47,6 +47,10 @@ test("I1 APIs de módulos quedan congeladas y sus nombres son únicos",()=>{
     names.push(...Array.from(source.matchAll(/(?:window|global)\.(GymOS[A-Za-z0-9_]+)\s*=/g),match=>match[1]));
   }
   assert.equal(new Set(names).size,names.length);
+  assert.doesNotMatch(
+    files.map(read).join("\n"),
+    /window\.(?:render|adapt)[A-Z][A-Za-z0-9_]*\s*=/
+  );
 });
 
 test("I2 no usa alertas genéricas ni eventos onclick inline",()=>{

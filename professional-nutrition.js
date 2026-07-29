@@ -470,7 +470,7 @@
     </div>`;
     document.getElementById("backProfessionalNutrition").onclick=()=>{state.screen="nutrition";renderNutrition();};
     document.getElementById("importProfessionalPlan").onclick=()=>document.getElementById("professionalNutritionFile").click();
-    document.querySelectorAll("[data-plan-id]").forEach(button=>button.onclick=()=>{state.professionalNutritionPlanId=button.dataset.planId;state.screen="professionalNutritionPlan";renderProfessionalNutritionPlan();});
+    document.querySelectorAll("[data-plan-id]").forEach(button=>button.onclick=()=>{state.professionalNutritionPlanId=button.dataset.planId;state.screen="professionalNutritionPlan";renderPlan();});
   }
   function renderImport(){
     const draft=state.professionalNutritionDraft;
@@ -507,7 +507,7 @@
       state.professionalNutritionPlanId=draft.id;
       state.screen="professionalNutritionPlan";
       toast("Planificación histórica guardada");
-      renderProfessionalNutritionPlan();
+      renderPlan();
     };
   }
   function renderPlan(){
@@ -549,7 +549,7 @@
       state.professionalNutritionDayType="rest";
       state.professionalNutritionIncludePreWorkout=false;
       state.screen="professionalNutritionAdapt";
-      renderProfessionalNutritionAdaptation();
+      renderAdaptation();
     });
   }
   function renderAdaptation(){
@@ -611,11 +611,7 @@
 
   window.GymOSProfessionalNutrition=Object.freeze({
     storageKey:STORAGE_KEY,getPlans,savePlans,mergePlans,parseProfessionalNutritionFile,
-    adaptProfessionalMealTemplate,equivalentTemplates,syncWithSupabase,handleFileSelection
+    adaptProfessionalMealTemplate,equivalentTemplates,syncWithSupabase,handleFileSelection,
+    renderLibrary,renderImport,renderPlan,renderAdaptation
   });
-  window.adaptProfessionalMealTemplate=adaptProfessionalMealTemplate;
-  window.renderProfessionalNutritionLibrary=renderLibrary;
-  window.renderProfessionalNutritionImport=renderImport;
-  window.renderProfessionalNutritionPlan=renderPlan;
-  window.renderProfessionalNutritionAdaptation=renderAdaptation;
 })();

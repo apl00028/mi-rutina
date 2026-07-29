@@ -659,8 +659,8 @@
     coachRecommendation,
     registerProvider,
     importFromProvider,
-    syncWithSupabase
+    syncWithSupabase,
+    renderRecoveryCenter,
+    renderWorkoutComplete
   });
-  window.renderRecoveryCenter=renderRecoveryCenter;
-  window.renderWorkoutComplete=renderWorkoutComplete;
 })();

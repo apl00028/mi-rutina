@@ -115,7 +115,7 @@ const legacyHistory=JSON.stringify([
   {id:"workout-1",date:"2026-07-26",session:"A",sets:[{weight:80,reps:8}]}
 ]);
 const legacyProfile=JSON.stringify({
-  name:"Adrián",
+  name:"Persona de prueba",
   goal:"muscle",
   days:4,
   duration:60,
@@ -142,7 +142,7 @@ test("migra un usuario v4.0.3 y conserva todos sus datos anteriores",()=>{
   assert.equal(localStorage.getItem("gymos:routine"),beforeRoutine);
   assert.equal(localStorage.getItem("gymos:history"),beforeHistory);
   assert.equal(localStorage.getItem("gymos:nutritionSettings"),beforeNutrition);
-  assert.equal(api.getUserProfile().name,"Adrián");
+  assert.equal(api.getUserProfile().name,"Persona de prueba");
   assert.equal(api.getActiveGoalCycle().primaryGoal,"muscle_gain");
   assert.equal(api.getActiveTrainingPhase().type,"muscle_gain");
   assert.equal(api.getCurrentLifeState().type,"general");

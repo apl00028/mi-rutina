@@ -6334,8 +6334,8 @@ function render(){
   if(state.screen==="onboarding") renderOnboarding();
   else if(state.screen==="home") renderHome();
   else if(state.screen==="workout") renderWorkout();
-  else if(state.screen==="workoutComplete") renderWorkoutComplete();
-  else if(state.screen==="recovery") renderRecoveryCenter();
+  else if(state.screen==="workoutComplete") window.GymOSRecovery.renderWorkoutComplete();
+  else if(state.screen==="recovery") window.GymOSRecovery.renderRecoveryCenter();
   else if(state.screen==="history") renderHistory();
   else if(state.screen==="stats") renderStats();
   else if(state.screen==="records") renderRecords();
@@ -6364,10 +6364,10 @@ function render(){
   else if(state.screen==="coachChat") renderCoachChat();
   else if(state.screen==="nutrition") renderNutrition();
   else if(state.screen==="quickActions") renderQuickActionsEditor();
-  else if(state.screen==="professionalNutrition") renderProfessionalNutritionLibrary();
-  else if(state.screen==="professionalNutritionImport") renderProfessionalNutritionImport();
-  else if(state.screen==="professionalNutritionPlan") renderProfessionalNutritionPlan();
-  else if(state.screen==="professionalNutritionAdapt") renderProfessionalNutritionAdaptation();
+  else if(state.screen==="professionalNutrition") window.GymOSProfessionalNutrition.renderLibrary();
+  else if(state.screen==="professionalNutritionImport") window.GymOSProfessionalNutrition.renderImport();
+  else if(state.screen==="professionalNutritionPlan") window.GymOSProfessionalNutrition.renderPlan();
+  else if(state.screen==="professionalNutritionAdapt") window.GymOSProfessionalNutrition.renderAdaptation();
   else if(state.screen==="developer") renderDeveloperMode();
   else if(state.screen==="health") renderHealth();
   else if(state.screen==="account") renderAccount();
@@ -7123,7 +7123,7 @@ function renderHome(){
     if(dashboard.mode==="recovery"){
       state.recoveryView="overview";
       state.screen="recovery";
-      renderRecoveryCenter();
+      window.GymOSRecovery.renderRecoveryCenter();
       return;
     }
     navigateToScreen("workout");
@@ -7167,7 +7167,7 @@ function renderHome(){
   };
   document.querySelectorAll("[data-quick-action]").forEach(button=>button.onclick=()=>executeQuickAction(button.dataset.quickAction));
   document.querySelectorAll("[data-open-recovery]").forEach(button=>{
-    button.onclick=()=>{state.recoveryView="overview";state.screen="recovery";renderRecoveryCenter();};
+    button.onclick=()=>{state.recoveryView="overview";state.screen="recovery";window.GymOSRecovery.renderRecoveryCenter();};
   });
   document.querySelectorAll("[data-open-recovery-checkin]").forEach(button=>{
     button.onclick=()=>{
@@ -7500,7 +7500,7 @@ function finishWorkout(){
   if(existing){
     state.completedWorkoutSummary=existing;
     state.screen="workoutComplete";
-    renderWorkoutComplete();
+    window.GymOSRecovery.renderWorkoutComplete();
     return;
   }
   state.finishingWorkout=true;
@@ -7547,7 +7547,7 @@ function finishWorkout(){
   }finally{
     state.finishingWorkout=false;
   }
-  renderWorkoutComplete();
+  window.GymOSRecovery.renderWorkoutComplete();
   autoSync("entrenamiento finalizado");
   if(newRecords.length) showRecordsCelebration(newRecords);
   else toast(`${workout.sessionName} guardada`);
@@ -9107,7 +9107,7 @@ function renderNutritionLegacy(){
   };
   document.getElementById("openProfessionalNutrition").onclick=()=>{
     state.screen="professionalNutrition";
-    renderProfessionalNutritionLibrary();
+    window.GymOSProfessionalNutrition.renderLibrary();
   };
   const professionalFile=document.getElementById("professionalNutritionFile");
   professionalFile.onchange=async event=>{
@@ -9296,7 +9296,7 @@ function renderNutrition(){
   };
   const generateRecipes=document.getElementById("generateNutritionRecipes");
   if(generateRecipes) generateRecipes.onclick=()=>{state.nutritionRecipeType=document.getElementById("nutritionRecipeType").value;state.nutritionRecipeSuggestions=window.GymOSNutritionEngine.suggestRecipes({type:state.nutritionRecipeType,remaining:nutritionRemaining(settings,entry),goal:settings.goal});renderNutrition();};
-  document.getElementById("openProfessionalNutrition").onclick=()=>{state.screen="professionalNutrition";renderProfessionalNutritionLibrary();};
+  document.getElementById("openProfessionalNutrition").onclick=()=>{state.screen="professionalNutrition";window.GymOSProfessionalNutrition.renderLibrary();};
   const professionalFile=document.getElementById("professionalNutritionFile");
   professionalFile.onchange=async event=>{const file=event.target.files?.[0];event.target.value="";if(!file)return;try{await window.GymOSProfessionalNutrition.handleFileSelection(file);}catch(error){console.error("Professional nutrition import",error);toast(error.message||"No se pudo importar la planificación.");}};
   bindNav();

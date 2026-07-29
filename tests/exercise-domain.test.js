@@ -181,7 +181,11 @@ test("el merge conserva colisiones heredadas y repetir el backup no duplica",()=
   });
   const context={
     console,localStorage,
-    window:{GymOSExerciseDomain:api},
+    window:{
+      GymOSExerciseDomain:api,
+      GymOSProfileData:{normalizeOwnerId:value=>String(value).toLowerCase()},
+      GymOSRoutineSessionModel:{validateCanonicalRoutine:()=>({valid:true})}
+    },
     GYMOS_BACKUP_KEYS:["gymos:exerciseLibrary"],
     EXERCISE_LIBRARY_KEY:"gymos:exerciseLibrary",
     EXERCISE_SUBSTITUTIONS_KEY:"gymos:exerciseSubstitutions",
@@ -189,7 +193,17 @@ test("el merge conserva colisiones heredadas y repetir el backup no duplica",()=
     ROUTINE_PROPOSALS_KEY:"gymos:routineProposals",
     ACTIVE_ROUTINE_PROPOSAL_ID_KEY:"gymos:activeRoutineProposalId",
     LOCAL_OWNER_KEY:"gymos:localDataOwnerId",
+    CANONICAL_ROUTINE_KEY:"gymos:routine:canonical",
+    CANONICAL_DRAFTS_KEY:"gymos:routineDrafts",
+    SELECTED_SESSION_ID_KEY:"gymos:selectedSessionId",
+    SESSION_MODEL_MIGRATION_KEY:"gymos:sessionModelMigration",
     AUTH_REQUIRED:true,
+    assertActiveLocalOwner:value=>String(value).toLowerCase(),
+    captureRoutineSessionStartupStorage:()=>localStorage.snapshot(),
+    restoreRoutineSessionStartupStorage:snapshot=>{
+      Object.keys(localStorage.snapshot()).forEach(key=>localStorage.removeItem(key));
+      Object.entries(snapshot).forEach(([key,value])=>localStorage.setItem(key,value));
+    },
     getExerciseLibrary:()=>JSON.parse(localStorage.getItem("gymos:exerciseLibrary")||"[]"),
     saveExerciseLibrary:items=>localStorage.setItem(
       "gymos:exerciseLibrary",
@@ -200,6 +214,7 @@ test("el merge conserva colisiones heredadas y repetir el backup no duplica",()=
     getFavoriteSubstitutions:()=>[],
     saveFavoriteSubstitutions:()=>{},
     ensureProfileDataMigration:()=>{},
+    ensureRoutineSessionMigration:()=>{},
     ensureExerciseDomainMigration:()=>{},
     saveCurrentUserVault:()=>{},
     getRoutine:()=>({A:[],B:[],C:[]}),
@@ -286,10 +301,10 @@ test("la integracion protege datos, aisla backups y respeta el orden de arranque
     /exerciseDomainMigrationBackup/
   );
 
-  const activateStart=appSource.indexOf("function activateLocalUser");
-  const activateEnd=appSource.indexOf("function deactivateLocalUser",activateStart);
+  const activateStart=appSource.indexOf("function finishLocalUserActivation");
+  const activateEnd=appSource.indexOf("function activateLocalUser",activateStart);
   const activateSource=appSource.slice(activateStart,activateEnd);
-  assert.ok(activateSource.indexOf("loadUserVault(userId)")<activateSource.lastIndexOf("ensureExerciseDomainMigration"));
+  assert.ok(activateSource.indexOf("ensureRoutineSessionMigration")<activateSource.lastIndexOf("ensureExerciseDomainMigration"));
   assert.ok(activateSource.lastIndexOf("ensureExerciseDomainMigration")<activateSource.lastIndexOf("saveCurrentUserVault"));
 });
 
@@ -376,6 +391,11 @@ test("aplicar dos veces el mismo payload conserva igualdad serializada exacta",(
     saveRoutine:value=>localStorage.setItem("gymos:routine",JSON.stringify(value)),
     getRoutine:()=>JSON.parse(localStorage.getItem("gymos:routine")||'{"A":[],"B":[],"C":[]}'),
     ensureProfileDataMigration:()=>{},
+    ensureRoutineSessionMigration:()=>({migrated:false}),
+    currentRoutineOwnerOrNull:()=>ownerId,
+    assertActiveLocalOwner:value=>value,
+    captureRoutineSessionStartupStorage:()=>localStorage.snapshot(),
+    restoreRoutineSessionStartupStorage:()=>{},
     sessions:null
   };
   vm.createContext(context);
@@ -425,6 +445,6 @@ test("aplicar dos veces el mismo payload conserva igualdad serializada exacta",(
 
 test("el modulo se carga antes de app y queda incluido en la cache PWA",()=>{
   assert.ok(indexSource.indexOf("exercise-domain.js")<indexSource.indexOf("app.js"));
-  assert.match(serviceWorkerSource,/gymos-cache-4\.2\.0-alpha\.1/);
+  assert.match(serviceWorkerSource,/gymos-cache-4\.2\.0-phase-h3/);
   assert.match(serviceWorkerSource,/exercise-domain\.js/);
 });

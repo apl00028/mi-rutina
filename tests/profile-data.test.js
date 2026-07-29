@@ -302,7 +302,8 @@ test("backup, restauración y vault incluyen el modelo sin añadir reemplazo de 
   ].forEach(key=>assert.ok(appSource.includes(`"${key}"`),`Falta ${key} en la persistencia de app.js`));
   assert.match(appSource,/function localDataKeys\(\)[\s\S]*GYMOS_BACKUP_KEYS/);
   assert.match(appSource,/function importGymOSBackup[\s\S]*ensureProfileDataMigration\(\{ownerId,mark:false\}\)/);
-  assert.match(appSource,/function activateLocalUser[\s\S]*localStorage\.setItem\(LOCAL_OWNER_KEY,userId\);[\s\S]*ensureProfileDataMigration\(\{ownerId:userId,mark:false\}\);[\s\S]*saveCurrentUserVault\(userId\)/);
+  assert.match(appSource,/function activateLocalUser[\s\S]*localStorage\.setItem\(LOCAL_OWNER_KEY,userId\);[\s\S]*finishLocalUserActivation\(userId\)/);
+  assert.match(appSource,/function finishLocalUserActivation[\s\S]*ensureProfileDataMigration\(\{ownerId,mark:false\}\);[\s\S]*saveCurrentUserVault\(ownerId\)/);
   assert.doesNotMatch(appSource,/GYMOS_BACKUP_KEYS=\[[\s\S]*gymos:preMigration/);
   assert.doesNotMatch(moduleSource,/generateRoutineProposal|diffRoutines|activateRoutineProposal|pendingRoutineProposal/);
   assert.doesNotMatch(moduleSource,/localStorage\.setItem\(["']gymos:routine/);
@@ -462,14 +463,17 @@ test("mantiene las claves internas de migración fuera del backup, vault y sincr
     Array.from(api.MIGRATION_INTERNAL_KEY_PREFIXES),
     [
       "gymos:preMigration:4.1.0-alpha.1:",
-      "gymos:legacyTrainingSetup:4.2.0-alpha.1:"
+      "gymos:legacyTrainingSetup:4.2.0-alpha.1:",
+      "gymos:preSessionMigration:4.2.0-alpha.1-phase-h2:"
     ]
   );
   assert.deepEqual(
     Array.from(api.migrationInternalKeys(OWNER_A)),
     [
       `gymos:preMigration:4.1.0-alpha.1:${OWNER_A}`,
-      `gymos:legacyTrainingSetup:4.2.0-alpha.1:${OWNER_A}`
+      `gymos:legacyTrainingSetup:4.2.0-alpha.1:${OWNER_A}`,
+      `gymos:preSessionMigration:4.2.0-alpha.1-phase-h2:${api.opaqueOwnerStorageId(OWNER_A)}`,
+      `gymos:preSessionMigration:4.2.0-alpha.1-phase-h2:${OWNER_A}`
     ]
   );
 
@@ -486,6 +490,22 @@ test("mantiene las claves internas de migración fuera del backup, vault y sincr
   const vaultStart=appSource.indexOf("function localDataKeys()");
   const vaultEnd=appSource.indexOf("function snapshotCurrentLocalData",vaultStart);
   assert.doesNotMatch(appSource.slice(vaultStart,vaultEnd),/preMigration|MIGRATION_INTERNAL/);
+});
+
+test("la identidad del backup H2 es opaca, estable, aislada y migra la clave de desarrollo",()=>{
+  const legacyKey=`gymos:preSessionMigration:4.2.0-alpha.1-phase-h2:${OWNER_A}`;
+  const {api,localStorage}=loadProfileData({[legacyKey]:'{"raw":"legacy"}'});
+  const keyA=api.sessionModelMigrationBackupKey(OWNER_A);
+  const keyASecond=api.sessionModelMigrationBackupKey(OWNER_A.toUpperCase());
+  const keyB=api.sessionModelMigrationBackupKey(OWNER_B);
+  assert.equal(keyA,keyASecond);
+  assert.notEqual(keyA,keyB);
+  assert.doesNotMatch(keyA,new RegExp(OWNER_A,"i"));
+  assert.doesNotMatch(keyA,/@|undefined|null/i);
+  assert.match(keyA,/phase-h2:o-[0-9a-f]{32}$/);
+  assert.equal(api.migrateSessionModelMigrationBackup(OWNER_A),keyA);
+  assert.equal(localStorage.getItem(keyA),'{"raw":"legacy"}');
+  assert.equal(localStorage.getItem(legacyKey),null);
 });
 
 test("elimina únicamente el snapshot del propietario en los flujos de borrado",()=>{

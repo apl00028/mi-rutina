@@ -6,6 +6,7 @@ const vm=require("node:vm");
 
 const root=path.join(__dirname,"..");
 const moduleSource=fs.readFileSync(path.join(root,"routine-io.js"),"utf8");
+const sessionModelSource=fs.readFileSync(path.join(root,"routine-session-model.js"),"utf8");
 const proposalsSource=fs.readFileSync(path.join(root,"routine-proposals.js"),"utf8");
 const activationSource=fs.readFileSync(path.join(root,"routine-activation.js"),"utf8");
 const workflowSource=fs.readFileSync(path.join(root,"routine-workflow-ui.js"),"utf8");
@@ -43,8 +44,8 @@ function loadApi(options={}){
       activationCompatibility(proposal){
         const count=Array.isArray(proposal?.sessions)?proposal.sessions.length:0;
         return {
-          compatible:count>=2&&count<=3,
-          reasons:count>3?["El runtime actual solo puede activar hasta tres sesiones A/B/C."]:[],
+          compatible:count>=2&&count<=6,
+          reasons:count>6?["La rutina no puede superar seis sesiones."]:[],
           sessionCount:count
         };
       }
@@ -141,6 +142,21 @@ test("5. no exporta la sesión C vacía",()=>{
   const api=loadApi();
   const rows=api.exportRoutineRows({A:[{id:"press",name:"Press",sets:3,target:"8"}],B:[{id:"row",name:"Remo",sets:3,target:"8"}],C:[]});
   assert.equal(rows.some(item=>item.session==="C"),false);
+});
+
+test("5b. exporta seis sesiones canónicas con etiquetas estables",()=>{
+  const api=loadApi();
+  const rows=plain(api.exportRoutineRows({
+    sessions:Array.from({length:6},(_,index)=>({
+      sessionId:`session-${index+1}`,
+      name:`Día ${index+1}`,
+      exercises:[{id:`exercise-${index+1}`,name:`Ejercicio ${index+1}`,sets:3,target:"8"}]
+    }))
+  }));
+  assert.deepEqual(rows.map(item=>item.session),["A","B","C","D","E","F"]);
+  assert.deepEqual(rows.map(item=>item.sessionName),[
+    "Día 1","Día 2","Día 3","Día 4","Día 5","Día 6"
+  ]);
 });
 
 test("6. exportación excluye cargas, resultados y estado",()=>{
@@ -333,13 +349,13 @@ test("32. tres sesiones son compatibles",()=>{
   assert.equal(preview.activationCompatible,true);
 });
 
-test("33. cuatro a seis sesiones no son activables",()=>{
+test("33. cuatro a seis sesiones son activables en H3",()=>{
   const api=loadApi();
   [4,5,6].forEach(count=>{
     const rows=Array.from({length:count},(_,index)=>row(String.fromCharCode(65+index),1,index%2?"row":"press",index%2?"Remo sentado":"Press de banca"));
     const result=convert(api,rows);
     const preview=api.previewModel({fileName:"x.csv",format:"csv",sheetName:"Rutina",rowCount:count,result});
-    assert.equal(preview.activationCompatible,false);
+    assert.equal(preview.activationCompatible,true);
     assert.equal(result.sessions.length,count);
   });
 });
@@ -462,7 +478,7 @@ test("integración de script, input y service worker",()=>{
   assert.ok(indexSource.indexOf("routine-activation.js")<indexSource.indexOf("routine-io.js"));
   assert.ok(indexSource.indexOf("routine-io.js")<indexSource.indexOf("routine-workflow-ui.js"));
   assert.match(indexSource,/id="routineFile"[^>]+\.csv/);
-  assert.match(workerSource,/phase-h1/);
+  assert.match(workerSource,/phase-h3/);
   assert.match(workerSource,/routine-io\.js/);
   assert.match(workerSource,/fetch\(e\.request\)/);
   assert.equal((indexSource.match(/routine-io\.js/g)||[]).length,1);
@@ -513,6 +529,7 @@ test("la propuesta importada encaja en persistencia C y queda pendiente",()=>{
   context.window=context;
   context.globalThis=context;
   vm.createContext(context);
+  vm.runInContext(sessionModelSource,context,{filename:"routine-session-model.js"});
   vm.runInContext(proposalsSource,context,{filename:"routine-proposals.js"});
   vm.runInContext(moduleSource,context,{filename:"routine-io.js"});
   const api=context.GymOSRoutineIO;
@@ -555,6 +572,7 @@ test("contrato completo llega desde archivo hasta createActivationPlan",()=>{
   context.window=context;
   context.globalThis=context;
   vm.createContext(context);
+  vm.runInContext(sessionModelSource,context,{filename:"routine-session-model.js"});
   vm.runInContext(proposalsSource,context,{filename:"routine-proposals.js"});
   vm.runInContext(activationSource,context,{filename:"routine-activation.js"});
   vm.runInContext(workflowSource,context,{filename:"routine-workflow-ui.js"});
@@ -598,6 +616,7 @@ test("contrato completo llega desde archivo hasta createActivationPlan",()=>{
   );
   const activation=plain(context.GymOSRoutineActivation.createActivationPlan({
     ownerId:OWNER_A,proposalRecord:recovered,currentRoutine,
+    targetRoutineId:"routine-target-fixed",
     selectedSession:"A",drafts:{A:null,B:null,C:null},
     rawBaseline:{},confirmed:true,timestamp:"2026-07-28T11:00:00.000Z"
   }));
@@ -621,22 +640,23 @@ test("contrato completo llega desde archivo hasta createActivationPlan",()=>{
   const fourStored=plain(context.GymOSRoutineProposals.storeProposal([],{
     ownerId:OWNER_A,proposal:fourProposal,currentRoutine,timestamp:T1
   }));
-  assert.equal(fourStored.record.activationCompatibility.compatible,false);
+  assert.equal(fourStored.record.activationCompatibility.compatible,true);
   assert.equal(fourStored.record.proposal.sessions.length,4);
   assert.equal(context.GymOSRoutineWorkflowUI.proposalViewModel(fourStored.record,{
     ownerId:OWNER_A,currentRoutine,labels:{}
-  }).canActivate,false);
-  const blocked=plain(context.GymOSRoutineActivation.createActivationPlan({
+  }).canActivate,true);
+  const activated=plain(context.GymOSRoutineActivation.createActivationPlan({
     ownerId:OWNER_A,proposalRecord:fourStored.record,currentRoutine,
+    targetRoutineId:"routine-imported-four",
     confirmed:true,timestamp:"2026-07-28T11:00:00.000Z"
   }));
-  assert.equal(blocked.ok,false);
-  assert.equal(blocked.code,"activation_incompatible");
+  assert.equal(activated.ok,true);
+  assert.equal(activated.canonicalRoutine.sessions.length,4);
   assert.equal(JSON.stringify(currentRoutine),beforeRoutine);
   assert.equal(JSON.stringify(history),beforeHistory);
 });
 
-test("cuatro a seis sesiones persisten completas pero Fase D bloquea activación",()=>{
+test("cuatro a seis sesiones persisten completas y quedan activables en H3",()=>{
   const api=loadApi();
   [4,5,6].forEach(count=>{
     const rows=Array.from({length:count},(_,index)=>row(
@@ -649,7 +669,7 @@ test("cuatro a seis sesiones persisten completas pero Fase D bloquea activación
       format:"csv",fileName:"plan.csv",generatedAt:T1
     }));
     assert.equal(proposal.sessions.length,count);
-    assert.equal(proposal.activationCompatibility.compatible,false);
+    assert.equal(proposal.activationCompatibility.compatible,true,`sesiones:${count}`);
     assert.equal(proposal.sessions.flatMap(item=>item.exercises).length,count);
   });
 });
@@ -994,7 +1014,7 @@ test("exportación y plantilla no causan efectos funcionales",()=>{
   );
   assert.doesNotMatch(exportSection,/markLocalUpdated|saveCurrentUserVault|scheduleAutoSync|persistRoutineProposal|saveRoutine\s*\(|saveHistory\s*\(/);
   assert.doesNotMatch(exportSection,/localStorage\.(setItem|removeItem)|saveRoutineProposalRecords|saveRoutineActivationRecords/);
-  assert.match(exportSection,/getRoutine\(\)/);
+  assert.match(exportSection,/activeRoutineForComparison\(\)/);
   const downloadSection=appSource.slice(
     appSource.indexOf("function downloadRoutineFile"),
     appSource.indexOf("function styleRoutineWorksheet")
@@ -1026,7 +1046,7 @@ test("exportar XLSX/CSV y descargar plantillas conserva storage relevante exacto
   const context={
     routineIoApi:()=>api,
     currentRoutineOwnerOrNull:()=>OWNER_A,
-    getRoutine:()=>JSON.parse(storage["gymos:routine"]),
+    activeRoutineForComparison:()=>JSON.parse(storage["gymos:routine"]),
     downloadRoutineFile:(content,name,type)=>downloads.push({kind:"blob",content,name,type}),
     downloadRoutineWorkbook:(model,name)=>downloads.push({kind:"workbook",model,name}),
     Date

@@ -1,7 +1,7 @@
 (function(global){
   "use strict";
 
-  const MODEL_VERSION="4.2.0-alpha.1-phase-d";
+  const MODEL_VERSION="4.2.0-alpha.1-phase-h2";
   const MAX_ACTIVATIONS_PER_OWNER=10;
   const ALLOWED_STATUSES=Object.freeze(["activated","rolled_back","rollback_blocked"]);
 
@@ -20,6 +20,10 @@
   function proposals(){
     if(!global.GymOSRoutineProposals) throw new Error("GymOSRoutineProposals is required.");
     return global.GymOSRoutineProposals;
+  }
+  function sessionModel(){
+    if(!global.GymOSRoutineSessionModel) throw new Error("GymOSRoutineSessionModel is required.");
+    return global.GymOSRoutineSessionModel;
   }
   function normalizeOwnerId(ownerId){
     if(!global.GymOSProfileData?.normalizeOwnerId){
@@ -56,7 +60,7 @@
   function validateProposalSessions(proposal){
     const errors=[];
     const sessions=list(proposal?.sessions);
-    if(sessions.length<2||sessions.length>3) errors.push("incompatible_session_count");
+    if(sessions.length<2||sessions.length>6) errors.push("incompatible_session_count");
     sessions.forEach((session,index)=>{
       const exercises=list(session?.exercises);
       if(!exercises.length) errors.push(`empty_session:${index+1}`);
@@ -66,6 +70,8 @@
       const ids=exercises.map(exercise=>text(exercise.exerciseId||exercise.id));
       if(new Set(ids).size!==ids.length) errors.push(`duplicate_exercise_id:${index+1}`);
     });
+    const sessionIds=sessions.map(session=>text(session?.sessionId||session?.id)).filter(Boolean);
+    if(new Set(sessionIds).size!==sessionIds.length) errors.push("duplicate_session_id");
     return errors;
   }
   function activationId(ownerId,proposalId,timestamp){
@@ -124,6 +130,73 @@
     });
     return {routine:output,sessionMapping};
   }
+  function mapProposalToCanonicalRoutine(proposal,{
+    routineId,sessionIds={},revision=1
+  }={}){
+    if(!text(routineId)) return incident("routine_id_required","El target necesita un routineId explícito.");
+    const sessions=list(proposal?.sessions);
+    const canonicalSessions=[];
+    for(let index=0;index<sessions.length;index+=1){
+      const session=sessions[index];
+      const proposalSessionKey=text(session?.sessionId||session?.id);
+      const explicitId=text(
+        session?.sessionId||session?.id||
+        sessionIds[proposalSessionKey]||sessionIds[index]||sessionIds[index+1]
+      );
+      if(!explicitId){
+        return incident("session_id_required","Cada sesión necesita un sessionId explícito.",{
+          sessionIndex:index
+        });
+      }
+      const explicitOrder=Number(session?.order);
+      const order=Number.isInteger(explicitOrder)&&explicitOrder>0?explicitOrder:index+1;
+      canonicalSessions.push({
+        sessionId:explicitId,
+        order,
+        label:text(session?.displayLabel||session?.label)||
+          sessionModel().deriveSessionLabel(Math.min(index+1,6)),
+        name:text(session?.name||session?.label)||`Sesión ${index+1}`,
+        focus:text(session?.focus),
+        estimatedDurationMinutes:Number.isInteger(Number(session?.estimatedDurationMinutes))
+          ?Number(session.estimatedDurationMinutes)
+          :Number.isInteger(Number(session?.estimatedMinutes))
+            ?Number(session.estimatedMinutes)
+            :null,
+        ...(index<3?{legacySessionKey:sessionModel().deriveSessionLabel(index+1)}:{}),
+        exercises:list(session?.exercises).map((exercise,exerciseIndex)=>
+          mapExercise(exercise,session,exerciseIndex)
+        )
+      });
+    }
+    const routine={
+      schemaVersion:sessionModel().SCHEMA_VERSION,
+      routineId:text(routineId),
+      revision:Number.isInteger(Number(revision))&&Number(revision)>0?Number(revision):1,
+      sessions:canonicalSessions
+    };
+    const validation=sessionModel().validateCanonicalRoutine(routine);
+    if(!validation.valid){
+      return incident("invalid_canonical_target","El target canónico no es válido.",{
+        errors:validation.errors
+      });
+    }
+    return {ok:true,routine:sessionModel().normalizeCanonicalRoutine(routine)};
+  }
+  function activationCompatibilityFields(proposal){
+    const count=list(proposal?.sessions).length;
+    const sessionErrors=validateProposalSessions(proposal);
+    const canonicalCompatible=!sessionErrors.includes("incompatible_session_count");
+    const activationEngineCompatible=canonicalCompatible&&sessionErrors.length===0;
+    const runtimeCompatible=activationEngineCompatible;
+    return {
+      canonicalCompatible,
+      activationEngineCompatible,
+      runtimeCompatible,
+      compatibleNow:runtimeCompatible,
+      sessionCount:count,
+      code:runtimeCompatible?null:"activation_incompatible"
+    };
+  }
   function validateActivationRequest({
     ownerId,proposalRecord,currentRoutine,confirmed=false
   }={}){
@@ -153,9 +226,6 @@
         expected:proposalRecord.baseline.routineHash,actual:currentHash
       });
     }
-    if(proposalRecord.activationCompatibility?.compatible!==true){
-      return incident("activation_incompatible","La propuesta no es compatible con el runtime A/B/C.");
-    }
     const blockers=proposalBlockers(proposalRecord.proposal);
     if(blockers.length){
       return incident("proposal_requires_review","La propuesta contiene incidencias sin resolver.",{blockers});
@@ -166,11 +236,18 @@
         errors:sessionErrors
       });
     }
-    return {ok:true,ownerId:normalizedOwner,currentHash};
+    const compatibility=activationCompatibilityFields(proposalRecord.proposal);
+    if(!compatibility.activationEngineCompatible){
+      return incident("activation_incompatible","La propuesta no es compatible con el motor de activación.",{
+        compatibility
+      });
+    }
+    return {ok:true,ownerId:normalizedOwner,currentHash,compatibility};
   }
   function createActivationPlan({
-    ownerId,proposalRecord,currentRoutine,selectedSession,drafts,
-    rawBaseline={},confirmed=false,timestamp
+    ownerId,proposalRecord,currentRoutine,currentCanonicalRoutine=null,
+    selectedSession,selectedSessionId=null,drafts,canonicalDrafts=null,
+    targetRoutineId,sessionIds={},rawBaseline={},confirmed=false,timestamp
   }={}){
     const validation=validateActivationRequest({
       ownerId,proposalRecord,currentRoutine,confirmed
@@ -180,15 +257,21 @@
     if(!validTimestamp(effectiveTimestamp)){
       return incident("invalid_timestamp","La activación necesita un timestamp válido.");
     }
-    const mapped=mapProposalToRoutine(proposalRecord.proposal);
-    const mappedErrors=validateProposalSessions({
-      sessions:Object.entries(mapped.routine).filter(([,items])=>items.length).map(([key,items])=>({
-        id:key,exercises:items
-      }))
+    const canonicalTarget=mapProposalToCanonicalRoutine(proposalRecord.proposal,{
+      routineId:targetRoutineId,sessionIds
     });
-    if(mappedErrors.length){
-      return incident("invalid_mapped_routine","La rutina A/B/C resultante no es válida.",{errors:mappedErrors});
-    }
+    if(!canonicalTarget.ok) return canonicalTarget;
+    const runtimeCompatible=validation.compatibility.runtimeCompatible;
+    const mapped={
+      routine:global.GymOSRoutineSessionRuntime
+        ?global.GymOSRoutineSessionRuntime.legacyShadow(canonicalTarget.routine)
+        :canonicalTarget.routine.sessions.length<=3
+          ?sessionModel().canonicalToLegacyRuntimeView(canonicalTarget.routine)
+          :{A:[],B:[],C:[]},
+      sessionMapping:Object.fromEntries(canonicalTarget.routine.sessions.map(session=>[
+        session.sessionId,session.legacySessionKey||null
+      ]))
+    };
     const id=activationId(
       validation.ownerId,proposalRecord.proposal.proposalId,effectiveTimestamp
     );
@@ -209,12 +292,29 @@
         selectedSessionRaw:rawBaseline.selectedSession??null,
         drafts:clone(drafts||{A:null,B:null,C:null}),
         draftsRaw:clone(rawBaseline.drafts||{A:null,B:null,C:null}),
+        canonicalRoutine:clone(currentCanonicalRoutine),
+        canonicalRoutineRaw:rawBaseline.canonicalRoutine??null,
+        canonicalRoutineHash:currentCanonicalRoutine
+          ?sessionModel().canonicalRoutineHash(currentCanonicalRoutine)
+          :null,
+        canonicalDrafts:clone(canonicalDrafts),
+        canonicalDraftsRaw:rawBaseline.canonicalDrafts??null,
+        selectedSessionId:text(selectedSessionId)||null,
+        selectedSessionIdRaw:rawBaseline.selectedSessionId??null,
+        migrationMetadataRaw:rawBaseline.migrationMetadata??null,
+        storageRaw:clone(rawBaseline.storage||null),
         proposal:clone(proposalRecord.proposal)
       },
       activated:{
         routine:clone(mapped.routine),
-        routineHash:routineHash(mapped.routine),
-        sessionMapping:clone(mapped.sessionMapping)
+        routineHash:mapped.routine?routineHash(mapped.routine):null,
+        canonicalRoutine:clone(canonicalTarget.routine),
+        canonicalRoutineHash:sessionModel().canonicalRoutineHash(canonicalTarget.routine),
+        sessionMapping:clone(mapped.sessionMapping),
+        canonicalCompatible:validation.compatibility.canonicalCompatible,
+        activationEngineCompatible:validation.compatibility.activationEngineCompatible,
+        runtimeCompatible,
+        compatibleNow:runtimeCompatible
       },
       rollback:{
         available:true,
@@ -222,7 +322,18 @@
         restoredRoutineHash:null
       }
     };
-    return {ok:true,record,routine:clone(mapped.routine),selectedSession:"A"};
+    return {
+      ok:true,record,
+      routine:clone(mapped.routine),
+      canonicalRoutine:clone(canonicalTarget.routine),
+      selectedSession:canonicalTarget.routine.sessions[0]?.legacySessionKey||null,
+      selectedSessionId:canonicalTarget.routine.sessions[0]?.sessionId||null,
+      canonicalCompatible:validation.compatibility.canonicalCompatible,
+      activationEngineCompatible:validation.compatibility.activationEngineCompatible,
+      runtimeCompatible,
+      compatibleNow:runtimeCompatible,
+      applicationError:null
+    };
   }
   function validateRecord(record,ownerId){
     const errors=[];
@@ -237,7 +348,25 @@
       errors.push("invalid_timestamp");
     }
     if(!text(record?.baseline?.routineHash)) errors.push("baseline_hash_required");
-    if(!text(record?.activated?.routineHash)) errors.push("activated_hash_required");
+    if(!text(record?.activated?.canonicalRoutineHash)&&!text(record?.activated?.routineHash)){
+      errors.push("activated_hash_required");
+    }
+    if(record?.activated?.canonicalRoutine){
+      const validation=sessionModel().validateCanonicalRoutine(record.activated.canonicalRoutine);
+      if(!validation.valid) errors.push("invalid_activated_canonical_routine");
+      else if(
+        sessionModel().canonicalRoutineHash(record.activated.canonicalRoutine)!==
+        record.activated.canonicalRoutineHash
+      ) errors.push("activated_canonical_hash_mismatch");
+    }
+    if(record?.baseline?.canonicalRoutine){
+      const validation=sessionModel().validateCanonicalRoutine(record.baseline.canonicalRoutine);
+      if(!validation.valid) errors.push("invalid_baseline_canonical_routine");
+      else if(
+        sessionModel().canonicalRoutineHash(record.baseline.canonicalRoutine)!==
+        record.baseline.canonicalRoutineHash
+      ) errors.push("baseline_canonical_hash_mismatch");
+    }
     if(record?.status==="activated"&&record?.rollback?.available!==true){
       errors.push("activated_must_be_reversible");
     }
@@ -263,6 +392,8 @@
       activated:{
         routine:clone(record?.activated?.routine),
         routineHash:text(record?.activated?.routineHash),
+        canonicalRoutine:clone(record?.activated?.canonicalRoutine),
+        canonicalRoutineHash:text(record?.activated?.canonicalRoutineHash),
         sessionMapping:clone(record?.activated?.sessionMapping)
       }
     };
@@ -368,7 +499,7 @@
       activeActivationId:selectActiveActivationId(next,normalizedOwner,record.activationId)
     };
   }
-  function rollbackDecision({ownerId,activationRecord,currentRoutine}={}){
+  function rollbackDecision({ownerId,activationRecord,currentRoutine,currentCanonicalRoutine=null}={}){
     let normalizedOwner;
     try{normalizedOwner=normalizeOwnerId(ownerId);}
     catch(_){return incident("invalid_owner","El propietario no es válido.");}
@@ -386,10 +517,18 @@
     if(!activationRecord.baseline||activationRecord.baseline.routineRaw===undefined){
       return incident("snapshot_missing","No existe una copia completa para revertir.");
     }
-    const currentHash=routineHash(currentRoutine);
-    if(currentHash!==activationRecord.activated.routineHash){
+    const usesCanonical=Boolean(
+      activationRecord.activated.canonicalRoutineHash&&currentCanonicalRoutine
+    );
+    const currentHash=usesCanonical
+      ?currentCanonicalRoutine&&sessionModel().canonicalRoutineHash(currentCanonicalRoutine)
+      :routineHash(currentRoutine);
+    const expectedHash=usesCanonical
+      ?activationRecord.activated.canonicalRoutineHash
+      :activationRecord.activated.routineHash;
+    if(currentHash!==expectedHash){
       return incident("routine_changed","La rutina actual cambió después de la activación.",{
-        currentHash,expectedHash:activationRecord.activated.routineHash
+        currentHash,expectedHash
       });
     }
     return {ok:true,idempotent:false,currentHash};
@@ -455,7 +594,8 @@
   global.GymOSRoutineActivation=Object.freeze({
     MODEL_VERSION,MAX_ACTIVATIONS_PER_OWNER,ALLOWED_STATUSES,
     stableStringify,validateProposalSessions,validateActivationRequest,
-    mapProposalToRoutine,createActivationPlan,validateRecord,
+    mapProposalToRoutine,mapProposalToCanonicalRoutine,activationCompatibilityFields,
+    createActivationPlan,validateRecord,
     structuralIdentity,
     normalizeRecords,selectActiveActivationId,trimRecords,mergeActivationRecords,
     addActivationRecord,rollbackDecision,markRollbackBlocked,markRolledBack,

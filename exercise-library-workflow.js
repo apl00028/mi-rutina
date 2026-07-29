@@ -356,7 +356,8 @@
     };
     const countDrafts=drafts=>{
       let count=0;
-      Object.values(drafts||{}).forEach(raw=>{
+      const collection=drafts?.draftsBySessionId||drafts||{};
+      Object.values(collection).forEach(raw=>{
         const draft=parseStored(raw);
         list(draft?.exercises).forEach(item=>{if(matches(item)) count++;});
       });
@@ -381,11 +382,18 @@
       });
     });
     list(sources.activations).forEach(record=>{
-      counts.activations+=countRoutine(record?.baseline?.routine);
-      counts.activations+=countRoutine(record?.activated?.routine);
+      counts.activations+=countRoutine(
+        record?.baseline?.canonicalRoutine||record?.baseline?.routine
+      );
+      counts.activations+=countRoutine(
+        record?.activated?.canonicalRoutine||record?.activated?.routine
+      );
       counts.activations+=proposalReferences(record?.baseline?.proposal);
-      counts.activations+=countDrafts(record?.baseline?.drafts);
-      counts.activations+=countDrafts(record?.baseline?.draftsRaw);
+      counts.activations+=countDrafts(
+        record?.baseline?.canonicalDrafts||
+        record?.baseline?.drafts||
+        record?.baseline?.draftsRaw
+      );
     });
     list(sources.library).forEach(item=>{if(item.id!==exerciseId&&list(item.alternatives).includes(exerciseId)) counts.alternatives++;});
     if(target?.favorite) counts.favorites=1;
@@ -481,7 +489,9 @@
   }
   function temporarySubstitution({draft,session,exerciseIndex,original,replacement,reason,timestamp}={}){
     const next=clone(draft);
-    if(!next||next.session!==session) return {ok:false,code:"draft_changed"};
+    if(!next||text(next.sessionId||next.session)!==text(session)){
+      return {ok:false,code:"draft_changed"};
+    }
     const index=Number(exerciseIndex),current=next.exercises?.[index];
     if(!current) return {ok:false,code:"exercise_not_found"};
     if(hasExerciseResults(current)) return {ok:false,code:"exercise_already_started"};
@@ -510,7 +520,9 @@
   }
   function undoTemporarySubstitution({draft,session,exerciseIndex}={}){
     const next=clone(draft);
-    if(!next||next.session!==session) return {ok:false,code:"draft_changed"};
+    if(!next||text(next.sessionId||next.session)!==text(session)){
+      return {ok:false,code:"draft_changed"};
+    }
     const index=Number(exerciseIndex),current=next.exercises?.[index];
     if(!current) return {ok:false,code:"exercise_not_found"};
     if(!current.substitution||current.substitution.mode!=="temporary") return {ok:true,idempotent:true,draft:next};
@@ -541,7 +553,12 @@
     };
   }
   function routineSessions(routine){
-    if(Array.isArray(routine?.sessions)) return clone(routine.sessions);
+    if(Array.isArray(routine?.sessions)) return clone(routine.sessions).map((session,index)=>({
+      ...session,
+      id:text(session.id||session.sessionId)||`session-${index+1}`,
+      label:text(session.label)||`Sesión ${index+1}`,
+      exercises:list(session.exercises)
+    }));
     return ["A","B","C"].filter(key=>list(routine?.[key]).length)
       .map((key,index)=>proposalSessionFromRoutine(key,routine[key],index));
   }

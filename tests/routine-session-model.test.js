@@ -258,7 +258,9 @@ test("una sesión C vacía se ignora y no se fabrica",()=>{
   const model=loadModel();
   const legacy=legacyFixture();
   legacy.C=[];
-  const migrated=plain(model.applyLegacyMigrationPlan(model.createLegacyMigrationPlan(legacyOptions(legacy))));
+  const options=legacyOptions(legacy);
+  delete options.sessionMetadata.C;
+  const migrated=plain(model.applyLegacyMigrationPlan(model.createLegacyMigrationPlan(options)));
   assert.equal(migrated.sessions.length,2);
   assert.equal(migrated.sessions.some(item=>item.legacySessionKey==="C"),false);
 });
@@ -278,8 +280,24 @@ test("la migración conserva legacySessionKey y el orden legacy incluso con un h
   const model=loadModel();
   const legacy=legacyFixture();
   legacy.B=[];
-  const migrated=plain(model.applyLegacyMigrationPlan(model.createLegacyMigrationPlan(legacyOptions(legacy))));
+  const options=legacyOptions(legacy);
+  delete options.sessionMetadata.B;
+  const migrated=plain(model.applyLegacyMigrationPlan(model.createLegacyMigrationPlan(options)));
   assert.deepEqual(migrated.sessions.map(item=>[item.legacySessionKey,item.order]),[["A",1],["C",3]]);
+});
+
+test("una sesión vacía con metadatos asociados se conserva sin inventar ejercicios",()=>{
+  const model=loadModel();
+  const legacy=legacyFixture();
+  legacy.B=[];
+  legacy.extraMetadata={source:"legacy"};
+  const migrated=plain(model.applyLegacyMigrationPlan(model.createLegacyMigrationPlan(legacyOptions(legacy))));
+  const session=migrated.sessions.find(item=>item.legacySessionKey==="B");
+  assert.ok(session);
+  assert.equal(session.order,2);
+  assert.deepEqual(session.exercises,[]);
+  assert.equal(session.name,"Pierna");
+  assert.deepEqual(migrated.extraMetadata,{source:"legacy"});
 });
 
 test("falta de ID legacy produce un error explícito",()=>{
@@ -399,10 +417,10 @@ test("el script se carga exactamente una vez, después de profile-data y antes d
   assert.ok(indexSource.indexOf('src="routine-session-model.js"')<indexSource.indexOf('src="routine-generator.js"'));
 });
 
-test("el service worker incluye el módulo una vez y usa la caché phase-h1",()=>{
+test("el service worker incluye el módulo H1 una vez y usa la caché phase-h3",()=>{
   const matches=workerSource.match(/routine-session-model\.js/g)||[];
   assert.equal(matches.length,1);
-  assert.match(workerSource,/const CACHE="gymos-cache-4\.2\.0-alpha\.1-phase-h1"/);
+  assert.match(workerSource,/const CACHE="gymos-cache-4\.2\.0-phase-h3"/);
   assert.equal((workerSource.match(/addEventListener\("fetch"/g)||[]).length,1);
 });
 

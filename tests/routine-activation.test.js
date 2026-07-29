@@ -8,6 +8,7 @@ const test=require("node:test");
 
 const root=path.resolve(__dirname,"..");
 const proposalSource=fs.readFileSync(path.join(root,"routine-proposals.js"),"utf8");
+const sessionModelSource=fs.readFileSync(path.join(root,"routine-session-model.js"),"utf8");
 const activationSource=fs.readFileSync(path.join(root,"routine-activation.js"),"utf8");
 const appSource=fs.readFileSync(path.join(root,"app.js"),"utf8");
 const indexSource=fs.readFileSync(path.join(root,"index.html"),"utf8");
@@ -29,6 +30,7 @@ function loadApi(){
   context.window=context;
   context.globalThis=context;
   vm.createContext(context);
+  vm.runInContext(sessionModelSource,context,{filename:"routine-session-model.js"});
   vm.runInContext(proposalSource,context,{filename:"routine-proposals.js"});
   vm.runInContext(activationSource,context,{filename:"routine-activation.js"});
   return {activation:context.GymOSRoutineActivation,proposals:context.GymOSRoutineProposals};
@@ -85,6 +87,7 @@ function plan(api,options={}){
   const proposalRecord=options.record||record(api,value,options.ownerId||OWNER_A,current);
   return plain(api.activation.createActivationPlan({
     ownerId:options.ownerId||OWNER_A,proposalRecord,currentRoutine:current,
+    targetRoutineId:options.targetRoutineId||"routine-target-fixed",
     selectedSession:"B",drafts:{A:{x:1},B:{x:2},C:null},
     rawBaseline:{
       routine:JSON.stringify(current),selectedSession:"B",
@@ -99,7 +102,7 @@ test("1. activa una propuesta compatible de dos sesiones",()=>{
   assert.equal(result.ok,true);
   assert.equal(result.routine.A.length,1);
   assert.equal(result.routine.B.length,1);
-  assert.deepEqual(result.routine.C,[]);
+  assert.equal(Object.hasOwn(result.routine,"C"),false);
 });
 
 test("2. activa una propuesta compatible de tres sesiones",()=>{
@@ -108,9 +111,14 @@ test("2. activa una propuesta compatible de tres sesiones",()=>{
   assert.equal(result.routine.C.length,1);
 });
 
-test("3. rechaza una propuesta de cuatro días",()=>{
+test("3. prepara cuatro días para el runtime dinámico",()=>{
   const api=loadApi(),value=proposal("p-4",4),proposalRecord=record(api,value);
-  assert.equal(plan(api,{proposal:value,record:proposalRecord}).code,"activation_incompatible");
+  const result=plan(api,{proposal:value,record:proposalRecord});
+  assert.equal(result.ok,true);
+  assert.equal(result.runtimeCompatible,true);
+  assert.equal(result.applicationError,null);
+  assert.equal(result.canonicalRoutine.sessions.length,4);
+  assert.deepEqual(Object.keys(result.routine),["A","B","C"]);
 });
 
 test("4. rechaza una propuesta stale",()=>{
@@ -491,7 +499,7 @@ test("39. restaura presencia y ausencia exactas de claves tras cada etapa fallid
 
 test("40. dos sesiones excluyen C de sugerencias y selectores del runtime",()=>{
   const api=loadApi(),mapped=plan(api,{days:2}).routine;
-  const available=["A","B","C"].filter(key=>mapped[key].length>0);
+  const available=["A","B","C"].filter(key=>Array.isArray(mapped[key])&&mapped[key].length>0);
   const next=last=>available[(available.indexOf(last)+1)%available.length];
   assert.deepEqual(available,["A","B"]);
   assert.equal(next("A"),"B");

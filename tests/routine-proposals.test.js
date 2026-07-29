@@ -239,12 +239,12 @@ test("19. detecta cambio de orden",()=>{
   assert.equal(api.compareRoutineProposal(current,value).summary.orderChanges,2);
 });
 
-test("20. propuestas de 4 a 6 días no son activables por runtime actual",()=>{
+test("20. propuestas de 4 a 6 días son activables por runtime H3",()=>{
   const api=loadApi();
   [4,5,6].forEach(days=>{
     const result=api.activationCompatibility(proposal(`p-${days}`,days));
-    assert.equal(result.compatible,false);
-    assert.match(result.reasons[0],/tres sesiones/);
+    assert.equal(result.compatible,true);
+    assert.equal(result.reasons.length,0);
   });
   assert.equal(api.activationCompatibility(proposal("p-2",2)).compatible,true);
   assert.equal(api.activationCompatibility(proposal("p-3",3)).compatible,true);
@@ -391,10 +391,10 @@ test("cambio entre propietarios revalida registros y active ID",()=>{
   assert.equal(api.selectActiveProposalId([a,b],OWNER_A,"proposal-b"),"proposal-a");
   assert.equal(api.selectActiveProposalId([a,b],OWNER_B,"proposal-a"),"proposal-b");
   const activateSource=appSource.slice(
-    appSource.indexOf("function activateLocalUser"),
-    appSource.indexOf("function deactivateLocalUser")
+    appSource.indexOf("function finishLocalUserActivation"),
+    appSource.indexOf("function activateLocalUser")
   );
-  assert.match(activateSource,/ensureRoutineProposalState\(userId\)/);
+  assert.match(activateSource,/ensureRoutineProposalState\(ownerId\)/);
 });
 
 test("proposalId conflictivo conserva proposal original y devuelve incidencia",()=>{

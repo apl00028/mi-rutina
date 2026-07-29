@@ -23,12 +23,18 @@
   ]);
   const SNAPSHOT_PREFIX="gymos:preMigration:4.1.0-alpha.1:";
   const LEGACY_TRAINING_SETUP_PREFIX="gymos:legacyTrainingSetup:4.2.0-alpha.1:";
+  const SESSION_MODEL_MIGRATION_BACKUP_PREFIX="gymos:preSessionMigration:4.2.0-alpha.1-phase-h2:";
   const MIGRATION_INTERNAL_KEY_PREFIXES=Object.freeze([
     SNAPSHOT_PREFIX,
-    LEGACY_TRAINING_SETUP_PREFIX
+    LEGACY_TRAINING_SETUP_PREFIX,
+    SESSION_MODEL_MIGRATION_BACKUP_PREFIX
   ]);
   const SNAPSHOT_DATA_KEYS=Object.freeze([
     "gymos:routine",
+    "gymos:routine:canonical",
+    "gymos:routineDrafts",
+    "gymos:selectedSessionId",
+    "gymos:sessionModelMigration",
     "gymos:history",
     "gymos:bodyWeight",
     "gymos:body",
@@ -184,16 +190,58 @@
     }
     return value.toLowerCase();
   }
+  function opaqueOwnerStorageId(ownerId){
+    const normalized=normalizeOwnerId(ownerId);
+    const source=`gymos-h2-owner-v1:${normalized}`;
+    const seeds=[2166136261,2246822507,3266489909,668265263];
+    const parts=seeds.map(seed=>{
+      let hash=seed>>>0;
+      for(let index=0;index<source.length;index+=1){
+        hash^=source.charCodeAt(index);
+        hash=Math.imul(hash,16777619);
+        hash^=hash>>>13;
+      }
+      return (hash>>>0).toString(16).padStart(8,"0");
+    });
+    return `o-${parts.join("")}`;
+  }
   function migrationSnapshotKey(ownerId){
     return `${SNAPSHOT_PREFIX}${normalizeOwnerId(ownerId)}`;
   }
   function legacyTrainingSetupMigrationKey(ownerId){
     return `${LEGACY_TRAINING_SETUP_PREFIX}${normalizeOwnerId(ownerId)}`;
   }
+  function sessionModelMigrationBackupKey(ownerId){
+    return `${SESSION_MODEL_MIGRATION_BACKUP_PREFIX}${opaqueOwnerStorageId(ownerId)}`;
+  }
+  function legacySessionModelMigrationBackupKey(ownerId){
+    return `${SESSION_MODEL_MIGRATION_BACKUP_PREFIX}${normalizeOwnerId(ownerId)}`;
+  }
+  function migrateSessionModelMigrationBackup(ownerId){
+    const currentKey=sessionModelMigrationBackupKey(ownerId);
+    const legacyKey=legacySessionModelMigrationBackupKey(ownerId);
+    if(currentKey===legacyKey) return currentKey;
+    const legacyRaw=localStorage.getItem(legacyKey);
+    if(legacyRaw===null) return currentKey;
+    const currentRaw=localStorage.getItem(currentKey);
+    if(currentRaw===null){
+      localStorage.setItem(currentKey,legacyRaw);
+    }else if(currentRaw!==legacyRaw){
+      localStorage.setItem(currentKey,JSON.stringify({
+        format:"gymos-h2-backup-conflict-v1",
+        primaryRaw:currentRaw,
+        migratedLegacyRaw:legacyRaw
+      }));
+    }
+    localStorage.removeItem(legacyKey);
+    return currentKey;
+  }
   function migrationInternalKeys(ownerId){
     return Object.freeze([
       migrationSnapshotKey(ownerId),
-      legacyTrainingSetupMigrationKey(ownerId)
+      legacyTrainingSetupMigrationKey(ownerId),
+      sessionModelMigrationBackupKey(ownerId),
+      legacySessionModelMigrationBackupKey(ownerId)
     ]);
   }
   function removeMigrationInternalData(ownerId){
@@ -706,7 +754,8 @@
 
   global.GymOSProfileData=Object.freeze({
     DATA_SCHEMA_VERSION,STORAGE_KEYS,MANAGED_KEYS,
-    SNAPSHOT_PREFIX,LEGACY_TRAINING_SETUP_PREFIX,SNAPSHOT_DATA_KEYS,MIGRATION_INTERNAL_KEY_PREFIXES,
+    SNAPSHOT_PREFIX,LEGACY_TRAINING_SETUP_PREFIX,SESSION_MODEL_MIGRATION_BACKUP_PREFIX,
+    SNAPSHOT_DATA_KEYS,MIGRATION_INTERNAL_KEY_PREFIXES,
     GOAL_OPTIONS,LIFE_STATE_OPTIONS,TRAINING_PHASE_OPTIONS,
     calculatePregnancyTrimester,normalizePregnancyDetails,
     migrateLegacyGoal,validateGoalSelection,buildGoalCycle,buildTrainingPhase,normalizeUserProfile,buildLifeState,
@@ -714,7 +763,9 @@
     getUserProfile,saveUserProfile,getCurrentLifeState,getLifeStateHistory,setCurrentLifeState,
     getActiveGoalCycle,getGoalsHistory,startGoalCycle,closeGoalCycle,
     getActiveTrainingPhase,getTrainingPhases,startTrainingPhase,closeTrainingPhase,
-    normalizeOwnerId,migrationSnapshotKey,legacyTrainingSetupMigrationKey,
+    normalizeOwnerId,opaqueOwnerStorageId,migrationSnapshotKey,legacyTrainingSetupMigrationKey,
+    sessionModelMigrationBackupKey,legacySessionModelMigrationBackupKey,
+    migrateSessionModelMigrationBackup,
     migrationInternalKeys,removeMigrationInternalData,
     createMigrationSnapshot,migrateDataModel,exportSyncData,importSyncData
   });

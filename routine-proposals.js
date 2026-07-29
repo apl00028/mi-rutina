@@ -207,7 +207,7 @@
     const count=list(proposal?.sessions).length;
     const reasons=[];
     if(count<2) reasons.push("La propuesta necesita al menos dos sesiones.");
-    if(count>3) reasons.push("El runtime actual solo puede activar hasta tres sesiones A/B/C.");
+    if(count>6) reasons.push("La propuesta no puede superar seis sesiones.");
     return {compatible:reasons.length===0,reasons,sessionCount:count};
   }
   function validateProposal(proposal){

@@ -2879,3 +2879,49 @@ html[data-theme="light"] .global-accessibility-controls button{
   .onboarding-phase-card{grid-template-columns:1fr}
   .onboarding-phase-card>.text-button{justify-self:start}
 }
+
+/* GymOS v4.2 phase G · exercise library and substitutions */
+.exercise-library-shell .screen{padding-bottom:calc(7rem + env(safe-area-inset-bottom))}
+.library-live-region:empty{display:none}
+.phase-g-filter-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+.library-toggle-filters{display:flex;flex-wrap:wrap;gap:.55rem;margin-top:.8rem}
+.library-toggle-filters label{display:flex;align-items:center;gap:.45rem;min-height:44px;padding:.45rem .75rem;border:1px solid var(--border);border-radius:999px;background:var(--surface)}
+.phase-g-library-list{display:grid;gap:1rem}
+.exercise-library-card{display:grid;gap:.8rem}
+.exercise-library-card.is-archived{opacity:.75}
+.exercise-card-open{min-width:0;padding:0;border:0;background:transparent;color:inherit;text-align:left;cursor:pointer}
+.exercise-library-title-row{display:flex;align-items:center;gap:.55rem;flex-wrap:wrap}
+.exercise-library-title-row strong{font-size:1.05rem}
+.exercise-card-tags{display:flex;flex-wrap:wrap;gap:.4rem}
+.exercise-card-tags span{padding:.3rem .55rem;border-radius:999px;background:var(--surface-soft);color:var(--muted);font-size:.82rem}
+.exercise-card-meta{display:flex;flex-wrap:wrap;gap:.65rem;color:var(--muted);font-size:.86rem}
+.exercise-card-meta .ready{color:var(--success)}
+.exercise-card-meta .review{color:#b45309}
+.exercise-context-warning,.unavailable-reason{margin:0;padding:.7rem;border-radius:12px;background:color-mix(in srgb,#d97706 10%,transparent);color:var(--text)}
+.destructive-confirmation{position:fixed;z-index:90;left:1rem;right:1rem;bottom:calc(1rem + env(safe-area-inset-bottom));max-width:520px;margin:auto;box-shadow:0 20px 60px rgba(15,23,42,.24)}
+.library-prescription-fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.75rem;border:1px solid var(--border);border-radius:var(--radius);padding:1rem}
+.library-prescription-fields legend{padding:0 .4rem;font-weight:700}
+.library-advanced-fields{display:grid;gap:.75rem;padding:1rem;border:1px solid var(--border);border-radius:var(--radius)}
+.exercise-detail-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1rem}
+.exercise-detail-grid div{display:grid;gap:.3rem}
+.exercise-detail-grid span{color:var(--muted);font-size:.85rem}
+.exercise-context-actions{display:flex;flex-wrap:wrap;gap:.25rem;margin:.35rem 0 .7rem}
+.exercise-context-actions .text-button{min-height:40px}
+.substitution-options{display:grid;gap:1rem}
+.substitution-option{display:grid;gap:.65rem}
+.substitution-option.selected{border-color:var(--primary);background:color-mix(in srgb,var(--primary) 7%,var(--surface))}
+.substitution-option h3,.substitution-option p{margin:0}
+.substitution-options.unavailable{margin-top:1rem;opacity:.82}
+.substitution-selection-summary{display:grid;gap:1rem}
+.substitution-compare{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.75rem}
+.substitution-compare>div{padding:.85rem;border-radius:12px;background:var(--surface-soft)}
+.substitution-compare span{display:block;color:var(--muted);font-size:.8rem;margin-bottom:.3rem}
+@media (min-width:720px){
+  .phase-g-filter-grid{grid-template-columns:repeat(3,minmax(0,1fr))}
+  .phase-g-library-list{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .destructive-confirmation{left:50%;right:auto;transform:translateX(-50%);width:min(520px,calc(100% - 2rem))}
+}
+@media (max-width:430px){
+  .phase-g-filter-grid,.exercise-detail-grid,.substitution-compare{grid-template-columns:1fr}
+  .library-prescription-fields{grid-template-columns:1fr 1fr}
+}

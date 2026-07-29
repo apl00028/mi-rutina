@@ -228,9 +228,9 @@
     "El futuro físico se decide en acciones que hoy parecen pequeñas."
   ]);
 
-  window.GymOSDailyThoughts={
+  window.GymOSDailyThoughts=Object.freeze({
     version:1,
     categories:["stoicism","science","coach","minimalist","performance"],
     entries:[...stoicism,...science,...coach,...minimalist,...performance]
-  };
+  });
 })();

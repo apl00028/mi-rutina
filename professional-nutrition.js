@@ -395,8 +395,15 @@
     if(typeof isAppAuthenticated!=="function"||!isAppAuthenticated()) return {status:"local"};
     const client=getSupabaseClient();
     if(!client) return {status:"local"};
+    const ownerId=currentRoutineOwnerOrNull();
+    const userId=state.syncUser.id;
+    const assertOwner=()=>{
+      assertActiveLocalOwner(ownerId);
+      if(state.syncUser?.id!==userId) throw new Error("owner_changed");
+    };
     try{
-      const {data,error}=await client.from("professional_nutrition_plans").select("*").eq("user_id",state.syncUser.id);
+      const {data,error}=await client.from("professional_nutrition_plans").select("*").eq("user_id",userId);
+      assertOwner();
       if(error) throw error;
       const remoteRows=new Map((data||[]).map(row=>[row.id,row]));
       const merged=new Map(getPlans().map(plan=>[plan.id,plan]));
@@ -405,20 +412,25 @@
         const local=merged.get(remote.id);
         if(!local||new Date(remote.updatedAt)>new Date(local.updatedAt)) merged.set(remote.id,remote);
         if(row.source_file_data&&!await getSourceFile(remote.id)){
+          assertOwner();
           await storeSourceFile(remote.id,{name:remote.sourceFile.name,type:remote.sourceFile.type,size:remote.sourceFile.size,lastModified:remote.sourceFile.lastModified},row.source_file_data);
+          assertOwner();
         }
       }
+      assertOwner();
       const plans=savePlans([...merged.values()],false);
       for(const plan of plans){
         const remoteRow=remoteRows.get(plan.id);
         if(remoteRow&&new Date(remoteRow.updated_at)>=new Date(plan.updatedAt||0)) continue;
         const source=await getSourceFile(plan.id);
+        assertOwner();
         const {error:writeError}=await client.from("professional_nutrition_plans").upsert({
-          id:plan.id,user_id:state.syncUser.id,title:plan.title,plan_date:plan.planDate||null,
+          id:plan.id,user_id:userId,title:plan.title,plan_date:plan.planDate||null,
           professional:plan.professional||"",source_file:plan.sourceFile||{},source_file_data:source?.dataUrl||null,
           meals:plan.meals||[],saved_adaptations:plan.savedAdaptations||[],
           imported_at:plan.importedAt,updated_at:plan.updatedAt
         },{onConflict:"id"});
+        assertOwner();
         if(writeError) throw writeError;
       }
       return {status:"synced",count:plans.length};
@@ -438,6 +450,11 @@
       <p>${meal.time?`${esc(meal.time)} · `:""}${meal.ingredients.length} ingredientes${meal.trainingDay?" · Día de entrenamiento":""}</p></div>
     </article>`;
   }
+  function isSafeSourceDataUrl(value){
+    return /^data:(?:application\/json|text\/csv|application\/vnd\.ms-excel|application\/vnd\.openxmlformats-officedocument\.spreadsheetml\.sheet|application\/octet-stream)(?:;[^,]*)?;base64,/i.test(
+      String(value||"")
+    );
+  }
   function renderLibrary(){
     const plans=getPlans();
     app.innerHTML=`<div class="app-shell">
@@ -453,7 +470,7 @@
     </div>`;
     document.getElementById("backProfessionalNutrition").onclick=()=>{state.screen="nutrition";renderNutrition();};
     document.getElementById("importProfessionalPlan").onclick=()=>document.getElementById("professionalNutritionFile").click();
-    document.querySelectorAll("[data-plan-id]").forEach(button=>button.onclick=()=>{state.professionalNutritionPlanId=button.dataset.planId;state.screen="professionalNutritionPlan";renderProfessionalNutritionPlan();});
+    document.querySelectorAll("[data-plan-id]").forEach(button=>button.onclick=()=>{state.professionalNutritionPlanId=button.dataset.planId;state.screen="professionalNutritionPlan";renderPlan();});
   }
   function renderImport(){
     const draft=state.professionalNutritionDraft;
@@ -490,7 +507,7 @@
       state.professionalNutritionPlanId=draft.id;
       state.screen="professionalNutritionPlan";
       toast("Planificación histórica guardada");
-      renderProfessionalNutritionPlan();
+      renderPlan();
     };
   }
   function renderPlan(){
@@ -518,7 +535,10 @@
     document.getElementById("backProfessionalPlan").onclick=()=>{state.screen="professionalNutrition";renderLibrary();};
     document.getElementById("downloadProfessionalSource").onclick=async()=>{
       const source=await getSourceFile(plan.id);
-      if(!source?.dataUrl){toast("El archivo original no está disponible en este dispositivo.");return;}
+      if(!isSafeSourceDataUrl(source?.dataUrl)){
+        toast("El archivo original no está disponible de forma segura en este dispositivo.");
+        return;
+      }
       const link=document.createElement("a");
       link.href=source.dataUrl;
       link.download=source.name||plan.sourceFile?.name||"planificacion-profesional";
@@ -529,7 +549,7 @@
       state.professionalNutritionDayType="rest";
       state.professionalNutritionIncludePreWorkout=false;
       state.screen="professionalNutritionAdapt";
-      renderProfessionalNutritionAdaptation();
+      renderAdaptation();
     });
   }
   function renderAdaptation(){
@@ -589,13 +609,9 @@
     renderImport();
   }
 
-  window.GymOSProfessionalNutrition={
+  window.GymOSProfessionalNutrition=Object.freeze({
     storageKey:STORAGE_KEY,getPlans,savePlans,mergePlans,parseProfessionalNutritionFile,
-    adaptProfessionalMealTemplate,equivalentTemplates,syncWithSupabase,handleFileSelection
-  };
-  window.adaptProfessionalMealTemplate=adaptProfessionalMealTemplate;
-  window.renderProfessionalNutritionLibrary=renderLibrary;
-  window.renderProfessionalNutritionImport=renderImport;
-  window.renderProfessionalNutritionPlan=renderPlan;
-  window.renderProfessionalNutritionAdaptation=renderAdaptation;
+    adaptProfessionalMealTemplate,equivalentTemplates,syncWithSupabase,handleFileSelection,
+    renderLibrary,renderImport,renderPlan,renderAdaptation
+  });
 })();

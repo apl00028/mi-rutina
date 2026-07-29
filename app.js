@@ -1,4 +1,4 @@
-
+const GYMOS_VERSION="4.2.0-rc.1";
 const GYMOS_APPEARANCE_KEY="gymos:appearance";
 const GYMOS_FONT_SCALE_KEY="gymos:fontScale";
 const GYMOS_FONT_SCALES=["font-scale-sm","font-scale-md","font-scale-lg","font-scale-xl"];
@@ -24,10 +24,14 @@ function applyAppearancePreference(value=getAppearancePreference()){
   document.documentElement.dataset.theme=resolved;
   document.documentElement.classList.remove("theme-light","theme-dark","theme-system");
   document.documentElement.classList.add(`theme-${next}`);
-  localStorage.setItem(GYMOS_APPEARANCE_KEY,next);
+  if(localStorage.getItem(GYMOS_APPEARANCE_KEY)!==next){
+    localStorage.setItem(GYMOS_APPEARANCE_KEY,next);
+  }
   try{
     const current=JSON.parse(localStorage.getItem("gymos:appPreferences")||"{}");
-    localStorage.setItem("gymos:appPreferences",JSON.stringify({...current,theme:next}));
+    if(current.theme!==next){
+      localStorage.setItem("gymos:appPreferences",JSON.stringify({...current,theme:next}));
+    }
   }catch(_){}
   updateAppearanceButton(next);
 }
@@ -59,10 +63,14 @@ function applyFontScalePreference(value=getFontScalePreference()){
   const next=GYMOS_FONT_SCALES.includes(value)?value:"font-scale-md";
   document.documentElement.classList.add(next);
   document.documentElement.dataset.fontScale=scaleMap[next];
-  localStorage.setItem(GYMOS_FONT_SCALE_KEY,next);
+  if(localStorage.getItem(GYMOS_FONT_SCALE_KEY)!==next){
+    localStorage.setItem(GYMOS_FONT_SCALE_KEY,next);
+  }
   try{
     const current=JSON.parse(localStorage.getItem("gymos:appPreferences")||"{}");
-    localStorage.setItem("gymos:appPreferences",JSON.stringify({...current,fontScale:scaleMap[next]}));
+    if(current.fontScale!==scaleMap[next]){
+      localStorage.setItem("gymos:appPreferences",JSON.stringify({...current,fontScale:scaleMap[next]}));
+    }
   }catch(_){}
   updateFontScaleButton(next);
 }
@@ -546,6 +554,7 @@ function estimatedOneRepMax(weight,reps){
   const w=Number(weight)||0;
   const r=Number(reps)||0;
   if(w<=0||r<=0) return 0;
+  // Una repetición completada ya es una medición directa del 1RM.
   if(r===1) return w;
   return w*(1+r/30);
 }
@@ -849,7 +858,7 @@ function updateExerciseTechnicalNotes(id,notes){
   return true;
 }
 
-const GYMOS_BACKUP_VERSION="4.0.8";
+const GYMOS_BACKUP_VERSION=GYMOS_VERSION;
 const ROUTINE_PROPOSALS_KEY="gymos:routineProposals";
 const ACTIVE_ROUTINE_PROPOSAL_ID_KEY="gymos:activeRoutineProposalId";
 const ROUTINE_ACTIVATION_HISTORY_KEY="gymos:routineActivationHistory";
@@ -3350,6 +3359,38 @@ function resetRoutineSessionOwnerState(){
   state.routineFileChooser=null;
   state.routineFileBusy=null;
   state.coachSessionId=null;
+  state.workoutDraftMessage=null;
+  state.workoutDraftObservedIds=new Set();
+  sessions=[];
+  clearInterval(state.timerInterval);
+  state.timerInterval=null;
+  state.timerSeconds=0;
+  clearTimeout(state.syncTimer);
+  state.syncTimer=null;
+  state.syncInProgress=false;
+  state.completedWorkoutSummary=null;
+  state.workoutAnalysisId=null;
+  state.coachChatMessages=[];
+  state.nutritionPreview=null;
+  state.nutritionRecipeSuggestions=[];
+  state.professionalNutritionDraft=null;
+  state.professionalNutritionPlanId=null;
+  state.professionalNutritionMealId=null;
+  state.quickActionsDraft=null;
+  state.quickActionsEditorMessage=null;
+  state.bodySummaryDraft=null;
+  state.bodySummaryReturnFocus=null;
+  state.bodyFormMessage=null;
+  state.recoveryDraft=null;
+  state.recoveryResultDate=null;
+  state.recoveryCheckinId=null;
+  state.accountProfile=null;
+  state.accountProfileUserId=null;
+  state.accountIdentityDirty=false;
+  state.accountPasswordMessage=null;
+  state.accountManagementMessage=null;
+  state.onboardingDraft=null;
+  state.onboardingMessage=null;
 }
 function assertActiveLocalOwner(ownerId){
   const expected=window.GymOSProfileData.normalizeOwnerId(ownerId);
@@ -3391,6 +3432,8 @@ function finishLocalUserActivation(userId){
     ensureRoutineProposalState(ownerId);
     assertActiveLocalOwner(ownerId);
     ensureRoutineActivationState(ownerId);
+    assertActiveLocalOwner(ownerId);
+    sanitizeStoredSyncAudit();
     assertActiveLocalOwner(ownerId);
     if(migration.migrated) markLocalUpdated({schedule:false});
     assertActiveLocalOwner(ownerId);
@@ -3729,6 +3772,7 @@ let state = {
   bodyEntryOpen: false,
   bodySummaryEditorOpen: false,
   bodySummaryDraft: null,
+  bodySummaryReturnFocus: null,
   selectedBodyMetric: null,
   bodyMetricPeriod: "3m",
   bodyFormMessage: null,
@@ -3740,6 +3784,8 @@ let state = {
   recoveryCheckinId: null,
   completedWorkoutSummary: null,
   workoutAnalysisId: null,
+  workoutDraftMessage: null,
+  workoutDraftObservedIds: new Set(),
   aiSettingsMessage: null,
   routineWorkflow: null,
   routineImport: null,
@@ -4238,12 +4284,21 @@ function setLastRemoteRevision(value){localStorage.setItem(LAST_REMOTE_REVISION_
 function getSyncConflictPreference(){return localStorage.getItem("gymos:syncConflictMode")||"ask";}
 function setSyncConflictPreference(value){localStorage.setItem("gymos:syncConflictMode",value);}
 function getSyncAudit(){
-  try{const value=JSON.parse(localStorage.getItem(SYNC_AUDIT_KEY)||"[]");return Array.isArray(value)?value:[];}
+  try{
+    const value=JSON.parse(localStorage.getItem(SYNC_AUDIT_KEY)||"[]");
+    return Array.isArray(value)?value.map(({userId,deviceId,...entry})=>entry):[];
+  }
   catch(error){return [];}
+}
+function sanitizeStoredSyncAudit(){
+  const raw=localStorage.getItem(SYNC_AUDIT_KEY);
+  if(!raw) return;
+  const sanitized=JSON.stringify(getSyncAudit());
+  if(raw!==sanitized) localStorage.setItem(SYNC_AUDIT_KEY,sanitized);
 }
 function addSyncAudit(action,status,details={}){
   const items=getSyncAudit();
-  items.push({id:`audit-${Date.now().toString(36)}`,createdAt:new Date().toISOString(),action,status,userId:state.syncUser?.id||null,deviceId:getDeviceId(),details});
+  items.push({id:`audit-${Date.now().toString(36)}`,createdAt:new Date().toISOString(),action,status,details});
   localStorage.setItem(SYNC_AUDIT_KEY,JSON.stringify(items.slice(-100)));
 }
 function simpleChecksum(value){
@@ -4258,7 +4313,7 @@ function buildSyncEnvelope(){
   return {schemaVersion:2,revision,deviceId:getDeviceId(),updatedAt:new Date().toISOString(),checksum:simpleChecksum(payload),payload};
 }
 function syncSecurityState(){
-  return {authenticated:isAppAuthenticated(),deviceId:getDeviceId(),localRevision:getLocalRevision(),lastRemoteRevision:getLastRemoteRevision(),conflictMode:getSyncConflictPreference(),audit:getSyncAudit().slice(-10)};
+  return {authenticated:isAppAuthenticated(),deviceConfigured:Boolean(getDeviceId()),localRevision:getLocalRevision(),lastRemoteRevision:getLastRemoteRevision(),conflictMode:getSyncConflictPreference(),audit:getSyncAudit().slice(-10)};
 }
 async function chooseConflictResolution(remote){
   const mode=getSyncConflictPreference();
@@ -4320,8 +4375,9 @@ function scheduleAccountProfileLoad(userId){
 async function loadAccountIdentityProfile(userId=state.syncUser?.id){
   const client=getSupabaseClient();
   if(!client||!userId||!isAppAuthenticated()) return null;
+  const ownerId=currentRoutineOwnerOrNull();
   const {data,error}=await client.from("profiles").select("alias,avatar_key").eq("id",userId).maybeSingle();
-  if(state.syncUser?.id!==userId) return null;
+  if(state.syncUser?.id!==userId||currentRoutineOwnerOrNull()!==ownerId) return null;
   if(error){
     state.accountProfileStatus="error";
     if(state.screen==="account"){
@@ -4341,14 +4397,18 @@ async function loadAccountIdentityProfile(userId=state.syncUser?.id){
 async function saveAccountIdentityProfile(alias,avatarKey){
   const client=getSupabaseClient();
   if(!client||!isAppAuthenticated()) throw new Error("No hay una cuenta confirmada.");
+  const ownerId=currentRoutineOwnerOrNull();
+  const userId=state.syncUser.id;
   const normalizedAlias=normalizeAccountAlias(alias);
   const normalizedAvatar=validAccountAvatarKey(avatarKey);
   const {error}=await client.from("profiles").upsert({
-    id:state.syncUser.id,
+    id:userId,
     alias:normalizedAlias||null,
     avatar_key:normalizedAvatar,
     updated_at:new Date().toISOString()
   },{onConflict:"id"});
+  assertActiveLocalOwner(ownerId);
+  if(state.syncUser?.id!==userId) throw new Error("owner_changed");
   if(error) throw error;
   state.accountProfile={alias:normalizedAlias,avatarKey:normalizedAvatar};
   state.accountProfileStatus="loaded";
@@ -4629,11 +4689,11 @@ async function signOutSync(){
   if(client) await client.auth.signOut();
   resolveAuthenticatedAppState(null);
 }
-function bodyMeasurementToDatabase(row){
+function bodyMeasurementToDatabase(row,userId=state.syncUser?.id){
   const normalized=normalizeBodyMeasurement(row);
   const record={
     id:normalized.id,
-    user_id:state.syncUser?.id,
+    user_id:userId,
     measured_at:normalized.date,
     notes:normalized.notes||null,
     created_at:normalized.createdAt,
@@ -4656,7 +4716,14 @@ function bodyMeasurementsTableMissing(error){
 async function syncBodyMeasurementsWithSupabase(){
   const client=getSupabaseClient();
   if(!client||!isAppAuthenticated()) return;
-  const {data,error}=await client.from("body_measurements").select("*").eq("user_id",state.syncUser.id);
+  const ownerId=currentRoutineOwnerOrNull();
+  const userId=state.syncUser.id;
+  const assertOwner=()=>{
+    assertActiveLocalOwner(ownerId);
+    if(state.syncUser?.id!==userId) throw new Error("owner_changed");
+  };
+  const {data,error}=await client.from("body_measurements").select("*").eq("user_id",userId);
+  assertOwner();
   if(error){
     if(bodyMeasurementsTableMissing(error)){
       console.warn("Body measurements table is not installed; using encrypted user sync payload.");
@@ -4671,16 +4738,26 @@ async function syncBodyMeasurementsWithSupabase(){
     if(!local||new Date(remote.updatedAt)>=new Date(local.updatedAt)) merged.set(String(remote.id),remote);
   });
   const rows=[...merged.values()].sort((a,b)=>new Date(a.date)-new Date(b.date));
+  assertOwner();
   saveBodyHistory(rows,{markUpdated:false});
   if(!rows.length) return;
-  const {error:writeError}=await client.from("body_measurements").upsert(rows.map(bodyMeasurementToDatabase),{onConflict:"id,user_id"});
+  assertOwner();
+  const {error:writeError}=await client.from("body_measurements").upsert(
+    rows.map(row=>bodyMeasurementToDatabase(row,userId)),
+    {onConflict:"id,user_id"}
+  );
+  assertOwner();
   if(writeError&&!bodyMeasurementsTableMissing(writeError)) throw writeError;
 }
 async function deleteBodyMeasurementRemote(id){
   const client=getSupabaseClient();
   if(!client||!isAppAuthenticated()) return;
+  const ownerId=currentRoutineOwnerOrNull();
+  const userId=state.syncUser.id;
   try{
-    const {error}=await client.from("body_measurements").delete().eq("id",String(id)).eq("user_id",state.syncUser.id);
+    const {error}=await client.from("body_measurements").delete().eq("id",String(id)).eq("user_id",userId);
+    assertActiveLocalOwner(ownerId);
+    if(state.syncUser?.id!==userId) throw new Error("owner_changed");
     if(error&&!bodyMeasurementsTableMissing(error)) throw error;
   }catch(error){
     console.error("Body measurement deletion",error);
@@ -4690,13 +4767,26 @@ async function deleteBodyMeasurementRemote(id){
 async function syncNow(options={}){
   const client=getSupabaseClient();
   if(!client||!isAppAuthenticated()) throw new Error("Confirma tu correo antes de sincronizar.");
+  if(state.syncInProgress) return {direction:"busy"};
+  const ownerId=currentRoutineOwnerOrNull();
+  const userId=state.syncUser.id;
+  const assertOwner=()=>{
+    assertActiveLocalOwner(ownerId);
+    if(state.syncUser?.id!==userId) throw new Error("owner_changed");
+  };
+  state.syncInProgress=true;
   state.syncStatus="syncing";updateSyncIndicators();addSyncAudit("sync","started");
   try{
     await window.GymOSRecovery?.syncWithSupabase?.();
+    assertOwner();
     await window.GymOSProfessionalNutrition?.syncWithSupabase?.();
+    assertOwner();
     await syncBodyMeasurementsWithSupabase();
+    assertOwner();
     await window.GymOSWorkoutAnalysis?.syncWithSupabase?.();
-    const {data:remote,error:readError}=await client.from("gymos_sync").select("payload,revision,device_id,updated_at,checksum").eq("user_id",state.syncUser.id).maybeSingle();
+    assertOwner();
+    const {data:remote,error:readError}=await client.from("gymos_sync").select("payload,revision,device_id,updated_at,checksum").eq("user_id",userId).maybeSingle();
+    assertOwner();
     if(readError) throw readError;
     const remoteRevision=Number(remote?.revision||0);
     const localRevision=getLocalRevision();
@@ -4704,6 +4794,7 @@ async function syncNow(options={}){
     const conflict=remote && remoteRevision>lastRemote && localRevision>lastRemote && !options.forceUpload;
     if(conflict){
       const resolution=await chooseConflictResolution(remote);
+      assertOwner();
       addSyncAudit("conflict",resolution,{remoteRevision,localRevision});
       if(resolution==="remote"){
         applySyncPayload(remote.payload||{});setLocalRevision(remoteRevision);setLastRemoteRevision(remoteRevision);
@@ -4713,11 +4804,22 @@ async function syncNow(options={}){
       applySyncPayload(remote.payload||{});setLocalRevision(remoteRevision);setLastRemoteRevision(remoteRevision);
       localStorage.setItem("gymos:lastSyncAt",new Date().toISOString());state.syncStatus="connected";addSyncAudit("sync","downloaded",{revision:remoteRevision});updateSyncIndicators();return {direction:"download",revision:remoteRevision};
     }
+    assertOwner();
     const envelope=buildSyncEnvelope();
-    const {error:writeError}=await client.from("gymos_sync").upsert({user_id:state.syncUser.id,payload:envelope.payload,revision:envelope.revision,device_id:envelope.deviceId,checksum:envelope.checksum,updated_at:envelope.updatedAt},{onConflict:"user_id"});
+    const {error:writeError}=await client.from("gymos_sync").upsert({user_id:userId,payload:envelope.payload,revision:envelope.revision,device_id:envelope.deviceId,checksum:envelope.checksum,updated_at:envelope.updatedAt},{onConflict:"user_id"});
+    assertOwner();
     if(writeError) throw writeError;
     setLastRemoteRevision(envelope.revision);localStorage.setItem("gymos:lastSyncAt",new Date().toISOString());state.syncStatus="connected";addSyncAudit("sync","uploaded",{revision:envelope.revision});updateSyncIndicators();return {direction:"upload",revision:envelope.revision};
-  }catch(error){state.syncStatus="error";addSyncAudit("sync","error",{message:error.message});updateSyncIndicators();throw error;}
+  }catch(error){
+    if(currentRoutineOwnerOrNull()===ownerId&&state.syncUser?.id===userId){
+      state.syncStatus="error";addSyncAudit("sync","error",{
+        code:error?.code||"sync_failed",status:error?.status||null
+      });updateSyncIndicators();
+    }
+    throw error;
+  }finally{
+    state.syncInProgress=false;
+  }
 }
 
 async function autoSync(reason="automática"){
@@ -4984,13 +5086,31 @@ function getDraft(sessionId){
   const canonical=getCanonicalRoutine();
   const resolved=resolveRuntimeSessionId(sessionId);
   let draft=null;
+  state.workoutDraftMessage=null;
   if(canonical){
     draft=routineSessionRuntimeApi().getDraft(getCanonicalDrafts(),{
       ownerId:currentRoutineOwnerOrNull(),routine:canonical,sessionId:resolved
     });
-    if(draft&&routineSessionMigrationApi().draftStatus(draft,{
-      ownerId:currentRoutineOwnerOrNull(),canonicalRoutine:canonical
-    }).status!=="current") draft=null;
+    if(draft){
+      const persistedDraftId=draft.draftId;
+      const shouldAnnounce=!state.workoutDraftObservedIds.has(persistedDraftId);
+      const status=routineSessionMigrationApi().draftStatus(draft,{
+        ownerId:currentRoutineOwnerOrNull(),canonicalRoutine:canonical
+      });
+      if(status.status!=="current"){
+        if(shouldAnnounce) state.workoutDraftMessage={
+            type:"warning",
+            text:"Este borrador pertenece a una versión anterior de la sesión. Se conserva para revisión y no se ha mezclado con la rutina actual."
+          };
+        draft=null;
+      }else if(shouldAnnounce){
+        state.workoutDraftMessage={
+          type:"info",
+          text:"Se ha recuperado el progreso guardado de esta sesión."
+        };
+      }
+      if(shouldAnnounce&&persistedDraftId) state.workoutDraftObservedIds.add(persistedDraftId);
+    }
   }else{
     draft=JSON.parse(localStorage.getItem(draftKey(resolved))||"null");
   }
@@ -5060,6 +5180,7 @@ function saveDraft(d){
     }
     if(currentRoutineOwnerOrNull()!==ownerId) throw new Error("owner_changed");
     markLocalUpdated();
+    state.workoutDraftMessage=null;
   }catch(error){
     if(legacySession) restoreStorageValue(draftKey(legacySession),previousLegacy);
     restoreStorageValue(CANONICAL_DRAFTS_KEY,previousCanonical);
@@ -5269,10 +5390,6 @@ function totalCurrentWeekVolume(){
 }
 function compactNumber(value){
   return new Intl.NumberFormat("es-ES",{maximumFractionDigits:0}).format(value);
-}
-function estimatedOneRepMax(weight,reps){
-  if(!weight||!reps) return 0;
-  return weight*(1+reps/30);
 }
 function allExercisePerformances(name,excludeWorkoutId=null){
   const performances=[];
@@ -5495,6 +5612,9 @@ function bindNav(){
 }
 function toast(msg){
   const el=document.createElement("div"); el.className="toast"; el.textContent=msg;
+  el.setAttribute("role","status");
+  el.setAttribute("aria-live","polite");
+  el.setAttribute("aria-atomic","true");
   document.body.appendChild(el); setTimeout(()=>el.remove(),1800);
 }
 
@@ -6214,8 +6334,8 @@ function render(){
   if(state.screen==="onboarding") renderOnboarding();
   else if(state.screen==="home") renderHome();
   else if(state.screen==="workout") renderWorkout();
-  else if(state.screen==="workoutComplete") renderWorkoutComplete();
-  else if(state.screen==="recovery") renderRecoveryCenter();
+  else if(state.screen==="workoutComplete") window.GymOSRecovery.renderWorkoutComplete();
+  else if(state.screen==="recovery") window.GymOSRecovery.renderRecoveryCenter();
   else if(state.screen==="history") renderHistory();
   else if(state.screen==="stats") renderStats();
   else if(state.screen==="records") renderRecords();
@@ -6244,10 +6364,10 @@ function render(){
   else if(state.screen==="coachChat") renderCoachChat();
   else if(state.screen==="nutrition") renderNutrition();
   else if(state.screen==="quickActions") renderQuickActionsEditor();
-  else if(state.screen==="professionalNutrition") renderProfessionalNutritionLibrary();
-  else if(state.screen==="professionalNutritionImport") renderProfessionalNutritionImport();
-  else if(state.screen==="professionalNutritionPlan") renderProfessionalNutritionPlan();
-  else if(state.screen==="professionalNutritionAdapt") renderProfessionalNutritionAdaptation();
+  else if(state.screen==="professionalNutrition") window.GymOSProfessionalNutrition.renderLibrary();
+  else if(state.screen==="professionalNutritionImport") window.GymOSProfessionalNutrition.renderImport();
+  else if(state.screen==="professionalNutritionPlan") window.GymOSProfessionalNutrition.renderPlan();
+  else if(state.screen==="professionalNutritionAdapt") window.GymOSProfessionalNutrition.renderAdaptation();
   else if(state.screen==="developer") renderDeveloperMode();
   else if(state.screen==="health") renderHealth();
   else if(state.screen==="account") renderAccount();
@@ -6498,14 +6618,16 @@ function renderHomeBodyCard(){
   </section>`;
 }
 function renderBodySummaryEditor(){
-  document.querySelector(".body-summary-editor-backdrop")?.remove();
+  const existing=document.querySelector(".body-summary-editor-backdrop");
+  if(!existing) state.bodySummaryReturnFocus=document.activeElement;
+  existing?.remove();
   const selected=Array.isArray(state.bodySummaryDraft)?state.bodySummaryDraft:getBodySummaryMetrics();
   state.bodySummaryDraft=selected.slice();
   const modal=document.createElement("div");
   modal.className="body-summary-editor-backdrop";
-  modal.innerHTML=`<section class="body-summary-editor" role="dialog" aria-modal="true" aria-labelledby="bodySummaryEditorTitle">
+  modal.innerHTML=`<section class="body-summary-editor" role="dialog" aria-modal="true" aria-labelledby="bodySummaryEditorTitle" aria-describedby="bodySummaryEditorHelp">
     <div class="card-heading-row">
-      <div><span class="section-kicker">INICIO</span><h2 id="bodySummaryEditorTitle">Editar resumen corporal</h2><p class="subtle">Elige exactamente cuatro métricas.</p></div>
+      <div><span class="section-kicker">INICIO</span><h2 id="bodySummaryEditorTitle">Editar resumen corporal</h2><p id="bodySummaryEditorHelp" class="subtle">Elige exactamente cuatro métricas.</p></div>
       <button type="button" class="icon-button" data-close-body-summary aria-label="Cerrar">×</button>
     </div>
     <div class="body-summary-picker">
@@ -6518,8 +6640,16 @@ function renderBodySummaryEditor(){
     <button type="button" class="primary full" data-save-body-summary ${selected.length===4?"":"disabled"}>Guardar resumen</button>
   </section>`;
   document.body.appendChild(modal);
-  modal.querySelector("[data-close-body-summary]").onclick=()=>{state.bodySummaryDraft=null;modal.remove();};
-  modal.onclick=event=>{if(event.target===modal){state.bodySummaryDraft=null;modal.remove();}};
+  const close=()=>{
+    const returnFocus=state.bodySummaryReturnFocus;
+    state.bodySummaryDraft=null;
+    state.bodySummaryReturnFocus=null;
+    modal.remove();
+    if(returnFocus?.isConnected) returnFocus.focus();
+  };
+  modal.querySelector("[data-close-body-summary]").onclick=close;
+  modal.onclick=event=>{if(event.target===modal) close();};
+  modal.onkeydown=event=>{if(event.key==="Escape"){event.preventDefault();close();}};
   modal.querySelectorAll("[data-body-summary-choice]").forEach(input=>input.onchange=()=>{
     const key=input.dataset.bodySummaryChoice;
     if(input.checked&&state.bodySummaryDraft.length<4) state.bodySummaryDraft.push(key);
@@ -6530,6 +6660,7 @@ function renderBodySummaryEditor(){
     if(state.bodySummaryDraft.length!==4) return;
     saveBodySummaryMetrics(state.bodySummaryDraft);
     state.bodySummaryDraft=null;
+    state.bodySummaryReturnFocus=null;
     modal.remove();
     renderHome();
     toast("Resumen corporal actualizado.");
@@ -6992,7 +7123,7 @@ function renderHome(){
     if(dashboard.mode==="recovery"){
       state.recoveryView="overview";
       state.screen="recovery";
-      renderRecoveryCenter();
+      window.GymOSRecovery.renderRecoveryCenter();
       return;
     }
     navigateToScreen("workout");
@@ -7036,7 +7167,7 @@ function renderHome(){
   };
   document.querySelectorAll("[data-quick-action]").forEach(button=>button.onclick=()=>executeQuickAction(button.dataset.quickAction));
   document.querySelectorAll("[data-open-recovery]").forEach(button=>{
-    button.onclick=()=>{state.recoveryView="overview";state.screen="recovery";renderRecoveryCenter();};
+    button.onclick=()=>{state.recoveryView="overview";state.screen="recovery";window.GymOSRecovery.renderRecoveryCenter();};
   });
   document.querySelectorAll("[data-open-recovery-checkin]").forEach(button=>{
     button.onclick=()=>{
@@ -7174,6 +7305,8 @@ function renderWorkout(){
   const d=getDraft(s),last=lastWorkoutForSession(s);
   const done=d.exercises.reduce((n,e)=>n+e.series.filter(x=>x.done).length,0);
   const total=d.exercises.reduce((sum,e)=>sum+e.series.length,0);
+  const progress=total?Math.min(100,(done/total)*100):0;
+  const emptySession=d.exercises.length===0;
   app.innerHTML=`<div class="app-shell">
     <main class="screen">
       <div class="workout-header">
@@ -7181,8 +7314,10 @@ function renderWorkout(){
           <div><div class="subtle">Entrenamiento activo</div><h1>${esc(sessionName)} · ${done}/${total} series</h1></div>
           <button id="timerChip" class="timer-chip">${state.timerSeconds?formatTimer(state.timerSeconds):"Descanso"}</button>
         </div>
-        <div class="progress"><span style="width:${(done/total)*100}%"></span></div>
+        <div class="progress"><span style="width:${progress}%"></span></div>
       </div>
+      ${state.workoutDraftMessage?`<p class="workout-draft-message ${esc(state.workoutDraftMessage.type)}" role="${state.workoutDraftMessage.type==="warning"?"alert":"status"}">${esc(state.workoutDraftMessage.text)}</p>`:""}
+      ${emptySession?`<section class="workout-empty-state" role="status"><h2>Esta sesión no tiene ejercicios</h2><p>Vuelve a Mi rutina para añadir ejercicios antes de empezar.</p><button type="button" id="openRoutineFromEmptyWorkout" class="secondary">Ir a Mi rutina</button></section>`:""}
       ${d.copiedFromLastSession ? `
         <div class="prefill-banner">
           <div><strong>Pesos preparados</strong><span>Se han copiado de tu último ${esc(sessionName.toLocaleLowerCase("es"))}.</span></div>
@@ -7261,7 +7396,7 @@ function renderWorkout(){
       <div class="timer-main"><div><div class="subtle">Descanso</div><div id="timerValue" class="timer-value">${formatTimer(state.timerSeconds)}</div></div><button id="closeTimer" class="secondary">Cerrar</button></div>
       <div class="timer-actions"><button class="secondary" data-time="60">60 s</button><button class="secondary" data-time="90">90 s</button><button class="secondary" data-time="120">120 s</button><button class="secondary" data-time="180">180 s</button></div>
     </div>
-    <footer class="sticky-actions"><div class="sticky-actions-inner"><button id="backHome" class="secondary">Salir</button><button id="finishWorkout" class="primary">Finalizar</button></div></footer>
+    <footer class="sticky-actions"><div class="sticky-actions-inner"><button id="backHome" class="secondary">Salir</button><button id="finishWorkout" class="primary" ${emptySession?"disabled":""}>Finalizar</button></div></footer>
   </div>`;
 
   document.querySelectorAll("[data-exercise]").forEach(card=>{
@@ -7321,6 +7456,10 @@ function renderWorkout(){
     toast("Pesos vaciados");
   };
   document.getElementById("backHome").onclick=()=>{stopAllExerciseTimers();state.screen="home";renderHome();};
+  const openRoutineFromEmptyWorkout=document.getElementById("openRoutineFromEmptyWorkout");
+  if(openRoutineFromEmptyWorkout) openRoutineFromEmptyWorkout.onclick=()=>{
+    stopAllExerciseTimers();state.screen="routine";renderRoutine();
+  };
   document.getElementById("finishWorkout").onclick=()=>{stopAllExerciseTimers();finishWorkout();};
   document.getElementById("timerChip").onclick=()=>document.getElementById("timerPanel").classList.remove("hidden");
   document.getElementById("closeTimer").onclick=()=>document.getElementById("timerPanel").classList.add("hidden");
@@ -7361,7 +7500,7 @@ function finishWorkout(){
   if(existing){
     state.completedWorkoutSummary=existing;
     state.screen="workoutComplete";
-    renderWorkoutComplete();
+    window.GymOSRecovery.renderWorkoutComplete();
     return;
   }
   state.finishingWorkout=true;
@@ -7408,7 +7547,7 @@ function finishWorkout(){
   }finally{
     state.finishingWorkout=false;
   }
-  renderWorkoutComplete();
+  window.GymOSRecovery.renderWorkoutComplete();
   autoSync("entrenamiento finalizado");
   if(newRecords.length) showRecordsCelebration(newRecords);
   else toast(`${workout.sessionName} guardada`);
@@ -7540,7 +7679,7 @@ function renderEditWorkout(){
   document.getElementById("cancelEditWorkout").onclick=()=>{state.screen="history";renderHistory();};
   document.getElementById("saveEditedWorkout").onclick=()=>{
     const dateValue=document.getElementById("editWorkoutDate").value;
-    if(!dateValue){alert("Selecciona una fecha válida.");return;}
+    if(!dateValue){toast("Selecciona una fecha válida.");return;}
     edited.date=new Date(dateValue).toISOString();
     edited.completedSeries=edited.exercises.reduce((sum,e)=>sum+workingSeries(e.series).filter(s=>s.done).length,0);
     const history=getHistory().map(w=>w.id===edited.id?edited:w);
@@ -7956,7 +8095,7 @@ function editExerciseModal(session,index=null){
 
   document.getElementById("saveExercise").onclick=()=>{
     const name=document.getElementById("reName").value.trim();
-    if(!name){alert("Escribe el nombre del ejercicio.");return;}
+    if(!name){toast("Escribe el nombre del ejercicio.");return;}
     const value={
       name,
       target:document.getElementById("reTarget").value.trim()||"8–10 reps",
@@ -8154,7 +8293,7 @@ function renderRoutineEditor(){
     if(target===null) return;
     const dest=available[Number(target.trim())-1]?.sessionId;
     if(!dest){toast("Selecciona una sesión válida.");return;}
-    if(dest===session){alert("Selecciona una sesión diferente.");return;}
+    if(dest===session){toast("Selecciona una sesión diferente.");return;}
     const destination=canonicalSessionByRef(dest);
     if(destination.exercises.length&&!confirm(`${routineSessionRuntimeApi().displayName(destination)} ya contiene ejercicios. ¿Sustituirlos?`)) return;
     saveCanonicalSessionExercises(dest,exercises.map(item=>({...item})));
@@ -8377,8 +8516,8 @@ function renderBlockEditor(){
   const save=()=>{
     const name=document.getElementById("blockName").value.trim();
     const startDate=document.getElementById("blockStart").value;
-    if(!name){alert("Escribe un nombre para el bloque.");return;}
-    if(!startDate){alert("Selecciona una fecha de inicio.");return;}
+    if(!name){toast("Escribe un nombre para el bloque.");return;}
+    if(!startDate){toast("Selecciona una fecha de inicio.");return;}
     const weeks=Number(document.getElementById("blockWeeks").value);
     let deloadWeek=Number(document.getElementById("blockDeload").value);
     if(deloadWeek>weeks) deloadWeek=weeks;
@@ -8667,236 +8806,6 @@ function renderExerciseAnalytics(){
 }
 
 
-function renderExerciseLibrary(){
-  const items=getExerciseLibrary();
-  const muscles=["Todos",...new Set(items.map(item=>item.muscle).filter(Boolean))];
-  const equipment=["Todos",...new Set(items.map(item=>item.equipment).filter(Boolean))];
-  const filtered=exerciseLibraryFilters(items,state.libraryQuery,state.libraryMuscle,state.libraryEquipment,state.libraryFavoritesOnly);
-
-  app.innerHTML=`<div class="app-shell">
-    <header class="topbar">
-      <button id="backExerciseLibrary" class="back-button">←</button>
-      <div><div class="brand">Biblioteca</div><div class="subtle">${items.length} ejercicios disponibles</div></div>
-      <button id="newLibraryExercise" class="header-action">＋</button>
-    </header>
-    <main class="screen">
-      <section class="card library-filter-card">
-        <label class="library-search"><span>Buscar</span><input id="librarySearch" type="search" value="${esc(state.libraryQuery)}" placeholder="Ejercicio, músculo o material"></label>
-        <div class="library-filter-grid">
-          <label><span>Grupo muscular</span><select id="libraryMuscle">${muscles.map(value=>`<option value="${esc(value)}" ${state.libraryMuscle===value?"selected":""}>${esc(value)}</option>`).join("")}</select></label>
-          <label><span>Equipamiento</span><select id="libraryEquipment">${equipment.map(value=>`<option value="${esc(value)}" ${state.libraryEquipment===value?"selected":""}>${esc(value)}</option>`).join("")}</select></label>
-        </div>
-        <label class="favorite-filter"><input id="libraryFavoritesOnly" type="checkbox" ${state.libraryFavoritesOnly?"checked":""}><span>Mostrar solo favoritos</span></label>
-      </section>
-
-      <section class="library-results-header"><strong>${filtered.length} resultados</strong><button id="resetLibraryFilters" class="text-button">Limpiar filtros</button></section>
-
-      <section class="exercise-library-list">
-        ${filtered.length?filtered.map(item=>`<article class="card exercise-library-card">
-          <div class="exercise-library-card-top">
-            <div><div class="exercise-library-title-row"><h2>${esc(item.name)}</h2>${item.custom?'<span class="custom-pill">Propio</span>':""}</div>
-            <p class="subtle">${esc(item.muscle)} · ${esc(item.equipment)} · ${esc(item.type)}</p></div>
-            <button class="favorite-button ${item.favorite?"active":""}" data-favorite-exercise="${item.id}" aria-label="Favorito">★</button>
-          </div>
-          ${item.notes?`<p class="exercise-library-notes">${esc(item.notes)}</p>`:""}
-          <div class="library-session-actions">${["A","B","C"].map(session=>`<button class="secondary" data-add-library-exercise="${item.id}" data-target-session="${session}">Añadir a ${session}</button>`).join("")}</div>
-          <div class="settings-actions compact-actions">
-            <button class="secondary" data-open-exercise-detail="${item.id}">Ver ficha</button>
-            ${item.custom?`<button class="secondary" data-edit-library-exercise="${item.id}">Editar</button>`:""}
-            ${item.custom?`<button class="danger-soft" data-delete-library-exercise="${item.id}">Eliminar</button>`:""}
-          </div>
-        </article>`).join(""):`<section class="card empty-library-state"><h2>Sin resultados</h2><p class="subtle">Prueba con otros filtros o crea un ejercicio personalizado.</p></section>`}
-      </section>
-    </main>${nav("settings")}
-  </div>`;
-
-  const rerender=()=>{
-    state.libraryQuery=document.getElementById("librarySearch")?.value||"";
-    state.libraryMuscle=document.getElementById("libraryMuscle")?.value||"Todos";
-    state.libraryEquipment=document.getElementById("libraryEquipment")?.value||"Todos";
-    state.libraryFavoritesOnly=Boolean(document.getElementById("libraryFavoritesOnly")?.checked);
-    renderExerciseLibrary();
-  };
-  document.getElementById("backExerciseLibrary").onclick=()=>{state.screen="settings";renderSettings();};
-  document.getElementById("newLibraryExercise").onclick=()=>{state.editingLibraryExerciseId=null;state.screen="exerciseLibraryEditor";renderExerciseLibraryEditor();};
-  document.getElementById("librarySearch").oninput=rerender;
-  document.getElementById("libraryMuscle").onchange=rerender;
-  document.getElementById("libraryEquipment").onchange=rerender;
-  document.getElementById("libraryFavoritesOnly").onchange=rerender;
-  document.getElementById("resetLibraryFilters").onclick=()=>{state.libraryQuery="";state.libraryMuscle="Todos";state.libraryEquipment="Todos";state.libraryFavoritesOnly=false;renderExerciseLibrary();};
-  document.querySelectorAll("[data-favorite-exercise]").forEach(button=>button.onclick=()=>{
-    const library=getExerciseLibrary(); const item=library.find(x=>x.id===button.dataset.favoriteExercise);
-    if(item) item.favorite=!item.favorite;
-    saveExerciseLibrary(library); renderExerciseLibrary();
-  });
-  document.querySelectorAll("[data-add-library-exercise]").forEach(button=>button.onclick=()=>{
-    const item=getExerciseLibrary().find(x=>x.id===button.dataset.addLibraryExercise);
-    if(!item) return;
-    addExerciseToRoutine(button.dataset.targetSession,item);
-    toast(`${item.name} añadido a la sesión ${button.dataset.targetSession}`);
-  });
-  document.querySelectorAll("[data-open-exercise-detail]").forEach(button=>button.onclick=()=>{
-    state.selectedLibraryExerciseId=button.dataset.openExerciseDetail;
-    state.screen="exerciseDetail";
-    renderExerciseDetail();
-  });
-  document.querySelectorAll("[data-edit-library-exercise]").forEach(button=>button.onclick=()=>{
-    state.editingLibraryExerciseId=button.dataset.editLibraryExercise;state.screen="exerciseLibraryEditor";renderExerciseLibraryEditor();
-  });
-  document.querySelectorAll("[data-delete-library-exercise]").forEach(button=>button.onclick=()=>{
-    const library=getExerciseLibrary(); const item=library.find(x=>x.id===button.dataset.deleteLibraryExercise);
-    if(!item||!item.custom) return;
-    state.exerciseLibraryDeleteCandidate=item.id;renderExerciseLibrary();
-  });
-  bindNav();
-}
-
-function renderExerciseLibraryEditor(){
-  const library=getExerciseLibrary();
-  const existing=library.find(item=>item.id===state.editingLibraryExerciseId);
-  const exercise=existing||{name:"",muscle:"Pecho",equipment:"Mancuernas",type:"Hipertrofia",favorite:false,custom:true,notes:""};
-
-  app.innerHTML=`<div class="app-shell">
-    <header class="topbar">
-      <button id="backLibraryEditor" class="back-button">←</button>
-      <div><div class="brand">${existing?"Editar ejercicio":"Nuevo ejercicio"}</div><div class="subtle">Biblioteca GymOS</div></div>
-      <button id="saveLibraryExerciseTop" class="header-action">Guardar</button>
-    </header>
-    <main class="screen">
-      <section class="card library-editor-form">
-        <label><span>Nombre</span><input id="libraryExerciseName" value="${esc(exercise.name)}" placeholder="Ej. Press en máquina"></label>
-        <div class="routine-editor-grid">
-          <label><span>Grupo muscular</span><input id="libraryExerciseMuscle" value="${esc(exercise.muscle)}" placeholder="Pecho"></label>
-          <label><span>Equipamiento</span><input id="libraryExerciseEquipment" value="${esc(exercise.equipment)}" placeholder="Máquina"></label>
-        </div>
-        <label><span>Tipo</span><select id="libraryExerciseType">${["Fuerza","Hipertrofia","Core","Cardio","Movilidad","Otro"].map(value=>`<option value="${value}" ${exercise.type===value?"selected":""}>${value}</option>`).join("")}</select></label>
-        <label><span>Notas técnicas</span><textarea id="libraryExerciseNotes" rows="5" placeholder="Recordatorios de ejecución">${esc(exercise.notes||"")}</textarea></label>
-        <label class="favorite-filter"><input id="libraryExerciseFavorite" type="checkbox" ${exercise.favorite?"checked":""}><span>Marcar como favorito</span></label>
-        <button id="saveLibraryExerciseBottom" class="primary full">${existing?"Guardar cambios":"Crear ejercicio"}</button>
-      </section>
-    </main>
-  </div>`;
-
-  const save=()=>{
-    const name=document.getElementById("libraryExerciseName").value.trim();
-    if(!name){toast("Escribe un nombre para el ejercicio");return;}
-    const updated={
-      id:existing?.id||makeExerciseId(name),name,
-      muscle:document.getElementById("libraryExerciseMuscle").value.trim()||"Sin categoría",
-      equipment:document.getElementById("libraryExerciseEquipment").value.trim()||"Sin material",
-      type:document.getElementById("libraryExerciseType").value,
-      notes:document.getElementById("libraryExerciseNotes").value.trim(),
-      favorite:Boolean(document.getElementById("libraryExerciseFavorite").checked),
-      custom:existing?Boolean(existing.custom):true
-    };
-    saveExerciseLibrary(existing?library.map(item=>item.id===existing.id?updated:item):[...library,updated]);
-    toast(existing?"Ejercicio actualizado":"Ejercicio creado");
-    state.screen="exerciseLibrary";renderExerciseLibrary();
-  };
-  document.getElementById("backLibraryEditor").onclick=()=>{state.screen="exerciseLibrary";renderExerciseLibrary();};
-  document.getElementById("saveLibraryExerciseTop").onclick=save;
-  document.getElementById("saveLibraryExerciseBottom").onclick=save;
-}
-
-
-
-function renderExerciseDetail(){
-  const item=getExerciseLibrary().find(exercise=>exercise.id===state.selectedLibraryExerciseId);
-  if(!item){
-    state.screen="exerciseLibrary";
-    renderExerciseLibrary();
-    return;
-  }
-  const stats=exerciseDetailStats(item.name);
-  const recent=stats.rows.slice(0,20);
-  const bestWeight=stats.bestWeight?`${stats.bestWeight.toLocaleString("es-ES")} kg`:"—";
-  const best1RM=stats.best1RM?`${Math.round(stats.best1RM*10)/10} kg`:"—";
-  const totalVolume=stats.totalVolume?`${Math.round(stats.totalVolume).toLocaleString("es-ES")} kg`:"—";
-
-  app.innerHTML=`<div class="app-shell">
-    <header class="topbar">
-      <button id="backExerciseDetail" class="back-button">←</button>
-      <div><div class="brand">${esc(item.name)}</div><div class="subtle">Ficha técnica e historial</div></div>
-      <button id="editExerciseFromDetail" class="header-action">Editar</button>
-    </header>
-    <main class="screen">
-      <section class="card exercise-profile-card">
-        <div class="exercise-profile-heading">
-          <div>
-            <h2>${esc(item.name)}</h2>
-            <p class="subtle">${esc(item.muscle)} · ${esc(item.equipment)} · ${esc(item.type)}</p>
-          </div>
-          <span class="favorite-profile ${item.favorite?"active":""}">★</span>
-        </div>
-        <div class="exercise-profile-tags">
-          <span>${esc(item.muscle)}</span><span>${esc(item.equipment)}</span><span>${esc(item.type)}</span>
-        </div>
-      </section>
-
-      <section class="analytics-grid exercise-detail-stats">
-        <article class="stat-card"><span>Mejor peso</span><strong>${bestWeight}</strong></article>
-        <article class="stat-card"><span>1RM estimado</span><strong>${best1RM}</strong></article>
-        <article class="stat-card"><span>Series registradas</span><strong>${stats.totalSets}</strong></article>
-        <article class="stat-card"><span>Volumen acumulado</span><strong>${totalVolume}</strong></article>
-      </section>
-
-      <section class="card">
-        <div class="card-heading-row">
-          <div><h2>Notas técnicas</h2><p class="subtle">Recordatorios visibles para este ejercicio.</p></div>
-        </div>
-        <textarea id="exerciseTechnicalNotes" class="technical-notes-area" rows="5" placeholder="Ej. Mantener escápulas retraídas, controlar la bajada...">${esc(item.notes||"")}</textarea>
-        <button id="saveExerciseTechnicalNotes" class="primary full">Guardar notas</button>
-      </section>
-
-      <section class="card">
-        <div class="card-heading-row">
-          <div><h2>Historial de rendimiento</h2><p class="subtle">${stats.totalSets?`${stats.totalSets} series registradas`:"Todavía no hay datos"}</p></div>
-        </div>
-        <div class="exercise-history-table">
-          ${recent.length?recent.map(row=>`<article>
-            <div>
-              <strong>${row.weight.toLocaleString("es-ES")} kg × ${row.reps}</strong>
-              <span>${row.date?new Date(row.date).toLocaleDateString("es-ES"):"Sin fecha"}${row.session?` · Sesión ${esc(row.session)}`:""} · Serie ${row.set}</span>
-            </div>
-            <div class="exercise-history-metrics">
-              <span>${Math.round(row.volume).toLocaleString("es-ES")} kg vol.</span>
-              <span>1RM ${Math.round(row.estimated1RM*10)/10} kg</span>
-              ${row.rir!==null?`<span>RIR ${esc(row.rir)}</span>`:""}
-              ${row.rpe!==null?`<span>RPE ${esc(row.rpe)}</span>`:""}
-            </div>
-          </article>`).join(""):`<div class="routine-empty"><strong>Sin historial todavía</strong><p>Cuando entrenes este ejercicio, aquí aparecerán tus cargas, repeticiones y estimaciones.</p></div>`}
-        </div>
-      </section>
-
-      <section class="card">
-        <h2>Añadir a una sesión</h2>
-        <p class="subtle">Se añadirá con 3 series y un rango inicial de 8–12 repeticiones.</p>
-        <div class="library-session-actions">
-          ${["A","B","C"].map(session=>`<button class="secondary" data-detail-add-session="${session}">Añadir a ${session}</button>`).join("")}
-        </div>
-      </section>
-    </main>
-  </div>`;
-
-  document.getElementById("backExerciseDetail").onclick=()=>{state.screen="exerciseLibrary";renderExerciseLibrary();};
-  document.getElementById("editExerciseFromDetail").onclick=()=>{
-    state.editingLibraryExerciseId=item.id;
-    state.screen="exerciseLibraryEditor";
-    renderExerciseLibraryEditor();
-  };
-  document.getElementById("saveExerciseTechnicalNotes").onclick=()=>{
-    const notes=document.getElementById("exerciseTechnicalNotes").value;
-    if(updateExerciseTechnicalNotes(item.id,notes)){
-      toast("Notas técnicas guardadas");
-      renderExerciseDetail();
-    }
-  };
-  document.querySelectorAll("[data-detail-add-session]").forEach(button=>button.onclick=()=>{
-    addExerciseToRoutine(button.dataset.detailAddSession,item);
-    toast(`${item.name} añadido a la sesión ${button.dataset.detailAddSession}`);
-  });
-}
-
 function renderSubstitutionHistory(){
   const history=getExerciseSubstitutions();
   app.innerHTML=`<div class="app-shell">
@@ -9063,7 +8972,7 @@ function renderHealth(){
       renderHealth();
     }catch(error){
       addDeveloperLog("error","Error importando datos de salud",error.message);
-      alert(error.message);
+      toast(error.message||"No se pudo importar el archivo de salud.");
     }
   };
 }
@@ -9198,7 +9107,7 @@ function renderNutritionLegacy(){
   };
   document.getElementById("openProfessionalNutrition").onclick=()=>{
     state.screen="professionalNutrition";
-    renderProfessionalNutritionLibrary();
+    window.GymOSProfessionalNutrition.renderLibrary();
   };
   const professionalFile=document.getElementById("professionalNutritionFile");
   professionalFile.onchange=async event=>{
@@ -9387,7 +9296,7 @@ function renderNutrition(){
   };
   const generateRecipes=document.getElementById("generateNutritionRecipes");
   if(generateRecipes) generateRecipes.onclick=()=>{state.nutritionRecipeType=document.getElementById("nutritionRecipeType").value;state.nutritionRecipeSuggestions=window.GymOSNutritionEngine.suggestRecipes({type:state.nutritionRecipeType,remaining:nutritionRemaining(settings,entry),goal:settings.goal});renderNutrition();};
-  document.getElementById("openProfessionalNutrition").onclick=()=>{state.screen="professionalNutrition";renderProfessionalNutritionLibrary();};
+  document.getElementById("openProfessionalNutrition").onclick=()=>{state.screen="professionalNutrition";window.GymOSProfessionalNutrition.renderLibrary();};
   const professionalFile=document.getElementById("professionalNutritionFile");
   professionalFile.onchange=async event=>{const file=event.target.files?.[0];event.target.value="";if(!file)return;try{await window.GymOSProfessionalNutrition.handleFileSelection(file);}catch(error){console.error("Professional nutrition import",error);toast(error.message||"No se pudo importar la planificación.");}};
   bindNav();
@@ -9576,7 +9485,7 @@ function renderCoachChat(){
       await sendCoachChatMessage(value);
       renderCoachChat();
     }catch(error){
-      alert(error.message||"No se pudo enviar el mensaje.");
+      toast(error.message||"No se pudo enviar el mensaje.");
       button.disabled=false;
       button.textContent="Enviar";
       input.disabled=false;
@@ -9709,7 +9618,7 @@ function renderCoach(){
       state.screen="coachProposal";
       renderCoachProposal();
     }catch(error){
-      alert(error.message||"No se pudo consultar el backend.");
+      toast(error.message||"No se pudo consultar el backend.");
     }
   };
   const latestButton=document.getElementById("openLatestProposal");
@@ -10155,7 +10064,7 @@ async function renderDeveloperMode(){
       toast("Coach conectado");
     }catch(error){
       addDeveloperLog("error","Error de conexión con Coach",error.message);
-      alert(error.message);
+      toast(error.message||"No se pudo completar la prueba de Coach.");
     }
     renderDeveloperMode();
   };
@@ -10166,7 +10075,7 @@ async function renderDeveloperMode(){
       toast("Sincronización completada");
     }catch(error){
       addDeveloperLog("error","Error de sincronización",error.message);
-      alert(error.message);
+      toast(error.message||"No se pudo completar la sincronización.");
     }
     renderDeveloperMode();
   };
@@ -10472,6 +10381,12 @@ function renderAccount(){
           showPasswordMessage("error","Tu sesión ya no es válida. Cierra sesión y vuelve a entrar.");
           return;
         }
+        const passwordOwnerId=currentRoutineOwnerOrNull();
+        const passwordUserId=state.syncUser.id;
+        const assertPasswordOwner=()=>{
+          assertActiveLocalOwner(passwordOwnerId);
+          if(state.syncUser?.id!==passwordUserId) throw new Error("owner_changed");
+        };
         let data,error;
         if(state.accountPasswordReauthRequired){
           ({data,error}=await client.auth.updateUser({
@@ -10483,13 +10398,7 @@ function renderAccount(){
             password:newPassword
           }));
         }
-        console.log("PASSWORD UPDATE RESULT",{
-          data,
-          error,
-          code:error?.code,
-          message:error?.message,
-          status:error?.status
-        });
+        assertPasswordOwner();
 
         if(error){
           const code=String(error.code||"").toLowerCase();
@@ -10497,16 +10406,12 @@ function renderAccount(){
           if(code==="same_password"||errorMessage.includes("same password")){
             showPasswordMessage("error","La nueva contraseña debe ser diferente de la actual.");
           }else if(code==="reauthentication_needed"||errorMessage.includes("reauthentication")){
-            const {data:reauthData,error:reauthError}=await client.auth.reauthenticate();
-            console.log("PASSWORD REAUTHENTICATION RESULT",{
-              data:reauthData,
-              error:reauthError,
-              code:reauthError?.code,
-              message:reauthError?.message,
-              status:reauthError?.status
-            });
+            const {error:reauthError}=await client.auth.reauthenticate();
+            assertPasswordOwner();
             if(reauthError){
-              console.error("PASSWORD REAUTHENTICATION ERROR",reauthError);
+              console.error("PASSWORD REAUTHENTICATION ERROR",{
+                code:reauthError.code,status:reauthError.status
+              });
               const reauthCode=String(reauthError.code||"").toLowerCase();
               if(["session_not_found","refresh_token_not_found","user_not_found"].includes(reauthCode)){
                 showPasswordMessage("error","Tu sesión ya no es válida. Cierra sesión y vuelve a entrar.");
@@ -10530,9 +10435,7 @@ function renderAccount(){
             showPasswordMessage("error",error.message||"La contraseña no cumple los requisitos de seguridad.");
           }else{
             console.error("PASSWORD UPDATE ERROR",{
-              error,
               code:error.code,
-              message:error.message,
               status:error.status
             });
             showPasswordMessage("error","No se pudo cambiar la contraseña.");
@@ -10541,7 +10444,7 @@ function renderAccount(){
         }
 
         if(!data?.user){
-          console.error("PASSWORD UPDATE ERROR: missing user",data);
+          console.error("PASSWORD UPDATE ERROR: missing user");
           showPasswordMessage("error","No se pudo cambiar la contraseña.");
           return;
         }
@@ -10549,12 +10452,14 @@ function renderAccount(){
         const {
           data:{session}
         }=await client.auth.getSession();
+        assertPasswordOwner();
         const {data:userData,error:userError}=await client.auth.getUser();
-        console.log("SESSION AFTER PASSWORD UPDATE",{
-          session,
-          user:userData?.user,
-          userError
-        });
+        assertPasswordOwner();
+        if(!session||userError||userData?.user?.id!==passwordUserId){
+          console.error("PASSWORD SESSION VERIFICATION ERROR",{
+            code:userError?.code,status:userError?.status
+          });
+        }
 
         const visibleNewPassword=document.getElementById("accountNewPassword")||newPasswordInput;
         const visibleConfirmation=document.getElementById("accountConfirmPassword")||confirmationInput;
@@ -10567,7 +10472,9 @@ function renderAccount(){
         state.accountPasswordReauthRequired=false;
         showPasswordMessage("success","Contraseña actualizada correctamente.");
       }catch(error){
-        console.error("UNEXPECTED PASSWORD UPDATE ERROR",error);
+        console.error("UNEXPECTED PASSWORD UPDATE ERROR",{
+          code:error?.code||error?.message,status:error?.status
+        });
         const code=String(error?.code||"").toLowerCase();
         if(code==="same_password"){
           showPasswordMessage("error","La nueva contraseña debe ser diferente de la actual.");
@@ -12983,7 +12890,7 @@ importFile.onchange=async()=>{
     const ownerId=localStorage.getItem(LOCAL_OWNER_KEY)||(!AUTH_REQUIRED?"local":null);
     saveCurrentUserVault(ownerId);
     toast("Copia importada");renderSettings();
-  }catch{alert("El archivo no es una copia válida de GymOS.");}
+  }catch{toast("El archivo no es una copia válida de GymOS.");}
   importFile.value="";
 };
 

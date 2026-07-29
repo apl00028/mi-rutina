@@ -6,9 +6,9 @@ El objetivo del proyecto es ofrecer una experiencia similar a la de un entrenado
 
 ## Estado del proyecto
 
-🚧 Desarrollo activo
+🚧 Release candidate en preparación
 
-Versión actual: v4.x
+Versión actual: v4.2.0-rc.1 (local, sin publicar)
 
 ## Funcionalidades
 
@@ -21,7 +21,7 @@ Versión actual: v4.x
 
 ### Entrenamiento
 
-- Rutinas A/B/C
+- Rutinas canónicas de 2 a 6 sesiones
 - Registro de ejercicios
 - Historial de entrenamientos
 - Seguimiento de cargas
@@ -70,7 +70,7 @@ Versión actual: v4.x
 - [x] Perfil deportivo
 - [x] Onboarding
 - [ ] Personalización avanzada
-- [ ] Accesibilidad
+- [x] Accesibilidad estructural y reducción de movimiento
 
 ### v5
 

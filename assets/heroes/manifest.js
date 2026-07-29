@@ -1,7 +1,7 @@
 (function(){
   "use strict";
 
-  window.GymOSHeroImages={
+  window.GymOSHeroImages=Object.freeze({
     version:1,
     source:"local",
     images:[
@@ -41,5 +41,5 @@
         license:"CC0-1.0"
       }
     ]
-  };
+  });
 })();

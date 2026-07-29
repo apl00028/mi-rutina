@@ -187,13 +187,13 @@ test("el historial nuevo conserva rutina, sesión, nombre y compatibilidad legac
   assert.equal(legacy.legacySessionKey,"B");
 });
 
-test("la integración carga runtime antes de app y lo precachea con versión H3",()=>{
+test("la integración carga runtime antes de app y lo precachea con versión rc.1",()=>{
   assert.ok(indexSource.indexOf('src="routine-session-runtime.js"')>
     indexSource.indexOf('src="routine-session-migration.js"'));
   assert.ok(indexSource.indexOf('src="routine-session-runtime.js"')<
     indexSource.indexOf('src="app.js"'));
   assert.match(workerSource,/routine-session-runtime\.js/);
-  assert.match(workerSource,/phase-h3/);
+  assert.match(workerSource,/gymos-cache-4\.2\.0-rc\.1/);
 });
 
 test("Inicio, entrenamiento y finalización consumen sessionId",()=>{
@@ -258,13 +258,14 @@ test("stale de drafts solo cambia cuando cambia la definición de su sesión y e
   assert.equal(JSON.stringify(twice),JSON.stringify(once));
 });
 
-test("H4 consolida solo duplicados preexistentes demostrablemente equivalentes",()=>{
+test("Fase I conserva consolidados los duplicados preexistentes equivalentes",()=>{
   const count=name=>(appSource.match(new RegExp(`function ${name}\\(`,"g"))||[]).length;
   assert.equal(count("getDeviceId"),1);
   assert.equal(count("addDays"),1);
-  assert.equal(count("estimatedOneRepMax"),2);
-  assert.equal(count("renderExerciseLibrary"),2);
-  assert.equal(count("renderExerciseLibraryEditor"),2);
+  assert.equal(count("estimatedOneRepMax"),1);
+  assert.equal(count("renderExerciseLibrary"),1);
+  assert.equal(count("renderExerciseLibraryEditor"),1);
+  assert.equal(count("renderExerciseDetail"),1);
 });
 
 test("H4 invalida operaciones pendientes al cambiar de propietario",()=>{

@@ -1,7 +1,7 @@
 (function(global){
   "use strict";
 
-  const MODEL_VERSION="4.2.0-rc.2-active-workout";
+  const MODEL_VERSION="4.2.0-rc.3-active-workout-sheet-1";
   const clone=value=>value===undefined?undefined:JSON.parse(JSON.stringify(value));
   const text=value=>String(value??"").trim();
   const list=value=>Array.isArray(value)?value:[];
@@ -121,6 +121,7 @@
     const row=set||{};
     return {
       index,number:index+1,setInstanceId:text(row.setInstanceId)||null,
+      planned:row.planned!==false,source:text(row.source),
       timed:Boolean(timed),target:text(target),
       previous:previous?{
         weight:previous.weight??"",reps:previous.reps??"",rir:previous.rir??"",
@@ -130,6 +131,43 @@
       seconds:row.seconds??"",warmup:Boolean(row.warmup),done:Boolean(row.done),
       hasResults:setHasResults(row),canDelete:!row.done
     };
+  }
+  function manualExtraSetModel({
+    setInstanceId,ownerId,workoutInstanceId,exerciseInstanceId,createdAt,
+    target="",targetRir="",restSeconds=0,type=""
+  }={}){
+    const identity={
+      setInstanceId:text(setInstanceId),ownerId:text(ownerId),
+      workoutInstanceId:text(workoutInstanceId),
+      exerciseInstanceId:text(exerciseInstanceId)
+    };
+    if(Object.values(identity).some(value=>!value)) throw new Error("invalid_extra_set_identity");
+    const timestamp=new Date(createdAt);
+    if(!Number.isFinite(timestamp.getTime())) throw new Error("invalid_extra_set_created_at");
+    return {
+      ...identity,planned:false,source:"manual_extra",
+      createdAt:timestamp.toISOString(),target:text(target),targetRir:text(targetRir),
+      restSeconds:Math.max(0,Math.floor(finite(restSeconds)||0)),type:text(type),
+      weight:"",reps:"",rir:"",seconds:"",distance:"",technique:"",
+      dropset:false,restPause:false,unilateral:false,warmup:false,done:false
+    };
+  }
+  function setSeriesSummaryModel({series=[],plannedSets=null}={}){
+    const rows=list(series);
+    const inferredPlanned=rows.filter(set=>set?.planned!==false).length;
+    const requested=plannedSets===null||plannedSets===undefined||plannedSets===""
+      ?null
+      :finite(plannedSets);
+    const planned=Math.max(0,Math.floor(requested===null?inferredPlanned:requested));
+    const extras=rows.filter(set=>set?.planned===false).length;
+    const completed=rows.filter(set=>set?.done).length;
+    const label=extras
+      ?`${planned} ${planned===1?"prevista":"previstas"} + ${extras} ${extras===1?"extra":"extras"}`
+      :`${completed} de ${planned} ${planned===1?"serie prevista":"series previstas"}`;
+    const performedLabel=extras&&completed>planned
+      ?`${completed} realizadas · ${planned} previstas`
+      :label;
+    return {planned,extras,completed,total:rows.length,label,performedLabel};
   }
   function restTimerModel({seconds=0,running=false,defaultSeconds=90}={}){
     const remaining=Math.max(0,Math.floor(finite(seconds)||0));
@@ -181,6 +219,8 @@
     exerciseTechniqueModel,
     exerciseGuideModel,
     setEntryModel,
+    manualExtraSetModel,
+    setSeriesSummaryModel,
     restTimerModel,
     workoutCompletionReviewModel
   });

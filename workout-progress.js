@@ -6,7 +6,9 @@
   const TOKEN_PATTERN=/^[A-Za-z0-9._:-]{1,240}$/;
   const SET_FIELDS=[
     "weight","reps","rir","seconds","duration","distance","value","load","assistance",
-    "technique","dropset","restPause","unilateral","warmup","done","completed"
+    "technique","dropset","restPause","unilateral","warmup","done","completed",
+    "planned","source","createdAt","ownerId","workoutInstanceId","exerciseInstanceId",
+    "target","targetRir","restSeconds","type"
   ];
   const EXERCISE_FIELDS=[
     "exerciseId","id","name","target","increment","type","equipment","variant",
@@ -342,7 +344,7 @@
       .forEach(set=>output.series.push(clone(set)));
     output.deletedSetInstanceIds=deletedSetInstanceIds;
     output.deletedSetTombstones=deletedSetTombstones;
-    output.sets=output.series.length;
+    output.sets=output.series.filter(set=>set?.planned!==false).length;
     return output;
   }
   function mergeDrafts(localDraft,incomingDraft){

@@ -9370,7 +9370,7 @@ function activeWorkoutExerciseStatus(exercise){
   const sets=Array.isArray(exercise?.series)?exercise.series:[];
   const completed=sets.filter(set=>set?.done).length;
   const started=sets.some(activeWorkoutApi().setHasResults);
-  if(completed===sets.length&&sets.length) return "completed";
+  if(completed===sets.length&&sets.length&&exercise?.completedAt) return "completed";
   if(started||completed) return "started";
   return "pending";
 }
@@ -9443,7 +9443,7 @@ function renderActiveWorkoutSet(row,exerciseIndex,sessionId,nextPendingIndex){
         :"—"
     :"—";
   return `<article class="active-set-card ${row.done?"completed":row.index===nextPendingIndex?"next":""}" data-active-set="${row.index}" data-set-instance-id="${esc(row.setInstanceId||"")}">
-    <header><strong>${row.number}</strong><span class="sr-only">Serie ${row.number}</span>${row.done?'<span class="active-set-complete-mark" aria-label="Serie completada">✓</span>':""}</header>
+    <header><strong>${row.number}</strong><span class="sr-only">Serie ${row.number}</span>${row.planned?"":'<span class="active-set-extra-label">Extra</span>'}${row.done?'<span class="active-set-complete-mark" aria-label="Serie completada">✓</span>':""}</header>
     <div class="active-set-reference"><span><small>Anterior</small><strong>${previous}</strong></span><span><small>Objetivo</small><strong>${esc(row.target||"Sin definir")}</strong></span></div>
     <div class="active-set-fields">
       ${row.timed
@@ -9493,7 +9493,10 @@ function renderActiveWorkoutExercise({
   }));
   const nextPendingIndex=rows.find(row=>!row.done)?.index??-1;
   const status=activeWorkoutExerciseStatus(exercise);
-  const completedSets=rows.filter(row=>row.done).length;
+  const seriesSummary=api.setSeriesSummaryModel({
+    series:exercise.series,plannedSets:exercise.sets
+  });
+  const completedSets=seriesSummary.completed;
   const expanded=state.workoutExpandedExercises.has(instanceId);
   const statusLabel={
     completed:"Completado",started:"En progreso",pending:"Pendiente"
@@ -9515,7 +9518,7 @@ function renderActiveWorkoutExercise({
           <small>${esc(muscle)}${pattern?` · ${esc(pattern)}`:""}</small>
         </span>
         <span class="workout-exercise-prescription">${exercise.sets||rows.length} × ${esc(exercise.target||"—")} · RIR ${esc(exercise.targetRir||"—")}</span>
-        <span class="workout-exercise-state" data-status="${status}">${status==="completed"?"✓ ":""}${statusLabel}<small>${completedSets}/${rows.length} series</small></span>
+        <span class="workout-exercise-state" data-status="${status}">${status==="completed"?"✓ ":""}${statusLabel}<small>${esc(seriesSummary.performedLabel)}</small></span>
         <span class="workout-exercise-chevron" aria-hidden="true">⌄</span>
       </button>
     </header>
@@ -9533,9 +9536,10 @@ function renderActiveWorkoutExercise({
       ${!resolution.exercise?renderActiveWorkoutUnresolved(resolution,exercise,key):""}
       ${recommendation?`<p class="workout-exercise-recommendation"><strong>${esc(recommendation.title)}</strong> ${esc(recommendation.text)}</p>`:""}
       <section class="active-workout-sets" aria-labelledby="activeWorkoutSetsTitle${index}">
-        <div class="active-workout-section-heading"><h2 id="activeWorkoutSetsTitle${index}">Series</h2><button type="button" class="text-button" data-add-active-set>Añadir serie</button></div>
+        <div class="active-workout-section-heading"><h2 id="activeWorkoutSetsTitle${index}">Series <small>${esc(seriesSummary.label)}</small></h2><button type="button" class="text-button add-extra-set-header" data-add-extra-set>+ Añadir serie</button></div>
         <div class="active-set-desktop-head" aria-hidden="true"><span>#</span><span>Anterior / objetivo</span><span>Registro</span><span>Acciones</span></div>
         ${rows.map(row=>renderActiveWorkoutSet(row,index,sessionId,nextPendingIndex)).join("")}
+        <button type="button" class="text-button add-extra-set-footer" data-add-extra-set>+ Serie extra</button>
       </section>
       <div class="workout-exercise-notes">
         <label class="active-workout-notes"><span>Notas</span><textarea data-active-workout-notes placeholder="Opcional">${esc(exercise.notes||"")}</textarea></label>
@@ -10118,13 +10122,37 @@ function bindActiveWorkoutEvents(context){
           if(startRest) startTimer(getRestSeconds());
         }finally{state.workoutSetBusyKey=null;}
         renderWorkout();
-      }else if(button.matches("[data-add-active-set]")){
+      }else if(button.matches("[data-add-extra-set]")){
         const {exerciseInstanceId}=exerciseMetaFromNode(button);
+        const setInstanceId=secureSessionModelId("set");
         persist((draft,exercise)=>{
-          exercise.series.push(normalizeSeries({setInstanceId:secureSessionModelId("set")}));
-          exercise.sets=exercise.series.length;
-        },{immediate:true,exerciseInstanceId});
+          exercise.series.push(normalizeSeries(activeWorkoutApi().manualExtraSetModel({
+            setInstanceId,
+            ownerId:draft.ownerId,
+            workoutInstanceId:draft.workoutInstanceId,
+            exerciseInstanceId:exercise.exerciseInstanceId,
+            createdAt:new Date().toISOString(),
+            target:exercise.target,
+            targetRir:exercise.targetRir,
+            restSeconds:exercise.restSeconds||getRestSeconds(),
+            type:exercise.type
+          })));
+          exercise.completedAt=null;
+        },{immediate:true,scheduleSync:true,exerciseInstanceId});
+        state.workoutExpandedExercises.add(exerciseInstanceId);
         renderWorkout();
+        requestAnimationFrame(()=>{
+          const row=document.querySelector(
+            `[data-set-instance-id="${CSS.escape(setInstanceId)}"]`
+          );
+          row?.scrollIntoView({
+            behavior:document.body.classList.contains("reduce-motion")?"auto":"smooth",
+            block:"nearest"
+          });
+          if(window.matchMedia?.("(pointer:fine)")?.matches){
+            row?.querySelector("[data-set-field]")?.focus({preventScroll:true});
+          }
+        });
       }else if(button.matches("[data-delete-active-set]")){
         const {exerciseInstanceId}=exerciseMetaFromNode(button);
         const setIndex=Number(button.dataset.deleteActiveSet);
@@ -10141,11 +10169,18 @@ function bindActiveWorkoutEvents(context){
           renderWorkout();
         }else{
           persist((current,currentExerciseRecord)=>{
+            const removed=currentExerciseRecord.series.find(
+              item=>item.setInstanceId===setInstanceId
+            );
             currentExerciseRecord.series=currentExerciseRecord.series.filter(
               item=>item.setInstanceId!==setInstanceId
             );
-            currentExerciseRecord.sets=currentExerciseRecord.series.length;
-          },{immediate:true,exerciseInstanceId});
+            if(removed?.planned!==false){
+              currentExerciseRecord.sets=currentExerciseRecord.series.filter(
+                item=>item.planned!==false
+              ).length;
+            }
+          },{immediate:true,scheduleSync:true,exerciseInstanceId});
           renderWorkout();
         }
       }else if(button.matches("[data-skip-rest]")){
@@ -10251,8 +10286,13 @@ function bindActiveWorkoutEvents(context){
           const set=exercise.series.find(item=>item.setInstanceId===candidate.setInstanceId);
           if(!set||set.done) return;
           exercise.series=exercise.series.filter(item=>item.setInstanceId!==candidate.setInstanceId);
-          exercise.sets=exercise.series.length;
-        },{immediate:true,exerciseInstanceId:candidate.exerciseInstanceId});
+          if(set.planned!==false){
+            exercise.sets=exercise.series.filter(item=>item.planned!==false).length;
+          }
+        },{
+          immediate:true,scheduleSync:true,
+          exerciseInstanceId:candidate.exerciseInstanceId
+        });
         state.workoutSeriesDeleteCandidate=null;renderWorkout();
       }catch(error){rerenderWithError(error);}
       return;

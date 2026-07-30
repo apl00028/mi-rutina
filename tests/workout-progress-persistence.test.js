@@ -273,6 +273,80 @@ test("dos dispositivos conservan sustituciones, nuevas series y borrados por ide
   );
 });
 
+test("series extra: varias identidades sobreviven recarga, dos pestañas y remoto antiguo",()=>{
+  const engine=api();
+  const base=engine.normalizeDraft(draft(),{});
+  const withExtras=JSON.parse(JSON.stringify(base));
+  withExtras.exercises[0].series.push(
+    {
+      setInstanceId:"set-extra-a",ownerId:OWNER_A,
+      workoutInstanceId:base.workoutInstanceId,
+      exerciseInstanceId:base.exercises[0].exerciseInstanceId,
+      planned:false,source:"manual_extra",createdAt:"2026-07-30T10:01:00.000Z",
+      target:"8–10",targetRir:"2",restSeconds:90,type:"peso",
+      weight:"",reps:"",rir:"",done:false
+    },
+    {
+      setInstanceId:"set-extra-b",ownerId:OWNER_A,
+      workoutInstanceId:base.workoutInstanceId,
+      exerciseInstanceId:base.exercises[0].exerciseInstanceId,
+      planned:false,source:"manual_extra",createdAt:"2026-07-30T10:02:00.000Z",
+      target:"8–10",targetRir:"2",restSeconds:90,type:"peso",
+      weight:"",reps:"",rir:"",done:false
+    }
+  );
+  const local=engine.stampLocalChanges(base,withExtras,{
+    now:"2026-07-30T10:02:00.000Z",clientInstanceId:"device-a"
+  }).draft;
+  const otherTab=JSON.parse(JSON.stringify(base));
+  otherTab.exercises[1].series[0].weight="45";
+  const remote=engine.stampLocalChanges(base,otherTab,{
+    now:"2026-07-30T10:03:00.000Z",clientInstanceId:"device-b"
+  }).draft;
+  const merged=engine.mergeDrafts(local,remote).draft;
+  const reloaded=engine.normalizeDraft(JSON.parse(JSON.stringify(merged)),{});
+  assert.deepEqual(
+    reloaded.exercises[0].series.filter(set=>set.planned===false).map(set=>set.setInstanceId),
+    ["set-extra-a","set-extra-b"]
+  );
+  assert.equal(reloaded.exercises[0].sets,2);
+  assert.equal(reloaded.exercises[1].series[0].weight,"45");
+  const afterOldRemote=engine.mergeDrafts(reloaded,base).draft;
+  assert.equal(afterOldRemote.exercises[0].series.filter(set=>set.planned===false).length,2);
+});
+
+test("serie extra eliminada genera tombstone y no reaparece desde una respuesta antigua",()=>{
+  const engine=api();
+  const base=engine.normalizeDraft(draft(),{});
+  const added=JSON.parse(JSON.stringify(base));
+  added.exercises[0].series.push({
+    setInstanceId:"set-extra-delete",ownerId:OWNER_A,
+    workoutInstanceId:base.workoutInstanceId,
+    exerciseInstanceId:base.exercises[0].exerciseInstanceId,
+    planned:false,source:"manual_extra",createdAt:"2026-07-30T10:01:00.000Z",
+    weight:"70",reps:"9",rir:"2",done:false
+  });
+  const saved=engine.stampLocalChanges(base,added,{
+    now:"2026-07-30T10:01:00.000Z",clientInstanceId:"offline-tab"
+  }).draft;
+  const removed=JSON.parse(JSON.stringify(saved));
+  removed.exercises[0].series=removed.exercises[0].series.filter(
+    set=>set.setInstanceId!=="set-extra-delete"
+  );
+  const deleted=engine.stampLocalChanges(saved,removed,{
+    now:"2026-07-30T10:02:00.000Z",clientInstanceId:"offline-tab"
+  }).draft;
+  const tombstone=deleted.exercises[0].deletedSetTombstones.find(
+    item=>item.setInstanceId==="set-extra-delete"
+  );
+  assert.equal(tombstone.ownerId,OWNER_A);
+  assert.equal(tombstone.workoutInstanceId,base.workoutInstanceId);
+  assert.equal(tombstone.exerciseInstanceId,base.exercises[0].exerciseInstanceId);
+  assert.equal(engine.mergeDrafts(deleted,saved).draft.exercises[0].series.some(
+    set=>set.setInstanceId==="set-extra-delete"
+  ),false);
+});
+
 test("una respuesta remota antigua no elimina un valor local más reciente",()=>{
   const engine=api();
   const base=engine.normalizeDraft(draft(),{});

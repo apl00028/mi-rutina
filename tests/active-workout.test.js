@@ -233,6 +233,56 @@ test("series: diferencia calentamiento, estado, borrado y registro por duración
   assert.equal(api.setEntryModel({set:{done:true}}).canDelete,false);
 });
 
+test("serie extra: crea identidad explícita sin copiar resultados reales",()=>{
+  const api=loadApi();
+  const extra=api.manualExtraSetModel({
+    setInstanceId:"set-extra-1",ownerId:"owner-1",
+    workoutInstanceId:"workout-1",exerciseInstanceId:"exercise-1",
+    createdAt:"2026-07-30T12:00:00.000Z",target:"8–10 reps",
+    targetRir:"2",restSeconds:90,type:"peso"
+  });
+  assert.deepEqual(plain(extra),{
+    setInstanceId:"set-extra-1",ownerId:"owner-1",
+    workoutInstanceId:"workout-1",exerciseInstanceId:"exercise-1",
+    planned:false,source:"manual_extra",createdAt:"2026-07-30T12:00:00.000Z",
+    target:"8–10 reps",targetRir:"2",restSeconds:90,type:"peso",
+    weight:"",reps:"",rir:"",seconds:"",distance:"",technique:"",
+    dropset:false,restPause:false,unilateral:false,warmup:false,done:false
+  });
+  assert.throws(()=>api.manualExtraSetModel({}),/invalid_extra_set_identity/);
+});
+
+test("serie extra: resume previstas, extras y realizadas sin mutar entradas",()=>{
+  const api=loadApi();
+  const series=deepFreeze([
+    {setInstanceId:"p1",done:true},
+    {setInstanceId:"p2",done:true},
+    {setInstanceId:"p3",done:true},
+    {setInstanceId:"x1",planned:false,source:"manual_extra",done:false}
+  ]);
+  const before=JSON.stringify(series);
+  const pending=api.setSeriesSummaryModel({series,plannedSets:3});
+  assert.equal(pending.label,"3 previstas + 1 extra");
+  assert.equal(pending.completed,3);
+  const completed=api.setSeriesSummaryModel({
+    series:series.map(set=>({...set,done:true})),plannedSets:3
+  });
+  assert.equal(completed.performedLabel,"4 realizadas · 3 previstas");
+  assert.equal(JSON.stringify(series),before);
+});
+
+test("serie extra completada debe desmarcarse antes de poder eliminarse",()=>{
+  const api=loadApi();
+  const completed=api.setEntryModel({
+    set:{setInstanceId:"extra",planned:false,source:"manual_extra",done:true}
+  });
+  assert.equal(completed.planned,false);
+  assert.equal(completed.canDelete,false);
+  assert.equal(api.setEntryModel({
+    set:{...completed,done:false,weight:"80",reps:"8"}
+  }).canDelete,true);
+});
+
 test("descanso: conserva el valor iniciado y separa el siguiente valor por defecto",()=>{
   const model=loadApi().restTimerModel({seconds:72,running:true,defaultSeconds:120});
   assert.deepEqual(plain(model),{
@@ -358,7 +408,7 @@ test("registro: ofrece campos etiquetados, calentamiento completo y acciones ine
 });
 
 test("registro: completar usa busy, inicia descanso solo en serie de trabajo y permite confirmación interna",()=>{
-  const completeBranch=between(bindingSource,'}else if(button.matches("[data-complete-active-set]"))','}else if(button.matches("[data-add-active-set]"))');
+  const completeBranch=between(bindingSource,'}else if(button.matches("[data-complete-active-set]"))','}else if(button.matches("[data-add-extra-set]"))');
   assert.match(completeBranch,/workoutSetBusyKey===busyKey/);
   assert.match(completeBranch,/startRest=!wasDone&&!set\.warmup/);
   assert.match(completeBranch,/startTimer\(getRestSeconds\(\)\)/);
@@ -385,6 +435,15 @@ test("finalización: revisa pendientes, duración, sustituciones y notas antes d
   assert.match(bindingSource,/if\(state\.finishingWorkout\) return/);
   assert.match(bindingSource,/finishWorkout\(\)/);
   assert.doesNotMatch(bindingSource,/localStorage\.setItem\("gymos:history"/);
+});
+
+test("finalización: incluye series extra sin modificar la rutina ni duplicar historial o Recuperación",()=>{
+  assert.match(finishSource,/completedExercises=d\.exercises\.map/);
+  assert.match(finishSource,/exercises:completedExercises/);
+  assert.doesNotMatch(finishSource,/planned!==false|source!=="manual_extra"/);
+  assert.doesNotMatch(finishSource,/saveRoutine|saveCanonicalRoutine/);
+  assert.match(finishSource,/workout\.workoutInstanceId===d\.workoutInstanceId\|\|workout\.draftId===d\.draftId/);
+  assert.equal((finishSource.match(/createPendingCheckin\?\.\(workout,\{mark:false,sync:false\}\)/g)||[]).length,1);
 });
 
 test("writer final: deduplica por identidad estable, guarda duración real y retira el draft activo",()=>{
@@ -454,6 +513,30 @@ test("expandir o colapsar una tarjeta no reconstruye la sesión",()=>{
   assert.match(toggleBranch,/panel\.hidden=expanded/);
   assert.match(toggleBranch,/workoutExpandedExercises\.(delete|add)/);
   assert.doesNotMatch(toggleBranch,/renderWorkout|saveDraft|stageWorkoutDraft|localStorage/);
+});
+
+test("serie extra: ofrece una única acción visible por breakpoint y etiqueta la fila",()=>{
+  assert.match(workoutUiSource,/data-add-extra-set/);
+  assert.match(workoutUiSource,/add-extra-set-header/);
+  assert.match(workoutUiSource,/add-extra-set-footer/);
+  assert.match(workoutUiSource,/active-set-extra-label/);
+  assert.match(stylesSource,/\.add-extra-set-footer\{display:none/);
+  assert.match(stylesSource,/@media\(max-width:767px\)\{[\s\S]*?\.add-extra-set-header\{display:none\}[\s\S]*?\.add-extra-set-footer\{display:block\}/);
+});
+
+test("serie extra: el handler guarda localmente, conserva la prescripción y enfoca solo con puntero preciso",()=>{
+  const addBranch=between(
+    bindingSource,
+    '}else if(button.matches("[data-add-extra-set]"))',
+    '}else if(button.matches("[data-delete-active-set]"))'
+  );
+  assert.match(addBranch,/manualExtraSetModel/);
+  assert.match(addBranch,/planned:false|manualExtraSetModel/);
+  assert.match(addBranch,/exercise\.completedAt=null/);
+  assert.match(addBranch,/\{immediate:true,scheduleSync:true,exerciseInstanceId\}/);
+  assert.match(addBranch,/scrollIntoView/);
+  assert.match(addBranch,/matchMedia\?\.\("\(pointer:fine\)"\)/);
+  assert.doesNotMatch(addBranch,/exercise\.sets\s*=|saveRoutine|saveHistory|supabase/);
 });
 
 test("UI: no conserva acciones ambiguas ni listeners inline en el render autoritativo",()=>{

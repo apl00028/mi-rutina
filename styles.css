@@ -3570,7 +3570,14 @@ body.reduce-motion .active-workout-session-progress span{transition:none}
 .active-workout-sets{padding:0;border:0;border-radius:0}
 .active-workout-section-heading{min-height:2rem}
 .active-workout-section-heading h2{font-size:.78rem}
+.active-workout-section-heading h2 small{
+  margin-left:.35rem;
+  color:var(--muted);
+  font-size:.6rem;
+  font-weight:650;
+}
 .active-workout-section-heading button{min-height:2rem;padding:.25rem .4rem;font-size:.68rem}
+.add-extra-set-footer{display:none;width:100%;margin-top:.3rem}
 .active-set-desktop-head{
   grid-template-columns:2.2rem minmax(8rem,1fr) minmax(13rem,1.4fr) minmax(6rem,.65fr);
   margin-top:.35rem;
@@ -3599,6 +3606,16 @@ body.reduce-motion .active-workout-session-progress span{transition:none}
   background:var(--surface-soft);
 }
 .active-set-complete-mark{color:var(--success);font-size:.7rem}
+.active-set-extra-label{
+  padding:.12rem .25rem;
+  border-radius:.3rem;
+  background:var(--brand-soft);
+  color:var(--brand);
+  font-size:.5rem;
+  font-weight:850;
+  letter-spacing:.025em;
+  text-transform:uppercase;
+}
 .active-set-reference{
   grid-template-columns:repeat(2,minmax(0,1fr));
   gap:.45rem;
@@ -3695,6 +3712,8 @@ body.reduce-motion .active-workout-session-progress span{transition:none}
   .active-workout-summary>div{padding:.5rem}
   .active-workout-summary span{font-size:.54rem}
   .active-workout-summary strong{font-size:.66rem}
+  .add-extra-set-header{display:none}
+  .add-extra-set-footer{display:block}
   .workout-exercise-toggle{
     grid-template-columns:1.8rem minmax(0,1fr) auto auto;
     grid-template-areas:"order title state chevron" "order prescription state chevron";

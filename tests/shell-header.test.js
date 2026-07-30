@@ -24,7 +24,7 @@ test("shell: la topbar global deriva títulos humanos del destino autoritativo",
   assert.match(shellSource,/const context=shellScreenContext\(\)/);
   assert.match(shellSource,/\$\{esc\(context\.title\)\}/);
   for(const title of [
-    "Inicio","Entrenar","Progreso","Coach","Nutrición","Mi rutina",
+    "Inicio","Entrenar","Progreso","Coach","Nutrición","Rutina",
     "Biblioteca","Recuperación","Cuenta","Ajustes"
   ]) assert.ok(appSource.includes(`${title}`),title);
   assert.match(appSource,/const destination=navigationDestinationForScreen\(screen\)/);

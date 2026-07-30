@@ -282,7 +282,7 @@ test("RC2 la navegación lateral agrupa destinos humanos y marca el activo",()=>
   for(const label of [
     "Entrenamiento","Inicio","Entrenar","Recuperación",
     "Seguimiento","Progreso","Coach","Nutrición",
-    "Planificación","Mi rutina","Biblioteca","Ajustes"
+    "Planificación","Rutina","Biblioteca","Ajustes"
   ]) assert.ok(appSource.includes(label),label);
   assert.match(appSource,/aria-current="page"/);
   assert.match(appSource,/navigationDestinationForScreen/);
@@ -431,7 +431,7 @@ test("RC2 respeta foco visible y movimiento reducido",()=>{
 });
 
 test("RC2 actualiza el caché y mantiene Supabase fuera de Cache Storage",()=>{
-  assert.match(workerSource,/const CACHE="gymos-cache-4\.2\.0-rc\.3"/);
+  assert.match(workerSource,/const CACHE="gymos-cache-4\.2\.0-routine-hub"/);
   assert.match(workerSource,/e\.request\.method!=="GET"\|\|url\.origin!==self\.location\.origin/);
   assert.match(workerSource,/keys\.filter\(key=>key\.startsWith\("gymos-cache-"\)&&key!==CACHE\)/);
   const fetchHandler=workerSource.slice(workerSource.indexOf('self.addEventListener("fetch"'));

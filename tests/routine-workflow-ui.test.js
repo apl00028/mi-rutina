@@ -234,7 +234,7 @@ test("2f. la fase elegida se conserva sin una casilla visual redundante",()=>{
 test("3. abrir la pantalla no genera propuestas",()=>{
   const workflowSegment=appSource.slice(
     appSource.indexOf("function renderRoutineWorkflow(){"),
-    appSource.indexOf("function exerciseLibraryWorkflowApi(){")
+    appSource.indexOf("function routineHubCurrentRoutine(){")
   );
   assert.doesNotMatch(workflowSegment,/generateRoutineProposal\(/);
   assert.doesNotMatch(workflowSegment,/persistRoutineProposal\(/);
@@ -336,7 +336,7 @@ test("14. sin casilla no se invoca la activación",()=>{
 
 test("15. confirmed true solo aparece después de comprobar la casilla",()=>{
   const workflowStart=appSource.indexOf("function routineWorkflowOwnerId");
-  const workflowEnd=appSource.indexOf("function renderSettings");
+  const workflowEnd=appSource.indexOf("function routineHubCurrentRoutine");
   const workflow=appSource.slice(workflowStart,workflowEnd);
   assert.equal((workflow.match(/activateStoredRoutineProposal\(/g)||[]).length,1);
   assert.equal((workflow.match(/confirmed:true/g)||[]).length,1);
@@ -346,7 +346,7 @@ test("15. confirmed true solo aparece después de comprobar la casilla",()=>{
 test("16. rechazo usa la API y no toca rutina ni historial",()=>{
   const workflow=appSource.slice(
     appSource.indexOf("function routineWorkflowOwnerId"),
-    appSource.indexOf("function exerciseLibraryWorkflowApi")
+    appSource.indexOf("function routineHubCurrentRoutine")
   );
   assert.equal((workflow.match(/rejectStoredRoutineProposal\(/g)||[]).length,1);
   assert.doesNotMatch(workflow,/saveRoutine\(|saveHistory\(/);
@@ -506,7 +506,7 @@ test("25. orden final de scripts correcto",()=>{
 test("26. generador y workflow están incluidos en el service worker",()=>{
   assert.match(workerSource,/routine-generator\.js/);
   assert.match(workerSource,/routine-workflow-ui\.js/);
-  assert.match(workerSource,/gymos-cache-4\.2\.0-rc\.3/);
+  assert.match(workerSource,/gymos-cache-4\.2\.0-routine-hub/);
 });
 
 test("27. el módulo puro no accede a DOM, almacenamiento, red ni navegación",()=>{
@@ -519,7 +519,7 @@ test("27. el módulo puro no accede a DOM, almacenamiento, red ni navegación",(
 test("28. la interfaz solo usa APIs centrales para operaciones funcionales",()=>{
   const workflow=appSource.slice(
     appSource.indexOf("function routineWorkflowOwnerId"),
-    appSource.indexOf("function exerciseLibraryWorkflowApi")
+    appSource.indexOf("function routineHubCurrentRoutine")
   );
   [
     "persistRoutineProposal(","rejectStoredRoutineProposal(",

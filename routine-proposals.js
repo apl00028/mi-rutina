@@ -52,7 +52,8 @@
       sets:Number(prescription.sets??exercise?.sets)||0,
       target:clone(prescription.target??exercise?.target??exercise?.reps??null),
       targetRir:clone(prescription.targetRir??exercise?.targetRir??exercise?.rir??null),
-      restSeconds:Number(prescription.restSeconds??exercise?.restSeconds)||0
+      restSeconds:Number(prescription.restSeconds??exercise?.restSeconds)||0,
+      notes:text(exercise?.notes)||text(prescription.notes)
     };
   }
   function routineSessions(routine){
@@ -61,13 +62,15 @@
         id:sessionId(session,index),
         name:text(session.name||session.label),
         focus:text(session.focus),
-        order:index,
+        durationMinutes:Number(session.estimatedDurationMinutes??session.estimatedDurationMin)||null,
+        notes:text(session.notes),
+        order:Number(session.order)||index+1,
         exercises:list(session.exercises).map(exerciseModel)
       }));
     }
     if(routine&&typeof routine==="object"){
       return Object.keys(routine).sort().map((key,index)=>({
-        id:key,name:`Sesión ${key}`,focus:"",order:index,
+        id:key,name:`Sesión ${key}`,focus:"",durationMinutes:null,notes:"",order:index+1,
         exercises:list(routine[key]).map(exerciseModel)
       }));
     }
@@ -78,7 +81,9 @@
       id:sessionId(session,index),
       name:text(session.name||session.label),
       focus:text(session.focus),
-      order:index,
+      durationMinutes:Number(session.estimatedDurationMinutes??session.estimatedDurationMin)||null,
+      notes:text(session.notes),
+      order:Number(session.order)||index+1,
       exercises:list(session.exercises).map(exerciseModel)
     }));
   }
@@ -97,6 +102,7 @@
       ["target","target_changed","repeticiones o duración"],
       ["targetRir","rir_changed","RIR"],
       ["restSeconds","rest_changed","descanso"],
+      ["notes","notes_changed","notas"],
       ["pattern","pattern_changed","patrón o función"],
       ["role","function_changed","función"]
     ];
@@ -175,6 +181,12 @@
       if(before.focus!==after.focus){
         changes.push(change("session_focus_changed",id,null,before.focus,after.focus,"Cambia el enfoque de la sesión."));
       }
+      if(before.durationMinutes!==after.durationMinutes){
+        changes.push(change("session_duration_changed",id,null,before.durationMinutes,after.durationMinutes,"Cambia la duración estimada de la sesión."));
+      }
+      if(before.notes!==after.notes){
+        changes.push(change("session_notes_changed",id,null,before.notes,after.notes,"Cambian las notas de la sesión."));
+      }
       if(before.order!==after.order){
         changes.push(change("session_order_changed",id,null,before.order,after.order,"Cambia el orden semanal de la sesión."));
       }
@@ -224,6 +236,46 @@
     });
     if(["approved","activated","rolled_back"].includes(proposal.status)) errors.push("unsupported_activation_status");
     return {valid:errors.length===0,errors};
+  }
+  function createCandidateProposal({
+    type,source=null,sessions,generatedAt,baselineHash="",summary=null,
+    warnings=[],unresolvedQuestions=[],rationale=[]
+  }={}){
+    const allowedTypes=["manual","import","imported","reconfigure","restore","generated"];
+    const normalizedType=token(type);
+    if(!allowedTypes.includes(normalizedType)) throw new Error("invalid_proposal_type");
+    const timestamp=text(generatedAt);
+    if(!timestamp||Number.isNaN(Date.parse(timestamp))) throw new Error("invalid_timestamp");
+    const immutableSessions=clone(list(sessions));
+    const proposalId=`proposal-${normalizedType}-${stableHash({
+      type:normalizedType,baselineHash:text(baselineHash),sessions:immutableSessions
+    }).replace(/^routine-/,"")}`;
+    const proposal={
+      version:MODEL_VERSION,
+      proposalId,
+      type:normalizedType==="imported"?"import":normalizedType,
+      status:"pending",
+      generatedAt:timestamp,
+      source:clone(source||{type:normalizedType}),
+      summary:clone(summary),
+      inputSummary:{source:normalizedType,days:immutableSessions.length},
+      rationale:list(rationale).map(text).filter(Boolean),
+      warnings:list(warnings).map(text).filter(Boolean),
+      unresolvedQuestions:list(unresolvedQuestions).map(text).filter(Boolean),
+      reviewRequired:list(unresolvedQuestions).length>0,
+      sessions:immutableSessions,
+      selectedExercises:immutableSessions.flatMap(session=>
+        list(session?.exercises).map(exercise=>text(exercise?.exerciseId||exercise?.id)).filter(Boolean)
+      ),
+      coverage:{
+        requiredPatterns:[],coveredPatterns:[],missingPatterns:[],balanced:true
+      },
+      activationCompatibility:activationCompatibility({sessions:immutableSessions}),
+      validation:{valid:true,results:[]}
+    };
+    const validation=validateProposal(proposal);
+    if(!validation.valid) throw new Error(`Invalid proposal: ${validation.errors.join(",")}`);
+    return proposal;
   }
   function validateRecord(record,ownerId){
     const errors=[];
@@ -313,7 +365,7 @@
     });
     return trimRecords([...byId.values()],normalizedOwner,options.activeProposalId);
   }
-  function storeProposal(records,{ownerId,proposal,currentRoutine,timestamp,supersedePrevious=true,activeProposalId=null}){
+  function storeProposal(records,{ownerId,proposal,currentRoutine,timestamp,supersedePrevious=false,activeProposalId=null}){
     const normalizedOwner=normalizeOwnerId(ownerId);
     const effectiveTimestamp=timestamp||proposal?.generatedAt;
     const current=normalizeRecords(records,normalizedOwner,{activeProposalId});
@@ -324,6 +376,15 @@
         records:current,record:clone(duplicate),
         activeProposalId:selectActiveProposalId(current,normalizedOwner,activeProposalId),
         created:false,incidents:[]
+      };
+    }
+    const existingPending=current.find(record=>record.lifecycle.status==="pending_review");
+    if(existingPending&&!supersedePrevious){
+      return {
+        records:current,record:null,
+        activeProposalId:selectActiveProposalId(current,normalizedOwner,activeProposalId),
+        created:false,requiresReplacementConfirmation:true,
+        existingPending:clone(existingPending),incidents:[{code:"pending_proposal_exists"}]
       };
     }
     const nextRecord=createProposalRecord({
@@ -449,7 +510,7 @@
   global.GymOSRoutineProposals=Object.freeze({
     MODEL_VERSION,MAX_PROPOSALS_PER_OWNER,ALLOWED_STATUSES,
     stableStringify,stableHash,routineHash,validateProposal,validateRecord,
-    compareRoutineProposal,activationCompatibility,createProposalRecord,
+    compareRoutineProposal,activationCompatibility,createCandidateProposal,createProposalRecord,
     normalizeRecords,selectActiveProposalId,trimRecords,storeProposal,rejectProposal,
     transitionProposalLifecycle,mergeProposalRecords,
     refreshProposalComparisons

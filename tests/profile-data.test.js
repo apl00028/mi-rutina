@@ -671,7 +671,8 @@ test("el configurador conectado no genera ni activa una rutina al guardar el per
   assert.match(onboarding,/Guardar perfil/);
   assert.match(onboarding,/Guardar y crear propuesta/);
   assert.match(onboarding,/persistTrainingProfileData\(p\)/);
-  assert.match(onboarding,/setFlowView\(state\.routineWorkflow,"prepare"\)/);
+  assert.match(onboarding,/state\.screen="routineHub"/);
+  assert.match(onboarding,/renderRoutineHub\(\)/);
   assert.doesNotMatch(onboarding,/saveRoutine\(|activateStoredRoutineProposal\(|persistRoutineProposal\(/);
   assert.match(appSource,/const goalCycle=window\.GymOSProfileData\?\.getActiveGoalCycle/);
   assert.match(appSource,/const trainingPhase=window\.GymOSProfileData\?\.getActiveTrainingPhase/);

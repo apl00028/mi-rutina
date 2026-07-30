@@ -476,14 +476,16 @@ test("47. abrir y cerrar mantiene rutina e historial",()=>{
 
 test("integración de script, input y service worker",()=>{
   assert.ok(indexSource.indexOf("routine-activation.js")<indexSource.indexOf("routine-io.js"));
-  assert.ok(indexSource.indexOf("routine-io.js")<indexSource.indexOf("routine-workflow-ui.js"));
-  assert.match(indexSource,/id="routineFile"[^>]+\.csv/);
-  assert.match(workerSource,/gymos-cache-4\.2\.0-rc\.3/);
+  assert.ok(indexSource.indexOf("routine-io.js")<indexSource.indexOf("routine-excel.js"));
+  assert.ok(indexSource.indexOf("routine-excel.js")<indexSource.indexOf("routine-hub.js"));
+  assert.match(indexSource,/id="routineFile" type="file" accept="\.xlsx"/);
+  assert.match(workerSource,/gymos-cache-4\.2\.0-routine-hub/);
   assert.match(workerSource,/routine-io\.js/);
+  assert.match(workerSource,/routine-excel\.js/);
+  assert.match(workerSource,/routine-hub\.js/);
   assert.match(workerSource,/fetch\(e\.request\)/);
   assert.equal((indexSource.match(/routine-io\.js/g)||[]).length,1);
   assert.equal((workerSource.match(/routine-io\.js/g)||[]).length,1);
-  assert.match(indexSource,/id="routineFile" type="file" accept="\.xlsx,\.xls,\.csv"/);
   const assets=JSON.parse(workerSource.match(/const ASSETS=(\[[^\n]+\]);/)?.[1]||"[]");
   assets.filter(asset=>asset!=="./").forEach(asset=>{
     assert.equal(fs.existsSync(path.join(root,asset)),true,asset);
@@ -1014,7 +1016,7 @@ test("exportación y plantilla no causan efectos funcionales",()=>{
   );
   assert.doesNotMatch(exportSection,/markLocalUpdated|saveCurrentUserVault|scheduleAutoSync|persistRoutineProposal|saveRoutine\s*\(|saveHistory\s*\(/);
   assert.doesNotMatch(exportSection,/localStorage\.(setItem|removeItem)|saveRoutineProposalRecords|saveRoutineActivationRecords/);
-  assert.match(exportSection,/activeRoutineForComparison\(\)/);
+  assert.match(exportSection,/routineHubCurrentRoutine\(\)/);
   const downloadSection=appSource.slice(
     appSource.indexOf("function downloadRoutineFile"),
     appSource.indexOf("function styleRoutineWorksheet")
@@ -1023,8 +1025,12 @@ test("exportación y plantilla no causan efectos funcionales",()=>{
   assert.match(downloadSection,/anchor\.remove\(\)/);
 });
 
-test("exportar XLSX/CSV y descargar plantillas conserva storage relevante exacto",()=>{
+test("exportar XLSX y descargar la plantilla conserva storage relevante exacto",()=>{
   const api=loadApi();
+  const excelSource=fs.readFileSync(path.join(root,"routine-excel.js"),"utf8");
+  const excelContext={window:{}};
+  vm.createContext(excelContext);
+  vm.runInContext(excelSource,excelContext,{filename:"routine-excel.js"});
   const storage={
     "gymos:routine":JSON.stringify({
       A:[{id:"press",name:"Press de banca",sets:3,target:"8-12 reps"}],
@@ -1046,7 +1052,8 @@ test("exportar XLSX/CSV y descargar plantillas conserva storage relevante exacto
   const context={
     routineIoApi:()=>api,
     currentRoutineOwnerOrNull:()=>OWNER_A,
-    activeRoutineForComparison:()=>JSON.parse(storage["gymos:routine"]),
+    routineHubCurrentRoutine:()=>JSON.parse(storage["gymos:routine"]),
+    window:{GymOSRoutineExcel:excelContext.window.GymOSRoutineExcel},
     downloadRoutineFile:(content,name,type)=>downloads.push({kind:"blob",content,name,type}),
     downloadRoutineWorkbook:(model,name)=>downloads.push({kind:"workbook",model,name}),
     Date
@@ -1054,9 +1061,9 @@ test("exportar XLSX/CSV y descargar plantillas conserva storage relevante exacto
   vm.createContext(context);
   vm.runInContext(functions,context,{filename:"routine-export-functions.js"});
   context.exportCurrentRoutineFile("xlsx",OWNER_A);
-  context.exportCurrentRoutineFile("csv",OWNER_A);
   context.downloadOfficialRoutineTemplate("xlsx");
-  context.downloadOfficialRoutineTemplate("csv");
-  assert.equal(downloads.length,4);
+  assert.throws(()=>context.exportCurrentRoutineFile("csv",OWNER_A),/XLSX/);
+  assert.throws(()=>context.downloadOfficialRoutineTemplate("csv"),/XLSX/);
+  assert.equal(downloads.length,2);
   assert.equal(JSON.stringify(storage),before);
 });

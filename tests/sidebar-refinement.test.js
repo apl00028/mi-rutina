@@ -38,7 +38,7 @@ test("sidebar: contiene ocho destinos en el orden definitivo",()=>{
   const {groups}=navigationConfiguration();
   assert.deepEqual(
     groups.flatMap(group=>group.items.map(item=>item[2])),
-    ["Inicio","Entrenar","Recuperación","Progreso","Coach","Nutrición","Mi rutina","Biblioteca"]
+    ["Inicio","Entrenar","Recuperación","Progreso","Coach","Nutrición","Rutina","Biblioteca"]
   );
 });
 

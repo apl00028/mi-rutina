@@ -936,12 +936,16 @@ function saveRoutineProposalRecords(records,{ownerId=null,mark=true,preferredAct
   if(mark) markLocalUpdated();
   return normalized;
 }
-function persistRoutineProposal(proposal,{ownerId=null,timestamp=new Date().toISOString(),mark=true}={}){
+function persistRoutineProposal(proposal,{
+  ownerId=null,timestamp=new Date().toISOString(),mark=true,replacePending=false
+}={}){
   const normalizedOwner=routineProposalOwnerId(ownerId);
   const result=window.GymOSRoutineProposals.storeProposal(getRoutineProposalRecords(normalizedOwner),{
     ownerId:normalizedOwner,proposal,currentRoutine:activeRoutineForComparison(),timestamp,
-    activeProposalId:localStorage.getItem(ACTIVE_ROUTINE_PROPOSAL_ID_KEY)
+    activeProposalId:localStorage.getItem(ACTIVE_ROUTINE_PROPOSAL_ID_KEY),
+    supersedePrevious:replacePending===true
   });
+  if(result.requiresReplacementConfirmation) return result;
   saveRoutineProposalRecords(result.records,{
     ownerId:normalizedOwner,mark:false,preferredActiveId:result.activeProposalId
   });
@@ -1111,6 +1115,20 @@ function routineActivationBaseline(ownerId){
     }
   };
 }
+function routineOwnerHasActiveWorkout(ownerId){
+  const normalizedOwner=routineProposalOwnerId(ownerId);
+  const memory=state?.workoutDraftMemory;
+  if(memory?.ownerId===normalizedOwner&&["active","paused"].includes(memory.status)){
+    return true;
+  }
+  try{
+    return storedWorkoutProgressRecords(normalizedOwner).some(record=>
+      record?.ownerId===normalizedOwner&&["active","paused"].includes(record?.status)
+    );
+  }catch(_){
+    return true;
+  }
+}
 function activateStoredRoutineProposal(proposalId,{
   ownerId=null,confirmed=false,timestamp=new Date().toISOString()
 }={}){
@@ -1140,11 +1158,19 @@ function activateStoredRoutineProposal(proposalId,{
     selectedSession:baseline.selectedSession,selectedSessionId:baseline.selectedSessionId,
     drafts:baseline.drafts,canonicalDrafts:baseline.canonicalDrafts,
     targetRoutineId:secureSessionModelId("routine"),
-    rawBaseline:baseline.rawBaseline,confirmed,timestamp
+    rawBaseline:baseline.rawBaseline,confirmed,timestamp,
+    activeWorkoutState:routineOwnerHasActiveWorkout(normalizedOwner)
   });
   if(!plan.ok){
     restoreRoutineActivationStorage(preflightStorage);
     return plan;
+  }
+  if(routineOwnerHasActiveWorkout(normalizedOwner)){
+    restoreRoutineActivationStorage(preflightStorage);
+    return {
+      ok:false,code:"active_workout_in_progress",
+      message:window.GymOSRoutineActivation.ACTIVE_WORKOUT_MESSAGE
+    };
   }
   const historyBefore=localStorage.getItem("gymos:history");
   let activationResult;
@@ -1154,6 +1180,7 @@ function activateStoredRoutineProposal(proposalId,{
   },[
     ()=>{
       assertActiveLocalOwner(normalizedOwner);
+      if(routineOwnerHasActiveWorkout(normalizedOwner)) throw new Error("active_workout_in_progress");
       saveCanonicalRoutine(plan.canonicalRoutine,{mark:false,writeLegacyShadow:true});
     },
     ()=>{
@@ -1201,6 +1228,7 @@ function activateStoredRoutineProposal(proposalId,{
     },
     ()=>{
       assertActiveLocalOwner(normalizedOwner);
+      if(routineOwnerHasActiveWorkout(normalizedOwner)) throw new Error("active_workout_in_progress");
       if(localStorage.getItem("gymos:history")!==historyBefore) throw new Error("history_changed");
       markRoutineActivationSyncPending(timestamp);
       assertActiveLocalOwner(normalizedOwner);
@@ -1224,7 +1252,8 @@ function rollbackStoredRoutineActivation(activationId,{
   const activation=activations.find(record=>record.activationId===activationId);
   const decision=window.GymOSRoutineActivation.rollbackDecision({
     ownerId:normalizedOwner,activationRecord:activation,currentRoutine:activeRoutineForComparison(),
-    currentCanonicalRoutine:getCanonicalRoutine()
+    currentCanonicalRoutine:getCanonicalRoutine(),
+    activeWorkoutState:routineOwnerHasActiveWorkout(normalizedOwner)
   });
   if(!decision.ok){
     if(decision.code!=="routine_changed"||!activation) return decision;
@@ -1253,6 +1282,12 @@ function rollbackStoredRoutineActivation(activationId,{
     return {...decision,activation:blocked};
   }
   if(decision.idempotent) return {ok:true,idempotent:true,activation:decision.record};
+  if(routineOwnerHasActiveWorkout(normalizedOwner)){
+    return {
+      ok:false,code:"active_workout_in_progress",
+      message:window.GymOSRoutineActivation.ACTIVE_WORKOUT_MESSAGE
+    };
+  }
   const proposalRecords=getRoutineProposalRecords(normalizedOwner);
   const historyBefore=localStorage.getItem("gymos:history");
   let rolledBack;
@@ -1262,6 +1297,7 @@ function rollbackStoredRoutineActivation(activationId,{
   },[
     ()=>{
       assertActiveLocalOwner(normalizedOwner);
+      if(routineOwnerHasActiveWorkout(normalizedOwner)) throw new Error("active_workout_in_progress");
       if(Object.prototype.hasOwnProperty.call(activation.baseline,"canonicalRoutineRaw")){
         restoreStorageValue(CANONICAL_ROUTINE_KEY,activation.baseline.canonicalRoutineRaw??null);
       }
@@ -1324,6 +1360,7 @@ function rollbackStoredRoutineActivation(activationId,{
     },
     ()=>{
       assertActiveLocalOwner(normalizedOwner);
+      if(routineOwnerHasActiveWorkout(normalizedOwner)) throw new Error("active_workout_in_progress");
       if(localStorage.getItem("gymos:history")!==historyBefore) throw new Error("history_changed");
       saveCurrentUserVault(normalizedOwner);
       assertActiveLocalOwner(normalizedOwner);
@@ -1411,6 +1448,26 @@ function importGymOSBackup(payload,mode="merge"){
   const backup=validateGymOSBackup(payload);
   const ownerId=localStorage.getItem(LOCAL_OWNER_KEY)||(!AUTH_REQUIRED?"local":null);
   const normalizedOwner=window.GymOSProfileData.normalizeOwnerId(ownerId);
+  if(!backup.ownerId){
+    throw new Error("La copia no identifica a su propietario y no puede aplicarse de forma segura.");
+  }
+  let backupOwner;
+  try{backupOwner=window.GymOSProfileData.normalizeOwnerId(backup.ownerId);}
+  catch(_){throw new Error("La copia contiene un propietario no válido.");}
+  if(backupOwner!==normalizedOwner){
+    throw new Error("Esta copia pertenece a otro propietario y no se ha aplicado.");
+  }
+  const routineStorageKeys=[
+    "gymos:routine",CANONICAL_ROUTINE_KEY,CANONICAL_DRAFTS_KEY,
+    SELECTED_SESSION_ID_KEY,SESSION_MODEL_MIGRATION_KEY,
+    draftKey("A"),draftKey("B"),draftKey("C")
+  ];
+  if(
+    routineStorageKeys.some(key=>Object.hasOwn(backup.storage,key))&&
+    routineOwnerHasActiveWorkout(normalizedOwner)
+  ){
+    throw new Error(window.GymOSRoutineActivation.ACTIVE_WORKOUT_MESSAGE);
+  }
   assertActiveLocalOwner(normalizedOwner);
   const importBefore=captureRoutineSessionStartupStorage(normalizedOwner);
   const workoutProgressBefore=typeof captureOwnerWorkoutProgressStorage==="function"
@@ -3409,6 +3466,7 @@ function resetRoutineSessionOwnerState(){
   state.expandedHistoryId=null;
   state.editWorkoutId=null;
   state.routineWorkflow=null;
+  window.GymOSRoutineHub?.reset?.();
   state.routineImport=null;
   state.routineFileChooser=null;
   state.routineFileBusy=null;
@@ -7288,7 +7346,7 @@ const NAVIGATION_GROUPS=[
     ["progressDashboard","progress","Progreso"],["coach","coach","Coach"],["nutrition","nutrition","Nutrición"]
   ]},
   {label:"Planificación",items:[
-    ["routineWorkflow","routine","Mi rutina"],["exerciseLibrary","library","Biblioteca"]
+    ["routineHub","routine","Rutina"],["exerciseLibrary","library","Biblioteca"]
   ]}
 ];
 const NAVIGATION_FOOTER_ITEMS=[
@@ -7328,7 +7386,7 @@ function navigationDestinationForScreen(screen=state.screen){
   if(direct.has(screen)) return screen;
   if(screen==="workoutComplete") return "workout";
   if(["history","stats","records","body","editWorkout"].includes(screen)) return "progressDashboard";
-  if(["plan","routineEditor","blocks","blockEditor","blockAnalytics","globalAnalytics","exerciseAnalytics"].includes(screen)) return "routineWorkflow";
+  if(["routineWorkflow","plan","routineEditor","blocks","blockEditor","blockAnalytics","globalAnalytics","exerciseAnalytics"].includes(screen)) return "routineHub";
   if(["exerciseLibraryEditor","exerciseDetail","favoriteExercises","exerciseSubstitution","substitutionHistory"].includes(screen)) return "exerciseLibrary";
   if(["coachProposal","coachChat","workoutAnalysis","aiSettings"].includes(screen)) return "coach";
   if(["professionalNutrition","professionalNutritionImport","professionalNutritionPlan","professionalNutritionAdapt"].includes(screen)) return "nutrition";
@@ -7807,7 +7865,7 @@ function trainingProfileMissingStep(missing=[]){
   if(missing.some(item=>/Días disponibles|Duración de sesión|Lugar de entrenamiento|Equipamiento/.test(item))) return 3;
   return 1;
 }
-function openTrainingProfileEditor(step=1,{returnScreen="routineWorkflow",createProposal=false}={}){
+function openTrainingProfileEditor(step=1,{returnScreen="routineHub",createProposal=false}={}){
   state.onboardingDraft=newOnboardingDraft();
   state.onboardingStep=Math.max(1,Math.min(5,Number(step)||1));
   state.onboardingMessage=null;
@@ -8300,11 +8358,9 @@ function renderOnboarding(){
       state.onboardingMessage=null;
       state.onboardingReturnScreen=null;
       state.onboardingCreateProposalAfterSave=false;
-      state.screen="routineWorkflow";
-      ensureRoutineWorkflowState();
-      state.routineWorkflow=window.GymOSRoutineWorkflowUI.setFlowView(state.routineWorkflow,"summary");
+      state.screen="routineHub";
       toast("Perfil guardado. Tu rutina no se ha modificado.");
-      renderRoutineWorkflow();
+      renderRoutineHub();
       setTimeout(()=>autoSync("perfil deportivo actualizado"),400);
     }catch(error){
       state.onboardingMessage={type:"error",text:error?.message||"No se pudo guardar el perfil."};
@@ -8365,11 +8421,9 @@ function renderOnboarding(){
       state.onboardingMessage=null;
       state.onboardingReturnScreen=null;
       state.onboardingCreateProposalAfterSave=false;
-      state.screen="routineWorkflow";
-      ensureRoutineWorkflowState();
-      state.routineWorkflow=window.GymOSRoutineWorkflowUI.setFlowView(state.routineWorkflow,"prepare");
+      state.screen="routineHub";
       toast("Perfil guardado. Revisa los datos antes de generar.");
-      renderRoutineWorkflow();
+      renderRoutineHub();
       setTimeout(()=>autoSync("perfil deportivo actualizado"),400);
     }catch(error){
       state.onboardingMessage={type:"error",text:error?.message||"No se pudo guardar el perfil."};
@@ -8430,8 +8484,8 @@ function render(){
   else if(state.screen==="body") renderBody();
   else if(state.screen==="editWorkout") renderEditWorkout();
   else if(state.screen==="plan") renderPlan();
-  else if(state.screen==="routineWorkflow") renderRoutineWorkflow();
-  else if(state.screen==="routineEditor") renderRoutineEditor();
+  else if(state.screen==="routineHub") renderRoutineHub();
+  else if(state.screen==="routineWorkflow"||state.screen==="routineEditor") renderRoutineHub();
   else if(state.screen==="blocks") renderBlocks();
   else if(state.screen==="blockEditor") renderBlockEditor();
   else if(state.screen==="blockAnalytics") renderBlockAnalytics();
@@ -9580,7 +9634,7 @@ function renderHome(){
   document.getElementById("homePrimaryAction")?.addEventListener("click",event=>{
     const action=event.currentTarget.dataset.homeAction;
     if(action==="workout") navigateToScreen("workout");
-    else navigateToScreen("routineWorkflow");
+    else navigateToScreen("routineHub");
   },{once:true});
   const homeSecondaryAction=document.getElementById("homeSecondaryAction");
   homeSecondaryAction?.addEventListener("click",cycleHomeSession,{once:true});
@@ -10811,7 +10865,7 @@ function renderWorkout(){
           exercise:item,index,sessionId,last,library,defaultRest,
           currentExerciseIndex:exerciseIndex
         })).join("")}
-      </section>`:`<section class="workout-empty-state" role="status"><h2>Esta sesión no tiene ejercicios</h2><p>Vuelve a Mi rutina para añadir ejercicios antes de empezar.</p><button type="button" data-open-routine-from-workout class="secondary">Ir a Mi rutina</button></section>`}
+      </section>`:`<section class="workout-empty-state" role="status"><h2>Esta sesión no tiene ejercicios</h2><p>Vuelve a Rutina para añadir ejercicios antes de empezar.</p><button type="button" data-open-routine-from-workout class="secondary">Ir a Rutina</button></section>`}
       ${rest.running?`<section class="active-rest-timer" aria-labelledby="activeRestTitle">
         <div><span>Descanso</span><strong id="activeRestTitle" data-active-rest-time aria-live="off">${formatTimer(rest.remainingSeconds)}</strong></div>
         <div><button type="button" class="text-button" data-skip-rest>Omitir</button><button type="button" class="secondary" data-add-rest>+30 s</button></div>
@@ -11467,7 +11521,7 @@ function bindActiveWorkoutEvents(context){
         state.workoutReturnFocusSelector="[data-workout-discard-menu]";
         state.workoutDiscardMenuOpen=false;state.workoutDiscardConfirmOpen=true;renderWorkout();
       }else if(button.matches("[data-open-routine-from-workout]")){
-        stopWorkoutSessionTimer();navigateToScreen("routineWorkflow");
+        stopWorkoutSessionTimer();navigateToScreen("routineHub");
       }
     }catch(error){rerenderWithError(error);}
   });
@@ -11629,7 +11683,7 @@ function renderLegacyWorkout(){
         <div class="progress"><span style="width:${progress}%"></span></div>
       </div>
       ${state.workoutDraftMessage?`<p class="workout-draft-message ${esc(state.workoutDraftMessage.type)}" role="${state.workoutDraftMessage.type==="warning"?"alert":"status"}">${esc(state.workoutDraftMessage.text)}</p>`:""}
-      ${emptySession?`<section class="workout-empty-state" role="status"><h2>Esta sesión no tiene ejercicios</h2><p>Vuelve a Mi rutina para añadir ejercicios antes de empezar.</p><button type="button" id="openRoutineFromEmptyWorkout" class="secondary">Ir a Mi rutina</button></section>`:""}
+      ${emptySession?`<section class="workout-empty-state" role="status"><h2>Esta sesión no tiene ejercicios</h2><p>Vuelve a Rutina para añadir ejercicios antes de empezar.</p><button type="button" id="openRoutineFromEmptyWorkout" class="secondary">Ir a Rutina</button></section>`:""}
       ${d.copiedFromLastSession ? `
         <div class="prefill-banner">
           <div><strong>Pesos preparados</strong><span>Se han copiado de tu último ${esc(sessionName.toLocaleLowerCase("es"))}.</span></div>
@@ -12580,6 +12634,7 @@ function moveRoutineExercise(session,index,direction){
   renderRoutineEditor();
 }
 function renderRoutineEditor(){
+  return renderRoutineHub();
   const available=activeRoutineSessions();
   const selected=canonicalSessionByRef(state.editingSession)||available[0]||null;
   if(!selected){state.screen="settings";renderSettings();return;}
@@ -15105,9 +15160,12 @@ function downloadRoutineFile(content,fileName,type){
   anchor.remove();
   URL.revokeObjectURL(url);
 }
-function styleRoutineWorksheet(sheet,columnCount){
+function styleRoutineWorksheet(sheet,columnCount,source={}){
   const widths=[18,12,24,22,20,18,22,30,10,18,10,16,22,18,20,28];
   sheet["!cols"]=widths.slice(0,columnCount).map(width=>({wch:width}));
+  (source.hiddenColumns||[]).forEach(index=>{
+    sheet["!cols"][index]={...(sheet["!cols"][index]||{wch:18}),hidden:true};
+  });
   if(sheet["!ref"]) sheet["!autofilter"]={ref:sheet["!ref"]};
 }
 function downloadRoutineWorkbook(model,fileName){
@@ -15115,32 +15173,31 @@ function downloadRoutineWorkbook(model,fileName){
   const workbook=XLSX.utils.book_new();
   model.sheets.forEach(source=>{
     const sheet=XLSX.utils.aoa_to_sheet(source.rows);
-    styleRoutineWorksheet(sheet,Math.max(1,...source.rows.map(row=>row.length)));
+    styleRoutineWorksheet(sheet,Math.max(1,...source.rows.map(row=>row.length)),source);
     XLSX.utils.book_append_sheet(workbook,sheet,source.name);
   });
+  workbook.Workbook=workbook.Workbook||{};
+  workbook.Workbook.Sheets=model.sheets.map(source=>({
+    name:source.name,Hidden:source.veryHidden?2:source.hidden?1:0
+  }));
   XLSX.writeFile(workbook,fileName,{bookType:"xlsx",compression:true});
 }
 function exportCurrentRoutineFile(format,expectedOwnerId=null){
-  const api=routineIoApi();
   if(expectedOwnerId&&currentRoutineOwnerOrNull()!==expectedOwnerId){
     throw new Error("La cuenta activa ha cambiado. Vuelve a solicitar la exportación.");
   }
-  const rows=api.exportRoutineRows(activeRoutineForComparison());
-  if(!rows.length) throw new Error("Todavía no hay ejercicios que exportar.");
-  const fileName=api.exportFileName("routine",format,new Date());
-  if(format==="csv"){
-    downloadRoutineFile(api.serializeCsv(rows),fileName,"text/csv;charset=utf-8");
-  }else{
-    downloadRoutineWorkbook({sheets:[{name:"Rutina",rows:api.rowsAsTable(rows)}]},fileName);
-  }
+  if(format!=="xlsx") throw new Error("El Centro de Rutina exporta únicamente Excel XLSX.");
+  const routine=routineHubCurrentRoutine();
+  const rows=window.GymOSRoutineExcel.workbookModel(routine).sheets
+    .find(sheet=>sheet.name==="Rutina")?.rows||[];
+  if(rows.length<=1) throw new Error("Todavía no hay ejercicios que exportar.");
+  const fileName=`gymos-rutina-${new Date().toISOString().slice(0,10)}.xlsx`;
+  downloadRoutineWorkbook(window.GymOSRoutineExcel.workbookModel(routine),fileName);
 }
 function downloadOfficialRoutineTemplate(format){
-  const api=routineIoApi();
-  const model=api.templateModel();
-  const fileName=api.exportFileName("template",format);
-  if(format==="csv"){
-    downloadRoutineFile(model.csv,fileName,"text/csv;charset=utf-8");
-  }else downloadRoutineWorkbook(model,fileName);
+  if(format!=="xlsx") throw new Error("La plantilla oficial está disponible en formato XLSX.");
+  const model=window.GymOSRoutineExcel.templateModel();
+  downloadRoutineWorkbook(model,`gymos-plantilla-rutina-v${model.templateVersion}.xlsx`);
 }
 function routineImportContext(fileName,format){
   return {
@@ -15155,7 +15212,7 @@ function currentRoutineOwnerOrNull(){
 }
 function workbookToRoutineModel(workbook){
   const api=routineIoApi();
-  const formulaCells=[],errors=[],macroSheets=[];
+  const formulaCells=[],errors=[],macroSheets=[],externalLinks=[];
   if(workbook.SheetNames.length>api.MAX_SHEETS){
     return {
       sheets:[],formulaCells:[],hasMacros:Boolean(workbook.vbaraw),
@@ -15178,7 +15235,13 @@ function workbookToRoutineModel(workbook){
       return;
     }
     cellKeys.forEach(key=>{
-      if(sheet[key]?.f||sheet[key]?.F) formulaCells.push(`${name}!${key}`);
+      if(sheet[key]?.f||sheet[key]?.F) formulaCells.push({
+        sheet:name,cell:key,value:sheet[key]?.f||sheet[key]?.F
+      });
+      const target=String(sheet[key]?.l?.Target||"").trim();
+      if(target&&!target.startsWith("#")) externalLinks.push({
+        sheet:name,cell:key,target
+      });
     });
   });
   const hasMacros=Boolean(workbook.vbaraw)||macroSheets.length>0;
@@ -15223,6 +15286,12 @@ function workbookToRoutineModel(workbook){
   return {
     sheets:errors.length?[]:sheets,formulaCells,
     hasMacros,
+    externalLinks:[
+      ...externalLinks,
+      ...Object.keys(workbook.files||{}).filter(key=>
+        /externalLinks|externalLink/i.test(key)
+      ).map(target=>({target}))
+    ],
     errors
   };
 }
@@ -15253,7 +15322,8 @@ async function handleRoutineFileSelection(file){
     fileName:descriptor.fileName,format:descriptor.format,preview:null,
     message:null,errorCode:null
   };
-  if(state.screen==="routineWorkflow") renderRoutineWorkflow();
+  if(state.screen==="routineWorkflow") renderRoutineHub();
+  if(state.screen==="routineHub") renderRoutineHub();
   try{
     if(!descriptor.valid){
       state.routineImport.status="error";
@@ -15265,7 +15335,19 @@ async function handleRoutineFileSelection(file){
       };
       return;
     }
-    if(!window.XLSX) throw new Error("No se pudo cargar el lector de hojas de cálculo.");
+    if(state.screen==="routineHub"&&descriptor.format!=="xlsx"){
+      state.routineImport.status="error";
+      state.routineImport.preview={
+        state:"errors",fileName:descriptor.fileName,format:descriptor.format.toUpperCase(),
+        sheetName:null,rowCount:0,sessionCount:0,exerciseCount:0,
+        recognizedExerciseCount:0,sessions:[],warnings:[],
+        errors:[window.GymOSRoutineExcel.issue(
+          "xlsx_required","El Centro de Rutina admite la plantilla Excel XLSX v2."
+        )],
+        ignoredRows:[],activationCompatible:false,reviewRequired:false,canSave:false
+      };
+      return;
+    }
     const bytes=await file.arrayBuffer();
     if(
       currentRoutineOwnerOrNull()!==ownerAtStart||
@@ -15279,15 +15361,20 @@ async function handleRoutineFileSelection(file){
         formulaCells:[],hasMacros:false,errors:parsed.errors
       };
     }else{
+      if(!window.XLSX) throw new Error("No se pudo cargar el lector de hojas de cálculo.");
       const workbook=XLSX.read(bytes,{
-        type:"array",raw:true,cellFormula:true,cellHTML:false,bookVBA:true
+        type:"array",raw:true,cellFormula:true,cellHTML:false,bookVBA:true,
+        bookFiles:true
       });
       workbookModel=workbookToRoutineModel(workbook);
     }
-    const preview=api.inspectWorkbook(
-      workbookModel,
-      routineImportContext(descriptor.fileName,descriptor.format)
-    );
+    const preview=descriptor.format==="xlsx"
+      ?window.GymOSRoutineExcel.inspectWorkbook(
+        workbookModel,routineImportContext(descriptor.fileName,descriptor.format)
+      )
+      :api.inspectWorkbook(
+        workbookModel,routineImportContext(descriptor.fileName,descriptor.format)
+      );
     if(
       currentRoutineOwnerOrNull()!==ownerAtStart||
       state.routineImport?.operationId!==operationId
@@ -15310,7 +15397,8 @@ async function handleRoutineFileSelection(file){
   }finally{
     if(operationId===routineImportReadSequence) state.routineFileBusy=null;
     routineFile.value="";
-    if(state.screen==="routineWorkflow") renderRoutineWorkflow();
+    if(state.screen==="routineWorkflow") renderRoutineHub();
+    if(state.screen==="routineHub") renderRoutineHub();
   }
 }
 function routineImportIssueList(items,title){
@@ -16056,35 +16144,157 @@ function bindRoutineWorkflowEvents(model,proposal,preparation){
   };
 }
 function renderRoutineWorkflow(){
-  ensureRoutineWorkflowState();
-  const model=routineWorkflowSummary();
-  const selectedId=state.routineWorkflow.selectedProposalId||model.pendingProposal?.proposalId;
-  const selectedRecord=getRoutineProposalRecords(model.ownerId).find(
-    record=>record.proposal.proposalId===selectedId
-  )||null;
-  const proposal=window.GymOSRoutineWorkflowUI.proposalViewModel(selectedRecord,{
-    ownerId:model.ownerId,currentRoutine:activeRoutineForComparison(),labels:routineWorkflowLabels()
-  });
-  const preparation=window.GymOSRoutineWorkflowUI.preparationModel(
-    routineWorkflowGenerationSource(),routineWorkflowLabels()
+  return renderRoutineHub();
+}
+
+function routineHubCurrentRoutine(){
+  return getCanonicalRoutine()||activeRoutineForComparison();
+}
+function routineHubPendingRecord(ownerId){
+  return window.GymOSRoutineProposals.selectActiveProposalId(
+    getRoutineProposalRecords(ownerId),ownerId,
+    localStorage.getItem(ACTIVE_ROUTINE_PROPOSAL_ID_KEY)
+  )
+    ?getRoutineProposalRecords(ownerId).find(record=>
+      record.proposal.proposalId===window.GymOSRoutineProposals.selectActiveProposalId(
+        getRoutineProposalRecords(ownerId),ownerId,
+        localStorage.getItem(ACTIVE_ROUTINE_PROPOSAL_ID_KEY)
+      )
+    )||null
+    :null;
+}
+function routineHubPreviousActivation(ownerId){
+  return window.GymOSRoutineWorkflowUI.selectReversibleActivation(
+    getRoutineActivationRecords(ownerId),ownerId,
+    localStorage.getItem(ACTIVE_ROUTINE_ACTIVATION_ID_KEY)
   );
-  const content=state.routineWorkflow.view==="import"
-    ?renderRoutineImport()
-    :state.routineWorkflow.view==="prepare"
-    ?renderRoutineWorkflowPreparation(preparation)
-    :state.routineWorkflow.view==="review"
-      ?renderRoutineProposalReview(proposal)
-      :renderRoutineWorkflowSummary(model,preparation);
-  app.innerHTML=`<div class="app-shell routine-workflow-shell">
-    <header class="topbar"><button id="backRoutineWorkflow" class="back-button" type="button" aria-label="Volver">←</button><div><div class="brand">Mi rutina</div><div class="subtle">Generación y activación bajo tu control</div></div></header>
-    <main class="screen routine-workflow-screen">
-      ${routineWorkflowMessage()}
-      ${content}
-      ${renderRoutineWorkflowConfirmation(model,proposal)}
-    </main>
-  </div>`;
-  bindRoutineWorkflowEvents(model,proposal,preparation);
-  if(state.routineWorkflow.confirmation) document.querySelector(".routine-confirmation")?.focus();
+}
+function routineHubBuildCandidate(type,sessions,options={}){
+  const baselineHash=window.GymOSRoutineProposals.routineHash(activeRoutineForComparison());
+  return window.GymOSRoutineProposals.createCandidateProposal({
+    type,sessions,baselineHash,generatedAt:new Date().toISOString(),
+    source:{type},...options
+  });
+}
+function routineHubImportCandidate(){
+  const current=state.routineImport;
+  const ownerId=currentRoutineOwnerOrNull();
+  if(!current?.preview?.canSave||!current.preview.imported){
+    throw new Error("Selecciona y valida un archivo antes de continuar.");
+  }
+  if(current.ownerId!==ownerId){
+    throw new Error("La cuenta activa ha cambiado. Vuelve a seleccionar el archivo.");
+  }
+  const baselineHash=window.GymOSRoutineProposals.routineHash(activeRoutineForComparison());
+  if(current.baselineHash!==baselineHash){
+    throw new Error("La rutina actual cambió durante la importación. Vuelve a validar el archivo.");
+  }
+  const imported=window.GymOSRoutineExcel.importedProposalResult(current.preview.imported);
+  return routineIoApi().buildImportedProposal({
+    ownerId,result:imported,baselineHash,format:"xlsx",
+    fileName:current.fileName,templateVersion:window.GymOSRoutineExcel.TEMPLATE_VERSION,
+    generatedAt:new Date().toISOString()
+  });
+}
+function routineHubReconfigureCandidate(values){
+  const source=routineWorkflowGenerationSource();
+  const input=JSON.parse(JSON.stringify(source));
+  const reasons=Array.isArray(values.reasons)?values.reasons:[];
+  if(reasons.includes("goal")) input.activeGoalCycle={
+    ...(input.activeGoalCycle||{}),primaryGoal:String(values.goal||"")
+  };
+  if(reasons.includes("days")) input.userProfile.weeklyAvailability=Number(values.days);
+  if(reasons.includes("duration")){
+    input.userProfile.preferredSessionDurationMin=Number(values.duration);
+  }
+  if(reasons.includes("equipment")){
+    input.userProfile.availableEquipment=String(values.equipment||"")
+      .split(",").map(item=>item.trim()).filter(Boolean);
+  }
+  if(reasons.includes("limitations")){
+    input.userProfile.injuries=String(values.limitations||"")
+      .split(",").map(item=>item.trim()).filter(Boolean);
+  }
+  if(reasons.includes("performance")){
+    input.userProfile.trainingExperience=String(values.performance||"");
+  }
+  if(reasons.includes("preferences")){
+    const requested=String(values.preferences||"").split(",")
+      .map(item=>item.trim().toLocaleLowerCase("es")).filter(Boolean);
+    input.generationPreferences.preferredExerciseIds=getExerciseLibrary()
+      .filter(item=>requested.includes(String(item.name||"").trim().toLocaleLowerCase("es")))
+      .map(item=>item.id);
+  }
+  const generated=window.GymOSRoutineGenerator.generateRoutineProposal(input,{
+    timestamp:new Date().toISOString()
+  });
+  if(!generated.sessions?.length){
+    throw new Error(
+      generated.unresolvedQuestions?.[0]||
+      generated.warnings?.[0]||
+      "El generador actual necesita más información para preparar una propuesta segura."
+    );
+  }
+  return routineHubBuildCandidate("reconfigure",generated.sessions,{
+    source:{type:"reconfigure",reasons},
+    warnings:generated.warnings,
+    unresolvedQuestions:generated.unresolvedQuestions,
+    rationale:[
+      ...generated.rationale,
+      ...(values.other?[`Motivo indicado: ${String(values.other).trim()}`]:[])
+    ]
+  });
+}
+function renderRoutineHub(){
+  if(!window.GymOSRoutineHub) throw new Error("El Centro de Rutina no está disponible.");
+  const ownerId=routineWorkflowOwnerId();
+  if(state.routineImport?.ownerId&&state.routineImport.ownerId!==ownerId){
+    routineImportReadSequence+=1;
+    state.routineImport=null;
+    state.routineFileBusy=null;
+    routineFile.value="";
+  }
+  const routine=routineHubCurrentRoutine();
+  const labels=routineWorkflowLabels();
+  const data={
+    ownerId,routine,
+    pending:routineHubPendingRecord(ownerId),
+    previousActivation:routineHubPreviousActivation(ownerId),
+    activeWorkout:routineOwnerHasActiveWorkout(ownerId),
+    importState:state.routineImport,
+    library:getExerciseLibrary(),
+    profile:window.GymOSProfileData.getUserProfile()||{},
+    goalOptions:(labels.goals||[]).map(item=>({
+      value:item.id||item.value,label:item.label||item.name||item.id
+    }))
+  };
+  window.GymOSRoutineHub.render({
+    root:app,data,navigation:nav("routineHub"),refresh:renderRoutineHub,
+    actions:{
+      downloadTemplate:()=>downloadOfficialRoutineTemplate("xlsx"),
+      exportRoutine:()=>exportCurrentRoutineFile("xlsx",ownerId),
+      chooseFile:()=>routineFile.click(),
+      importProposal:async()=>routineHubImportCandidate(),
+      buildCandidate:routineHubBuildCandidate,
+      reconfigure:async values=>routineHubReconfigureCandidate(values),
+      restoreCandidate:activation=>{
+        const previous=activation?.baseline?.canonicalRoutine||activation?.baseline?.routine;
+        return routineHubBuildCandidate(
+          "restore",window.GymOSRoutineHub.proposalSessionsFromRoutine(previous),{
+            source:{type:"restore",activationDate:activation?.activatedAt},
+            rationale:["Versión anterior preparada para restauración explícita."]
+          }
+        );
+      },
+      storeProposal:async(proposal,{replacePending=false}={})=>
+        persistRoutineProposal(proposal,{ownerId,replacePending}),
+      discardProposal:async proposalId=>
+        rejectStoredRoutineProposal(proposalId,"Descartada desde el Centro de Rutina.",{ownerId}),
+      activate:async proposalId=>activateStoredRoutineProposal(proposalId,{
+        ownerId,confirmed:true
+      })
+    }
+  });
 }
 
 function exerciseLibraryWorkflowApi(){
@@ -16766,7 +16976,7 @@ async function applyExerciseLibrarySubstitution(){
       window.GymOSRoutineWorkflowUI.setFlowView(state.routineWorkflow,"review",persisted.record.proposal.proposalId),
       {type:"success",text:persisted.created?"Sustitución guardada como propuesta pendiente.":"Esta sustitución ya existía y se ha recuperado."}
     );
-    state.exerciseSubstitution=null;state.screen="routineWorkflow";renderRoutineWorkflow();
+    state.exerciseSubstitution=null;state.screen="routineHub";renderRoutineHub();
   }catch(error){
     flow.message={
       exercise_already_started:"No puedes cambiar este ejercicio porque ya has empezado a registrarlo.",
@@ -16824,8 +17034,7 @@ function organizeSettingsScreen(main){
         cardFor(".onboarding-profile-card"),cardFor(".routine-workflow-entry"),
         cardFor("#openProgressDashboard"),cardFor("#openFavoriteExercises"),
         cardFor("#openSubstitutionHistory"),cardFor("#openExerciseLibrary"),
-        cardFor("#openGlobalAnalytics"),cardFor("#openBlocksSettings"),
-        cardFor("#openPlanSettings"),cardFor("#openRoutineEditor")
+        cardFor("#openGlobalAnalytics"),cardFor("#openBlocksSettings")
       ]
     },
     {
@@ -16909,14 +17118,10 @@ function renderSettings(){
       </section>
 
       <section class="card routine-workflow-entry">
-        <div class="card-heading-row">
-          <div>
-            <span class="section-kicker">ENTRENAMIENTO</span>
-            <h2>Mi rutina</h2>
-            <p class="subtle">Consulta tu rutina, genera una propuesta y decide cuándo activarla o revertirla.</p>
-          </div>
-        </div>
-        <button id="openRoutineWorkflow" class="secondary full" type="button">Crear o cambiar rutina</button>
+        <button type="button" class="settings-route-row" data-nav="routineHub">
+          <span><strong>Rutina</strong><small>Gestionar, importar, exportar o reconfigurar</small></span>
+          <span aria-hidden="true">›</span>
+        </button>
       </section>
 
       <section class="card ai-settings-entry">
@@ -17101,11 +17306,6 @@ function renderSettings(){
         <p class="subtle">Organiza la rutina en periodos de 4, 6 u 8 semanas y controla el avance.</p>
         <button id="openBlocksSettings" class="primary full">Gestionar bloques</button>
       </section>
-      <section class="card">
-        <h2>Objetivo y calendario</h2>
-        <p class="subtle">Consulta la adherencia semanal, la racha y el calendario de actividad.</p>
-        <button id="openPlanSettings" class="secondary full">Abrir plan semanal</button>
-      </section>
       <section class="card training-rest-card" id="trainingRestSettings">
         <h2>Descanso entre series</h2>
         <p class="subtle">Define el descanso de las próximas series. Un temporizador que ya esté en marcha conserva su tiempo actual.</p>
@@ -17118,17 +17318,11 @@ function renderSettings(){
         <p class="subtle">Registra peso y cintura para comprobar la tendencia junto con tu rendimiento.</p>
         <button id="openBodySettings" class="secondary full">Abrir seguimiento corporal</button>
       </section>
-      <section class="card">
-        <h2>Editar rutina</h2>
-        <p class="subtle">Modifica sesiones y ejercicios directamente desde el móvil.</p>
-        <button id="openRoutineEditor" class="primary full">Abrir editor de rutina</button>
-      </section>
       <section class="card developer-only">
         <h2>Copia de seguridad</h2>
         <p class="subtle">Exporta tus entrenamientos a un archivo y podrás recuperarlos en este u otro móvil.</p>
         <div class="settings-actions">
-          <button id="exportData" class="primary">Exportar copia</button>
-          <button id="importData" class="secondary">Importar copia</button>
+          <button id="openBackupRestoreLegacy" class="secondary full">Abrir copia y restauración</button>
         </div>
       </section>
       <section class="card developer-only">
@@ -17263,8 +17457,6 @@ function renderSettings(){
   bindScreen("openRecoveryCenter","recovery",()=>window.GymOSRecovery.renderRecoveryCenter());
   bindScreen("openCoach","coach",renderCoach);
   bindScreen("openBackupRestore","backupRestore",renderBackupRestore);
-  bindScreen("openRoutineEditor","routineEditor",renderRoutineEditor);
-  bindScreen("openRoutineWorkflow","routineWorkflow",renderRoutineWorkflow);
   bindScreen("openTrainingBlocks","blocks",renderBlocks);
   bindScreen("openGlobalAnalytics","globalAnalytics",renderGlobalAnalytics);
   bindScreen("openExerciseLibrary","exerciseLibrary",renderExerciseLibrary);
@@ -17272,14 +17464,9 @@ function renderSettings(){
   bindScreen("openSubstitutionHistory","substitutionHistory",renderSubstitutionHistory);
   bindScreen("openProgressDashboard","progressDashboard",renderProgressDashboard);
   bindScreen("openBlocksSettings","blocks",renderBlocks);
-  bindScreen("openPlanSettings","plan",renderPlan);
   bindScreen("openBodySettings","body",renderBody);
 
-  const exportDataButton=document.getElementById("exportData");
-  if(exportDataButton) exportDataButton.onclick=()=>exportData();
-
-  const importDataButton=document.getElementById("importData");
-  if(importDataButton) importDataButton.onclick=()=>importFile.click();
+  bindScreen("openBackupRestoreLegacy","backupRestore",renderBackupRestore);
 
   const deleteDataButton=document.getElementById("deleteData");
   if(deleteDataButton) deleteDataButton.onclick=()=>{
@@ -17348,57 +17535,8 @@ routineFile.onchange=async()=>{
 importFile.onchange=async()=>{
   const file=importFile.files[0]; if(!file)return;
   try{
-    let data=JSON.parse(await file.text());
-    data=sanitizeIncomingWorkoutPayload(data,{
-      ownerId:currentRoutineOwnerOrNull()
-    });
-    if(!Array.isArray(data.history))throw new Error();
-    saveHistory(mergeWorkoutHistory(getHistory(),data.history,currentRoutineOwnerOrNull()));
-    if(Array.isArray(data.body)) saveBodyHistory(data.body);
-    if([60,90,120,180].includes(Number(data.restSeconds))) saveRestSeconds(Number(data.restSeconds));
-    if(Number(data.weeklyGoal)>=1&&Number(data.weeklyGoal)<=7) saveWeeklyGoal(Number(data.weeklyGoal));
-    if(Array.isArray(data.blocks)) saveTrainingBlocks(data.blocks);
-    if(data.activeBlockId) localStorage.setItem("gymos:activeBlockId",data.activeBlockId);
-    if(Array.isArray(data.routineProposals)) importRoutineProposalSyncData(data,{mark:false});
-    if(Array.isArray(data.routineActivationHistory)) importRoutineActivationSyncData(data,{mark:false});
-    if(data.canonicalRoutine&&data.sessionModelMigration){
-      const ownerId=currentRoutineOwnerOrNull();
-      const validation=window.GymOSRoutineSessionModel.validateCanonicalRoutine(data.canonicalRoutine);
-      if(
-        validation.valid&&
-        data.sessionModelMigration.ownerId===ownerId
-      ){
-        saveCanonicalRoutine(data.canonicalRoutine,{mark:false});
-        if(data.canonicalDrafts){
-          const draftValidation=routineSessionMigrationApi().validateDraftContainer(
-            data.canonicalDrafts,{ownerId,canonicalRoutine:data.canonicalRoutine}
-          );
-          if(draftValidation.valid){
-            localStorage.setItem(CANONICAL_DRAFTS_KEY,JSON.stringify(data.canonicalDrafts));
-            writeLegacyDraftShadows(data.canonicalRoutine,data.canonicalDrafts);
-          }
-        }
-        localStorage.setItem(SESSION_MODEL_MIGRATION_KEY,JSON.stringify(data.sessionModelMigration));
-        if(data.selectedSessionId) localStorage.setItem(SELECTED_SESSION_ID_KEY,data.selectedSessionId);
-        if(Array.isArray(data.workoutProgress)){
-          mergeIncomingWorkoutProgress(data.workoutProgress,{writeCanonical:true});
-        }
-      }
-    }else if(data.routine){saveRoutine(data.routine,{mark:false});}
-    sessions=getRoutine();
-    ["A","B","C"].forEach(s=>{
-      if(data.drafts&&data.drafts[s]) localStorage.setItem(
-        draftKey(s),compactWorkoutDraftShadow(data.drafts[s],s)
-      );
-    });
-    persistSelectedRoutineSession(
-      data.selectedSessionId||data.selectedSession||nextSuggestedSession()
-    );
-    const importedProfileData=window.GymOSProfileData?.importSyncData?.(data,{mark:false});
-    if(!importedProfileData) ensureProfileDataMigration({mark:false});
-    ensureExerciseDomainMigration({mark:false,force:true});
-    const ownerId=localStorage.getItem(LOCAL_OWNER_KEY)||(!AUTH_REQUIRED?"local":null);
-    saveCurrentUserVault(ownerId);
+    const data=JSON.parse(await file.text());
+    importGymOSBackup(data,"merge");
     toast("Copia importada");renderSettings();
   }catch{toast("El archivo no es una copia válida de GymOS.");}
   importFile.value="";

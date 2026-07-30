@@ -778,8 +778,11 @@
   }
   function canonicalImportedRoutine(result){
     return list(result?.sessions).map((session,index)=>({
-      id:`session-${index+1}`,label:session.name,focus:session.focus,
+      id:text(session.sessionIdHint)||`session-${index+1}`,
+      label:session.name,name:session.name,focus:session.focus,
       estimatedDurationMin:session.durationMin||null,
+      estimatedDurationMinutes:session.durationMin||null,
+      notes:text(session.notes)||null,
       exercises:list(session.rows).map(row=>({
         exerciseId:row.exerciseId,name:row.name,pattern:row.pattern,role:row.role,
         prescription:{

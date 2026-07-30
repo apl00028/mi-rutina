@@ -331,6 +331,44 @@ test("series extra: varias identidades sobreviven recarga, dos pestañas y remot
   assert.equal(afterOldRemote.exercises[0].series.filter(set=>set.planned===false).length,2);
 });
 
+test("ficha pendiente: plegado y selección sobreviven recarga sin perder progreso",()=>{
+  const engine=api();
+  const base=engine.normalizeDraft(draft(),{});
+  const recording=JSON.parse(JSON.stringify(base));
+  recording.exercises[0].series[0].weight="72.5";
+  recording.exercises[0].series[0].reps="9";
+  recording.exercises[0].series[0].rir="2";
+  recording.exercises[0].notes="Mantener la técnica";
+  const withResults=engine.stampLocalChanges(base,recording,{
+    now:"2026-07-30T10:01:00.000Z",clientInstanceId:"device-a"
+  }).draft;
+  const dismissedInput=JSON.parse(JSON.stringify(withResults));
+  dismissedInput.exercises[0].libraryResolutionDismissed=true;
+  const dismissed=engine.stampLocalChanges(withResults,dismissedInput,{
+    now:"2026-07-30T10:02:00.000Z",clientInstanceId:"device-a"
+  }).draft;
+  const reloaded=engine.normalizeDraft(JSON.parse(JSON.stringify(dismissed)),{});
+  assert.equal(reloaded.exercises[0].libraryResolutionDismissed,true);
+  const progressBefore=JSON.stringify({
+    series:reloaded.exercises[0].series,
+    notes:reloaded.exercises[0].notes,
+    completedAt:reloaded.exercises[0].completedAt
+  });
+  const selectedInput=JSON.parse(JSON.stringify(reloaded));
+  selectedInput.exercises[0].resolvedLibraryExerciseId="press-maquina";
+  selectedInput.exercises[0].libraryResolutionDismissed=false;
+  const selected=engine.stampLocalChanges(reloaded,selectedInput,{
+    now:"2026-07-30T10:03:00.000Z",clientInstanceId:"device-a"
+  }).draft;
+  assert.equal(selected.exercises[0].resolvedLibraryExerciseId,"press-maquina");
+  assert.equal(selected.exercises[0].libraryResolutionDismissed,false);
+  assert.equal(JSON.stringify({
+    series:selected.exercises[0].series,
+    notes:selected.exercises[0].notes,
+    completedAt:selected.exercises[0].completedAt
+  }),progressBefore);
+});
+
 test("serie extra eliminada genera tombstone y no reaparece desde una respuesta antigua",()=>{
   const engine=api();
   const base=engine.normalizeDraft(draft(),{});
@@ -564,6 +602,52 @@ test("notas rápidas actualizan memoria y producen una sola persistencia debounc
   assert.equal(restored.exercises[0].notes,"Nota exacta");
 });
 
+test("una operación debounced obsoleta se descarta con código seguro y no escribe",async()=>{
+  let writes=0;
+  const {context,state}=autosaveHarness({
+    saveDraft(){writes+=1;}
+  });
+  const candidate=JSON.parse(JSON.stringify(state.workoutDraftMemory));
+  candidate.exercises[0].series[0].weight="55";
+  context.candidate=candidate;
+  vm.runInContext("stageWorkoutDraft(candidate)",context);
+  state.workoutDraftOperationId+=1;
+  await new Promise(resolve=>setTimeout(resolve,450));
+  assert.equal(writes,0);
+  assert.deepEqual(JSON.parse(JSON.stringify(state.workoutLastDiscardedOperation)),{
+    code:"stale_operation",phase:"autosave_debounce"
+  });
+  assert.equal(state.workoutDraftMemory.exercises[0].series[0].weight,"55");
+});
+
+test("campos rápidos guardan una vez y programan una sola sincronización posterior",async()=>{
+  let writes=0;
+  const {context,state}=autosaveHarness({
+    saveDraft(value,currentState){
+      writes+=1;
+      currentState.workoutDraftMemory=JSON.parse(JSON.stringify(value));
+      currentState.workoutDraftLastError=null;
+      currentState.workoutDraftSaveStatus="pending_sync";
+    }
+  });
+  for(const [weight,reps] of [["8",""],["82","1"],["82.5","10"]]){
+    const candidate=JSON.parse(JSON.stringify(state.workoutDraftMemory));
+    candidate.exercises[0].series[0].weight=weight;
+    candidate.exercises[0].series[0].reps=reps;
+    context.candidate=candidate;
+    vm.runInContext(
+      "stageWorkoutDraft(candidate,{scheduleSync:true})",
+      context
+    );
+  }
+  assert.equal(state.workoutDraftMemory.exercises[0].series[0].weight,"82.5");
+  assert.equal(state.workoutDraftMemory.exercises[0].series[0].reps,"10");
+  assert.equal(context.remoteRequests,0);
+  await new Promise(resolve=>setTimeout(resolve,450));
+  assert.equal(writes,1);
+  assert.equal(context.remoteRequests,1);
+});
+
 test("el input de notas no reconstruye la vista y blur o salida fuerzan flush",()=>{
   const binding=appSource.slice(
     appSource.indexOf("function bindActiveWorkoutEvents("),
@@ -575,6 +659,7 @@ test("el input de notas no reconstruye la vista y blur o salida fuerzan flush",(
   );
   assert.match(inputBranch,/data-active-workout-notes/);
   assert.match(inputBranch,/stageWorkoutDraft|persist\(/);
+  assert.match(inputBranch,/scheduleSync:true/);
   assert.doesNotMatch(inputBranch,/renderWorkout|innerHTML|replaceWith|saveCurrentUserVault|autoSync/);
   assert.match(binding,/main\.addEventListener\("focusout"[\s\S]*?flushWorkoutDraftProgress/);
   assert.match(binding,/data-workout-back[\s\S]*?flushWorkoutDraftProgress/);
@@ -809,6 +894,7 @@ test("un error remoto ocurre después del guardado local y no revierte una serie
     }
   });
   const edited=JSON.parse(JSON.stringify(state.workoutDraftMemory));
+  edited.exercises[0].series[0].weight="82.5";
   edited.exercises[0].series[0].reps="11";
   context.edited=edited;
   vm.runInContext(
@@ -817,10 +903,12 @@ test("un error remoto ocurre después del guardado local y no revierte una serie
   );
   assert.equal(localWrites,1);
   assert.equal(context.remoteRequests,1);
+  assert.equal(state.workoutDraftMemory.exercises[0].series[0].weight,"82.5");
   assert.equal(state.workoutDraftMemory.exercises[0].series[0].reps,"11");
   // Una respuesta remota fallida solo cambia el estado de sincronización.
   state.workoutDraftLastError={code:"remote_sync_failed",phase:"supabase_sync"};
   state.workoutDraftSaveStatus="pending_sync";
+  assert.equal(state.workoutDraftMemory.exercises[0].series[0].weight,"82.5");
   assert.equal(state.workoutDraftMemory.exercises[0].series[0].reps,"11");
   assert.equal(state.workoutDraftSaveStatus,"pending_sync");
 });
@@ -952,11 +1040,19 @@ test("errores de cuota, propietario, identidad y sincronización tienen códigos
   const context={
     console:{error(){}},
     Set,Error,String,
+    localStorage:{
+      setItem(){
+        const error=new Error("storage blocked");
+        error.name="SecurityError";
+        throw error;
+      }
+    },
     WORKOUT_PERSISTENCE_ERROR_CODES:new Set([
       "memory_update_failed","local_progress_write_failed",
       "active_pointer_write_failed","legacy_shadow_write_failed",
       "remote_sync_failed","owner_mismatch","invalid_workout_identity",
-      "storage_quota","migration_failed"
+      "storage_quota","migration_failed","stale_operation",
+      "corrupt_active_pointer"
     ])
   };
   vm.createContext(context);
@@ -964,6 +1060,7 @@ test("errores de cuota, propietario, identidad y sincronización tienen códigos
     `${extractFunction(appSource,"isWorkoutStorageQuotaError")}
      ${extractFunction(appSource,"workoutPersistenceError")}
      ${extractFunction(appSource,"classifyWorkoutPersistenceError")}
+     ${extractFunction(appSource,"writeWorkoutStorage")}
      ${extractFunction(appSource,"workoutPersistenceUserMessage")}`,
     context
   );
@@ -994,6 +1091,27 @@ test("errores de cuota, propietario, identidad y sincronización tienen códigos
       context
     ),
     "owner_mismatch"
+  );
+  const blocked=vm.runInContext(
+    '(()=>{try{writeWorkoutStorage("key","value",{code:"local_progress_write_failed",phase:"progress_record"});}catch(error){return error;}})()',
+    context
+  );
+  assert.equal(blocked.code,"local_progress_write_failed");
+  assert.equal(blocked.phase,"progress_record");
+  assert.equal(blocked.cause.name,"SecurityError");
+  assert.equal(
+    vm.runInContext(
+      'classifyWorkoutPersistenceError(new Error("stale_operation"),{phase:"autosave"}).code',
+      context
+    ),
+    "stale_operation"
+  );
+  assert.equal(
+    vm.runInContext(
+      'classifyWorkoutPersistenceError(new Error("active_pointer_target_invalid"),{phase:"pointer"}).code',
+      context
+    ),
+    "corrupt_active_pointer"
   );
 });
 
@@ -1035,7 +1153,16 @@ test("puntero corrupto se descarta y la migración parcial sigue siendo reparabl
     appSource.indexOf("function activeWorkoutPointerId(")
   );
   assert.match(pointerReader,/normalizePointer\(rawPointer/);
-  assert.match(pointerReader,/localStorage\.removeItem\(activeKey\)/);
+  assert.match(pointerReader,/discardCorruptActiveWorkoutPointer\(activeKey/);
+  assert.match(pointerReader,/phase:"active_pointer_parse"/);
+  assert.match(pointerReader,/phase:"active_pointer_target"/);
+  const pointerRepair=appSource.slice(
+    appSource.indexOf("function discardCorruptActiveWorkoutPointer("),
+    appSource.indexOf("function approximateStorageBytes(")
+  );
+  assert.match(pointerRepair,/corrupt_active_pointer/);
+  assert.match(pointerRepair,/active_pointer_write_failed/);
+  assert.match(pointerRepair,/logWorkoutPersistenceError/);
   const migration=appSource.slice(
     appSource.indexOf("function ensureWorkoutProgressMigration("),
     appSource.indexOf("function mergeIncomingWorkoutProgress(")
@@ -1107,6 +1234,44 @@ test("reiniciar el cronómetro cambia la memoria aunque falle la persistencia lo
   assert.equal(context.compactionAttempts,1);
 });
 
+test("reiniciar el cronómetro no espera a Supabase y sobrevive a su fallo",()=>{
+  const runtime=runtimeApi();
+  const {context,state}=autosaveHarness({
+    saveDraft(value,currentState){
+      currentState.workoutDraftMemory=JSON.parse(JSON.stringify(value));
+      currentState.workoutDraftLastError=null;
+      currentState.workoutDraftSaveStatus="pending_sync";
+    }
+  });
+  state.workoutDraftMemory.sessionTimer=runtime.normalizeSessionTimer({
+    ownerId:OWNER_A,sessionId:"session-1",status:"running",
+    elapsedMs:90_000,startedAt:Date.parse(NOW)
+  },{ownerId:OWNER_A,sessionId:"session-1"});
+  context.routineSessionRuntimeApi=()=>runtime;
+  context.resolveRuntimeSessionId=()=> "session-1";
+  context.getDraft=()=>JSON.parse(JSON.stringify(state.workoutDraftMemory));
+  context.workoutSessionTimerForDraft=value=>runtime.normalizeSessionTimer(
+    value.sessionTimer,{ownerId:OWNER_A,sessionId:"session-1"}
+  );
+  vm.runInContext(
+    extractFunction(appSource,"setWorkoutSessionTimerAction"),
+    context
+  );
+  vm.runInContext(
+    'setWorkoutSessionTimerAction("session-1","reset",Date.parse("2026-07-30T12:00:00.000Z"))',
+    context
+  );
+  assert.equal(state.workoutDraftMemory.sessionTimer.elapsedMs,0);
+  assert.equal(context.remoteRequests,1);
+  state.workoutDraftLastError={code:"remote_sync_failed",phase:"supabase_sync"};
+  state.workoutDraftSaveStatus="pending_sync";
+  assert.equal(state.workoutDraftMemory.sessionTimer.elapsedMs,0);
+  assert.equal(
+    state.workoutDraftMemory.sessionTimer.startedAt,
+    Date.parse("2026-07-30T12:00:00.000Z")
+  );
+});
+
 test("una respuesta remota antigua no sustituye valores visibles pendientes",()=>{
   const getter=appSource.slice(
     appSource.indexOf("function getDraft("),
@@ -1166,7 +1331,7 @@ test("legacyRaw deja de crecer y no se duplica dentro de workoutProgress",()=>{
   );
   assert.ok(
     save.indexOf("delete nextDraft.legacyRaw")<
-    save.indexOf("nextDraft.legacyRaw=JSON.stringify")
+    save.indexOf("nextDraft.legacyRaw=compactWorkoutDraftShadow")
   );
   const store=appSource.slice(
     appSource.indexOf("function storeWorkoutProgressRecord("),
@@ -1280,8 +1445,254 @@ test("el mensaje genérico anterior se elimina y cada fase conserva la causa ori
     "memory_update_failed","local_progress_write_failed",
     "active_pointer_write_failed","legacy_shadow_write_failed",
     "remote_sync_failed","owner_mismatch","invalid_workout_identity",
-    "storage_quota","migration_failed"
+    "storage_quota","migration_failed","stale_operation",
+    "corrupt_active_pointer"
   ]){
     assert.match(appSource,new RegExp(`"${code}"`),code);
   }
+});
+
+test("legacyRaw se inspecciona con limites, se elimina al normalizar y la reparacion es idempotente",()=>{
+  const engine=api();
+  const base=draft();
+  const one={...base,legacyRaw:JSON.stringify({...base,session:"A"})};
+  const two={...base,legacyRaw:JSON.stringify(one)};
+  const three={...base,legacyRaw:JSON.stringify(two)};
+  assert.equal(engine.inspectLegacyRaw(one).present,true);
+  assert.equal(engine.inspectLegacyRaw(one).nested,false);
+  assert.equal(engine.inspectLegacyRaw(three).nested,true);
+  assert.ok(engine.inspectLegacyRaw(three).depth<=engine.LEGACY_RAW_SCAN_MAX_DEPTH);
+  const oversized={...base,legacyRaw:"x".repeat(engine.LEGACY_RAW_SCAN_MAX_BYTES)};
+  const inspection=engine.inspectLegacyRaw(oversized);
+  assert.equal(inspection.oversized,true);
+  assert.equal(inspection.truncated,true);
+  assert.equal(inspection.depth,0);
+  const normalized=engine.normalizeDraft(three,{});
+  assert.equal(Object.hasOwn(normalized,"legacyRaw"),false);
+  assert.deepEqual(
+    JSON.parse(JSON.stringify(normalized.exercises)),
+    JSON.parse(JSON.stringify(engine.normalizeDraft(base,{}).exercises))
+  );
+  assert.deepEqual(
+    JSON.parse(JSON.stringify(normalized.sessionTimer)),
+    JSON.parse(JSON.stringify(engine.normalizeDraft(base,{}).sessionTimer))
+  );
+  const once=engine.stripLegacyRaw(three).draft;
+  const twice=engine.stripLegacyRaw(once).draft;
+  assert.equal(JSON.stringify(once),JSON.stringify(twice));
+});
+
+test("payload remoto o de otra pestana no puede reintroducir legacyRaw recursivo",()=>{
+  const engine=api();
+  const base=engine.normalizeDraft(draft(),{});
+  const incoming={
+    ...base,
+    legacyRaw:JSON.stringify({
+      ...base,
+      legacyRaw:JSON.stringify({...base,session:"A"})
+    })
+  };
+  const merged=engine.mergeCollections([],[incoming],{owner:OWNER_A});
+  assert.equal(merged.rejected.length,0);
+  assert.equal(merged.records.length,1);
+  assert.equal(Object.hasOwn(merged.records[0],"legacyRaw"),false);
+  assert.equal(
+    merged.records[0].exercises[0].series[0].setInstanceId,
+    base.exercises[0].series[0].setInstanceId
+  );
+});
+
+test("repara datos legacy inflados con cuota llena conservando entrenamiento y otros dominios",()=>{
+  const engine=api();
+  const base=engine.normalizeDraft({
+    ...draft(),
+    currentExerciseInstanceId:"exercise-workout-1-row",
+    substitutions:[{from:"remo",to:"jalon"}],
+    exercises:[{
+      exerciseId:"row",name:"Remo",
+      exerciseInstanceId:"exercise-workout-1-row",
+      notes:"nota exacta",substitution:{from:"remo",to:"jalon"},
+      series:[{
+        setInstanceId:"set-workout-1-row-1",
+        weight:"82.5",reps:"9",rir:"2",done:true
+      }]
+    }],
+    sessionTimer:{
+      ownerId:OWNER_A,sessionId:"session-1",status:"paused",
+      elapsedMs:987654,startedAt:null
+    }
+  },{});
+  let inflated={...base,legacyRaw:JSON.stringify({...base,session:"A"})};
+  for(let level=0;level<5;level+=1){
+    inflated={...base,legacyRaw:JSON.stringify(inflated)};
+  }
+  const canonicalRoutine={
+    routineId:"routine-1",
+    sessions:[{sessionId:"session-1",legacySessionKey:"A"}]
+  };
+  const canonicalContainer={
+    routineId:"routine-1",draftsBySessionId:{"session-1":inflated}
+  };
+  const otherOwnerKey=`gymos:workoutProgress:${OWNER_B}:workout-b`;
+  const storageMap=new Map([
+    ["gymos:routine",JSON.stringify({A:[{name:"Remo"}]})],
+    ["gymos:routine:canonical",JSON.stringify(canonicalRoutine)],
+    ["gymos:routineDrafts",JSON.stringify(canonicalContainer)],
+    ["gymos:draft:A",JSON.stringify(inflated)],
+    ["gymos:history",JSON.stringify([{id:"history-1"}])],
+    ["gymos:dailyRecovery",JSON.stringify({score:71})],
+    ["gymos:recoveryCheckins",JSON.stringify([{id:"checkin-1"}])],
+    [otherOwnerKey,JSON.stringify({
+      ...base,ownerId:OWNER_B,workoutInstanceId:"workout-b"
+    })]
+  ]);
+  const storageBytes=entries=>[...entries].reduce(
+    (total,[key,value])=>total+(key.length+String(value).length)*2,0
+  );
+  const quota=storageBytes(storageMap);
+  const localStorage={
+    get length(){return storageMap.size;},
+    key:index=>[...storageMap.keys()][index]??null,
+    getItem:key=>storageMap.has(key)?storageMap.get(key):null,
+    removeItem:key=>storageMap.delete(key),
+    setItem(key,value){
+      const next=new Map(storageMap);
+      next.set(String(key),String(value));
+      if(storageBytes(next)>quota){
+        const error=new Error("quota");
+        error.name="QuotaExceededError";
+        error.code=22;
+        throw error;
+      }
+      storageMap.set(String(key),String(value));
+    }
+  };
+  assert.throws(
+    ()=>localStorage.setItem(
+      `gymos:workoutProgress:${OWNER_A}:workout-1`,JSON.stringify(base)
+    ),
+    error=>error.name==="QuotaExceededError"
+  );
+  const protectedBefore={
+    routine:localStorage.getItem("gymos:routine"),
+    canonicalRoutine:localStorage.getItem("gymos:routine:canonical"),
+    history:localStorage.getItem("gymos:history"),
+    recovery:localStorage.getItem("gymos:dailyRecovery"),
+    recoveryCheckins:localStorage.getItem("gymos:recoveryCheckins"),
+    other:localStorage.getItem(otherOwnerKey)
+  };
+  const state={
+    workoutDraftMemory:null,workoutDraftLastError:null,
+    workoutDraftSaveStatus:"saved_local",workoutInlineMessage:null
+  };
+  const context={
+    JSON,Map,Object,String,Array,Date,localStorage,state,
+    CANONICAL_DRAFTS_KEY:"gymos:routineDrafts",
+    CANONICAL_ROUTINE_KEY:"gymos:routine:canonical",
+    workoutProgressApi:()=>engine,
+    currentRoutineOwnerOrNull:()=>OWNER_A,
+    getCanonicalRoutine:()=>canonicalRoutine,
+    readStoredJson:key=>{
+      try{return JSON.parse(localStorage.getItem(key));}catch(_){return null;}
+    },
+    assertActiveLocalOwner:owner=>{
+      if(owner!==OWNER_A) throw new Error("owner_changed");
+      return owner;
+    },
+    writeWorkoutStorage:(key,value)=>{
+      try{localStorage.setItem(key,value);}
+      catch(error){
+        const wrapped=new Error("storage_quota");
+        wrapped.name="WorkoutPersistenceError";
+        wrapped.code=error.name==="QuotaExceededError"
+          ?"storage_quota":"local_progress_write_failed";
+        wrapped.cause=error;
+        throw wrapped;
+      }
+    },
+    classifyWorkoutPersistenceError:(error,options={})=>{
+      if(error?.name==="WorkoutPersistenceError") return error;
+      const wrapped=new Error(options.fallback||"migration_failed");
+      wrapped.name="WorkoutPersistenceError";
+      wrapped.code=error?.name==="QuotaExceededError"
+        ?"storage_quota":(options.fallback||"migration_failed");
+      wrapped.phase=options.phase;
+      wrapped.cause=error;
+      return wrapped;
+    },
+    logWorkoutPersistenceError:()=>{},
+    setActiveWorkoutMessage:(type,text,options={})=>{
+      state.workoutInlineMessage={type,text,...options};
+    }
+  };
+  vm.createContext(context);
+  vm.runInContext(
+    `${extractFunction(appSource,"draftKey")}
+     ${extractFunction(appSource,"workoutProgressPrefix")}
+     ${extractFunction(appSource,"compactWorkoutDraftShadow")}
+     ${extractFunction(appSource,"sanitizeWorkoutDraftContainer")}
+     ${extractFunction(appSource,"repairInflatedLegacyWorkoutStorage")}`,
+    context
+  );
+  const first=vm.runInContext(
+    `repairInflatedLegacyWorkoutStorage({ownerId:"${OWNER_A}"})`,context
+  );
+  assert.equal(first.completed,true);
+  assert.equal(first.repaired,true);
+  const progress=JSON.parse(localStorage.getItem(
+    `gymos:workoutProgress:${OWNER_A}:workout-1`
+  ));
+  assert.equal(progress.workoutInstanceId,"workout-1");
+  assert.equal(progress.currentExerciseInstanceId,"exercise-workout-1-row");
+  assert.equal(progress.exercises[0].notes,"nota exacta");
+  assert.equal(progress.exercises[0].series[0].weight,"82.5");
+  assert.equal(progress.exercises[0].series[0].reps,"9");
+  assert.equal(progress.sessionTimer.elapsedMs,987654);
+  assert.equal(progress.exercises[0].substitution.to,"jalon");
+  assert.equal(Object.hasOwn(progress,"legacyRaw"),false);
+  const compactCanonical=JSON.parse(localStorage.getItem("gymos:routineDrafts"));
+  const compactDraft=compactCanonical.draftsBySessionId["session-1"];
+  assert.equal(
+    Object.hasOwn(JSON.parse(compactDraft.legacyRaw),"legacyRaw"),false
+  );
+  assert.deepEqual({
+    routine:localStorage.getItem("gymos:routine"),
+    canonicalRoutine:localStorage.getItem("gymos:routine:canonical"),
+    history:localStorage.getItem("gymos:history"),
+    recovery:localStorage.getItem("gymos:dailyRecovery"),
+    recoveryCheckins:localStorage.getItem("gymos:recoveryCheckins"),
+    other:localStorage.getItem(otherOwnerKey)
+  },protectedBefore);
+  const afterFirst=JSON.stringify([...storageMap.entries()].sort());
+  const second=vm.runInContext(
+    `repairInflatedLegacyWorkoutStorage({ownerId:"${OWNER_A}"})`,context
+  );
+  assert.equal(second.completed,true);
+  assert.equal(second.repaired,false);
+  assert.equal(JSON.stringify([...storageMap.entries()].sort()),afterFirst);
+});
+
+test("salidas y entradas funcionales sanean legacyRaw antes de persistir",()=>{
+  const backup=appSource.slice(
+    appSource.indexOf("function buildGymOSBackup("),
+    appSource.indexOf("function downloadGymOSBackup(")
+  );
+  const vault=appSource.slice(
+    appSource.indexOf("function snapshotCurrentLocalData("),
+    appSource.indexOf("function resetExerciseLibraryOwnerState(")
+  );
+  const sync=appSource.slice(
+    appSource.indexOf("function buildSyncPayload("),
+    appSource.indexOf("const SYNC_AUDIT_KEY")
+  );
+  const storageListener=appSource.slice(
+    appSource.indexOf('window.addEventListener("storage"'),
+    appSource.indexOf("setInterval(()=>autoSync")
+  );
+  assert.match(backup,/sanitizeWorkoutStorageValue/);
+  assert.match(vault,/sanitizeWorkoutStorageValue/);
+  assert.match(sync,/sanitizeWorkoutDraftContainer/);
+  assert.match(sync,/sanitizeIncomingWorkoutPayload/);
+  assert.match(storageListener,/repairInflatedLegacyWorkoutStorage/);
+  assert.match(storageListener,/mergeDrafts\(memory,incoming\)/);
 });

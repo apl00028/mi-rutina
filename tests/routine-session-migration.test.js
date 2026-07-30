@@ -586,7 +586,10 @@ test("sync exporta canónico, drafts, selección y asociaciones",()=>{
     appSource.indexOf("function applySyncPayload")
   );
   assert.match(source,/canonicalRoutine:getCanonicalRoutine\(\)/);
-  assert.match(source,/canonicalDrafts:getCanonicalDrafts\(\)/);
+  assert.match(
+    source,
+    /canonicalDrafts:sanitizeWorkoutDraftContainer\(getCanonicalDrafts\(\)/
+  );
   assert.match(source,/selectedSessionId/);
   assert.match(source,/sessionModelMigration/);
 });

@@ -12,11 +12,14 @@
   ];
   const EXERCISE_FIELDS=[
     "exerciseId","id","name","target","increment","type","equipment","variant",
-    "targetRir","restSeconds","recordTypes","substitution","notes","discomfort","completedAt"
+    "targetRir","restSeconds","recordTypes","substitution","notes","discomfort",
+    "completedAt","libraryResolutionDismissed","resolvedLibraryExerciseId"
   ];
   const ROOT_FIELDS=[
     "startedAt","sessionTimer","currentExerciseInstanceId","status","completedAt"
   ];
+  const LEGACY_RAW_SCAN_MAX_BYTES=512*1024;
+  const LEGACY_RAW_SCAN_MAX_DEPTH=4;
   const clone=value=>value===undefined?undefined:JSON.parse(JSON.stringify(value));
   const list=value=>Array.isArray(value)?value:[];
   const text=value=>String(value??"").trim();
@@ -31,6 +34,66 @@
     return value;
   };
   const same=(left,right)=>JSON.stringify(stable(left))===JSON.stringify(stable(right));
+  function inspectLegacyRaw(draft,{
+    maxBytes=LEGACY_RAW_SCAN_MAX_BYTES,
+    maxDepth=LEGACY_RAW_SCAN_MAX_DEPTH
+  }={}){
+    if(!record(draft)||!Object.prototype.hasOwnProperty.call(draft,"legacyRaw")){
+      return {
+        present:false,nested:false,oversized:false,truncated:false,
+        depth:0,scannedBytes:0
+      };
+    }
+    let candidate=draft.legacyRaw;
+    let depth=0;
+    let scannedBytes=0;
+    let nested=false;
+    let oversized=false;
+    let truncated=false;
+    while(candidate!==undefined&&candidate!==null&&depth<maxDepth){
+      const raw=typeof candidate==="string"?candidate:JSON.stringify(candidate);
+      const bytes=raw.length*2;
+      if(scannedBytes+bytes>maxBytes){
+        oversized=true;
+        truncated=true;
+        break;
+      }
+      scannedBytes+=bytes;
+      depth+=1;
+      let parsed;
+      try{parsed=typeof candidate==="string"?JSON.parse(candidate):candidate;}
+      catch(_){break;}
+      if(!record(parsed)||!Object.prototype.hasOwnProperty.call(parsed,"legacyRaw")) break;
+      nested=true;
+      candidate=parsed.legacyRaw;
+    }
+    if(candidate!==undefined&&candidate!==null&&depth>=maxDepth){
+      truncated=true;
+    }
+    const directBytes=typeof draft.legacyRaw==="string"
+      ?draft.legacyRaw.length*2
+      :0;
+    if(directBytes>maxBytes) oversized=true;
+    return {
+      present:true,nested,oversized,truncated,depth,scannedBytes,directBytes
+    };
+  }
+  function stripLegacyRaw(draft,options={}){
+    if(!record(draft)) throw new Error("invalid_workout_progress");
+    const inspection=inspectLegacyRaw(draft,options);
+    const clean={};
+    Object.keys(draft).forEach(key=>{
+      if(key!=="legacyRaw") clean[key]=clone(draft[key]);
+    });
+    return {draft:clean,inspection,changed:inspection.present};
+  }
+  function compactLegacyShadow(draft,{session=null}={}){
+    const clean=stripLegacyRaw(draft).draft;
+    return JSON.stringify({
+      ...clean,
+      ...(session!==null&&session!==undefined?{session}: {})
+    });
+  }
   function hash(value){
     let output=2166136261;
     for(const character of String(value)){
@@ -132,6 +195,7 @@
     owner,sessionId,routineId,now=new Date().toISOString(),clientInstanceId="legacy",idFactory=null
   }={}){
     if(!record(draft)) throw new Error("invalid_workout_progress");
+    draft=stripLegacyRaw(draft).draft;
     const normalizedOwner=ownerId(draft.ownerId||owner);
     const session=token(draft.sessionId||sessionId,"session_id");
     const routine=token(draft.routineId||routineId,"routine_id");
@@ -535,7 +599,9 @@
 
   global.GymOSWorkoutProgress=Object.freeze({
     VERSION,SET_FIELDS,EXERCISE_FIELDS,ROOT_FIELDS,
+    LEGACY_RAW_SCAN_MAX_BYTES,LEGACY_RAW_SCAN_MAX_DEPTH,
     ownerId,progressStorageKey,activeWorkoutStorageKey,migrationStorageKey,
+    inspectLegacyRaw,stripLegacyRaw,compactLegacyShadow,
     normalizePointer,selectActivePointer,normalizeDraft,
     stampLocalChanges,mergeDrafts,mergeCollections,same
   });

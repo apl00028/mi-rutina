@@ -370,20 +370,59 @@ test("resumen de sesión: usa identidades estables, estado humano y restauració
   assert.match(bindingSource,/event\.key==="Escape"/);
 });
 
-test("ficha ambigua: sustituye el toast por un bloque inline no bloqueante",()=>{
+test("ficha ambigua: muestra un bloque inline compacto y no bloqueante",()=>{
   assert.match(workoutUiSource,/active-workout-resolution/);
-  assert.match(workoutUiSource,/FICHA DEL EJERCICIO PENDIENTE/);
-  assert.match(workoutUiSource,/Elegir la ficha correcta/);
+  assert.match(workoutUiSource,/FICHA PENDIENTE/);
+  assert.match(workoutUiSource,/Elegir ficha/);
   assert.match(workoutUiSource,/Continuar sin ficha/);
+  assert.match(workoutUiSource,/Ficha pendiente/);
+  assert.match(workoutUiSource,/data-workout-show-candidates[\s\S]*?>Seleccionar</);
   assert.doesNotMatch(workoutUiSource,/Este ejercicio todavía no tiene una ficha inequívoca en la biblioteca/);
   assert.match(bindingSource,/workoutUnresolvedDismissed\.add/);
   assert.match(bindingSource,/workoutVisualLibrarySelections\.set/);
+  assert.match(stylesSource,/@media\(max-width:767px\)\{[\s\S]*?\.active-workout-resolution\{grid-template-columns:1fr/);
 });
 
-test("ficha ambigua: elegir candidato es solo visual y no escribe rutina ni historial",()=>{
+test("ficha ambigua: continuar sin ficha persiste el plegado sin iniciar la sesión",()=>{
+  const dismissBranch=between(
+    bindingSource,
+    '}else if(button.matches("[data-workout-dismiss-resolution]"))',
+    '}else if(button.matches("[data-workout-library-candidate]"))'
+  );
+  assert.match(dismissBranch,/current\.libraryResolutionDismissed=true/);
+  assert.match(dismissBranch,/stageWorkoutDraft\(draft,\{immediate:true,scheduleSync:false\}\)/);
+  assert.doesNotMatch(dismissBranch,/startWorkoutSessionInDraft|saveRoutine|saveHistory/);
+});
+
+test("ficha ambigua: elegir candidato lo asocia al draft sin tocar rutina ni historial",()=>{
   const candidateBranch=between(bindingSource,'}else if(button.matches("[data-workout-library-candidate]"))','}else if(button.matches("[data-active-timer-start]"))');
   assert.match(candidateBranch,/workoutVisualLibrarySelections\.set/);
-  assert.doesNotMatch(candidateBranch,/saveRoutine|saveHistory|localStorage|markLocalUpdated|autoSync/);
+  assert.match(candidateBranch,/current\.resolvedLibraryExerciseId=candidateId/);
+  assert.match(candidateBranch,/stageWorkoutDraft\(draft,\{immediate:true,scheduleSync:true\}\)/);
+  assert.doesNotMatch(candidateBranch,/saveRoutine|saveHistory|localStorage|startWorkoutSessionInDraft/);
+});
+
+test("ficha pendiente no bloquea series, ejercicio ni finalización",()=>{
+  const completeSetBranch=between(
+    bindingSource,
+    '}else if(button.matches("[data-complete-active-set]"))',
+    '}else if(button.matches("[data-add-extra-set]"))'
+  );
+  const completeExerciseBranch=between(
+    bindingSource,
+    '}else if(button.matches("[data-complete-active-exercise]"))',
+    '}else if(button.matches("[data-workout-discard-menu]"))'
+  );
+  assert.doesNotMatch(completeSetBranch,/libraryResolution|workoutUnresolved|resolvedLibrary/);
+  assert.doesNotMatch(completeExerciseBranch,/libraryResolution|workoutUnresolved|resolvedLibrary/);
+  assert.doesNotMatch(finishSource,/libraryResolution|workoutUnresolved|resolvedLibrary/);
+});
+
+test("en móvil el descanso queda en flujo y no se superpone al registro",()=>{
+  assert.match(
+    stylesSource,
+    /@media\(max-width:767px\)\{[\s\S]*?\.active-rest-timer\{[\s\S]*?position:static[\s\S]*?min-width:0/
+  );
 });
 
 test("cambio de ejercicio: existe un único menú y reutiliza los modos temporal y permanente",()=>{

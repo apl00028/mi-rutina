@@ -3074,16 +3074,52 @@ body.reduce-motion .home-weekly-card .weekly-progress-fill{transition:none}
   font-weight:750;
 }
 .active-workout-resolution{
-  margin-top:1rem;
-  padding:1rem;
+  display:grid;
+  grid-template-columns:minmax(0,1fr) auto;
+  align-items:center;
+  gap:.55rem .8rem;
+  margin:0;
+  padding:.65rem .75rem;
   border:1px solid color-mix(in srgb,var(--brand) 30%,var(--border));
-  border-radius:calc(var(--radius) - .2rem);
+  border-radius:.7rem;
   background:color-mix(in srgb,var(--brand-soft) 28%,var(--surface));
 }
-.active-workout-resolution h3{margin:.35rem 0 0;font-size:1rem}
-.active-workout-resolution>p{margin:.45rem 0 0;color:var(--muted);font-size:.8rem;line-height:1.5}
-.active-workout-resolution>div:not(.active-workout-candidates){display:flex;gap:.65rem;flex-wrap:wrap;margin-top:.8rem}
-.active-workout-candidates{display:grid;gap:.5rem;margin-top:1rem}
+.active-workout-resolution-copy{display:grid;gap:.12rem;min-width:0}
+.active-workout-resolution h3{margin:0;font-size:.78rem}
+.active-workout-resolution-copy>p{
+  margin:0;
+  color:var(--muted);
+  font-size:.68rem;
+  line-height:1.35;
+}
+.active-workout-resolution-actions{display:flex;gap:.4rem;flex-wrap:wrap}
+.active-workout-resolution-actions button{
+  min-height:2.25rem;
+  padding:.35rem .55rem;
+  font-size:.66rem;
+}
+.active-workout-resolution.compact{
+  display:block;
+  padding:.25rem .55rem;
+  background:var(--surface-soft);
+}
+.active-workout-resolution-row{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:.6rem;
+  min-height:2.1rem;
+  color:var(--muted);
+  font-size:.68rem;
+  font-weight:750;
+}
+.active-workout-resolution-row button{min-height:2rem;padding:.25rem .4rem;font-size:.66rem}
+.active-workout-candidates{
+  display:grid;
+  grid-column:1/-1;
+  gap:.5rem;
+  margin-top:.5rem;
+}
 .active-workout-candidates button{
   display:grid;
   gap:.2rem;
@@ -3779,6 +3815,16 @@ body.reduce-motion .active-workout-session-progress span{transition:none}
 .active-workout-image-placeholder span{font-size:.68rem}
 @media(max-width:767px){
   .active-workout-screen{gap:.6rem;padding-inline:.6rem}
+  .active-workout-resolution{grid-template-columns:1fr;padding:.55rem .6rem}
+  .active-workout-resolution-actions{gap:.25rem}
+  .active-workout-resolution-actions button{flex:1 1 auto}
+  .active-workout-resolution.compact{padding:.2rem .5rem}
+  .active-rest-timer{
+    position:static;
+    width:100%;
+    min-width:0;
+    box-shadow:none;
+  }
   .active-workout-context{
     grid-template-columns:auto minmax(0,1fr) auto;
     gap:.3rem .5rem;

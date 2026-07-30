@@ -127,6 +127,7 @@
       status="running";
       startedAt=legacyStart;
     }
+    if(status==="idle"&&elapsedMs>0) status="paused";
     if(status==="running"&&startedAt===null) status=elapsedMs>0?"paused":"idle";
     if(status!=="running") startedAt=null;
     return {
@@ -165,13 +166,12 @@
       };
     }
     if(action==="reset"){
-      const keepRunning=current.status==="running";
       return {
         ...current,
-        status:keepRunning?"running":"idle",
-        running:keepRunning,
+        status:current.status,
+        running:current.status==="running",
         elapsedMs:0,
-        startedAt:keepRunning?timestamp:null
+        startedAt:current.status==="running"?timestamp:null
       };
     }
     throw new Error("invalid_timer_action");

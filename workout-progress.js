@@ -250,7 +250,9 @@
       ownerId:normalizedOwner,
       sessionId:session,
       routineId:routine,
-      startedAt:draft.startedAt??now,
+      startedAt:Object.prototype.hasOwnProperty.call(draft,"startedAt")
+        ?draft.startedAt
+        :now,
       revision,
       updatedAt,
       clientInstanceId:client,

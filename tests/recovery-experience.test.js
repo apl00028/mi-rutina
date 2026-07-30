@@ -38,7 +38,11 @@ function loadRecovery({owner="11111111-1111-4111-8111-111111111111",history=[]}=
     isAppAuthenticated(){return true;},
     getSupabaseClient(){return null;},
     nav(){return "";},bindNav(){},navigateToScreen(){},
-    app:{innerHTML:""},document:{querySelector(){return null;}},
+    app:{innerHTML:""},document:{
+      querySelector(){return null;},
+      querySelectorAll(){return [];},
+      getElementById(){return null;}
+    },
     queueMicrotask,console,Date,setTimeout,clearTimeout
   };
   vm.createContext(context);
@@ -209,6 +213,159 @@ test("los estados cubren primer uso, próximo, pendiente y completado",()=>{
   }).state,"completed_today");
 });
 
+test("primer uso mantiene Registrar recuperación visible y deshabilitado",()=>{
+  const {api}=loadRecovery();
+  const model=api.recoveryPendingModel({
+    entries:[],checkins:[],referenceDate:"2026-07-30"
+  });
+  const action=api.recoveryRegistrationActionModel(model,{
+    referenceDate:"2026-07-30"
+  });
+  assert.deepEqual(JSON.parse(JSON.stringify(action)),{
+    visible:true,enabled:false,label:"Registrar recuperación",checkinId:null,
+    availabilityText:"Completa una sesión para habilitar tu primer registro de recuperación."
+  });
+  assert.match(recoverySource,/disabled aria-disabled="true"/);
+  assert.match(recoverySource,/data-recovery-view-session>Ver mi próxima sesión/);
+  assert.match(stylesSource,/\.recovery-register-cta:disabled[\s\S]*?opacity:1/);
+});
+
+test("un entrenamiento completado todavía no elegible muestra la fecha local",()=>{
+  const {api}=loadRecovery();
+  const checkin={
+    id:"c-upcoming",status:"pending",workoutDate:"2026-07-30",
+    availableFrom:"2026-07-31"
+  };
+  const model=api.recoveryPendingModel({
+    checkins:[checkin],referenceDate:"2026-07-30"
+  });
+  const action=api.recoveryRegistrationActionModel(model,{
+    referenceDate:"2026-07-30"
+  });
+  assert.equal(model.state,"upcoming");
+  assert.equal(action.enabled,false);
+  assert.equal(action.availabilityText,"Disponible mañana");
+  assert.equal(
+    api.recoveryAvailabilityLabel("2026-07-31","2026-07-29"),
+    "Disponible el 31 de julio"
+  );
+});
+
+test("un check-in disponible abre el cuestionario vinculado sin duplicarlo",()=>{
+  const item=workout();
+  const {api,context}=loadRecovery({history:[item]});
+  const checkin=api.createPendingCheckin(item,{mark:false,sync:false});
+  const model=api.recoveryPendingModel({
+    checkins:api.getCheckins(),referenceDate:"2026-07-30",online:false
+  });
+  const action=api.recoveryRegistrationActionModel(model,{
+    referenceDate:"2026-07-30"
+  });
+  assert.equal(action.enabled,true);
+  assert.equal(action.checkinId,checkin.id);
+  assert.equal(action.label,"Registrar recuperación");
+  api.startCheckin(checkin);
+  assert.equal(context.state.recoveryView,"checkin");
+  assert.equal(context.state.recoveryCheckinId,checkin.id);
+  assert.equal(api.createPendingCheckin(item,{mark:false,sync:false}).id,checkin.id);
+  assert.equal(api.getCheckins().length,1);
+});
+
+test("el cambio de día convierte el mismo próximo check-in en disponible sin recarga",()=>{
+  const {api}=loadRecovery();
+  const checkin={
+    id:"c-midnight",status:"pending",workoutDate:"2026-07-30",
+    availableFrom:"2026-07-31"
+  };
+  const before=api.recoveryPendingModel({
+    checkins:[checkin],referenceDate:"2026-07-30"
+  });
+  const after=api.recoveryPendingModel({
+    checkins:[checkin],referenceDate:"2026-07-31"
+  });
+  assert.equal(before.state,"upcoming");
+  assert.equal(after.state,"pending");
+  assert.equal(
+    api.recoveryRegistrationActionModel(after,{
+      referenceDate:"2026-07-31"
+    }).enabled,
+    true
+  );
+  assert.match(recoverySource,/function scheduleRecoveryDayRefresh/);
+  assert.match(recoverySource,/today!==recoveryRenderedDate\) renderRecoveryExperienceOverview\(\)/);
+});
+
+test("completado y sesión caducada mantienen el CTA visible sin ofrecer otro registro",()=>{
+  const {api}=loadRecovery();
+  const completed=api.recoveryPendingModel({
+    entries:[{...completeAnswers,date:"2026-07-30"}],
+    referenceDate:"2026-07-30"
+  });
+  const expired=api.recoveryPendingModel({
+    authenticated:false,referenceDate:"2026-07-30"
+  });
+  const completedAction=api.recoveryRegistrationActionModel(completed,{
+    referenceDate:"2026-07-30"
+  });
+  const expiredAction=api.recoveryRegistrationActionModel(expired,{
+    referenceDate:"2026-07-30"
+  });
+  assert.equal(completedAction.visible,true);
+  assert.equal(completedAction.enabled,false);
+  assert.equal(completedAction.availabilityText,"La recuperación de hoy ya está registrada.");
+  assert.equal(expiredAction.visible,true);
+  assert.equal(expiredAction.enabled,false);
+  assert.equal(
+    expiredAction.availabilityText,
+    "Vuelve a iniciar sesión para registrar tu recuperación."
+  );
+  assert.match(
+    recoverySource,
+    /renderRecoveryResult\([\s\S]*?renderRecoveryRegistrationAction\(model,referenceDate\)/
+  );
+});
+
+test("offline conserva habilitado el check-in elegible",()=>{
+  const {api}=loadRecovery();
+  const model=api.recoveryPendingModel({
+    checkins:[{
+      id:"c-offline",status:"pending",workoutDate:"2026-07-29",
+      availableFrom:"2026-07-30"
+    }],
+    referenceDate:"2026-07-30",online:false
+  });
+  assert.equal(model.networkState,"offline");
+  assert.equal(
+    api.recoveryRegistrationActionModel(model,{
+      referenceDate:"2026-07-30"
+    }).enabled,
+    true
+  );
+});
+
+test("un registro diario no oculta ni consume un check-in postentrenamiento pendiente",()=>{
+  const {api}=loadRecovery();
+  const model=api.recoveryPendingModel({
+    entries:[{
+      ...completeAnswers,id:"manual-today",date:"2026-07-30",
+      source:"manual",checkinId:""
+    }],
+    checkins:[{
+      id:"linked-workout",status:"pending",workoutDate:"2026-07-29",
+      availableFrom:"2026-07-30"
+    }],
+    referenceDate:"2026-07-30"
+  });
+  assert.equal(model.state,"pending");
+  assert.equal(model.checkin.id,"linked-workout");
+  assert.equal(
+    api.recoveryRegistrationActionModel(model,{
+      referenceDate:"2026-07-30"
+    }).checkinId,
+    "linked-workout"
+  );
+});
+
 test("los estados distinguen idle, offline, error recuperable y sesión caducada",()=>{
   const {api}=loadRecovery();
   const old={...completeAnswers,date:"2026-07-28"};
@@ -373,11 +530,12 @@ test("la finalización crea el check-in dentro de la transacción y no abre el c
   assert.doesNotMatch(completion,/Completar check-in|recoveryQuestionnaireModel|Recovery Score/);
 });
 
-test("la API pública expone los seis modelos puros y la navegación oficial",()=>{
+test("la API pública expone los modelos puros y la navegación oficial",()=>{
   const {api}=loadRecovery();
   for(const name of [
     "recoveryPendingModel","recoveryQuestionnaireModel","recoveryResultModel",
-    "recoveryHistoryModel","recoveryTrendModel","recoveryHomeSummaryModel"
+    "recoveryHistoryModel","recoveryTrendModel","recoveryHomeSummaryModel",
+    "recoveryAvailabilityLabel","recoveryRegistrationActionModel"
   ]) assert.equal(typeof api[name],"function");
   assert.match(recoverySource,/navigateToScreen\("history"\)/);
   assert.match(recoverySource,/navigateToScreen\("home"\)/);

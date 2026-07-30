@@ -9,6 +9,8 @@
   const TREND_MINIMUM=3;
   const PROVIDERS=["manual","apple_health","google_fit","garmin","polar","whoop","oura","fitbit"];
   const providerAdapters=new Map();
+  let recoveryDayRefreshTimer=null;
+  let recoveryRenderedDate=null;
   const scaleLabels={
     sleepQuality:["Muy mal","Mal","Normal","Bien","Muy bien"],
     energy:["Muy bajo","Bajo","Normal","Bueno","Muy bueno"],
@@ -296,16 +298,80 @@
       String(a.id||"").localeCompare(String(b.id||""))
     );
     const completedToday=completed.find(entry=>entry.date===today)||null;
-    if(completedToday) return {state:"completed_today",entry:clone(completedToday),result:resultForEntry(completedToday),online,networkState};
     const pending=[...checkins].filter(checkin=>checkin?.status==="pending");
     const due=pending.filter(checkin=>checkin.availableFrom&&checkin.availableFrom<=today)
       .sort((a,b)=>String(a.workoutDate).localeCompare(String(b.workoutDate))||String(a.id).localeCompare(String(b.id)))[0]||null;
     if(due) return {state:"pending",checkin:clone(due),online,networkState};
+    if(completedToday) return {state:"completed_today",entry:clone(completedToday),result:resultForEntry(completedToday),online,networkState};
     const upcoming=pending.filter(checkin=>checkin.availableFrom>today)
       .sort((a,b)=>String(a.availableFrom).localeCompare(String(b.availableFrom))||String(a.id).localeCompare(String(b.id)))[0]||null;
     if(upcoming) return {state:"upcoming",checkin:clone(upcoming),online,networkState};
     if(!completed.length) return {state:"first_use",online,networkState};
     return {state:"idle",entry:clone(completed[0]),result:resultForEntry(completed[0]),online,networkState};
+  }
+  function localDateParts(value){
+    const match=/^(\d{4})-(\d{2})-(\d{2})$/.exec(String(value||""));
+    if(!match) return null;
+    const year=Number(match[1]),month=Number(match[2]),day=Number(match[3]);
+    const date=new Date(year,month-1,day,12);
+    if(
+      date.getFullYear()!==year||date.getMonth()!==month-1||
+      date.getDate()!==day
+    ) return null;
+    return {year,month,day,date};
+  }
+  function recoveryAvailabilityLabel(availableFrom,referenceDate){
+    const available=localDateParts(availableFrom);
+    const reference=localDateParts(referenceDate);
+    if(!available) return "Disponible próximamente";
+    if(reference){
+      const availableDay=Date.UTC(available.year,available.month-1,available.day);
+      const referenceDay=Date.UTC(reference.year,reference.month-1,reference.day);
+      if((availableDay-referenceDay)/86400000===1) return "Disponible mañana";
+    }
+    return `Disponible el ${available.date.toLocaleDateString("es-ES",{
+      day:"numeric",month:"long"
+    })}`;
+  }
+  function recoveryRegistrationActionModel(model,{referenceDate}={}){
+    if(model?.state==="pending"&&model.checkin?.id){
+      return {
+        visible:true,enabled:true,label:"Registrar recuperación",
+        checkinId:String(model.checkin.id),availabilityText:null
+      };
+    }
+    if(model?.state==="upcoming"&&model.checkin){
+      return {
+        visible:true,enabled:false,label:"Registrar recuperación",checkinId:null,
+        availabilityText:recoveryAvailabilityLabel(
+          model.checkin.availableFrom,referenceDate
+        )
+      };
+    }
+    if(model?.state==="first_use"){
+      return {
+        visible:true,enabled:false,label:"Registrar recuperación",checkinId:null,
+        availabilityText:"Completa una sesión para habilitar tu primer registro de recuperación."
+      };
+    }
+    if(model?.state==="idle"){
+      return {
+        visible:true,enabled:false,label:"Registrar recuperación",checkinId:null,
+        availabilityText:"Completa una nueva sesión para habilitar el próximo registro de recuperación."
+      };
+    }
+    if(model?.state==="completed_today"){
+      return {
+        visible:true,enabled:false,label:"Registrar recuperación",checkinId:null,
+        availabilityText:"La recuperación de hoy ya está registrada."
+      };
+    }
+    return {
+      visible:true,enabled:false,label:"Registrar recuperación",checkinId:null,
+      availabilityText:model?.state==="session_error"
+        ?"Vuelve a iniciar sesión para registrar tu recuperación."
+        :"No se pudo comprobar si hay un registro disponible."
+    };
   }
   function recoveryTrendModel({entries=[]}={}){
     const comparable=[...entries].filter(entry=>
@@ -866,9 +932,30 @@
       </aside>
     </section>`;
   }
-  function renderRecoveryState(model,entries){
+  function renderRecoveryRegistrationAction(model,referenceDate,{
+    showSessionAction=false
+  }={}){
+    const action=recoveryRegistrationActionModel(model,{referenceDate});
+    if(!action.visible) return "";
+    return `<div class="recovery-register-actions">
+      <button type="button" class="primary recovery-register-cta"
+        ${action.enabled
+          ?`data-recovery-start="${esc(action.checkinId)}"`
+          :'disabled aria-disabled="true"'}
+      >${esc(action.label)}</button>
+      ${action.availabilityText
+        ?`<p class="recovery-availability" role="status">${esc(action.availabilityText)}</p>`
+        :""}
+      ${showSessionAction
+        ?'<button type="button" class="secondary" data-recovery-view-session>Ver mi próxima sesión</button>'
+        :""}
+    </div>`;
+  }
+  function renderRecoveryState(model,entries,referenceDate){
     if(model.state==="completed_today"){
-      return renderRecoveryResult(model.entry,{newResult:state.recoveryView==="result"});
+      return `${renderRecoveryResult(
+        model.entry,{newResult:state.recoveryView==="result"}
+      )}${renderRecoveryRegistrationAction(model,referenceDate)}`;
     }
     if(model.state==="pending"){
       return `<section class="recovery-primary-state pending" aria-labelledby="recoveryPendingTitle">
@@ -876,16 +963,19 @@
         <h1 id="recoveryPendingTitle">Cuéntanos cómo te encuentras hoy</h1>
         ${recoveryWorkoutContextHtml(model.checkin)}
         <p>Completa un check-in de menos de 30 segundos.</p>
-        <button type="button" class="primary" data-recovery-start="${esc(model.checkin.id)}">Completar check-in</button>
+        ${renderRecoveryRegistrationAction(model,referenceDate)}
         <aside><strong>¿Por qué te preguntamos esto?</strong><p>Tus respuestas permiten ofrecer una orientación prudente para la sesión de hoy. No modificaremos tu rutina automáticamente.</p></aside>
       </section>`;
     }
     if(model.state==="upcoming"){
       return `<section class="recovery-primary-state upcoming" aria-labelledby="recoveryUpcomingTitle">
         <span class="section-kicker">PRÓXIMO CHECK-IN</span>
-        <h1 id="recoveryUpcomingTitle">Tu evaluación estará disponible mañana</h1>
+        <h1 id="recoveryUpcomingTitle">${esc(recoveryAvailabilityLabel(
+          model.checkin.availableFrom,referenceDate
+        ))}</h1>
         ${recoveryWorkoutContextHtml(model.checkin,{verb:"Completada"})}
         <p>Primero necesitamos conocer el sueño y las sensaciones posteriores al entrenamiento.</p>
+        ${renderRecoveryRegistrationAction(model,referenceDate)}
       </section>`;
     }
     if(model.state==="first_use"){
@@ -894,7 +984,7 @@
         <h1 id="recoveryFirstUseTitle">Descubre cómo estás respondiendo a tus entrenamientos</h1>
         <p>Después de entrenar, GymOS te preguntará por sueño, energía, fatiga y molestias. Tus respuestas ayudan a valorar si conviene mantener la sesión prevista o entrenar con algo más de margen.</p>
         <p>El primer check-in estará disponible después de completar un entrenamiento y alcanzar el día siguiente.</p>
-        <button type="button" class="secondary" data-recovery-view-session>Ver mi próxima sesión</button>
+        ${renderRecoveryRegistrationAction(model,referenceDate,{showSessionAction:true})}
       </section>`;
     }
     if(model.state==="idle"){
@@ -903,6 +993,7 @@
         <span class="section-kicker">TODO AL DÍA</span>
         <h1 id="recoveryIdleTitle">No tienes ningún check-in pendiente</h1>
         <p>El próximo estará disponible después de completar un entrenamiento y alcanzar el día siguiente.</p>
+        ${renderRecoveryRegistrationAction(model,referenceDate)}
         ${model.entry?`<article class="recovery-last-entry">
           <span class="section-kicker">ÚLTIMA RECUPERACIÓN</span>
           <strong>${esc(model.result.title)}</strong>
@@ -916,8 +1007,28 @@
       <span class="section-kicker">${model.state==="session_error"?"SESIÓN NO DISPONIBLE":"NO SE PUDO ACTUALIZAR"}</span>
       <h1>${esc(model.title||"No se pudo cargar Recuperación")}</h1>
       <p>${model.state==="session_error"?"Cierra sesión y vuelve a entrar.":"Tus datos locales se conservan. Puedes volver a intentarlo."}</p>
+      ${renderRecoveryRegistrationAction(model,referenceDate)}
       ${model.retryable?'<button type="button" class="secondary" data-recovery-retry>Reintentar</button>':""}
     </section>`;
+  }
+  function scheduleRecoveryDayRefresh(referenceDate){
+    clearTimeout(recoveryDayRefreshTimer);
+    recoveryRenderedDate=referenceDate;
+    const ownerId=currentOwnerId();
+    const now=new Date();
+    const nextDay=new Date(
+      now.getFullYear(),now.getMonth(),now.getDate()+1,0,0,0,100
+    );
+    recoveryDayRefreshTimer=setTimeout(()=>{
+      recoveryDayRefreshTimer=null;
+      if(
+        state.screen!=="recovery"||state.recoveryView!=="overview"||
+        currentOwnerId()!==ownerId
+      ) return;
+      const today=dateKey(new Date());
+      if(today!==recoveryRenderedDate) renderRecoveryExperienceOverview();
+    },Math.max(1000,nextDay.getTime()-now.getTime()));
+    recoveryDayRefreshTimer?.unref?.();
   }
   function renderRecoveryExperienceOverview(){
     const today=dateKey(new Date());
@@ -931,11 +1042,12 @@
       entries,checkins,referenceDate:today,online:navigator.onLine,
       error,authenticated:typeof isAppAuthenticated!=="function"||isAppAuthenticated()
     });
+    scheduleRecoveryDayRefresh(today);
     app.innerHTML=`<div class="app-shell recovery-shell">
       <main class="screen recovery-screen recovery-experience-screen">
         ${!navigator.onLine?'<p class="recovery-connectivity-note" role="status">Sin conexión. Puedes completar el check-in y GymOS lo sincronizará más tarde.</p>':""}
         ${conflict?'<p class="form-message info" role="status">Hay dos versiones de una evaluación. Ambas se conservan; vuelve a sincronizar para revisarlo.</p>':""}
-        ${renderRecoveryState(model,entries)}
+        ${renderRecoveryState(model,entries,today)}
         ${entries.length>=2?renderRecoveryHistoryExperience(entries,today):""}
         ${entries.length?'<p class="recovery-disclaimer">Las orientaciones describen tus respuestas y no constituyen un diagnóstico.</p>':""}
       </main>
@@ -1234,6 +1346,8 @@
     recoveryQuestionnaireModel,
     recoveryResultModel,
     recoveryPendingModel,
+    recoveryAvailabilityLabel,
+    recoveryRegistrationActionModel,
     recoveryHistoryModel,
     recoveryTrendModel,
     recoveryHomeSummaryModel,

@@ -70,7 +70,8 @@ test("entrenamiento activo: el módulo expone modelos puros sin dependencias de 
   for(const name of [
     "activeWorkoutHeaderModel","sessionElapsedModel","exerciseGuideModel",
     "exerciseMuscleModel","exerciseTechniqueModel","exerciseLibraryResolutionModel",
-    "setEntryModel","restTimerModel","workoutCompletionReviewModel"
+    "setEntryModel","sessionTimerControlModel","restTimerModel",
+    "workoutCompletionReviewModel","exerciseDetailDisclosureModel"
   ]) assert.equal(typeof api[name],"function",name);
   assert.doesNotMatch(moduleSource,/localStorage|document\.|supabase|setInterval|setTimeout|saveRoutine|saveHistory/);
 });
@@ -513,6 +514,84 @@ test("expandir o colapsar una tarjeta no reconstruye la sesión",()=>{
   assert.match(toggleBranch,/panel\.hidden=expanded/);
   assert.match(toggleBranch,/workoutExpandedExercises\.(delete|add)/);
   assert.doesNotMatch(toggleBranch,/renderWorkout|saveDraft|stageWorkoutDraft|localStorage/);
+});
+
+test("notas y molestias comienzan plegadas con controles accesibles independientes",()=>{
+  assert.match(workoutUiSource,/data-workout-detail-toggle="notes"[\s\S]*?aria-expanded="\$\{notesExpanded\}"[\s\S]*?aria-controls="workoutExerciseNotesPanel\$\{index\}"/);
+  assert.match(workoutUiSource,/data-workout-detail-toggle="discomfort"[\s\S]*?aria-expanded="\$\{discomfortExpanded\}"[\s\S]*?aria-controls="workoutExerciseDiscomfortPanel\$\{index\}"/);
+  assert.match(workoutUiSource,/class="workout-exercise-detail-panel" \$\{notesExpanded\?"":"hidden"\}/);
+  assert.match(workoutUiSource,/class="workout-exercise-detail-panel" \$\{discomfortExpanded\?"":"hidden"\}/);
+  assert.match(stylesSource,/\.workout-exercise-detail-panel\[hidden\]\{display:none\}/);
+});
+
+test("el resumen indica contenido sin revelar notas ni molestias",()=>{
+  const api=loadApi();
+  const model=api.exerciseDetailDisclosureModel({
+    notes:"Aumentar carga la próxima vez",
+    discomfort:"Dolor punzante detallado en rodilla derecha"
+  });
+  assert.equal(model.notes.label,"Notas del ejercicio · Añadida");
+  assert.equal(model.discomfort.label,"Molestias durante el ejercicio · Registrada");
+  assert.equal(model.discomfort.safeSummary,"Molestia registrada");
+  assert.doesNotMatch(JSON.stringify(model),/punzante|rodilla derecha|Aumentar carga/);
+});
+
+test("abrir un panel no escribe y cerrarlo solo hace flush si hay cambios",()=>{
+  const detailBranch=between(
+    bindingSource,
+    '}else if(button.matches("[data-workout-detail-toggle]"))',
+    '}else if(button.matches("[data-workout-reference]"))'
+  );
+  assert.match(detailBranch,/expanded&&!flushWorkoutDetailPanels/);
+  assert.match(detailBranch,/workoutExpandedDetailPanels\.(delete|add)/);
+  assert.match(detailBranch,/event\.detail===0[\s\S]*?textarea,input[\s\S]*?focus/);
+  assert.doesNotMatch(detailBranch,/renderWorkout|stageWorkoutDraft|saveDraft|localStorage/);
+  const flushHelper=between(
+    appSource,
+    "function flushWorkoutDetailPanels(",
+    "function focusNextPendingWorkoutExercise("
+  );
+  assert.match(flushHelper,/if\(!dirtyKeys\.length\) return true/);
+  assert.match(flushHelper,/requireLocal:true/);
+});
+
+test("completar guarda localmente antes de plegar y avanza de forma suave",()=>{
+  const completeBranch=between(
+    bindingSource,
+    '}else if(button.matches("[data-complete-active-exercise]"))',
+    '}else if(button.matches("[data-workout-discard-menu]"))'
+  );
+  assert.match(completeBranch,/flushWorkoutDraftProgress\(\{[\s\S]*?requireLocal:true/);
+  assert.match(completeBranch,/persist\([\s\S]*?completedAt=new Date\(\)\.toISOString/);
+  assert.match(completeBranch,/if\(!workoutLocalSaveSucceeded\(\)\) return/);
+  assert.match(completeBranch,/collapseCompletedWorkoutExercise\(exerciseInstanceId\)/);
+  const collapseHelper=between(
+    appSource,
+    "function focusNextPendingWorkoutExercise(",
+    "function renderActiveWorkoutExercise("
+  );
+  assert.match(collapseHelper,/workoutExpandedExercises\.delete/);
+  assert.match(collapseHelper,/scrollIntoView\(\{[\s\S]*?behavior:[\s\S]*?"smooth"/);
+  assert.match(collapseHelper,/data-workout-toggle-exercise[\s\S]*?focus/);
+});
+
+test("fallo remoto permite plegar y fallo local lo impide",()=>{
+  const savePolicy=between(
+    appSource,
+    "function workoutLocalSaveSucceeded(",
+    "function flushWorkoutDetailPanels("
+  );
+  assert.match(savePolicy,/workoutDraftSaveStatus!=="local_error"/);
+  assert.match(savePolicy,/workoutDraftLastError\.code==="remote_sync_failed"/);
+});
+
+test("corregir una serie completada devuelve el ejercicio a En progreso",()=>{
+  const setBranch=between(
+    bindingSource,
+    '}else if(button.matches("[data-complete-active-set]"))',
+    '}else if(button.matches("[data-add-extra-set]"))'
+  );
+  assert.match(setBranch,/if\(wasDone\) exercise\.completedAt=null/);
 });
 
 test("serie extra: ofrece una única acción visible por breakpoint y etiqueta la fila",()=>{

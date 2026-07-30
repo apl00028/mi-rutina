@@ -225,6 +225,22 @@ test("normalizar añade identidades estables a entrenamiento, ejercicios y serie
   );
 });
 
+test("un draft nuevo conserva startedAt nulo hasta empezar la sesión",()=>{
+  const engine=api();
+  const fresh=draft();
+  fresh.startedAt=null;
+  fresh.sessionTimer={
+    ownerId:OWNER_A,sessionId:"session-1",
+    status:"idle",running:false,elapsedMs:0,startedAt:null
+  };
+  const normalized=engine.normalizeDraft(fresh,{
+    now:"2026-07-30T12:00:00.000Z"
+  });
+  assert.equal(normalized.startedAt,null);
+  assert.equal(normalized.sessionTimer.status,"idle");
+  assert.equal(normalized.sessionTimer.startedAt,null);
+});
+
 test("dos pestañas fusionan cambios en ejercicios diferentes sin perder ninguno",()=>{
   const engine=api();
   const base=engine.normalizeDraft(draft(),{});
@@ -1036,9 +1052,9 @@ test("puntero corrupto se descarta y la migración parcial sigue siendo reparabl
 test("cronómetro y campos escriben memoria antes de persistir y no esperan a Supabase",()=>{
   const timerAction=appSource.slice(
     appSource.indexOf("function setWorkoutSessionTimerAction("),
-    appSource.indexOf("function ensureWorkoutSessionTimerStarted(")
+    appSource.indexOf("function stopWorkoutSessionTimerDisplay(")
   );
-  assert.match(timerAction,/stageWorkoutDraft\(draft,\{immediate:true,scheduleSync:false\}\)/);
+  assert.match(timerAction,/stageWorkoutDraft\(draft,\{immediate:true,scheduleSync:true\}\)/);
   assert.doesNotMatch(timerAction,/supabase|syncNow|autoSync|await/);
   const save=appSource.slice(
     appSource.indexOf("function saveDraft("),

@@ -3915,6 +3915,529 @@ body.reduce-motion .workout-exercise-chevron,
 body.reduce-motion .workout-detail-chevron,
 body.reduce-motion .workout-exercise-panel{transition:none}
 
+/* v4.2: entrenamiento inmersivo móvil. Todo queda encapsulado en el layout móvil. */
+@media(max-width:767px){
+  .active-workout-shell[data-workout-layout="mobile"]{
+    width:100%;
+    max-width:none;
+    min-height:100dvh;
+    padding:0;
+    overflow-x:clip;
+    background:var(--bg);
+    --mobile-workout-edge:clamp(.75rem,3.6vw,1rem);
+  }
+  .active-workout-shell[data-workout-layout="mobile"] .active-workout-mobile-screen{
+    width:100%;
+    min-height:var(--workout-visual-height,100dvh);
+    margin:0;
+    overflow-x:clip;
+  }
+  .active-workout-shell[data-workout-layout="mobile"] .icon-button{
+    width:44px;
+    height:44px;
+    min-width:44px;
+    min-height:44px;
+  }
+  .active-workout-shell[data-workout-layout="mobile"] .mobile-workout-main-content{
+    display:grid;
+    gap:.75rem;
+    min-height:var(--workout-visual-height,100dvh);
+    padding:0 var(--mobile-workout-edge)
+      max(1rem,env(safe-area-inset-bottom));
+    scroll-padding-block:5.5rem calc(7rem + var(--workout-keyboard-inset,0px));
+  }
+  .active-workout-shell[data-workout-layout="mobile"] .mobile-workout-header{
+    position:sticky;
+    top:0;
+    z-index:40;
+    display:grid;
+    grid-template-columns:44px minmax(0,1fr) auto auto 44px;
+    grid-template-areas:
+      "back position clock save menu"
+      "progress progress progress progress progress";
+    align-items:center;
+    gap:.25rem .45rem;
+    margin-inline:calc(var(--mobile-workout-edge) * -1);
+    padding:max(.35rem,env(safe-area-inset-top)) var(--mobile-workout-edge) .45rem;
+    border-bottom:1px solid var(--border);
+    background:color-mix(in srgb,var(--bg) 95%,transparent);
+    backdrop-filter:blur(16px);
+  }
+  .active-workout-shell[data-workout-layout="mobile"] .mobile-workout-header>.icon-button:first-child{grid-area:back}
+  .active-workout-shell[data-workout-layout="mobile"] .mobile-workout-header>.icon-button:last-of-type{grid-area:menu}
+  .active-workout-shell[data-workout-layout="mobile"] .mobile-workout-position{
+    grid-area:position;
+    display:grid;
+    gap:.08rem;
+    min-width:0;
+    min-height:44px;
+    padding:.25rem;
+    border:0;
+    background:transparent;
+    color:var(--text);
+    text-align:left;
+  }
+  .active-workout-shell[data-workout-layout="mobile"] .mobile-workout-position strong,
+  .active-workout-shell[data-workout-layout="mobile"] .mobile-workout-position span{
+    overflow:hidden;
+    text-overflow:ellipsis;
+    white-space:nowrap;
+  }
+  .active-workout-shell[data-workout-layout="mobile"] .mobile-workout-position strong{font-size:.9rem}
+  .active-workout-shell[data-workout-layout="mobile"] .mobile-workout-position span{color:var(--muted);font-size:.75rem}
+  .active-workout-shell[data-workout-layout="mobile"] .mobile-workout-clock{
+    grid-area:clock;
+    min-height:44px;
+    padding:.35rem .25rem;
+    border:0;
+    background:transparent;
+    color:var(--text);
+  }
+  .active-workout-shell[data-workout-layout="mobile"] .mobile-workout-clock time{
+    font-size:.9rem;
+    font-weight:850;
+    font-variant-numeric:tabular-nums;
+  }
+  .active-workout-shell[data-workout-layout="mobile"] .mobile-workout-save{
+    grid-area:save;
+    max-width:7rem;
+    color:var(--muted);
+    font-size:.75rem;
+    font-weight:750;
+    line-height:1.15;
+    text-align:right;
+  }
+  .active-workout-shell[data-workout-layout="mobile"] .mobile-workout-save[data-status="local_error"],
+  .active-workout-shell[data-workout-layout="mobile"] .mobile-workout-save[data-status="conflict"]{color:var(--danger)}
+  .active-workout-shell[data-workout-layout="mobile"] .mobile-workout-progress{
+    grid-area:progress;
+    height:4px;
+    overflow:hidden;
+    border-radius:999px;
+    background:var(--surface-soft);
+  }
+  .active-workout-shell[data-workout-layout="mobile"] .mobile-workout-progress span{
+    display:block;
+    height:100%;
+    border-radius:inherit;
+    background:var(--brand);
+    transition:width .18s ease;
+  }
+  .active-workout-shell[data-workout-layout="mobile"] .mobile-workout-exercise{
+    display:grid;
+    gap:.75rem;
+    min-width:0;
+  }
+  .active-workout-shell[data-workout-layout="mobile"] .mobile-workout-exercise-header{
+    display:grid;
+    grid-template-columns:minmax(0,1fr) 44px;
+    align-items:start;
+    gap:.65rem;
+    padding-top:.15rem;
+  }
+  .active-workout-shell[data-workout-layout="mobile"] .mobile-workout-exercise-header h1{
+    margin:0;
+    font-size:clamp(1.35rem,6vw,1.7rem);
+    line-height:1.12;
+    letter-spacing:-.035em;
+  }
+  .active-workout-shell[data-workout-layout="mobile"] .mobile-workout-exercise-header p{
+    margin:.35rem 0 0;
+    color:var(--muted);
+    font-size:.875rem;
+    line-height:1.45;
+  }
+  .active-workout-shell[data-workout-layout="mobile"] .mobile-workout-context-actions{
+    display:grid;
+    grid-template-columns:repeat(4,minmax(0,1fr));
+    gap:.4rem;
+  }
+  .active-workout-shell[data-workout-layout="mobile"] .mobile-workout-context-actions button{
+    min-width:0;
+    min-height:44px;
+    padding:.45rem .25rem;
+    border:1px solid var(--border);
+    border-radius:.7rem;
+    background:var(--surface);
+    color:var(--text);
+    font-size:.875rem;
+    font-weight:750;
+  }
+  .active-workout-shell[data-workout-layout="mobile"] .mobile-workout-library-pending{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:1rem;
+    min-height:44px;
+    padding:.65rem .75rem;
+    border:1px solid color-mix(in srgb,var(--brand) 30%,var(--border));
+    border-radius:.75rem;
+    background:var(--brand-soft);
+    color:var(--text);
+    font-size:.875rem;
+    text-align:left;
+  }
+  .active-workout-shell[data-workout-layout="mobile"] .mobile-workout-disclosure{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    width:100%;
+    min-height:44px;
+    padding:.45rem .1rem;
+    border:0;
+    background:transparent;
+    color:var(--text);
+    font-size:.875rem;
+    text-align:left;
+  }
+  .active-workout-shell[data-workout-layout="mobile"] .mobile-workout-disclosure strong{color:var(--brand)}
+  .active-workout-shell[data-workout-layout="mobile"] .mobile-workout-summary-rows{
+    display:grid;
+    border-block:1px solid var(--border);
+  }
+  .active-workout-shell[data-workout-layout="mobile"] .mobile-workout-summary-rows button{
+    display:grid;
+    grid-template-columns:auto minmax(0,1fr) auto;
+    align-items:center;
+    gap:.55rem;
+    min-height:48px;
+    padding:.55rem .25rem;
+    border:0;
+    border-bottom:1px solid var(--border);
+    background:transparent;
+    color:var(--text);
+    font-size:.875rem;
+    text-align:left;
+  }
+  .active-workout-shell[data-workout-layout="mobile"] .mobile-workout-summary-rows button:last-child{border-bottom:0}
+  .active-workout-shell[data-workout-layout="mobile"] .mobile-workout-summary-rows button>strong{
+    overflow:hidden;
+    text-overflow:ellipsis;
+    white-space:nowrap;
+  }
+  .active-workout-shell[data-workout-layout="mobile"] .mobile-workout-summary-rows button>small{color:var(--brand);font-size:.8rem}
+  .active-workout-shell[data-workout-layout="mobile"] .mobile-workout-active-set{
+    display:grid;
+    gap:.8rem;
+    scroll-margin-block:5.5rem 8rem;
+    padding:.9rem;
+    border:1px solid color-mix(in srgb,var(--brand) 36%,var(--border));
+    border-radius:1rem;
+    background:var(--surface);
+    box-shadow:0 8px 28px rgba(15,23,42,.06);
+  }
+  .active-workout-shell[data-workout-layout="mobile"] .mobile-workout-active-set>header{
+    display:flex;
+    align-items:start;
+    justify-content:space-between;
+    gap:.75rem;
+  }
+  .active-workout-shell[data-workout-layout="mobile"] .mobile-workout-active-set h2{margin:.15rem 0 0;font-size:1.1rem}
+  .active-workout-shell[data-workout-layout="mobile"] .mobile-workout-extra-badge{
+    padding:.25rem .45rem;
+    border-radius:.45rem;
+    background:var(--brand-soft);
+    color:var(--brand);
+    font-size:.75rem;
+    font-weight:850;
+  }
+  .active-workout-shell[data-workout-layout="mobile"] .mobile-workout-set-reference{
+    display:grid;
+    grid-template-columns:repeat(2,minmax(0,1fr));
+    gap:.55rem;
+  }
+  .active-workout-shell[data-workout-layout="mobile"] .mobile-workout-set-reference span{
+    display:grid;
+    gap:.15rem;
+    padding:.55rem .65rem;
+    border-radius:.7rem;
+    background:var(--surface-soft);
+  }
+  .active-workout-shell[data-workout-layout="mobile"] .mobile-workout-set-reference small,
+  .active-workout-shell[data-workout-layout="mobile"] .mobile-workout-set-fields label>span{
+    color:var(--muted);
+    font-size:.8rem;
+    font-weight:750;
+  }
+  .active-workout-shell[data-workout-layout="mobile"] .mobile-workout-set-reference strong{font-size:.95rem}
+  .active-workout-shell[data-workout-layout="mobile"] .mobile-workout-set-fields{
+    display:grid;
+    grid-template-columns:repeat(3,minmax(0,1fr));
+    gap:.55rem;
+  }
+  .active-workout-shell[data-workout-layout="mobile"] .mobile-workout-set-fields label{display:grid;gap:.3rem;min-width:0}
+  .active-workout-shell[data-workout-layout="mobile"] .mobile-workout-set-fields input,
+  .active-workout-shell[data-workout-layout="mobile"] .mobile-workout-set-fields select{
+    width:100%;
+    min-width:0;
+    min-height:48px;
+    padding:.65rem .55rem;
+    border:1px solid var(--border);
+    border-radius:.7rem;
+    background:var(--surface);
+    color:var(--text);
+    font-size:1rem;
+  }
+  .active-workout-shell[data-workout-layout="mobile"] .mobile-workout-set-timer{
+    grid-column:1/-1;
+    display:grid;
+    grid-template-columns:minmax(0,1fr) auto;
+    align-items:center;
+    gap:.35rem;
+  }
+  .active-workout-shell[data-workout-layout="mobile"] .mobile-workout-set-timer>span{font-size:.875rem;font-weight:750}
+  .active-workout-shell[data-workout-layout="mobile"] .mobile-workout-set-timer>strong{font-size:1.2rem;font-variant-numeric:tabular-nums}
+  .active-workout-shell[data-workout-layout="mobile"] .mobile-workout-set-timer>div{
+    grid-column:1/-1;
+    display:grid;
+    grid-template-columns:repeat(3,minmax(0,1fr));
+    gap:.4rem;
+  }
+  .active-workout-shell[data-workout-layout="mobile"] .mobile-workout-set-timer button,
+  .active-workout-shell[data-workout-layout="mobile"] .mobile-workout-warmup{
+    min-height:44px;
+  }
+  .active-workout-shell[data-workout-layout="mobile"] .mobile-workout-warmup{
+    display:flex;
+    align-items:center;
+    gap:.55rem;
+    font-size:.875rem;
+  }
+  .active-workout-shell[data-workout-layout="mobile"] .mobile-workout-warmup input{width:1.25rem;height:1.25rem}
+  .active-workout-shell[data-workout-layout="mobile"] .mobile-workout-rest{
+    position:sticky;
+    top:calc(3.9rem + env(safe-area-inset-top));
+    z-index:35;
+    display:grid;
+    grid-template-columns:minmax(0,1fr) auto;
+    align-items:center;
+    gap:.55rem;
+    min-height:56px;
+    padding:.45rem .55rem .45rem .75rem;
+    border:1px solid color-mix(in srgb,var(--brand) 36%,var(--border));
+    border-radius:.85rem;
+    background:color-mix(in srgb,var(--brand-soft) 96%,var(--surface));
+    box-shadow:0 8px 20px rgba(15,23,42,.08);
+  }
+  .active-workout-shell[data-workout-layout="mobile"] .mobile-workout-rest-toggle{
+    display:flex;
+    align-items:baseline;
+    gap:.55rem;
+    min-height:44px;
+    padding:0;
+    border:0;
+    background:transparent;
+    color:var(--text);
+    text-align:left;
+  }
+  .active-workout-shell[data-workout-layout="mobile"] .mobile-workout-rest-toggle span{font-size:.875rem;font-weight:750}
+  .active-workout-shell[data-workout-layout="mobile"] .mobile-workout-rest-toggle strong{font-size:1.15rem;font-variant-numeric:tabular-nums}
+  .active-workout-shell[data-workout-layout="mobile"] .mobile-workout-rest>div{
+    display:flex;
+    gap:.35rem;
+  }
+  .active-workout-shell[data-workout-layout="mobile"] .mobile-workout-rest>div button{min-height:44px;padding:.45rem .55rem}
+  .active-workout-shell[data-workout-layout="mobile"] .mobile-workout-rest.minimized{grid-template-columns:1fr}
+  .active-workout-shell[data-workout-layout="mobile"] .mobile-workout-exercise-nav{
+    display:grid;
+    grid-template-columns:48px minmax(0,1fr) 48px;
+    gap:.5rem;
+  }
+  .active-workout-shell[data-workout-layout="mobile"] .mobile-workout-exercise-nav button{
+    min-height:44px;
+    border:1px solid var(--border);
+    border-radius:.75rem;
+    background:var(--surface);
+    color:var(--text);
+    font-size:.875rem;
+  }
+  .active-workout-shell[data-workout-layout="mobile"] .mobile-workout-primary-bar{
+    position:sticky;
+    bottom:0;
+    z-index:30;
+    margin:0 calc(var(--mobile-workout-edge) * -1);
+    padding:.6rem var(--mobile-workout-edge)
+      max(.6rem,env(safe-area-inset-bottom));
+    border-top:1px solid var(--border);
+    background:color-mix(in srgb,var(--surface) 95%,transparent);
+    backdrop-filter:blur(16px);
+  }
+  .active-workout-shell[data-workout-layout="mobile"] .mobile-workout-primary{
+    width:100%;
+    min-height:52px;
+    font-size:1rem;
+  }
+  .active-workout-shell[data-workout-layout="mobile"][data-keyboard-open] .mobile-workout-rest{display:none}
+  .active-workout-shell[data-workout-layout="mobile"][data-keyboard-open] .mobile-workout-exercise-nav{display:none}
+  .active-workout-shell[data-workout-layout="mobile"][data-keyboard-open] .mobile-workout-primary-bar{
+    position:sticky;
+    bottom:0;
+  }
+  .active-workout-shell[data-workout-layout="mobile"] .mobile-workout-empty{
+    display:grid;
+    place-items:center;
+    align-content:center;
+    min-height:50dvh;
+    text-align:center;
+  }
+  .active-workout-shell[data-workout-layout="mobile"] .mobile-workout-empty h1{margin:0;font-size:1.4rem}
+  .active-workout-shell[data-workout-layout="mobile"] .mobile-workout-empty p{color:var(--muted)}
+  .active-workout-shell[data-workout-layout="mobile"] .mobile-workout-sheet-backdrop{
+    position:fixed;
+    inset:0;
+    z-index:120;
+    display:grid;
+    place-items:end center;
+    padding:max(.5rem,env(safe-area-inset-top)) .5rem 0;
+    background:rgba(15,23,42,.58);
+  }
+  .active-workout-shell[data-workout-layout="mobile"] .mobile-workout-sheet{
+    display:grid;
+    grid-template-rows:auto auto minmax(0,1fr);
+    gap:.75rem;
+    width:min(100%,42rem);
+    max-height:min(
+      calc(var(--workout-visual-height,100dvh) - env(safe-area-inset-top) - .5rem),
+      46rem
+    );
+    margin:0;
+    padding:.4rem .9rem max(.9rem,env(safe-area-inset-bottom));
+    overflow-y:auto;
+    overscroll-behavior:contain;
+    border-radius:1.25rem 1.25rem 0 0;
+    background:var(--surface);
+  }
+  .active-workout-shell[data-workout-layout="mobile"] .mobile-workout-sheet-handle{
+    justify-self:center;
+    width:2.75rem;
+    height:.3rem;
+    border-radius:999px;
+    background:var(--border);
+  }
+  .active-workout-shell[data-workout-layout="mobile"] .mobile-workout-sheet-header{
+    position:sticky;
+    top:-.4rem;
+    z-index:2;
+    display:grid;
+    grid-template-columns:minmax(0,1fr) 44px;
+    align-items:start;
+    gap:.75rem;
+    padding:.45rem 0;
+    background:var(--surface);
+  }
+  .active-workout-shell[data-workout-layout="mobile"] .mobile-workout-sheet-header h2{margin:.15rem 0 0;font-size:1.25rem}
+  .active-workout-shell[data-workout-layout="mobile"] .mobile-workout-sheet-close{min-width:44px;min-height:44px}
+  .active-workout-shell[data-workout-layout="mobile"] .mobile-workout-exercise-list,
+  .active-workout-shell[data-workout-layout="mobile"] .mobile-workout-option-list{
+    display:grid;
+    gap:.45rem;
+  }
+  .active-workout-shell[data-workout-layout="mobile"] .mobile-workout-exercise-list button,
+  .active-workout-shell[data-workout-layout="mobile"] .mobile-workout-option-list button{
+    display:grid;
+    grid-template-columns:auto minmax(0,1fr);
+    gap:.15rem .65rem;
+    min-height:56px;
+    padding:.65rem .7rem;
+    border:1px solid var(--border);
+    border-radius:.8rem;
+    background:var(--surface);
+    color:var(--text);
+    font-size:.875rem;
+    text-align:left;
+  }
+  .active-workout-shell[data-workout-layout="mobile"] .mobile-workout-exercise-list button[aria-current="step"]{
+    border-color:var(--brand);
+    background:var(--brand-soft);
+  }
+  .active-workout-shell[data-workout-layout="mobile"] .mobile-workout-exercise-list button>span{grid-row:1/3;font-weight:850}
+  .active-workout-shell[data-workout-layout="mobile"] .mobile-workout-exercise-list button>small,
+  .active-workout-shell[data-workout-layout="mobile"] .mobile-workout-option-list button>span{
+    grid-column:2;
+    color:var(--muted);
+    font-size:.8rem;
+  }
+  .active-workout-shell[data-workout-layout="mobile"] .mobile-workout-note-fields{display:grid;gap:.85rem}
+  .active-workout-shell[data-workout-layout="mobile"] .mobile-workout-note-fields label{display:grid;gap:.35rem;font-size:.875rem;font-weight:750}
+  .active-workout-shell[data-workout-layout="mobile"] .mobile-workout-note-fields textarea,
+  .active-workout-shell[data-workout-layout="mobile"] .mobile-workout-note-fields input{
+    min-height:52px;
+    margin:0;
+    padding:.75rem;
+    font-size:1rem;
+  }
+  .active-workout-shell[data-workout-layout="mobile"] .mobile-workout-note-fields textarea{min-height:9rem}
+  .active-workout-shell[data-workout-layout="mobile"] .mobile-workout-sheet-actions{
+    position:sticky;
+    bottom:calc(env(safe-area-inset-bottom) * -1);
+    display:flex;
+    justify-content:flex-end;
+    gap:.55rem;
+    padding:.75rem 0 max(.2rem,env(safe-area-inset-bottom));
+    background:var(--surface);
+  }
+  .active-workout-shell[data-workout-layout="mobile"] .mobile-workout-sheet-actions button{min-height:48px}
+  .active-workout-shell[data-workout-layout="mobile"] .mobile-workout-review{display:grid;margin:0}
+  .active-workout-shell[data-workout-layout="mobile"] .mobile-workout-review>div{
+    display:flex;
+    justify-content:space-between;
+    gap:1rem;
+    padding:.75rem 0;
+    border-bottom:1px solid var(--border);
+  }
+  .active-workout-shell[data-workout-layout="mobile"] .mobile-workout-review dd{margin:0;font-weight:850}
+  .active-workout-shell[data-workout-layout="mobile"] button:focus-visible,
+  .active-workout-shell[data-workout-layout="mobile"] input:focus-visible,
+  .active-workout-shell[data-workout-layout="mobile"] select:focus-visible,
+  .active-workout-shell[data-workout-layout="mobile"] textarea:focus-visible{
+    outline:3px solid color-mix(in srgb,var(--brand) 78%,white);
+    outline-offset:2px;
+  }
+}
+@media(max-width:430px){
+  .active-workout-shell[data-workout-layout="mobile"] .mobile-workout-context-actions{
+    grid-template-columns:repeat(2,minmax(0,1fr));
+  }
+  .active-workout-shell[data-workout-layout="mobile"] .mobile-workout-set-fields{
+    grid-template-columns:repeat(2,minmax(0,1fr));
+  }
+  .active-workout-shell[data-workout-layout="mobile"] .mobile-workout-set-fields>label:last-child{
+    grid-column:1/-1;
+  }
+}
+@media(max-width:360px){
+  .active-workout-shell[data-workout-layout="mobile"] .mobile-workout-header{
+    grid-template-columns:44px minmax(0,1fr) 44px;
+    grid-template-areas:
+      "back position menu"
+      "clock clock save"
+      "progress progress progress";
+  }
+  .active-workout-shell[data-workout-layout="mobile"] .mobile-workout-clock{
+    justify-self:start;
+  }
+  .active-workout-shell[data-workout-layout="mobile"] .mobile-workout-save{
+    justify-self:end;
+  }
+}
+body.mobile-workout-sheet-open{overflow:hidden}
+body.high-contrast .active-workout-shell[data-workout-layout="mobile"] .mobile-workout-active-set,
+body.high-contrast .active-workout-shell[data-workout-layout="mobile"] .mobile-workout-context-actions button,
+body.high-contrast .active-workout-shell[data-workout-layout="mobile"] .mobile-workout-rest,
+body.high-contrast .active-workout-shell[data-workout-layout="mobile"] .mobile-workout-sheet{border-color:currentColor}
+body.reduce-motion .active-workout-shell[data-workout-layout="mobile"] *{
+  scroll-behavior:auto!important;
+  transition:none!important;
+  animation:none!important;
+}
+@media(prefers-reduced-motion:reduce){
+  .active-workout-shell[data-workout-layout="mobile"] *{
+    scroll-behavior:auto!important;
+    transition:none!important;
+    animation:none!important;
+  }
+}
+
 .body-summary-editor-backdrop{
   position:fixed;inset:0;z-index:120;display:grid;place-items:end center;
   padding:1rem;background:rgba(15,23,42,.55);backdrop-filter:blur(6px)

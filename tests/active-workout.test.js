@@ -71,7 +71,8 @@ test("entrenamiento activo: el módulo expone modelos puros sin dependencias de 
     "activeWorkoutHeaderModel","sessionElapsedModel","exerciseGuideModel",
     "exerciseMuscleModel","exerciseTechniqueModel","exerciseLibraryResolutionModel",
     "setEntryModel","sessionTimerControlModel","restTimerModel",
-    "workoutCompletionReviewModel","exerciseDetailDisclosureModel"
+    "workoutCompletionReviewModel","exerciseDetailDisclosureModel",
+    "mobileWorkoutViewModel","reduceMobileWorkoutUi"
   ]) assert.equal(typeof api[name],"function",name);
   assert.doesNotMatch(moduleSource,/localStorage|document\.|supabase|setInterval|setTimeout|saveRoutine|saveHistory/);
 });
@@ -691,4 +692,222 @@ test("integración offline: los módulos activos cargan antes de app.js y están
   assert.match(workerSource,/"workout-progress\.js"/);
   assert.match(workerSource,/gymos-cache-4\.2\.0-rc\.3/);
   assert.match(workerSource,/url\.origin!==self\.location\.origin/);
+});
+
+function mobileDraft(){
+  return {
+    ownerId:"local",workoutInstanceId:"workout-mobile",
+    currentExerciseInstanceId:"exercise-press",
+    exercises:[
+      {
+        exerciseInstanceId:"exercise-press",name:"Press",sets:3,target:"8-10",
+        targetRir:"2",series:[
+          {setInstanceId:"set-press-1",weight:"70",reps:"10",rir:"2",done:true},
+          {setInstanceId:"set-press-2",weight:"72.5",reps:"",rir:"",done:false},
+          {setInstanceId:"set-press-3",weight:"",reps:"",rir:"",done:false}
+        ]
+      },
+      {
+        exerciseInstanceId:"exercise-row",name:"Remo",sets:1,target:"10",
+        targetRir:"2",series:[
+          {setInstanceId:"set-row-1",weight:"",reps:"",rir:"",done:false}
+        ]
+      }
+    ]
+  };
+}
+
+test("modelo móvil: deriva un ejercicio canónico y una única serie editable por identidades",()=>{
+  const api=loadApi();
+  const draft=mobileDraft();
+  const model=api.mobileWorkoutViewModel({
+    draft,sessionTimerStatus:"running",saveStatus:"saved_local"
+  });
+  assert.equal(model.exerciseInstanceId,"exercise-press");
+  assert.equal(model.positionLabel,"Ejercicio 1 de 2");
+  assert.equal(model.activeSet.setInstanceId,"set-press-2");
+  assert.deepEqual(
+    plain(model.completedSets.map(row=>row.setInstanceId)),["set-press-1"]
+  );
+  assert.deepEqual(
+    plain(model.futureSets.map(row=>row.setInstanceId)),["set-press-3"]
+  );
+  assert.equal(model.primaryAction.kind,"complete_set");
+  assert.equal(model.previousExercise,null);
+  assert.equal(model.nextExercise.exerciseInstanceId,"exercise-row");
+});
+
+test("modelo móvil: una serie realizada puede ser la única seleccionada para corrección",()=>{
+  const api=loadApi();
+  const model=api.mobileWorkoutViewModel({
+    draft:mobileDraft(),selectedSetInstanceId:"set-press-1",
+    sessionTimerStatus:"running"
+  });
+  assert.equal(model.activeSet.setInstanceId,"set-press-1");
+  assert.equal(model.completedSets.length,0);
+  assert.equal(model.futureSets.length,2);
+  assert.equal(model.primaryAction.kind,"save_set_correction");
+});
+
+test("modelo móvil: la acción primaria cubre inicio, ejercicio, revisión, anomalía y vacío",()=>{
+  const api=loadApi();
+  const fresh=mobileDraft();
+  fresh.exercises[0].series.forEach(set=>{
+    set.weight="";set.reps="";set.rir="";set.done=false;
+  });
+  assert.equal(api.mobileWorkoutViewModel({
+    draft:fresh,sessionTimerStatus:"idle"
+  }).primaryAction.kind,"start_session");
+  fresh.exercises[0].series.forEach(set=>{set.reps="8";set.done=true;});
+  assert.equal(api.mobileWorkoutViewModel({
+    draft:fresh,sessionTimerStatus:"running"
+  }).primaryAction.kind,"complete_exercise");
+  fresh.exercises.forEach(exercise=>{
+    exercise.series.forEach(set=>{set.reps="8";set.done=true;});
+    exercise.completedAt="2026-07-30T10:00:00.000Z";
+  });
+  assert.equal(api.mobileWorkoutViewModel({
+    draft:fresh,sessionTimerStatus:"running"
+  }).primaryAction.kind,"review");
+  assert.equal(api.mobileWorkoutViewModel({
+    draft:mobileDraft(),elapsedAnomalous:true
+  }).primaryAction.kind,"reset_anomalous");
+  assert.equal(api.mobileWorkoutViewModel({
+    draft:{exercises:[]}
+  }).primaryAction.kind,"open_routine");
+});
+
+test("modelo móvil: continuar busca el siguiente pendiente de forma circular",()=>{
+  const api=loadApi();
+  const draft=mobileDraft();
+  draft.exercises[0].series.forEach(set=>{set.reps="8";set.done=true;});
+  draft.exercises[0].completedAt="2026-07-30T10:00:00.000Z";
+  draft.exercises[1].series.forEach(set=>{set.reps="8";set.done=true;});
+  draft.currentExerciseInstanceId=draft.exercises[1].exerciseInstanceId;
+  let model=api.mobileWorkoutViewModel({
+    draft,sessionTimerStatus:"running"
+  });
+  assert.equal(model.primaryAction.kind,"complete_exercise");
+  assert.equal(model.primaryAction.label,"Completar ejercicio y revisar");
+
+  draft.exercises[0].completedAt=null;
+  draft.exercises[1].completedAt="2026-07-30T10:01:00.000Z";
+  model=api.mobileWorkoutViewModel({
+    draft,sessionTimerStatus:"running"
+  });
+  assert.equal(model.primaryAction.kind,"next_pending");
+  assert.equal(
+    model.primaryAction.exerciseInstanceId,
+    draft.exercises[0].exerciseInstanceId
+  );
+});
+
+test("reducer móvil mantiene un único panel y una única selección efímera",()=>{
+  const api=loadApi();
+  let ui=api.reduceMobileWorkoutUi({},{
+    type:"OPEN_PANEL",panel:"notes"
+  });
+  assert.equal(ui.panel,"notes");
+  ui=api.reduceMobileWorkoutUi(ui,{type:"OPEN_PANEL",panel:"technique"});
+  assert.equal(ui.panel,"technique");
+  ui=api.reduceMobileWorkoutUi(ui,{
+    type:"SELECT_SET",setInstanceId:"set-press-3"
+  });
+  assert.equal(ui.selectedSetInstanceId,"set-press-3");
+  ui=api.reduceMobileWorkoutUi(ui,{type:"CLOSE_PANEL"});
+  assert.equal(ui.panel,null);
+  assert.equal(ui.selectedSetInstanceId,"set-press-3");
+});
+
+test("renderer móvil es inmersivo, muestra un formulario y mantiene desktop separado",()=>{
+  assert.match(appSource,/data-workout-layout="mobile"/);
+  assert.match(appSource,/if\(activeWorkoutUsesMobileLayout\(\)\)/);
+  assert.match(appSource,/renderMobileWorkout\(/);
+  const mobileSource=between(
+    appSource,"function renderMobileWorkout({","function renderWorkout()"
+  );
+  assert.doesNotMatch(mobileSource,/\$\{nav\("workout"\)\}/);
+  assert.equal((mobileSource.match(/class="mobile-workout-active-set"/g)||[]).length,1);
+  assert.equal((mobileSource.match(/data-set-field="weight"/g)||[]).length,1);
+  assert.match(mobileSource,/mobile-workout-summary-rows/);
+  assert.match(renderSource,/draft\.exercises\.map/);
+  assert.match(renderSource,/\$\{nav\("workout"\)\}/);
+  assert.match(
+    bindingSource,
+    /\.active-workout-screen,\.active-workout-mobile-screen/
+  );
+});
+
+test("navegación móvil hace flush local y persiste currentExerciseInstanceId con el writer existente",()=>{
+  const navigation=between(
+    bindingSource,
+    "const navigateMobileWorkoutExercise=",
+    "const rerenderWithError="
+  );
+  assert.match(navigation,/flushWorkoutDraftProgress/);
+  assert.match(navigation,/requireLocal:true/);
+  assert.match(navigation,/draft\.currentExerciseInstanceId=target\.exerciseInstanceId/);
+  assert.match(navigation,/stageWorkoutDraft\(draft,\{immediate:true,scheduleSync:true\}\)/);
+  assert.doesNotMatch(navigation,/localStorage|saveRoutine|saveHistory|supabase/);
+});
+
+test("sheets móviles aíslan fondo, restauran foco y Notas exige flush local",()=>{
+  const mobileSource=between(
+    appSource,"function renderMobileWorkoutSheet({","function renderWorkout()"
+  );
+  assert.match(mobileSource,/role="dialog"/);
+  assert.match(mobileSource,/inert aria-hidden/);
+  assert.match(mobileSource,/data-mobile-autofocus/);
+  assert.match(mobileSource,/data-mobile-save-close/);
+  const closeSource=between(
+    appSource,"function closeActiveWorkoutOverlay()",
+    "function activeWorkoutRecoveryGuidanceModel("
+  );
+  assert.match(closeSource,/workoutMobileUi\?\.panel==="notes"/);
+  assert.match(closeSource,/flushWorkoutDraftProgress/);
+  assert.match(closeSource,/requireLocal:true/);
+  assert.match(bindingSource,/event\.key==="Escape"/);
+  assert.match(bindingSource,/event\.key==="Tab"/);
+});
+
+test("teclado y storage difieren reconstrucción mientras existe una edición activa",()=>{
+  assert.match(appSource,/function activeWorkoutEditingInProgress\(\)/);
+  assert.match(appSource,/state\.workoutDeferredRender=true/);
+  assert.match(appSource,/window\.visualViewport/);
+  assert.match(appSource,/--workout-keyboard-inset/);
+  assert.match(bindingSource,/event\.key==="Enter"/);
+  assert.match(bindingSource,/event\.preventDefault\(\)/);
+  assert.match(appSource,/requestSafeActiveWorkoutRender\(\)/);
+  assert.match(stylesSource,/data-keyboard-open/);
+});
+
+test("descanso usa deadline en memoria y no crea writer",()=>{
+  const timerSource=between(
+    appSource,"function startTimer(sec)","function formatTimer("
+  );
+  assert.match(timerSource,/state\.timerDeadline=Date\.now\(\)/);
+  assert.match(timerSource,/Math\.ceil/);
+  assert.match(timerSource,/Descanso finalizado/);
+  assert.match(timerSource,/},1000\)/);
+  assert.doesNotMatch(timerSource,/localStorage|saveDraft|stageWorkoutDraft|flushWorkoutDraftProgress/);
+  assert.match(stylesSource,/\.mobile-workout-rest/);
+  assert.match(appSource,/data-active-rest-time aria-live="off"/);
+});
+
+test("CSS móvil está encapsulado, respeta safe areas y targets esenciales",()=>{
+  assert.match(stylesSource,/@media\(max-width:767px\)\{[\s\S]*?data-workout-layout="mobile"/);
+  assert.match(stylesSource,/--workout-visual-height/);
+  assert.match(stylesSource,/env\(safe-area-inset-bottom\)/);
+  assert.match(stylesSource,/min-height:44px/);
+  assert.match(stylesSource,/min-height:52px/);
+  assert.match(stylesSource,/font-size:1rem/);
+  assert.match(stylesSource,/@media\(max-width:430px\)/);
+  assert.match(stylesSource,/@media\(max-width:360px\)/);
+  assert.match(stylesSource,/prefers-reduced-motion:reduce/);
+});
+
+test("el rediseño no añade store, storage key ni writer de progreso",()=>{
+  assert.equal((appSource.match(/function saveDraft\(d\)/g)||[]).length,1);
+  assert.doesNotMatch(moduleSource,/localStorage|sessionStorage|indexedDB|saveDraft|stageWorkoutDraft|flushWorkoutDraftProgress/);
+  assert.doesNotMatch(appSource,/gymos:mobileWorkout|gymos:workoutLayout/);
 });

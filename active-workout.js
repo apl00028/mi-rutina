@@ -245,6 +245,158 @@
       complete:rows.length>0&&rows.every(row=>row.status==="completed")
     };
   }
+  function mobileWorkoutViewModel({
+    draft=null,currentExerciseInstanceId=null,selectedSetInstanceId=null,
+    previousExercises=[],sessionTimerStatus="idle",elapsedAnomalous=false,
+    saveStatus="saved_local",offline=false
+  }={}){
+    const exercises=list(draft?.exercises);
+    const mobileExerciseIdentity=(exercise,index=0)=>
+      text(exercise?.exerciseInstanceId)||exerciseIdentity(exercise,index);
+    const requestedExerciseId=text(
+      currentExerciseInstanceId||draft?.currentExerciseInstanceId
+    );
+    let exerciseIndex=exercises.findIndex(
+      (exercise,index)=>mobileExerciseIdentity(exercise,index)===requestedExerciseId
+    );
+    if(exerciseIndex<0){
+      exerciseIndex=exercises.findIndex(exercise=>{
+        const series=list(exercise?.series);
+        return !(exercise?.completedAt&&series.length&&series.every(set=>set?.done));
+      });
+    }
+    if(exerciseIndex<0&&exercises.length) exerciseIndex=0;
+    const exercise=exerciseIndex>=0?exercises[exerciseIndex]:null;
+    const exerciseInstanceId=exercise
+      ?mobileExerciseIdentity(exercise,exerciseIndex)
+      :null;
+    const series=list(exercise?.series);
+    const requestedSetId=text(selectedSetInstanceId);
+    let activeSetIndex=series.findIndex(
+      set=>text(set?.setInstanceId)===requestedSetId
+    );
+    if(activeSetIndex<0) activeSetIndex=series.findIndex(set=>!set?.done);
+    const activeSet=activeSetIndex>=0
+      ?setEntryModel({set:series[activeSetIndex],index:activeSetIndex})
+      :null;
+    const completedSets=series.map((set,index)=>({set,index})).filter(
+      row=>row.set?.done&&row.index!==activeSetIndex
+    ).map(row=>setEntryModel({set:row.set,index:row.index}));
+    const futureSets=series.map((set,index)=>({set,index})).filter(
+      row=>!row.set?.done&&row.index!==activeSetIndex
+    ).map(row=>setEntryModel({set:row.set,index:row.index}));
+    const exerciseRows=exercises.map((item,index)=>{
+      const sets=list(item?.series);
+      const completed=sets.filter(set=>set?.done).length;
+      const started=sets.some(setHasResults);
+      const status=item?.completedAt&&sets.length&&completed===sets.length
+        ?"completed"
+        :started||completed?"started":"pending";
+      return {
+        exerciseInstanceId:mobileExerciseIdentity(item,index),
+        index,name:text(item?.name)||`Ejercicio ${index+1}`,
+        status,completedSets:completed,totalSets:sets.length,
+        current:index===exerciseIndex
+      };
+    });
+    const allSetsComplete=Boolean(series.length&&series.every(set=>set?.done));
+    const allExercisesComplete=Boolean(
+      exerciseRows.length&&exerciseRows.every(row=>row.status==="completed")
+    );
+    const orderedOtherRows=exerciseIndex>=0
+      ?[
+          ...exerciseRows.slice(exerciseIndex+1),
+          ...exerciseRows.slice(0,exerciseIndex)
+        ]
+      :exerciseRows;
+    const nextPendingExercise=orderedOtherRows.find(
+      row=>row.status!=="completed"
+    )||null;
+    let primaryAction;
+    if(!exercises.length){
+      primaryAction={kind:"open_routine",label:"Ir a Mi rutina"};
+    }else if(elapsedAnomalous){
+      primaryAction={kind:"reset_anomalous",label:"Retomar tiempo desde ahora"};
+    }else if(allExercisesComplete){
+      primaryAction={kind:"review",label:"Revisar y finalizar"};
+    }else if(activeSet?.done){
+      primaryAction={kind:"save_set_correction",label:"Guardar corrección"};
+    }else if(exercise?.completedAt){
+      primaryAction={
+        kind:"next_pending",label:"Ir al siguiente pendiente",
+        exerciseInstanceId:nextPendingExercise?.exerciseInstanceId||null
+      };
+    }else if(allSetsComplete&&!exercise?.completedAt){
+      primaryAction={
+        kind:"complete_exercise",
+        label:nextPendingExercise
+          ?"Completar ejercicio y continuar"
+          :"Completar ejercicio y revisar"
+      };
+    }else if(sessionTimerStatus==="idle"&&!series.some(setHasResults)){
+      primaryAction={kind:"start_session",label:"Empezar sesión"};
+    }else{
+      primaryAction={kind:"complete_set",label:"Completar serie"};
+    }
+    const previousExercise=exerciseIndex>0?exerciseRows[exerciseIndex-1]:null;
+    const nextExercise=exerciseIndex>=0&&exerciseIndex<exerciseRows.length-1
+      ?exerciseRows[exerciseIndex+1]
+      :null;
+    const saveLabel={
+      saving:"Guardando…",saved:"Guardado",saved_local:"Guardado",
+      pending_sync:"Pendiente",conflict:"Conflicto",
+      local_error:"Error al guardar"
+    }[saveStatus]||"Guardado";
+    return {
+      empty:!exercises.length,
+      exercise,exerciseIndex,exerciseInstanceId,
+      positionLabel:exercise?`Ejercicio ${exerciseIndex+1} de ${exercises.length}`:"Sin ejercicios",
+      progress:{
+        current:exercise?exerciseIndex+1:0,total:exercises.length,
+        completed:exerciseRows.filter(row=>row.status==="completed").length
+      },
+      activeSet,activeSetIndex,
+      completedSets,futureSets,allSetsComplete,allExercisesComplete,
+      exerciseRows,previousExercise,nextExercise,nextPendingExercise,primaryAction,
+      prescription:{
+        sets:Number(exercise?.sets)||series.length,
+        target:text(exercise?.target),
+        targetRir:text(exercise?.targetRir),
+        restSeconds:Math.max(0,Math.floor(finite(exercise?.restSeconds)||0))
+      },
+      libraryPending:Boolean(exercise&&!exercise?.resolvedLibraryExerciseId),
+      notesPresent:Boolean(text(exercise?.notes)||text(exercise?.discomfort)),
+      save:{status:saveStatus,label:offline?`Sin conexión · ${saveLabel.toLocaleLowerCase("es")}`:saveLabel},
+      accessibleLabel:exercise
+        ?`${exerciseRows[exerciseIndex].name}. ${exerciseIndex+1} de ${exercises.length}.`
+        :"Esta sesión no tiene ejercicios."
+    };
+  }
+  function reduceMobileWorkoutUi(state={},action={}){
+    const current={
+      panel:null,selectedSetInstanceId:null,
+      completedExpanded:false,futureExpanded:false,restMinimized:false,
+      ...clone(state)
+    };
+    switch(action.type){
+      case "OPEN_PANEL":
+        return {...current,panel:text(action.panel)||null};
+      case "CLOSE_PANEL":
+        return {...current,panel:null};
+      case "SELECT_SET":
+        return {...current,selectedSetInstanceId:text(action.setInstanceId)||null};
+      case "CLEAR_SET":
+        return {...current,selectedSetInstanceId:null};
+      case "TOGGLE_COMPLETED":
+        return {...current,completedExpanded:!current.completedExpanded};
+      case "TOGGLE_FUTURE":
+        return {...current,futureExpanded:!current.futureExpanded};
+      case "TOGGLE_REST":
+        return {...current,restMinimized:!current.restMinimized};
+      default:
+        return current;
+    }
+  }
 
   global.GymOSActiveWorkout=Object.freeze({
     MODEL_VERSION,
@@ -262,6 +414,8 @@
     exerciseDetailDisclosureModel,
     sessionTimerControlModel,
     restTimerModel,
-    workoutCompletionReviewModel
+    workoutCompletionReviewModel,
+    mobileWorkoutViewModel,
+    reduceMobileWorkoutUi
   });
 })(typeof window!=="undefined"?window:globalThis);

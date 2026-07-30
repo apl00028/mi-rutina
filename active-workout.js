@@ -169,6 +169,44 @@
       :label;
     return {planned,extras,completed,total:rows.length,label,performedLabel};
   }
+  function exerciseDetailDisclosureModel({notes="",discomfort=""}={}){
+    const hasNotes=Boolean(text(notes));
+    const hasDiscomfort=Boolean(text(discomfort));
+    return {
+      notes:{
+        hasContent:hasNotes,
+        label:hasNotes?"Notas del ejercicio · Añadida":"Notas del ejercicio"
+      },
+      discomfort:{
+        hasContent:hasDiscomfort,
+        label:hasDiscomfort
+          ?"Molestias durante el ejercicio · Registrada"
+          :"Molestias durante el ejercicio",
+        safeSummary:hasDiscomfort?"Molestia registrada":""
+      }
+    };
+  }
+  function sessionTimerControlModel({
+    status="idle",elapsedMs=0,restored=false
+  }={}){
+    const normalized=["running","paused"].includes(status)?status:"idle";
+    const state={
+      idle:"NOT_STARTED",
+      running:"RUNNING",
+      paused:"PAUSED"
+    }[normalized];
+    return {
+      state,
+      restoredState:Boolean(restored&&state!=="NOT_STARTED")?"RESTORED":null,
+      primaryLabel:{
+        NOT_STARTED:"Empezar sesión",
+        RUNNING:"Pausar",
+        PAUSED:"Reanudar"
+      }[state],
+      showReset:Math.max(0,finite(elapsedMs)||0)>0,
+      intervalRequired:state==="RUNNING"
+    };
+  }
   function restTimerModel({seconds=0,running=false,defaultSeconds=90}={}){
     const remaining=Math.max(0,Math.floor(finite(seconds)||0));
     const fallback=Math.max(0,Math.floor(finite(defaultSeconds)||0));
@@ -221,6 +259,8 @@
     setEntryModel,
     manualExtraSetModel,
     setSeriesSummaryModel,
+    exerciseDetailDisclosureModel,
+    sessionTimerControlModel,
     restTimerModel,
     workoutCompletionReviewModel
   });

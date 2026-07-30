@@ -372,14 +372,15 @@ test("guardar progreso no modifica rutina y el cronómetro no escribe cada segun
 });
 
 test("serie, ejercicio y navegaciÃ³n aplican la polÃ­tica de guardado requerida",()=>{
-  assert.match(appSource,/data-complete-active-set[\s\S]*?\{immediate:true,scheduleSync:true\}/);
-  assert.match(appSource,/data-complete-active-exercise[\s\S]*?completedAt=new Date\(\)\.toISOString\(\)[\s\S]*?\{immediate:true,scheduleSync:true\}/);
+  assert.match(appSource,/data-complete-active-set[\s\S]*?\{immediate:true,scheduleSync:true,exerciseInstanceId\}/);
+  assert.match(appSource,/data-complete-active-exercise[\s\S]*?completedAt=new Date\(\)\.toISOString\(\)[\s\S]*?\{immediate:true,scheduleSync:true,exerciseInstanceId\}/);
   const bindingStart=appSource.indexOf("function bindActiveWorkoutEvents(");
-  for(const action of ["data-workout-previous","data-workout-next","data-workout-jump-exercise"]){
-    const offset=appSource.indexOf(action,bindingStart);
-    assert.ok(offset>=0,action);
-    assert.match(appSource.slice(offset,offset+700),/\{immediate:true\}/);
-  }
+  const toggle=appSource.slice(
+    appSource.indexOf("data-workout-toggle-exercise",bindingStart),
+    appSource.indexOf("data-workout-reference",bindingStart)
+  );
+  assert.doesNotMatch(toggle,/persist\(|stageWorkoutDraft|saveDraft|markLocalUpdated/);
+  assert.doesNotMatch(appSource.slice(bindingStart),/data-workout-previous|data-workout-next(?!-pending)/);
   const reviewOffset=appSource.indexOf("data-workout-review",bindingStart);
   assert.match(
     appSource.slice(reviewOffset,reviewOffset+500),
@@ -486,7 +487,7 @@ test("el input de notas no reconstruye la vista y blur o salida fuerzan flush",(
   assert.match(inputBranch,/stageWorkoutDraft|persist\(/);
   assert.doesNotMatch(inputBranch,/renderWorkout|innerHTML|replaceWith|saveCurrentUserVault|autoSync/);
   assert.match(binding,/main\.addEventListener\("focusout"[\s\S]*?flushWorkoutDraftProgress/);
-  assert.match(binding,/data-workout-previous[\s\S]*?flushWorkoutDraftProgress/);
+  assert.match(binding,/data-workout-back[\s\S]*?flushWorkoutDraftProgress/);
   assert.match(binding,/data-complete-active-exercise[\s\S]*?immediate:true,scheduleSync:true/);
   assert.match(appSource,/function navigateToScreen[\s\S]*?state\.screen==="workout"[\s\S]*?flushWorkoutDraftProgress/);
   assert.match(appSource,/visibilityState==="hidden"[\s\S]*?flushWorkoutDraftProgress/);

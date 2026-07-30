@@ -189,14 +189,16 @@ test("guía: separa músculos principales y secundarios sin duplicarlos",()=>{
   assert.deepEqual(plain(muscles.secondary),["triceps"]);
 });
 
-test("guía: presenta técnica existente y un estado vacío cuando no existe",()=>{
+test("guía: presenta técnica existente y un estado vacío amable cuando no existe",()=>{
   const api=loadApi();
   const complete=api.exerciseTechniqueModel({exercise:libraryExercise()});
   assert.equal(complete.available,true);
   assert.equal(complete.highlights.length,3);
   assert.equal(complete.cautions.length,1);
   assert.equal(api.exerciseTechniqueModel({exercise:{}}).available,false);
-  assert.match(workoutUiSource,/Técnica todavía no disponible para este ejercicio/);
+  assert.match(workoutUiSource,/Aún no tenemos indicaciones confirmadas/);
+  assert.match(workoutUiSource,/Referencia visual pendiente/);
+  assert.match(workoutUiSource,/Puedes registrar el ejercicio con normalidad/);
 });
 
 test("guía: todo contenido procedente de biblioteca pasa por escaping al renderizarse",()=>{
@@ -275,9 +277,10 @@ test("cabecera visual: ofrece Volver, progreso accesible, resumen y tiempo total
   for(const token of [
     "data-workout-back","data-workout-session-overview",
     'role="progressbar"','data-workout-session-elapsed',
-    "sessionElapsedAccessible","Ejercicio ${header.exerciseNumber} de ${header.totalExercises}"
+    "sessionElapsedAccessible","completedExercises} de ${totalExercises} ejercicios"
   ]) assert.ok(renderSource.includes(token),token);
-  assert.match(renderSource,/← Volver a \$\{esc\(sessionName\)\}/);
+  assert.match(renderSource,/data-workout-back aria-label="Volver a Inicio"/);
+  assert.match(renderSource,/id="activeWorkoutTitle"/);
 });
 
 test("volver: fuerza el guardado pendiente, detiene timers y no finaliza ni elimina",()=>{
@@ -312,7 +315,7 @@ test("resumen de sesión: usa identidades estables, estado humano y restauració
   assert.match(workoutUiSource,/Completado/);
   assert.match(workoutUiSource,/Sustituido/);
   assert.match(bindingSource,/activeWorkoutApi\(\)\.exerciseIdentity\(exercise,index\)!==button\.dataset\.exerciseId/);
-  assert.match(bindingSource,/requestAnimationFrame\(\(\)=>document\.getElementById\("activeExerciseTitle"\)\?\.focus\(\)\)/);
+  assert.match(bindingSource,/target\?\.querySelector\("\[data-workout-toggle-exercise\]"\)\?\.focus\(\)/);
   assert.match(bindingSource,/event\.key==="Escape"/);
 });
 
@@ -333,11 +336,11 @@ test("ficha ambigua: elegir candidato es solo visual y no escribe rutina ni hist
 });
 
 test("cambio de ejercicio: existe un único menú y reutiliza los modos temporal y permanente",()=>{
-  assert.match(renderSource,/Cambiar ejercicio/);
+  assert.match(workoutUiSource,/Cambiar ejercicio/);
   assert.match(workoutUiSource,/¿Dónde quieres aplicar el cambio\?/);
   assert.match(workoutUiSource,/Solo en este entrenamiento/);
   assert.match(workoutUiSource,/Cambiar en mi rutina/);
-  assert.match(bindingSource,/openExerciseSubstitution\(mode,context\.exerciseIndex\)/);
+  assert.match(bindingSource,/openExerciseSubstitution\(mode,index\)/);
   assert.match(substitutionSource,/api\.hasExerciseResults\(exercise\)/);
   assert.doesNotMatch(substitutionSource,/saveRoutine\(/);
   assert.match(appSource,/permanentSubstitutionProposal/);
@@ -366,7 +369,7 @@ test("registro: completar usa busy, inicia descanso solo en serie de trabajo y p
 
 test("descanso: muestra Omitir y +30 sin confundirlo con el tiempo de sesión",()=>{
   assert.match(renderSource,/data-active-rest-time/);
-  assert.match(renderSource,/Omitir descanso/);
+  assert.match(renderSource,/>Omitir</);
   assert.match(renderSource,/\+30 s/);
   assert.match(renderSource,/id="activeRestStatus"[\s\S]*aria-live="polite"/);
   assert.match(bindingSource,/state\.timerSeconds=Math\.max\(0,state\.timerSeconds\)\+30/);
@@ -404,23 +407,53 @@ test("owner isolation: revalida propietario, draft, rutina y sesión antes de es
 
 test("accesibilidad: usa landmarks, labels, controles reales, Escape, foco y aria-controls",()=>{
   for(const token of [
-    '<main class="screen active-workout-screen"','aria-labelledby="activeExerciseTitle"',
+    '<main class="screen active-workout-screen"','aria-labelledby="activeWorkoutTitle"',
     'aria-controls="workoutSessionOverviewDialog"','aria-controls="workoutChangeDialog"',
-    'aria-controls="workoutCompletionDialog"','role="dialog"','aria-modal="true"',
+    'aria-controls="workoutCompletionDialog"','aria-controls="workoutReferenceDialog"',
+    'role="dialog"','aria-modal="true"','aria-expanded="${expanded}"',
     'inputmode="decimal"','inputmode="numeric"','aria-pressed="${row.done}"'
   ]) assert.ok(workoutUiSource.includes(token),token);
   assert.match(bindingSource,/event\.key==="Tab"/);
   assert.match(appSource,/returnFocusSelector[\s\S]*?requestAnimationFrame/);
 });
 
-test("responsive: escritorio usa dos columnas y móvil conserva una columna sin scroll horizontal",()=>{
-  assert.match(stylesSource,/\.active-workout-layout\{[\s\S]*?grid-template-columns:minmax\(0,1\.8fr\) minmax\(18rem,1fr\)/);
-  assert.match(stylesSource,/@media\(max-width:1199px\)\{[\s\S]*?grid-template-areas:"heading" "guide" "register"/);
-  assert.match(stylesSource,/@media\(max-width:767px\)\{[\s\S]*?\.active-set-card\{[\s\S]*?grid-template-columns:1fr/);
+test("responsive: la hoja compacta conserva filas densas y adaptación móvil",()=>{
+  assert.match(stylesSource,/\.workout-exercise-sheet\{display:grid;gap:\.6rem\}/);
+  assert.match(stylesSource,/\.workout-exercise-toggle\{[\s\S]*?grid-template-columns:2rem minmax\(11rem,1\.45fr\)/);
+  assert.match(stylesSource,/@media\(max-width:767px\)\{[\s\S]*?\.active-set-card\{[\s\S]*?grid-template-columns:1\.8rem/);
   assert.match(stylesSource,/\.active-workout-screen\{[\s\S]*?overflow-x:clip/);
   assert.match(stylesSource,/@media\(max-width:430px\)/);
   assert.match(stylesSource,/@media\(max-width:360px\)/);
   assert.match(stylesSource,/env\(safe-area-inset-bottom\)/);
+});
+
+test("hoja de sesión: renderiza todos los ejercicios y elimina el carrusel obligatorio",()=>{
+  assert.match(renderSource,/draft\.exercises\.map\(\(item,index\)=>renderActiveWorkoutExercise/);
+  assert.match(workoutUiSource,/class="workout-exercise-card status-\$\{status\}/);
+  assert.match(workoutUiSource,/data-workout-toggle-exercise/);
+  assert.match(renderSource,/data-workout-next-pending/);
+  assert.doesNotMatch(renderSource,/data-workout-previous|data-workout-next(?!-pending)/);
+});
+
+test("referencia: solo se renderiza bajo demanda en un diálogo no bloqueante",()=>{
+  assert.match(workoutUiSource,/data-workout-reference/);
+  assert.match(workoutUiSource,/id="workoutReferenceDialog"/);
+  assert.match(workoutUiSource,/renderActiveWorkoutGuide\(reference\.guide,reference\.exercise,\{dialog:true\}\)/);
+  assert.doesNotMatch(renderSource,/\$\{renderActiveWorkoutGuide\(guide,exercise\)\}/);
+  assert.match(workoutUiSource,/Consejos de ejecución/);
+  assert.match(workoutUiSource,/Errores frecuentes/);
+  assert.match(workoutUiSource,/Señales de molestia y advertencias/);
+});
+
+test("expandir o colapsar una tarjeta no reconstruye la sesión",()=>{
+  const toggleBranch=between(
+    bindingSource,
+    '}else if(button.matches("[data-workout-toggle-exercise]"))',
+    '}else if(button.matches("[data-workout-reference]"))'
+  );
+  assert.match(toggleBranch,/panel\.hidden=expanded/);
+  assert.match(toggleBranch,/workoutExpandedExercises\.(delete|add)/);
+  assert.doesNotMatch(toggleBranch,/renderWorkout|saveDraft|stageWorkoutDraft|localStorage/);
 });
 
 test("UI: no conserva acciones ambiguas ni listeners inline en el render autoritativo",()=>{

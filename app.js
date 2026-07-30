@@ -3400,6 +3400,9 @@ function resetRoutineSessionOwnerState(){
   state.workoutSessionOverviewOpen=false;
   state.workoutTechniqueExpanded=false;
   state.workoutChangeMenuOpen=false;
+  state.workoutReferenceExerciseId=null;
+  state.workoutActionExerciseId=null;
+  state.workoutExpandedExercises=new Set();
   state.workoutCompletionReviewOpen=false;
   state.workoutDiscardConfirmOpen=false;
   state.workoutSeriesDeleteCandidate=null;
@@ -3793,6 +3796,9 @@ let state = {
   workoutSessionOverviewOpen: false,
   workoutTechniqueExpanded: false,
   workoutChangeMenuOpen: false,
+  workoutReferenceExerciseId: null,
+  workoutActionExerciseId: null,
+  workoutExpandedExercises: new Set(),
   workoutCompletionReviewOpen: false,
   workoutDiscardConfirmOpen: false,
   workoutSeriesDeleteCandidate: null,
@@ -9368,16 +9374,14 @@ function activeWorkoutExerciseStatus(exercise){
   if(started||completed) return "started";
   return "pending";
 }
-function renderActiveWorkoutGuide(guide,exercise){
+function renderActiveWorkoutGuide(guide,exercise,{dialog=false}={}){
   const technique=guide.technique;
   const listHtml=items=>items.length?`<ul>${items.map(item=>`<li>${esc(item)}</li>`).join("")}</ul>`:"";
-  return `<aside class="active-workout-guide" aria-labelledby="exerciseGuideTitle">
-    <span class="section-kicker">GUÍA DEL EJERCICIO</span>
-    <h2 id="exerciseGuideTitle">Referencia técnica</h2>
+  return `<section class="active-workout-guide${dialog?" active-workout-reference-content":""}" aria-labelledby="exerciseGuideTitle">
     <div class="active-workout-image">
       ${guide.image
         ?`<img src="${esc(guide.image.src)}" alt="${esc(guide.image.alt)}">`
-        :'<div class="active-workout-image-placeholder" role="img" aria-label="Imagen todavía no disponible">Imagen todavía no disponible</div>'}
+        :'<div class="active-workout-image-placeholder" role="img" aria-label="Referencia visual pendiente"><strong>Referencia visual pendiente</strong><span>Puedes registrar el ejercicio con normalidad.</span></div>'}
     </div>
     <section class="active-workout-muscles" aria-labelledby="exerciseMusclesTitle">
       <h3 id="exerciseMusclesTitle">Músculos trabajados</h3>
@@ -9393,13 +9397,17 @@ function renderActiveWorkoutGuide(guide,exercise){
         <details>
           <summary>Ver técnica completa</summary>
           ${technique.setup.length?`<h4>Preparación</h4>${listHtml(technique.setup)}`:""}
-          ${technique.execution.length?`<h4>Ejecución</h4>${listHtml(technique.execution)}`:""}
+          ${technique.execution.length?`<h4>Consejos de ejecución</h4>${listHtml(technique.execution)}`:""}
           ${technique.breathing?`<h4>Respiración</h4><p>${esc(technique.breathing)}</p>`:""}
-          ${technique.cautions.length?`<h4>Indicaciones registradas</h4>${listHtml(technique.cautions)}`:""}
+          <h4>Errores frecuentes</h4>
+          <p>${technique.cautions.length
+            ?"Evita forzar la técnica cuando aparezcan las señales indicadas."
+            :"No hay errores frecuentes documentados todavía."}</p>
+          ${technique.cautions.length?`<h4>Señales de molestia y advertencias</h4>${listHtml(technique.cautions)}`:""}
         </details>
-      `:"<p>Técnica todavía no disponible para este ejercicio.</p>"}
+      `:"<p>Aún no tenemos indicaciones confirmadas para este ejercicio. Puedes continuar con tu registro.</p>"}
     </section>
-  </aside>`;
+  </section>`;
 }
 function renderActiveWorkoutUnresolved(resolution,exercise,key){
   if(state.workoutUnresolvedDismissed?.has(key)) return "";
@@ -9435,8 +9443,8 @@ function renderActiveWorkoutSet(row,exerciseIndex,sessionId,nextPendingIndex){
         :"—"
     :"—";
   return `<article class="active-set-card ${row.done?"completed":row.index===nextPendingIndex?"next":""}" data-active-set="${row.index}" data-set-instance-id="${esc(row.setInstanceId||"")}">
-    <header><strong>Serie ${row.number}</strong>${row.done?'<span aria-label="Serie completada">✓ Completada</span>':""}</header>
-    <div class="active-set-reference"><span>Anterior: <strong>${previous}</strong></span><span>Objetivo: <strong>${esc(row.target||"Sin definir")}</strong></span></div>
+    <header><strong>${row.number}</strong><span class="sr-only">Serie ${row.number}</span>${row.done?'<span class="active-set-complete-mark" aria-label="Serie completada">✓</span>':""}</header>
+    <div class="active-set-reference"><span><small>Anterior</small><strong>${previous}</strong></span><span><small>Objetivo</small><strong>${esc(row.target||"Sin definir")}</strong></span></div>
     <div class="active-set-fields">
       ${row.timed
         ?`<div class="active-set-stopwatch">
@@ -9452,17 +9460,95 @@ function renderActiveWorkoutSet(row,exerciseIndex,sessionId,nextPendingIndex){
         ${[0,1,2,3,4,5].map(value=>`<option value="${value}" ${String(row.rir)===String(value)?"selected":""}>${value}</option>`).join("")}
       </select></label>
     </div>
-    <label class="active-set-warmup"><input type="checkbox" data-set-warmup="${row.index}" ${row.warmup?"checked":""} ${row.done?"disabled":""}><span>Serie de calentamiento</span></label>
+    <label class="active-set-warmup" title="Serie de calentamiento"><input type="checkbox" data-set-warmup="${row.index}" ${row.warmup?"checked":""} ${row.done?"disabled":""}><span>Calentamiento</span></label>
     <div class="active-set-actions">
-      <button type="button" class="${row.done?"secondary":"primary"}" data-complete-active-set="${row.index}" aria-pressed="${row.done}">${row.done?"Corregir serie":"Completar serie"}</button>
-      ${row.canDelete?`<button type="button" class="text-button" data-delete-active-set="${row.index}">Eliminar serie</button>`:""}
+      <button type="button" class="${row.done?"secondary":"primary"}" data-complete-active-set="${row.index}" aria-pressed="${row.done}" aria-label="${row.done?`Corregir serie ${row.number}`:`Completar serie ${row.number}`}">${row.done?"Corregir":"Completar"}</button>
+      ${row.canDelete?`<button type="button" class="text-button" data-delete-active-set="${row.index}" aria-label="Eliminar serie ${row.number}">Eliminar</button>`:""}
     </div>
   </article>`;
 }
 function hasInputValue(value){
   return value!==null&&value!==undefined&&value!=="";
 }
-function renderActiveWorkoutOverlays({draft,header,review,resolution,currentExercise,key}){
+function renderActiveWorkoutExercise({
+  exercise,index,sessionId,last,library,defaultRest,currentExerciseIndex
+}){
+  const api=activeWorkoutApi();
+  const exerciseId=api.exerciseIdentity(exercise,index);
+  const instanceId=exercise.exerciseInstanceId||exerciseId;
+  const key=activeWorkoutExerciseKey(sessionId,exercise,index);
+  const selectedLibraryId=state.workoutVisualLibrarySelections.get(key)||null;
+  const resolution=api.exerciseLibraryResolutionModel({
+    exercise,library,selectedExerciseId:selectedLibraryId,
+    normalize:window.GymOSExerciseDomain.normalizeToken
+  });
+  const guide=api.exerciseGuideModel({
+    exercise:resolution.exercise,label:exerciseLibraryWorkflowApi().label
+  });
+  const timed=isTimedExercise(exercise);
+  const previous=previousExerciseForWorkout(last,exercise,index);
+  const rows=exercise.series.map((set,setIndex)=>api.setEntryModel({
+    set,index:setIndex,previous:previous?.series?.[setIndex]||null,
+    target:exercise.target,timed
+  }));
+  const nextPendingIndex=rows.find(row=>!row.done)?.index??-1;
+  const status=activeWorkoutExerciseStatus(exercise);
+  const completedSets=rows.filter(row=>row.done).length;
+  const expanded=state.workoutExpandedExercises.has(instanceId);
+  const statusLabel={
+    completed:"Completado",started:"En progreso",pending:"Pendiente"
+  }[status];
+  const muscle=guide.muscles.primary[0]||"Grupo muscular pendiente";
+  const pattern=guide.pattern||guide.category||"";
+  const technique=guide.technique.highlights[0]||(
+    guide.technique.available?"Consulta la referencia para revisar la técnica.":"Técnica pendiente de confirmar."
+  );
+  const recommendation=!timed
+    ?exerciseRecommendation(previous,exercise.target,exercise.increment,exercise.type)
+    :null;
+  return `<article class="workout-exercise-card status-${status}${expanded?" expanded":""}" data-exercise-instance-id="${esc(instanceId)}" data-exercise-index="${index}">
+    <header class="workout-exercise-card-header">
+      <button type="button" class="workout-exercise-toggle" data-workout-toggle-exercise aria-expanded="${expanded}" aria-controls="workoutExercisePanel${index}">
+        <span class="workout-exercise-order">${index+1}</span>
+        <span class="workout-exercise-title">
+          <strong id="workoutExerciseTitle${index}">${esc(exercise.name)}</strong>
+          <small>${esc(muscle)}${pattern?` · ${esc(pattern)}`:""}</small>
+        </span>
+        <span class="workout-exercise-prescription">${exercise.sets||rows.length} × ${esc(exercise.target||"—")} · RIR ${esc(exercise.targetRir||"—")}</span>
+        <span class="workout-exercise-state" data-status="${status}">${status==="completed"?"✓ ":""}${statusLabel}<small>${completedSets}/${rows.length} series</small></span>
+        <span class="workout-exercise-chevron" aria-hidden="true">⌄</span>
+      </button>
+    </header>
+    <div id="workoutExercisePanel${index}" class="workout-exercise-panel" ${expanded?"":"hidden"} aria-labelledby="workoutExerciseTitle${index}">
+      <div class="workout-exercise-quick-info">
+        <p><strong>Técnica</strong><span>${esc(technique)}</span></p>
+        <p><strong>Trabaja</strong><span>${esc([
+          ...guide.muscles.primary,...guide.muscles.secondary
+        ].slice(0,3).join(", ")||"Información muscular pendiente")}</span></p>
+        <div>
+          <button type="button" class="text-button" data-workout-reference aria-controls="workoutReferenceDialog">Ver referencia</button>
+          <button type="button" class="text-button" data-workout-change-exercise aria-controls="workoutChangeDialog">Cambiar ejercicio</button>
+        </div>
+      </div>
+      ${!resolution.exercise?renderActiveWorkoutUnresolved(resolution,exercise,key):""}
+      ${recommendation?`<p class="workout-exercise-recommendation"><strong>${esc(recommendation.title)}</strong> ${esc(recommendation.text)}</p>`:""}
+      <section class="active-workout-sets" aria-labelledby="activeWorkoutSetsTitle${index}">
+        <div class="active-workout-section-heading"><h2 id="activeWorkoutSetsTitle${index}">Series</h2><button type="button" class="text-button" data-add-active-set>Añadir serie</button></div>
+        <div class="active-set-desktop-head" aria-hidden="true"><span>#</span><span>Anterior / objetivo</span><span>Registro</span><span>Acciones</span></div>
+        ${rows.map(row=>renderActiveWorkoutSet(row,index,sessionId,nextPendingIndex)).join("")}
+      </section>
+      <div class="workout-exercise-notes">
+        <label class="active-workout-notes"><span>Notas</span><textarea data-active-workout-notes placeholder="Opcional">${esc(exercise.notes||"")}</textarea></label>
+        <label class="active-workout-notes"><span>Molestias</span><input data-active-workout-discomfort value="${esc(exercise.discomfort||"")}" placeholder="Ninguna"></label>
+      </div>
+      <div class="active-workout-exercise-completion">
+        <button type="button" class="secondary" data-complete-active-exercise>${exercise.completedAt?"Actualizar ejercicio":"Completar ejercicio"}</button>
+        ${exercise.completedAt?`<span role="status">✓ Ejercicio guardado</span>`:""}
+      </div>
+    </div>
+  </article>`;
+}
+function renderActiveWorkoutOverlays({draft,header,review,reference,changeAllowed=false}){
   const statusLabels={completed:"Completado",started:"Iniciado",pending:"Pendiente"};
   const summary=state.workoutSessionOverviewOpen?`<div class="workout-modal-backdrop" data-workout-close-modal>
     <section id="workoutSessionOverviewDialog" class="workout-modal session-overview-modal" role="dialog" aria-modal="true" aria-labelledby="workoutSessionOverviewTitle">
@@ -9477,10 +9563,16 @@ function renderActiveWorkoutOverlays({draft,header,review,resolution,currentExer
       </div>
     </section>
   </div>`:"";
+  const referenceDialog=reference?`<div class="workout-modal-backdrop" data-workout-close-modal>
+    <section id="workoutReferenceDialog" class="workout-modal workout-reference-modal" role="dialog" aria-modal="true" aria-labelledby="exerciseGuideTitle">
+      <header><div><span class="section-kicker">TÉCNICA Y REFERENCIA</span><h2 id="exerciseGuideTitle">${esc(reference.exercise.name)}</h2></div><button type="button" class="icon-button" data-workout-close-modal aria-label="Cerrar referencia">×</button></header>
+      ${renderActiveWorkoutGuide(reference.guide,reference.exercise,{dialog:true})}
+    </section>
+  </div>`:"";
   const change=state.workoutChangeMenuOpen?`<div class="workout-modal-backdrop" data-workout-close-modal>
     <section id="workoutChangeDialog" class="workout-modal workout-change-modal" role="dialog" aria-modal="true" aria-labelledby="workoutChangeTitle">
       <header><h2 id="workoutChangeTitle">¿Dónde quieres aplicar el cambio?</h2><button type="button" class="icon-button" data-workout-close-modal aria-label="Cerrar">×</button></header>
-      ${resolution.exercise?`<button type="button" data-workout-change-mode="temporary"><strong>Solo en este entrenamiento</strong><span>La rutina continuará igual.</span></button>
+      ${changeAllowed?`<button type="button" data-workout-change-mode="temporary"><strong>Solo en este entrenamiento</strong><span>La rutina continuará igual.</span></button>
         <button type="button" data-workout-change-mode="permanent"><strong>Cambiar en mi rutina</strong><span>Se creará una propuesta para revisar y confirmar.</span></button>`
         :`<p class="form-message info">Primero debes elegir una ficha compatible para esta visita. GymOS no puede crear una sustitución segura desde una coincidencia ambigua.</p>`}
     </section>
@@ -9522,12 +9614,14 @@ function renderActiveWorkoutOverlays({draft,header,review,resolution,currentExer
       <div class="workout-modal-actions"><button type="button" class="secondary" data-workout-close-modal>Conservar entrenamiento</button><button type="button" class="danger-button" data-confirm-discard-workout>Descartar</button></div>
     </section>
   </div>`:"";
-  return summary+change+completion+deleteSet+discard;
+  return summary+referenceDialog+change+completion+deleteSet+discard;
 }
 function closeActiveWorkoutOverlay(){
   const returnFocusSelector=state.workoutReturnFocusSelector;
   state.workoutSessionOverviewOpen=false;
   state.workoutChangeMenuOpen=false;
+  state.workoutReferenceExerciseId=null;
+  state.workoutActionExerciseId=null;
   state.workoutCompletionReviewOpen=false;
   state.workoutDiscardConfirmOpen=false;
   state.workoutSeriesDeleteCandidate=null;
@@ -9619,10 +9713,17 @@ function renderWorkout(){
       ?restoredIndex
       :(Number(draft.currentExerciseIndex)||0);
     state.workoutActiveInstanceId=draft.workoutInstanceId;
+    state.workoutExpandedExercises=new Set();
+    const firstPending=draft.exercises.find(
+      item=>activeWorkoutExerciseStatus(item)!=="completed"
+    )||draft.exercises[0];
+    if(firstPending?.exerciseInstanceId){
+      state.workoutExpandedExercises.add(firstPending.exerciseInstanceId);
+    }
   }
   state.workoutExerciseIndex=Math.min(Math.max(0,state.workoutExerciseIndex||0),Math.max(0,totalExercises-1));
   const exerciseIndex=state.workoutExerciseIndex;
-  const exercise=draft.exercises[exerciseIndex]||null;
+  const exercise=draft.exercises[exerciseIndex]||draft.exercises[0]||null;
   const sessionName=routineSessionRuntimeApi().displayName(
     session,activeRoutineSessions().findIndex(item=>item.sessionId===sessionId)
   );
@@ -9641,26 +9742,8 @@ function renderWorkout(){
     ?"Pausar"
     :sessionTimer.status==="paused"?"Reanudar":"Iniciar";
   const last=lastWorkoutForSession(sessionId);
-  const previous=exercise?previousExerciseForWorkout(last,exercise,exerciseIndex):null;
   const library=getExerciseLibrary();
-  const key=exercise?activeWorkoutExerciseKey(sessionId,exercise,exerciseIndex):"";
-  const selectedLibraryId=state.workoutVisualLibrarySelections.get(key)||null;
-  const resolution=api.exerciseLibraryResolutionModel({
-    exercise,library,selectedExerciseId:selectedLibraryId,
-    normalize:window.GymOSExerciseDomain.normalizeToken
-  });
-  const guide=api.exerciseGuideModel({
-    exercise:resolution.exercise,label:exerciseLibraryWorkflowApi().label
-  });
-  const timed=exercise?isTimedExercise(exercise):false;
-  const rows=exercise?exercise.series.map((set,index)=>api.setEntryModel({
-    set,index,previous:previous?.series?.[index]||null,target:exercise.target,timed
-  })):[];
-  const nextPendingIndex=rows.find(row=>!row.done)?.index??-1;
   const review=api.workoutCompletionReviewModel({exercises:draft.exercises,elapsedMs:elapsedForDisplay});
-  const recommendation=exercise&&!timed
-    ?exerciseRecommendation(previous,exercise.target,exercise.increment,exercise.type)
-    :null;
   const recoveryGuidance=activeWorkoutRecoveryGuidanceModel(
     window.GymOSRecovery?.entryForDate?.(dateKey(new Date()))||null
   );
@@ -9668,17 +9751,55 @@ function renderWorkout(){
   const rest=api.restTimerModel({
     seconds:state.timerSeconds,running:Boolean(state.timerInterval),defaultSeconds:defaultRest
   });
-  const tags=guide.available?[
-    ...guide.muscles.primary.slice(0,2),
-    ...guide.equipment.slice(0,1),
-    guide.pattern
-  ].filter(Boolean):[];
+  const completedExercises=draft.exercises.filter(
+    item=>activeWorkoutExerciseStatus(item)==="completed"
+  ).length;
+  const progressPercentage=totalExercises
+    ?Math.round((completedExercises/totalExercises)*100)
+    :0;
+  const estimatedDuration=Number(
+    session.estimatedDurationMinutes||session.estimatedDurationMin||session.duration
+  )||45;
+  const referenceIndex=draft.exercises.findIndex(
+    item=>item.exerciseInstanceId===state.workoutReferenceExerciseId
+  );
+  const referenceExercise=referenceIndex>=0?draft.exercises[referenceIndex]:null;
+  let reference=null;
+  if(referenceExercise){
+    const referenceKey=activeWorkoutExerciseKey(sessionId,referenceExercise,referenceIndex);
+    const referenceResolution=api.exerciseLibraryResolutionModel({
+      exercise:referenceExercise,library,
+      selectedExerciseId:state.workoutVisualLibrarySelections.get(referenceKey)||null,
+      normalize:window.GymOSExerciseDomain.normalizeToken
+    });
+    reference={
+      exercise:referenceExercise,
+      guide:api.exerciseGuideModel({
+        exercise:referenceResolution.exercise,label:exerciseLibraryWorkflowApi().label
+      })
+    };
+  }
+  const actionIndex=draft.exercises.findIndex(
+    item=>item.exerciseInstanceId===state.workoutActionExerciseId
+  );
+  const actionExercise=actionIndex>=0?draft.exercises[actionIndex]:null;
+  const actionResolution=actionExercise?api.exerciseLibraryResolutionModel({
+    exercise:actionExercise,library,
+    selectedExerciseId:state.workoutVisualLibrarySelections.get(
+      activeWorkoutExerciseKey(sessionId,actionExercise,actionIndex)
+    )||null,
+    normalize:window.GymOSExerciseDomain.normalizeToken
+  }):null;
   app.innerHTML=`<div class="app-shell active-workout-shell">
-    <main class="screen active-workout-screen" aria-labelledby="activeExerciseTitle">
+    <main class="screen active-workout-screen" aria-labelledby="activeWorkoutTitle">
       <header class="active-workout-context">
-        <button type="button" class="text-button active-workout-back" data-workout-back>← Volver a ${esc(sessionName)}</button>
+        <button type="button" class="icon-button active-workout-back" data-workout-back aria-label="Volver a Inicio">←</button>
+        <div class="active-workout-session-title">
+          <h1 id="activeWorkoutTitle">${esc(sessionName)}</h1>
+          <span>${completedExercises} de ${totalExercises} ejercicios</span>
+        </div>
         <button type="button" class="active-workout-progress-trigger" data-workout-session-overview aria-expanded="${state.workoutSessionOverviewOpen}" aria-controls="workoutSessionOverviewDialog">
-          <strong>Ejercicio ${header.exerciseNumber} de ${header.totalExercises}</strong><span>Ver resumen de la sesión</span>
+          <strong>${progressPercentage}%</strong><span>Ver sesión</span>
         </button>
         <section class="active-workout-session-clock" aria-labelledby="activeWorkoutSessionClockLabel">
           <span id="activeWorkoutSessionClockLabel">Tiempo de sesión</span>
@@ -9689,63 +9810,43 @@ function renderWorkout(){
           </div>
         </section>
         <p class="active-workout-save-status" data-workout-save-status data-status="${esc(state.workoutDraftSaveStatus)}" role="status" aria-live="polite">${esc(workoutSaveStatusLabel())}</p>
-        <div class="active-workout-session-progress" role="progressbar" aria-label="Progreso por ejercicios" aria-valuemin="0" aria-valuemax="${header.totalExercises}" aria-valuenow="${header.exerciseNumber}"><span style="width:${header.progressPercentage}%"></span></div>
-        ${header.focus?`<p>${esc(header.focus)}</p>`:""}
+        <div class="active-workout-session-progress" role="progressbar" aria-label="Progreso por ejercicios" aria-valuemin="0" aria-valuemax="${totalExercises}" aria-valuenow="${completedExercises}"><span style="width:${progressPercentage}%"></span></div>
       </header>
       ${header.elapsed.anomalous?`<section class="form-message info active-workout-old-draft" role="status"><p>Este borrador lleva abierto un periodo inusual. Conservamos todos sus datos, pero debes reiniciar el contador antes de finalizar.</p><button type="button" class="secondary" data-workout-session-reset>Retomar tiempo desde ahora</button></section>`:""}
       <div data-workout-inline-message>${renderActiveWorkoutInlineMessage()}</div>
       ${state.workoutDraftMessage?`<p class="workout-draft-message ${esc(state.workoutDraftMessage.type)}" role="${state.workoutDraftMessage.type==="warning"?"alert":"status"}">${esc(state.workoutDraftMessage.text)}</p>`:""}
-      ${exercise?`<div class="active-workout-layout">
-        <section class="active-workout-exercise-heading" aria-labelledby="activeExerciseTitle">
-          <span class="section-kicker">REGISTRO</span>
-          <div class="active-exercise-title-row">
-            <div><h1 id="activeExerciseTitle" tabindex="-1">${esc(exercise.name)}</h1>
-              <p>${exercise.sets||exercise.series.length} series · ${esc(exercise.target||"Objetivo sin definir")} · RIR ${esc(exercise.targetRir||"sin definir")} · Descanso ${defaultRest%60===0?`${defaultRest/60} min`:`${defaultRest} s`}</p></div>
-            <button type="button" class="secondary" data-workout-change-exercise aria-controls="workoutChangeDialog">Cambiar ejercicio</button>
-          </div>
-          ${tags.length?`<div class="active-exercise-tags">${tags.map(tag=>`<span>${esc(tag)}</span>`).join("")}</div>`:""}
-          ${!resolution.exercise?renderActiveWorkoutUnresolved(resolution,exercise,key):""}
-        </section>
-        ${renderActiveWorkoutGuide(guide,exercise)}
-        <section class="active-workout-register" aria-label="Registro del ejercicio">
-          ${recoveryGuidance.available?`<aside class="active-workout-recovery active-workout-recovery-${esc(recoveryGuidance.status)}" aria-label="Orientación de recuperación">
-            <span class="section-kicker">ORIENTACIÓN DE RECUPERACIÓN</span>
-            <strong>${esc(recoveryGuidance.title)}</strong>
-            <p>${esc(recoveryGuidance.guidance)}</p>
-          </aside>`:""}
-          ${recommendation?`<section class="active-workout-recommendation">
-            <span class="section-kicker">RECOMENDACIÓN DE HOY</span>
-            <strong>${esc(recommendation.title)}</strong><p>${esc(recommendation.text)}</p>
-            ${previous?`<small>Basada en la última vez que realizaste este ejercicio.</small>`:"<small>Se creará una referencia cuando completes esta sesión.</small>"}
-          </section>`:""}
-          <section class="active-workout-sets" aria-labelledby="activeWorkoutSetsTitle">
-            <div class="active-workout-section-heading"><h2 id="activeWorkoutSetsTitle">Series</h2><button type="button" class="text-button" data-add-active-set>Añadir serie</button></div>
-            <div class="active-set-desktop-head" aria-hidden="true"><span>Serie</span><span>Anterior / objetivo</span><span>Registro</span><span>Estado</span></div>
-            ${rows.map(row=>renderActiveWorkoutSet(row,exerciseIndex,sessionId,nextPendingIndex)).join("")}
-          </section>
-          <label class="active-workout-notes"><span>Notas del ejercicio</span><textarea data-active-workout-notes placeholder="Opcional">${esc(exercise.notes||"")}</textarea></label>
-          <label class="active-workout-notes"><span>Molestias durante el ejercicio</span><input data-active-workout-discomfort value="${esc(exercise.discomfort||"")}" placeholder="Déjalo vacío si no hubo molestias"></label>
-          <div class="active-workout-exercise-completion">
-            <button type="button" class="secondary" data-complete-active-exercise>${exercise.completedAt?"Actualizar ejercicio guardado":"Completar ejercicio"}</button>
-            ${exercise.completedAt?`<span role="status">✓ Ejercicio guardado</span>`:""}
-          </div>
-        </section>
-      </div>`:`<section class="workout-empty-state" role="status"><h1 id="activeExerciseTitle">Esta sesión no tiene ejercicios</h1><p>Vuelve a Mi rutina para añadir ejercicios antes de empezar.</p><button type="button" data-open-routine-from-workout class="secondary">Ir a Mi rutina</button></section>`}
+      <section class="active-workout-summary" aria-label="Resumen de la sesión">
+        <div><span>Objetivo</span><strong>${esc(session.focus||"Completar la sesión")}</strong></div>
+        <div><span>Duración</span><strong>${estimatedDuration} min</strong></div>
+        <div><span>Ejercicios</span><strong>${totalExercises}</strong></div>
+        <div><span>Descanso</span><strong>${defaultRest%60===0?`${defaultRest/60} min`:`${defaultRest} s`}</strong></div>
+      </section>
+      ${recoveryGuidance.available?`<aside class="active-workout-recovery active-workout-recovery-${esc(recoveryGuidance.status)}" aria-label="Orientación de recuperación">
+        <strong>${esc(recoveryGuidance.title)}</strong><p>${esc(recoveryGuidance.guidance)}</p>
+      </aside>`:""}
+      ${exercise?`<section class="workout-exercise-sheet" aria-label="Ejercicios de la sesión">
+        ${draft.exercises.map((item,index)=>renderActiveWorkoutExercise({
+          exercise:item,index,sessionId,last,library,defaultRest,
+          currentExerciseIndex:exerciseIndex
+        })).join("")}
+      </section>`:`<section class="workout-empty-state" role="status"><h2>Esta sesión no tiene ejercicios</h2><p>Vuelve a Mi rutina para añadir ejercicios antes de empezar.</p><button type="button" data-open-routine-from-workout class="secondary">Ir a Mi rutina</button></section>`}
       ${rest.running?`<section class="active-rest-timer" aria-labelledby="activeRestTitle">
-        <div><span class="section-kicker">DESCANSO</span><strong id="activeRestTitle" data-active-rest-time aria-live="off">${formatTimer(rest.remainingSeconds)}</strong></div>
-        <div><button type="button" class="secondary" data-skip-rest>Omitir descanso</button><button type="button" class="secondary" data-add-rest>+30 s</button></div>
+        <div><span>Descanso</span><strong id="activeRestTitle" data-active-rest-time aria-live="off">${formatTimer(rest.remainingSeconds)}</strong></div>
+        <div><button type="button" class="text-button" data-skip-rest>Omitir</button><button type="button" class="secondary" data-add-rest>+30 s</button></div>
       </section>`:""}
       <p id="activeRestStatus" class="sr-only" aria-live="polite"></p>
-      ${exercise?`<nav class="active-exercise-navigation" aria-label="Navegación entre ejercicios">
-        <button type="button" class="secondary" data-workout-previous ${exerciseIndex===0?"disabled":""}>← Ejercicio anterior</button>
-        <button type="button" class="primary" ${exerciseIndex===totalExercises-1?'data-workout-review aria-controls="workoutCompletionDialog"':"data-workout-next"}>${exerciseIndex===totalExercises-1?"Revisar y finalizar sesión":"Siguiente ejercicio →"}</button>
+      ${exercise?`<nav class="active-exercise-navigation" aria-label="Acciones de la sesión">
+        ${completedExercises<totalExercises?'<button type="button" class="secondary" data-workout-next-pending>Ir al siguiente pendiente</button>':""}
+        <button type="button" class="primary" data-workout-review aria-controls="workoutCompletionDialog">Revisar y finalizar</button>
         <div class="active-workout-more">
           <button type="button" class="icon-button" data-workout-discard-menu aria-label="Más acciones" aria-expanded="${state.workoutDiscardMenuOpen||false}">•••</button>
           ${state.workoutDiscardMenuOpen?'<button type="button" class="danger-soft" data-workout-discard>Descartar entrenamiento</button>':""}
         </div>
       </nav>`:""}
     </main>
-    ${renderActiveWorkoutOverlays({draft,header,review,resolution,currentExercise:exercise,key})}
+    ${renderActiveWorkoutOverlays({
+      draft,header,review,reference,changeAllowed:Boolean(actionResolution?.exercise)
+    })}
     ${nav("workout")}
   </div>`;
   if(!header.elapsed.anomalous) startWorkoutSessionTimer({
@@ -9756,7 +9857,7 @@ function renderWorkout(){
     ownerId,sessionId,draftId:draft.draftId,
     workoutInstanceId:draft.workoutInstanceId,
     exerciseIndex,exerciseInstanceId:exercise?.exerciseInstanceId||null,
-    key,resolution,elapsedAnomalous:header.elapsed.anomalous
+    elapsedAnomalous:header.elapsed.anomalous
   });
   bindNav();
 }
@@ -9811,14 +9912,24 @@ function bindActiveWorkoutEvents(context){
     if(draft.workoutInstanceId!==context.workoutInstanceId) throw new Error("draft_changed");
     return draft;
   };
-  const currentExercise=draft=>{
-    const exercise=draft.exercises.find(item=>item.exerciseInstanceId===context.exerciseInstanceId);
+  const exerciseMetaFromNode=node=>{
+    const card=node?.closest?.("[data-exercise-instance-id]");
+    if(!card) throw new Error("exercise_changed");
+    return {
+      exerciseInstanceId:card.dataset.exerciseInstanceId,
+      exerciseIndex:Number(card.dataset.exerciseIndex)
+    };
+  };
+  const currentExercise=(draft,exerciseInstanceId=context.exerciseInstanceId)=>{
+    const exercise=draft.exercises.find(item=>item.exerciseInstanceId===exerciseInstanceId);
     if(!exercise) throw new Error("exercise_changed");
     return exercise;
   };
-  const persist=(mutator,{immediate=false,scheduleSync=false}={})=>{
+  const persist=(mutator,{
+    immediate=false,scheduleSync=false,exerciseInstanceId=context.exerciseInstanceId
+  }={})=>{
     const draft=getCurrent();
-    mutator(draft,currentExercise(draft));
+    mutator(draft,currentExercise(draft,exerciseInstanceId));
     if(!activeWorkoutIdentityValid(context)){
       throw workoutPersistenceError(
         "owner_mismatch","memory_commit_guard",new Error("owner_changed")
@@ -9842,7 +9953,11 @@ function bindActiveWorkoutEvents(context){
   };
   main.addEventListener("input",event=>{
     const target=event.target;
+    if(!target.matches(
+      "[data-set-field],[data-active-workout-notes],[data-active-workout-discomfort]"
+    )) return;
     try{
+      const {exerciseInstanceId}=exerciseMetaFromNode(target);
       if(target.matches("[data-set-field]")){
         const setInstanceId=target.closest("[data-set-instance-id]")?.dataset.setInstanceId;
         persist((draft,exercise)=>{
@@ -9850,11 +9965,11 @@ function bindActiveWorkoutEvents(context){
           if(!set||set.done) return;
           set[target.dataset.setField]=target.value;
           if(target.dataset.setField==="seconds"){set.weight="";set.reps="";}
-        });
+        },{exerciseInstanceId});
       }else if(target.matches("[data-active-workout-notes]")){
-        persist((draft,exercise)=>{exercise.notes=target.value;});
+        persist((draft,exercise)=>{exercise.notes=target.value;},{exerciseInstanceId});
       }else if(target.matches("[data-active-workout-discomfort]")){
-        persist((draft,exercise)=>{exercise.discomfort=target.value;});
+        persist((draft,exercise)=>{exercise.discomfort=target.value;},{exerciseInstanceId});
       }
     }catch(error){rerenderWithError(error);}
   });
@@ -9862,11 +9977,12 @@ function bindActiveWorkoutEvents(context){
     const target=event.target;
     if(!target.matches("[data-set-warmup]")) return;
     try{
+      const {exerciseInstanceId}=exerciseMetaFromNode(target);
       const setInstanceId=target.closest("[data-set-instance-id]")?.dataset.setInstanceId;
       persist((draft,exercise)=>{
         const set=exercise.series.find(item=>item.setInstanceId===setInstanceId);
         if(set&&!set.done) set.warmup=target.checked;
-      },{immediate:true});
+      },{immediate:true,exerciseInstanceId});
       renderWorkout();
     }catch(error){rerenderWithError(error);}
   });
@@ -9894,6 +10010,20 @@ function bindActiveWorkoutEvents(context){
           setActiveWorkoutMessage("success","Cambios guardados en este dispositivo.");
         }
         renderWorkout();
+      }else if(button.matches("[data-workout-toggle-exercise]")){
+        const {exerciseInstanceId}=exerciseMetaFromNode(button);
+        const panel=document.getElementById(button.getAttribute("aria-controls"));
+        const expanded=button.getAttribute("aria-expanded")==="true";
+        button.setAttribute("aria-expanded",String(!expanded));
+        if(panel) panel.hidden=expanded;
+        button.closest(".workout-exercise-card")?.classList.toggle("expanded",!expanded);
+        if(expanded) state.workoutExpandedExercises.delete(exerciseInstanceId);
+        else state.workoutExpandedExercises.add(exerciseInstanceId);
+      }else if(button.matches("[data-workout-reference]")){
+        const {exerciseInstanceId}=exerciseMetaFromNode(button);
+        state.workoutReferenceExerciseId=exerciseInstanceId;
+        state.workoutReturnFocusSelector=`[data-exercise-instance-id="${CSS.escape(exerciseInstanceId)}"] [data-workout-reference]`;
+        renderWorkout();
       }else if(button.matches("[data-workout-session-toggle]")){
         const draft=getCurrent();
         const timer=workoutSessionTimerForDraft(draft);
@@ -9918,42 +10048,65 @@ function bindActiveWorkoutEvents(context){
         state.workoutReturnFocusSelector="[data-workout-session-overview]";
         state.workoutSessionOverviewOpen=true;renderWorkout();
       }else if(button.matches("[data-workout-change-exercise]")){
-        state.workoutReturnFocusSelector="[data-workout-change-exercise]";
+        const {exerciseInstanceId}=exerciseMetaFromNode(button);
+        state.workoutActionExerciseId=exerciseInstanceId;
+        state.workoutReturnFocusSelector=`[data-exercise-instance-id="${CSS.escape(exerciseInstanceId)}"] [data-workout-change-exercise]`;
         state.workoutChangeMenuOpen=true;renderWorkout();
       }else if(button.matches("[data-workout-show-candidates]")){
-        state.workoutLibraryCandidateKey=context.key;renderWorkout();
+        const {exerciseInstanceId,exerciseIndex}=exerciseMetaFromNode(button);
+        const current=currentExercise(getCurrent(),exerciseInstanceId);
+        state.workoutLibraryCandidateKey=activeWorkoutExerciseKey(
+          context.sessionId,current,exerciseIndex
+        );
+        renderWorkout();
       }else if(button.matches("[data-workout-dismiss-resolution]")){
-        state.workoutUnresolvedDismissed.add(context.key);
+        const {exerciseInstanceId,exerciseIndex}=exerciseMetaFromNode(button);
+        const current=currentExercise(getCurrent(),exerciseInstanceId);
+        state.workoutUnresolvedDismissed.add(activeWorkoutExerciseKey(
+          context.sessionId,current,exerciseIndex
+        ));
         state.workoutLibraryCandidateKey=null;
         renderWorkout();
       }else if(button.matches("[data-workout-library-candidate]")){
+        const {exerciseInstanceId,exerciseIndex}=exerciseMetaFromNode(button);
+        const current=currentExercise(getCurrent(),exerciseInstanceId);
+        const key=activeWorkoutExerciseKey(context.sessionId,current,exerciseIndex);
+        const resolution=activeWorkoutApi().exerciseLibraryResolutionModel({
+          exercise:current,library:getExerciseLibrary(),
+          selectedExerciseId:state.workoutVisualLibrarySelections.get(key)||null,
+          normalize:window.GymOSExerciseDomain.normalizeToken
+        });
         const candidateId=button.dataset.workoutLibraryCandidate;
-        if(!context.resolution.candidates.some(item=>item.id===candidateId)) return;
-        state.workoutVisualLibrarySelections.set(context.key,candidateId);
+        if(!resolution.candidates.some(item=>item.id===candidateId)) return;
+        state.workoutVisualLibrarySelections.set(key,candidateId);
         state.workoutLibraryCandidateKey=null;
         renderWorkout();
       }else if(button.matches("[data-active-timer-start]")){
-        startExerciseTimer(context.sessionId,context.exerciseIndex,Number(button.dataset.activeTimerStart));
+        const {exerciseIndex}=exerciseMetaFromNode(button);
+        startExerciseTimer(context.sessionId,exerciseIndex,Number(button.dataset.activeTimerStart));
       }else if(button.matches("[data-active-timer-stop]")){
-        stopExerciseTimer(context.sessionId,context.exerciseIndex,Number(button.dataset.activeTimerStop));
+        const {exerciseIndex}=exerciseMetaFromNode(button);
+        stopExerciseTimer(context.sessionId,exerciseIndex,Number(button.dataset.activeTimerStop));
       }else if(button.matches("[data-active-timer-reset]")){
-        resetExerciseTimer(context.sessionId,context.exerciseIndex,Number(button.dataset.activeTimerReset));
+        const {exerciseIndex}=exerciseMetaFromNode(button);
+        resetExerciseTimer(context.sessionId,exerciseIndex,Number(button.dataset.activeTimerReset));
       }else if(button.matches("[data-complete-active-set]")){
+        const {exerciseInstanceId,exerciseIndex}=exerciseMetaFromNode(button);
         const setIndex=Number(button.dataset.completeActiveSet);
         const setInstanceId=button.closest("[data-set-instance-id]")?.dataset.setInstanceId;
-        const busyKey=`${context.workoutInstanceId}:${context.exerciseInstanceId}:${setInstanceId}`;
+        const busyKey=`${context.workoutInstanceId}:${exerciseInstanceId}:${setInstanceId}`;
         if(state.workoutSetBusyKey===busyKey) return;
         state.workoutSetBusyKey=busyKey;
         try{
           let startRest=false;
           const before=getCurrent();
-          const beforeExercise=currentExercise(before);
+          const beforeExercise=currentExercise(before,exerciseInstanceId);
           const beforeSet=beforeExercise.series.find(item=>item.setInstanceId===setInstanceId);
           if(
             beforeSet&&!beforeSet.done&&
             isTimedExercise(beforeExercise)&&!hasInputValue(beforeSet.seconds)
           ){
-            stopExerciseTimer(context.sessionId,context.exerciseIndex,setIndex);
+            stopExerciseTimer(context.sessionId,exerciseIndex,setIndex);
           }
           persist((draft,exercise)=>{
             const set=exercise.series.find(item=>item.setInstanceId===setInstanceId);
@@ -9961,27 +10114,29 @@ function bindActiveWorkoutEvents(context){
             const wasDone=Boolean(set.done);
             set.done=!wasDone;
             startRest=!wasDone&&!set.warmup;
-          },{immediate:true,scheduleSync:true});
+          },{immediate:true,scheduleSync:true,exerciseInstanceId});
           if(startRest) startTimer(getRestSeconds());
         }finally{state.workoutSetBusyKey=null;}
         renderWorkout();
       }else if(button.matches("[data-add-active-set]")){
+        const {exerciseInstanceId}=exerciseMetaFromNode(button);
         persist((draft,exercise)=>{
           exercise.series.push(normalizeSeries({setInstanceId:secureSessionModelId("set")}));
           exercise.sets=exercise.series.length;
-        },{immediate:true});
+        },{immediate:true,exerciseInstanceId});
         renderWorkout();
       }else if(button.matches("[data-delete-active-set]")){
+        const {exerciseInstanceId}=exerciseMetaFromNode(button);
         const setIndex=Number(button.dataset.deleteActiveSet);
         const setInstanceId=button.closest("[data-set-instance-id]")?.dataset.setInstanceId;
         const draft=getCurrent();
-        const exercise=currentExercise(draft);
+        const exercise=currentExercise(draft,exerciseInstanceId);
         const set=exercise.series.find(item=>item.setInstanceId===setInstanceId);
         if(!set||set.done) return;
         if(activeWorkoutApi().setHasResults(set)){
           state.workoutReturnFocusSelector=`[data-delete-active-set="${setIndex}"]`;
           state.workoutSeriesDeleteCandidate={
-            exerciseInstanceId:context.exerciseInstanceId,setInstanceId
+            exerciseInstanceId,setInstanceId
           };
           renderWorkout();
         }else{
@@ -9990,7 +10145,7 @@ function bindActiveWorkoutEvents(context){
               item=>item.setInstanceId!==setInstanceId
             );
             currentExerciseRecord.sets=currentExerciseRecord.series.length;
-          },{immediate:true});
+          },{immediate:true,exerciseInstanceId});
           renderWorkout();
         }
       }else if(button.matches("[data-skip-rest]")){
@@ -9998,27 +10153,32 @@ function bindActiveWorkoutEvents(context){
         updateTimerUI();renderWorkout();
       }else if(button.matches("[data-add-rest]")){
         state.timerSeconds=Math.max(0,state.timerSeconds)+30;updateTimerUI();renderWorkout();
-      }else if(button.matches("[data-workout-previous]")){
-        const nextIndex=Math.max(0,context.exerciseIndex-1);
-        persist(draft=>{
-          draft.currentExerciseInstanceId=draft.exercises[nextIndex]?.exerciseInstanceId||null;
-        },{immediate:true});
-        state.workoutExerciseIndex=nextIndex;
-        state.workoutTechniqueExpanded=false;renderWorkout();
-      }else if(button.matches("[data-workout-next]")){
-        const nextIndex=context.exerciseIndex+1;
-        persist(draft=>{
-          draft.currentExerciseInstanceId=draft.exercises[nextIndex]?.exerciseInstanceId||null;
-        },{immediate:true});
-        state.workoutExerciseIndex=nextIndex;
-        state.workoutTechniqueExpanded=false;renderWorkout();
+      }else if(button.matches("[data-workout-next-pending]")){
+        const draft=getCurrent();
+        const pendingIndex=draft.exercises.findIndex(
+          item=>activeWorkoutExerciseStatus(item)!=="completed"
+        );
+        if(pendingIndex<0) return;
+        const pending=draft.exercises[pendingIndex];
+        state.workoutExpandedExercises.add(pending.exerciseInstanceId);
+        const card=main.querySelector(
+          `[data-exercise-index="${pendingIndex}"]`
+        );
+        const toggle=card?.querySelector("[data-workout-toggle-exercise]");
+        const panel=card?.querySelector(".workout-exercise-panel");
+        card?.classList.add("expanded");
+        toggle?.setAttribute("aria-expanded","true");
+        if(panel) panel.hidden=false;
+        card?.scrollIntoView({behavior:document.body.classList.contains("reduce-motion")?"auto":"smooth",block:"start"});
+        requestAnimationFrame(()=>toggle?.focus());
       }else if(button.matches("[data-workout-review]")){
         flushWorkoutDraftProgress({scheduleSync:false});
         state.workoutReturnFocusSelector="[data-workout-review]";
         state.workoutCompletionReviewOpen=true;renderWorkout();
       }else if(button.matches("[data-complete-active-exercise]")){
+        const {exerciseInstanceId}=exerciseMetaFromNode(button);
         const draft=getCurrent();
-        const exercise=currentExercise(draft);
+        const exercise=currentExercise(draft,exerciseInstanceId);
         const started=exercise.series.filter(set=>activeWorkoutApi().setHasResults(set));
         const invalid=started.some(set=>isTimedExercise(exercise)
           ?!hasInputValue(set.seconds)
@@ -10036,7 +10196,7 @@ function bindActiveWorkoutEvents(context){
         }
         persist((current,currentExerciseRecord)=>{
           currentExerciseRecord.completedAt=new Date().toISOString();
-        },{immediate:true,scheduleSync:true});
+        },{immediate:true,scheduleSync:true,exerciseInstanceId});
         setActiveWorkoutMessage("success","Ejercicio guardado.");
         renderWorkout();
       }else if(button.matches("[data-workout-discard-menu]")){
@@ -10061,31 +10221,38 @@ function bindActiveWorkoutEvents(context){
       const draft=getDraft(context.sessionId);
       const exercise=draft.exercises[index];
       if(!exercise||activeWorkoutApi().exerciseIdentity(exercise,index)!==button.dataset.exerciseId) return;
-      persist(current=>{
-        current.currentExerciseInstanceId=exercise.exerciseInstanceId;
-      },{immediate:true});
       state.workoutSessionOverviewOpen=false;
-      state.workoutExerciseIndex=index;
+      state.workoutExpandedExercises.add(exercise.exerciseInstanceId);
       renderWorkout();
-      requestAnimationFrame(()=>document.getElementById("activeExerciseTitle")?.focus());
+      requestAnimationFrame(()=>{
+        const target=document.querySelector(`[data-exercise-index="${index}"]`);
+        target?.scrollIntoView({block:"start"});
+        target?.querySelector("[data-workout-toggle-exercise]")?.focus();
+      });
       return;
     }
     if(button?.matches("[data-workout-change-mode]")){
       const mode=button.dataset.workoutChangeMode;
+      const draft=getCurrent();
+      const index=draft.exercises.findIndex(
+        item=>item.exerciseInstanceId===state.workoutActionExerciseId
+      );
+      if(index<0) return rerenderWithError(new Error("exercise_changed"));
       state.workoutChangeMenuOpen=false;
-      openExerciseSubstitution(mode,context.exerciseIndex);
+      state.workoutActionExerciseId=null;
+      openExerciseSubstitution(mode,index);
       return;
     }
     if(button?.matches("[data-confirm-delete-active-set]")){
       const candidate=state.workoutSeriesDeleteCandidate;
       try{
-        if(!candidate||candidate.exerciseInstanceId!==context.exerciseInstanceId) return;
+        if(!candidate) return;
         persist((draft,exercise)=>{
           const set=exercise.series.find(item=>item.setInstanceId===candidate.setInstanceId);
           if(!set||set.done) return;
           exercise.series=exercise.series.filter(item=>item.setInstanceId!==candidate.setInstanceId);
           exercise.sets=exercise.series.length;
-        },{immediate:true});
+        },{immediate:true,exerciseInstanceId:candidate.exerciseInstanceId});
         state.workoutSeriesDeleteCandidate=null;renderWorkout();
       }catch(error){rerenderWithError(error);}
       return;

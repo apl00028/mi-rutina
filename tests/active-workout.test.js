@@ -280,9 +280,9 @@ test("cabecera visual: ofrece Volver, progreso accesible, resumen y tiempo total
   assert.match(renderSource,/← Volver a \$\{esc\(sessionName\)\}/);
 });
 
-test("volver: guarda el draft oficial, detiene timers y no finaliza ni elimina",()=>{
+test("volver: fuerza el guardado pendiente, detiene timers y no finaliza ni elimina",()=>{
   const backBranch=between(bindingSource,'if(button.matches("[data-workout-back]"))','}else if(button.matches("[data-workout-session-toggle]"))');
-  assert.match(backBranch,/saveDraft\(draft\)/);
+  assert.match(backBranch,/flushWorkoutDraftProgress\(\{scheduleSync:false\}\)/);
   assert.match(backBranch,/stopAllExerciseTimers\(\)/);
   assert.match(backBranch,/stopWorkoutSessionTimer\(\)/);
   assert.match(backBranch,/renderHome\(\)/);
@@ -384,11 +384,12 @@ test("finalización: revisa pendientes, duración, sustituciones y notas antes d
   assert.doesNotMatch(bindingSource,/localStorage\.setItem\("gymos:history"/);
 });
 
-test("writer final: deduplica por draftId, guarda duración real y elimina el draft una vez",()=>{
-  assert.match(finishSource,/find\(workout=>workout\.draftId===d\.draftId\)/);
+test("writer final: deduplica por identidad estable, guarda duración real y retira el draft activo",()=>{
+  assert.match(finishSource,/workout\.workoutInstanceId===d\.workoutInstanceId\|\|workout\.draftId===d\.draftId/);
   assert.match(finishSource,/durationMs:workoutSessionElapsedMs\(d\)/);
-  assert.match(finishSource,/if\(!history\.some\(item=>item\.draftId===d\.draftId\)\)/);
-  assert.equal((finishSource.match(/clearDraft\(s,\{mark:false\}\)/g)||[]).length,1);
+  assert.match(finishSource,/item\.workoutInstanceId===d\.workoutInstanceId\|\|item\.draftId===d\.draftId/);
+  assert.match(finishSource,/workoutId:d\.workoutInstanceId/);
+  assert.match(finishSource,/clearDraft\(s,\{mark:false,preserveProgress:true\}\)/);
   assert.match(finishSource,/finally\{\s*state\.finishingWorkout=false/);
 });
 
@@ -447,11 +448,13 @@ test("operaciones de solo lectura: los modelos no cambian rutina ni historial",(
   assert.equal(JSON.stringify(history),beforeHistory);
 });
 
-test("integración offline: el módulo carga antes de app.js y está en el precache RC.2",()=>{
+test("integración offline: los módulos activos cargan antes de app.js y están en el precache RC.3",()=>{
   const moduleIndex=indexSource.indexOf('<script src="active-workout.js"></script>');
+  const progressIndex=indexSource.indexOf('<script src="workout-progress.js"></script>');
   const appIndex=indexSource.indexOf('<script src="app.js"></script>');
-  assert.ok(moduleIndex>=0&&appIndex>moduleIndex);
+  assert.ok(moduleIndex>=0&&progressIndex>moduleIndex&&appIndex>progressIndex);
   assert.match(workerSource,/"active-workout\.js"/);
-  assert.match(workerSource,/gymos-cache-4\.2\.0-rc\.2/);
+  assert.match(workerSource,/"workout-progress\.js"/);
+  assert.match(workerSource,/gymos-cache-4\.2\.0-rc\.3/);
   assert.match(workerSource,/url\.origin!==self\.location\.origin/);
 });

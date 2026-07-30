@@ -2966,6 +2966,15 @@ body.reduce-motion .home-weekly-card .weekly-progress-fill{transition:none}
   font-size:.68rem;
 }
 .active-workout-session-clock .text-button[hidden]{display:none}
+.active-workout-save-status{
+  margin:0;
+  justify-self:end;
+  color:var(--muted);
+  font-size:.72rem;
+  font-weight:700;
+}
+.active-workout-save-status[data-status="saving"]{color:var(--brand)}
+.active-workout-save-status[data-status="conflict"]{color:var(--danger)}
 .active-workout-session-progress{
   grid-column:1/-1;
   height:.42rem;
@@ -3196,6 +3205,14 @@ body.reduce-motion .home-weekly-card .weekly-progress-fill{transition:none}
 .active-workout-notes{display:grid;gap:.4rem}
 .active-workout-notes>span{font-size:.72rem;font-weight:800}
 .active-workout-notes textarea,.active-workout-notes input{width:100%}
+.active-workout-exercise-completion{
+  display:flex;
+  align-items:center;
+  justify-content:flex-end;
+  gap:.75rem;
+  flex-wrap:wrap;
+}
+.active-workout-exercise-completion span{color:var(--success);font-weight:800}
 .active-rest-timer{
   display:flex;
   align-items:center;

@@ -120,7 +120,8 @@
   function setEntryModel({set=null,index=0,previous=null,target="",timed=false}={}){
     const row=set||{};
     return {
-      index,number:index+1,timed:Boolean(timed),target:text(target),
+      index,number:index+1,setInstanceId:text(row.setInstanceId)||null,
+      timed:Boolean(timed),target:text(target),
       previous:previous?{
         weight:previous.weight??"",reps:previous.reps??"",rir:previous.rir??"",
         seconds:previous.seconds??""

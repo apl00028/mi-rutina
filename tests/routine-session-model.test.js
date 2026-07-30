@@ -420,7 +420,7 @@ test("el script se carga exactamente una vez, después de profile-data y antes d
 test("el service worker incluye el módulo H1 una vez y usa la caché rc.2",()=>{
   const matches=workerSource.match(/routine-session-model\.js/g)||[];
   assert.equal(matches.length,1);
-  assert.match(workerSource,/const CACHE="gymos-cache-4\.2\.0-rc\.2"/);
+  assert.match(workerSource,/const CACHE="gymos-cache-4\.2\.0-rc\.3"/);
   assert.equal((workerSource.match(/addEventListener\("fetch"/g)||[]).length,1);
 });
 

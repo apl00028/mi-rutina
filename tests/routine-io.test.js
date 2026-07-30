@@ -478,7 +478,7 @@ test("integración de script, input y service worker",()=>{
   assert.ok(indexSource.indexOf("routine-activation.js")<indexSource.indexOf("routine-io.js"));
   assert.ok(indexSource.indexOf("routine-io.js")<indexSource.indexOf("routine-workflow-ui.js"));
   assert.match(indexSource,/id="routineFile"[^>]+\.csv/);
-  assert.match(workerSource,/gymos-cache-4\.2\.0-rc\.2/);
+  assert.match(workerSource,/gymos-cache-4\.2\.0-rc\.3/);
   assert.match(workerSource,/routine-io\.js/);
   assert.match(workerSource,/fetch\(e\.request\)/);
   assert.equal((indexSource.match(/routine-io\.js/g)||[]).length,1);

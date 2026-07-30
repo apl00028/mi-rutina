@@ -269,18 +269,26 @@
       context:entry
     });
   }
+  const RECOVERY_SESSION_ERROR_CODES=new Set([
+    "session_not_found","not_authenticated","refresh_token_not_found",
+    "user_not_found","jwt_expired"
+  ]);
+  function recoverySessionErrorCode(error){
+    return RECOVERY_SESSION_ERROR_CODES.has(String(error?.code||"").toLowerCase());
+  }
   function recoveryPendingModel({
     entries=[],checkins=[],referenceDate,online=true,error=null,authenticated=true
   }={}){
     const networkState=online?"online":"offline";
-    if(error) return {
-      state:["session_not_found","permission_denied","not_authenticated"].includes(error.code)?"session_error":"error",
-      title:["session_not_found","permission_denied","not_authenticated"].includes(error.code)
-        ?"Tu sesión ya no está disponible."
-        :"No se pudo actualizar Recuperación.",
+    const sessionError=recoverySessionErrorCode(error);
+    if(!authenticated) return {
+      state:"session_error",title:"Tu sesión ya no está disponible.",
+      retryable:false,networkState
+    };
+    if(error&&!sessionError) return {
+      state:"error",title:"No se pudo actualizar Recuperación.",
       retryable:Boolean(error.retryable),networkState
     };
-    if(!authenticated) return {state:"session_error",title:"Tu sesión ya no está disponible.",retryable:false,networkState};
     const today=String(referenceDate||"");
     const completed=[...entries].filter(entry=>entry?.date).sort((a,b)=>
       String(b.date).localeCompare(String(a.date))||

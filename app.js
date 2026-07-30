@@ -3503,6 +3503,9 @@ function activateLocalUser(userId){
   localStorage.setItem(LOCAL_OWNER_KEY,userId);
   resetExerciseLibraryOwnerState();
   resetRoutineSessionOwnerState();
+  if(typeof invalidateRecoveryDerivedState==="function"){
+    invalidateRecoveryDerivedState({reason:"owner_changed",renderCurrent:false});
+  }
   return finishLocalUserActivation(userId);
 }
 
@@ -4508,6 +4511,25 @@ function isEmailConfirmed(user){
 function isAppAuthenticated(){
   return Boolean(!state.passwordRecoveryMode&&state.syncSession&&isEmailConfirmed(state.syncUser));
 }
+const RECOVERY_AUTH_REFRESH_EVENTS=new Set(["SIGNED_IN","TOKEN_REFRESHED","USER_UPDATED"]);
+const RECOVERY_SESSION_ERROR_CODES=new Set([
+  "session_not_found","not_authenticated","refresh_token_not_found",
+  "user_not_found","jwt_expired"
+]);
+function invalidateRecoveryDerivedState({reason="state_changed",renderCurrent=true}={}){
+  const authenticated=isAppAuthenticated();
+  const recoveryErrorCode=String(state.recoveryMessage?.code||"").toLowerCase();
+  if(authenticated&&RECOVERY_SESSION_ERROR_CODES.has(recoveryErrorCode)){
+    state.recoveryMessage=null;
+  }
+  if(!renderCurrent) return {reason,authenticated};
+  if(state.screen==="home"){
+    renderHome();
+  }else if(state.screen==="recovery"){
+    window.GymOSRecovery?.renderRecoveryCenter?.();
+  }
+  return {reason,authenticated};
+}
 function resolveAuthenticatedAppState(session,pendingUser=null){
   const previousAuthorizedUserId=isAppAuthenticated()?state.syncUser?.id:null;
   const user=session?.user||(pendingUser&&!isEmailConfirmed(pendingUser)?pendingUser:null);
@@ -4709,6 +4731,9 @@ function ensureAuthStateListener(client){
       state.passwordRecoveryMessage=null;
     }
     resolveAuthenticatedAppState(session);
+    if(RECOVERY_AUTH_REFRESH_EVENTS.has(event)){
+      invalidateRecoveryDerivedState({reason:event,renderCurrent:false});
+    }
     if(event==="SIGNED_OUT"&&!state.passwordRecoveryMode){
       state.screen="account";
     }
@@ -4910,13 +4935,21 @@ async function syncNow(options={}){
         applySyncPayload(remote.payload||{});setLocalRevision(remoteRevision);setLastRemoteRevision(remoteRevision);
         localStorage.removeItem("gymos:syncPending");
         localStorage.setItem("gymos:lastSyncHash",remote.checksum||simpleChecksum(buildSyncPayload()));
-        localStorage.setItem("gymos:lastSyncAt",new Date().toISOString());state.syncStatus="synced";state.syncIssue=null;updateSyncIndicators();return {direction:"download",revision:remoteRevision};
+        localStorage.setItem("gymos:lastSyncAt",new Date().toISOString());state.syncStatus="synced";state.syncIssue=null;updateSyncIndicators();
+        if(typeof invalidateRecoveryDerivedState==="function"){
+          invalidateRecoveryDerivedState({reason:"sync_completed",renderCurrent:true});
+        }
+        return {direction:"download",revision:remoteRevision};
       }
     }else if(remote && remoteRevision>localRevision && !options.forceUpload){
       applySyncPayload(remote.payload||{});setLocalRevision(remoteRevision);setLastRemoteRevision(remoteRevision);
       localStorage.removeItem("gymos:syncPending");
       localStorage.setItem("gymos:lastSyncHash",remote.checksum||simpleChecksum(buildSyncPayload()));
-      localStorage.setItem("gymos:lastSyncAt",new Date().toISOString());state.syncStatus="synced";state.syncIssue=null;addSyncAudit("sync","downloaded",{revision:remoteRevision});updateSyncIndicators();return {direction:"download",revision:remoteRevision};
+      localStorage.setItem("gymos:lastSyncAt",new Date().toISOString());state.syncStatus="synced";state.syncIssue=null;addSyncAudit("sync","downloaded",{revision:remoteRevision});updateSyncIndicators();
+      if(typeof invalidateRecoveryDerivedState==="function"){
+        invalidateRecoveryDerivedState({reason:"sync_completed",renderCurrent:true});
+      }
+      return {direction:"download",revision:remoteRevision};
     }else if(remote&&!hasPendingChanges&&!options.forceUpload&&remoteRevision===localRevision&&remote.checksum===localChecksum){
       setLastRemoteRevision(remoteRevision);
       localStorage.setItem("gymos:lastSyncAt",new Date().toISOString());
@@ -4924,6 +4957,9 @@ async function syncNow(options={}){
       state.syncStatus="synced";
       state.syncIssue=null;
       updateSyncIndicators();
+      if(typeof invalidateRecoveryDerivedState==="function"){
+        invalidateRecoveryDerivedState({reason:"sync_completed",renderCurrent:true});
+      }
       return {direction:"none",revision:remoteRevision};
     }
     assertOwner();
@@ -4937,6 +4973,9 @@ async function syncNow(options={}){
     localStorage.setItem("gymos:lastSyncAt",new Date().toISOString());
     state.syncStatus="synced";state.syncIssue=null;
     addSyncAudit("sync","uploaded",{revision:envelope.revision});updateSyncIndicators();
+    if(typeof invalidateRecoveryDerivedState==="function"){
+      invalidateRecoveryDerivedState({reason:"sync_completed",renderCurrent:true});
+    }
     return {direction:"upload",revision:envelope.revision};
   }catch(error){
     if(currentRoutineOwnerOrNull()===ownerId&&state.syncUser?.id===userId){

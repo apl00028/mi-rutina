@@ -78,6 +78,67 @@ test("no crea check-in para un entrenamiento descartado o ajeno",()=>{
   assert.equal(loaded.api.createPendingCheckin(loaded.context.history[0]),null);
 });
 
+test("sesión caducada → SIGNED_IN recalcula la tarjeta de Recuperación sin recargar",()=>{
+  const {api}=loadRecovery();
+  const expiredError={code:"session_not_found",retryable:false};
+  const expired=api.recoveryHomeSummaryModel({
+    authenticated:false,error:expiredError,referenceDate:"2026-07-30"
+  });
+  assert.equal(expired.state,"session_error");
+  assert.match(expired.detail,/iniciar sesión/i);
+
+  const start=appSource.indexOf("const RECOVERY_AUTH_REFRESH_EVENTS=");
+  const end=appSource.indexOf("function resolveAuthenticatedAppState(",start);
+  assert.ok(start>=0&&end>start);
+  const lifecycleSource=appSource.slice(start,end);
+  let authenticated=false;
+  let renders=0;
+  let card=expired;
+  const context={
+    Set,Number,String,
+    state:{
+      screen:"home",recoveryMessage:{type:"error",...expiredError}
+    },
+    window:{GymOSRecovery:{renderRecoveryCenter(){}}},
+    isAppAuthenticated(){return authenticated;},
+    renderHome(){
+      renders+=1;
+      card=api.recoveryHomeSummaryModel({
+        authenticated,error:context.state.recoveryMessage,
+        referenceDate:"2026-07-30"
+      });
+    }
+  };
+  vm.createContext(context);
+  vm.runInContext(`${lifecycleSource};this.invalidate=invalidateRecoveryDerivedState;`,context);
+
+  authenticated=true;
+  context.invalidate({reason:"SIGNED_IN"});
+  assert.equal(renders,1);
+  assert.equal(context.state.recoveryMessage,null);
+  assert.notEqual(card.state,"session_error");
+  assert.doesNotMatch(JSON.stringify(card),/Vuelve a iniciar sesión/i);
+  for(const event of ["SIGNED_IN","TOKEN_REFRESHED","USER_UPDATED"]){
+    assert.match(lifecycleSource,new RegExp(`"${event}"`));
+  }
+  assert.match(appSource,/RECOVERY_AUTH_REFRESH_EVENTS\.has\(event\)/);
+  assert.match(appSource,/invalidateRecoveryDerivedState\(\{reason:event,renderCurrent:false\}\)/);
+  assert.match(appSource,/reason:"sync_completed",renderCurrent:true/);
+  assert.match(appSource,/reason:"owner_changed",renderCurrent:false/);
+  assert.doesNotMatch(lifecycleSource,/localStorage|saveRoutine|saveHistory|saveDraft|markLocalUpdated/);
+});
+
+test("un error de sesión obsoleto tampoco reaparece al abrir Recuperación autenticado",()=>{
+  const {api}=loadRecovery();
+  const model=api.recoveryPendingModel({
+    authenticated:true,
+    error:{code:"refresh_token_not_found"},
+    referenceDate:"2026-07-30"
+  });
+  assert.notEqual(model.state,"session_error");
+  assert.equal(model.state,"first_use");
+});
+
 test("el snapshot histórico conserva sesión, foco y duración",()=>{
   const item=workout();
   const {api}=loadRecovery({history:[item]});

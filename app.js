@@ -3373,6 +3373,10 @@ function resetRoutineSessionOwnerState(){
   state.workoutDraftAutosaveTimer=null;
   state.workoutDraftMemory=null;
   state.workoutDraftSaveStatus="saved_local";
+  state.workoutDraftLastError=null;
+  state.workoutStorageDiagnostic=null;
+  state.workoutQuotaRecoveryInProgress=false;
+  state.workoutInlineMessage=null;
   state.workoutDraftOperationId=(state.workoutDraftOperationId||0)+1;
   stopWorkoutSessionTimer();
   stopAllExerciseTimers();
@@ -3802,6 +3806,9 @@ let state = {
   workoutDraftMemory: null,
   workoutDraftAutosaveTimer: null,
   workoutDraftSaveStatus: "saved_local",
+  workoutDraftLastError: null,
+  workoutStorageDiagnostic: null,
+  workoutQuotaRecoveryInProgress: false,
   workoutDraftOperationId: 0,
   workoutActiveInstanceId: null,
   restPreferenceBusy: false,
@@ -5084,6 +5091,11 @@ async function syncNow(options={}){
       if(state.workoutDraftMemory){
         state.workoutDraftSaveStatus=issue.status==="offline"?"saved_local":"pending_sync";
         updateWorkoutSaveIndicator();
+        const workoutFailure=workoutPersistenceError(
+          "remote_sync_failed","supabase_sync",error
+        );
+        if(state.screen==="workout") handleWorkoutPersistenceFailure(workoutFailure);
+        else logWorkoutPersistenceError(workoutFailure);
       }
       addSyncAudit("sync",issue.status,{
         code:error?.code||"sync_failed",status:error?.status||null
@@ -5373,21 +5385,429 @@ function activeWorkoutProgressRecord(ownerId,sessionId){
 function activeWorkoutPointerId(ownerId,sessionId){
   return activeWorkoutProgressRecord(ownerId,sessionId)?.workoutInstanceId||null;
 }
+const WORKOUT_PERSISTENCE_ERROR_CODES=new Set([
+  "memory_update_failed",
+  "local_progress_write_failed",
+  "active_pointer_write_failed",
+  "legacy_shadow_write_failed",
+  "remote_sync_failed",
+  "owner_mismatch",
+  "invalid_workout_identity",
+  "storage_quota",
+  "migration_failed"
+]);
+function isWorkoutStorageQuotaError(error){
+  return error?.name==="QuotaExceededError"||error?.code===22||error?.code===1014;
+}
+function workoutPersistenceError(code,phase,cause=null){
+  const normalizedCode=WORKOUT_PERSISTENCE_ERROR_CODES.has(code)
+    ?code:"local_progress_write_failed";
+  const error=new Error(normalizedCode);
+  error.name="WorkoutPersistenceError";
+  error.code=normalizedCode;
+  error.phase=phase||"unknown";
+  if(cause&&cause!==error) error.cause=cause;
+  return error;
+}
+function classifyWorkoutPersistenceError(error,{
+  fallback="local_progress_write_failed",phase="unknown"
+}={}){
+  if(error?.name==="WorkoutPersistenceError"&&WORKOUT_PERSISTENCE_ERROR_CODES.has(error.code)){
+    return error;
+  }
+  if(isWorkoutStorageQuotaError(error)){
+    return workoutPersistenceError("storage_quota",phase,error);
+  }
+  const raw=String(error?.code||error?.message||"");
+  if(["owner_changed","owner_mismatch","owner_not_active","invalid_owner"].includes(raw)){
+    return workoutPersistenceError("owner_mismatch",phase,error);
+  }
+  if(
+    raw.includes("workout_instance")||raw.includes("session_mismatch")||
+    raw.includes("invalid_workout")||raw.includes("draft_session_not_found")
+  ){
+    return workoutPersistenceError("invalid_workout_identity",phase,error);
+  }
+  return workoutPersistenceError(fallback,phase,error);
+}
+function logWorkoutPersistenceError(error){
+  const failure=classifyWorkoutPersistenceError(error);
+  console.error("Workout persistence failure",{
+    code:failure.code,
+    phase:failure.phase,
+    originalName:failure.cause?.name||error?.name||"Error",
+    originalCode:failure.cause?.code||error?.code||null
+  });
+  return failure;
+}
+function writeWorkoutStorage(key,value,{code,phase}){
+  try{
+    localStorage.setItem(key,value);
+  }catch(error){
+    throw classifyWorkoutPersistenceError(error,{fallback:code,phase});
+  }
+}
+function removeWorkoutStorage(key,{code,phase}){
+  try{
+    localStorage.removeItem(key);
+  }catch(error){
+    throw classifyWorkoutPersistenceError(error,{fallback:code,phase});
+  }
+}
+function approximateStorageBytes(key,value){
+  return (String(key||"").length+String(value||"").length)*2;
+}
+function workoutStorageEntryDescriptor(key,raw,currentOwnerId){
+  const ownerMatch=String(key).match(
+    /^gymos:(?:workoutProgress|activeWorkout|workoutProgressMigration):([^:]+)/
+  );
+  const vaultMatch=String(key).match(/^gymos:userVault:(.+)$/);
+  const ownerId=ownerMatch?.[1]||vaultMatch?.[1]||currentOwnerId||null;
+  let logicalName=key,contentType="functional_data",role="authoritative";
+  let writer="application_writer";
+  if(key===CANONICAL_DRAFTS_KEY){
+    logicalName="Borradores canónicos";
+    contentType="workout_drafts";
+    role="active_draft";
+    writer="saveDraft";
+  }else if(/^gymos:draft:[ABC]$/.test(key)){
+    logicalName=`Sombra legacy ${key.slice(-1)}`;
+    contentType="workout_draft_shadow";
+    role="legacy_shadow";
+    writer="saveDraft/writeLegacyDraftShadows";
+  }else if(key.startsWith("gymos:workoutProgress:")){
+    let status="unknown";
+    try{status=JSON.parse(raw)?.status||"unknown";}catch(_){}
+    logicalName=status==="finalized"?"Progreso finalizado":"Progreso de entrenamiento";
+    contentType="workout_progress";
+    role=status==="active"
+      ?"active_draft":status==="finalized"?"finalized":"authoritative";
+    writer="storeWorkoutProgressRecord";
+  }else if(key.startsWith("gymos:activeWorkout:")){
+    logicalName="Puntero de entrenamiento activo";
+    contentType="active_pointer";
+    role="pointer";
+    writer="storeWorkoutProgressRecord";
+  }else if(key.startsWith("gymos:userVault:")){
+    logicalName="Vault local del propietario";
+    contentType="owner_vault";
+    role="backup";
+    writer="saveCurrentUserVault";
+  }else if(
+    (window.GymOSProfileData?.MIGRATION_INTERNAL_KEY_PREFIXES||[]).some(
+      prefix=>key.startsWith(prefix)
+    )||key.startsWith(EXERCISE_DOMAIN_MIGRATION_BACKUP_PREFIX)
+  ){
+    logicalName="Backup interno de migración";
+    contentType="migration_backup";
+    role="backup";
+    writer="migration_transaction";
+  }else if(key.includes("Migration")){
+    logicalName="Estado de migración";
+    contentType="migration_state";
+    role="marker";
+    writer="migration_transaction";
+  }else if(key==="gymos:history"){
+    logicalName="Historial definitivo";
+    contentType="workout_history";
+    role="finalized";
+    writer="saveHistory/finishWorkout";
+  }else if(key==="gymos:recoveryCheckins"||key==="gymos:dailyRecovery"){
+    logicalName=key==="gymos:recoveryCheckins"
+      ?"Check-ins de Recuperación":"Datos de Recuperación";
+    contentType="recovery";
+    role="authoritative";
+    writer="GymOSRecovery";
+  }else if(key==="gymos:syncAudit"||key==="gymos:developerLogs"){
+    logicalName=key==="gymos:syncAudit"?"Auditoría de sincronización":"Logs internos";
+    contentType="internal_cache";
+    role="cache";
+    writer=key==="gymos:syncAudit"?"addSyncAudit":"addDeveloperLog";
+  }else if(key==="gymos:routine"||key===CANONICAL_ROUTINE_KEY){
+    logicalName=key===CANONICAL_ROUTINE_KEY?"Rutina canónica":"Sombra de rutina";
+    contentType="routine";
+    role=key===CANONICAL_ROUTINE_KEY?"authoritative":"legacy_shadow";
+    writer="saveCanonicalRoutine";
+  }else if(key==="gymos:syncPending"||key==="gymos:updatedAt"){
+    logicalName="Estado ligero de sincronización";
+    contentType="sync_state";
+    role="signal";
+    writer="markLocalUpdated";
+  }
+  return {
+    logicalName,
+    key,
+    approximateBytes:approximateStorageBytes(key,raw),
+    ownerId,
+    contentType,
+    role,
+    writer
+  };
+}
+function workoutStorageUsageDiagnostic(ownerId=currentRoutineOwnerOrNull()){
+  const entries=[];
+  try{
+    for(let index=0;index<localStorage.length;index+=1){
+      const key=localStorage.key(index);
+      if(!key?.startsWith("gymos:")) continue;
+      const raw=localStorage.getItem(key);
+      entries.push(workoutStorageEntryDescriptor(key,raw,ownerId));
+    }
+  }catch(error){
+    return {
+      ownerId,
+      generatedAt:new Date().toISOString(),
+      approximateBytes:entries.reduce((total,item)=>total+item.approximateBytes,0),
+      entries:entries.sort((a,b)=>b.approximateBytes-a.approximateBytes),
+      incomplete:true,
+      errorCode:isWorkoutStorageQuotaError(error)?"storage_quota":"storage_unavailable"
+    };
+  }
+  return {
+    ownerId,
+    generatedAt:new Date().toISOString(),
+    approximateBytes:entries.reduce((total,item)=>total+item.approximateBytes,0),
+    entries:entries.sort((a,b)=>
+      b.approximateBytes-a.approximateBytes||a.key.localeCompare(b.key)
+    ),
+    incomplete:false
+  };
+}
+function storageValueContains(authoritative,candidate){
+  if(candidate===null||typeof candidate!=="object"){
+    return Object.is(authoritative,candidate);
+  }
+  if(Array.isArray(candidate)){
+    return Array.isArray(authoritative)&&authoritative.length===candidate.length&&
+      candidate.every((item,index)=>storageValueContains(authoritative[index],item));
+  }
+  if(!authoritative||typeof authoritative!=="object"||Array.isArray(authoritative)){
+    return false;
+  }
+  return Object.entries(candidate).every(([key,value])=>
+    ["legacyRaw","_fieldMeta","conflicts"].includes(key)||
+    storageValueContains(authoritative[key],value)
+  );
+}
+function verifiedLegacyShadowDuplicate(ownerId,sessionId,raw,{
+  allowActive=false
+}={}){
+  if(!raw) return false;
+  const progress=activeWorkoutProgressRecord(ownerId,sessionId)||
+    storedWorkoutProgressRecords(ownerId).filter(
+      item=>item.sessionId===sessionId
+    ).sort((left,right)=>
+      String(right.updatedAt||"").localeCompare(String(left.updatedAt||""))||
+      String(left.workoutInstanceId||"").localeCompare(
+        String(right.workoutInstanceId||"")
+      )
+    )[0];
+  if(!progress||progress.ownerId!==ownerId) return false;
+  if(progress.status==="active"&&!allowActive) return false;
+  let legacy;
+  try{legacy=JSON.parse(raw);}catch(_){return false;}
+  if(!storageValueContains(progress,legacy)) return false;
+  const canonical=getCanonicalDrafts()?.draftsBySessionId?.[sessionId];
+  return Boolean(
+    canonical&&canonical.ownerId===ownerId&&canonical.legacyRaw===raw&&
+    storageValueContains(canonical,legacy)
+  );
+}
+function compactWorkoutStorageForQuota({
+  ownerId=currentRoutineOwnerOrNull()
+}={}){
+  const normalizedOwner=workoutProgressApi().ownerId(ownerId);
+  assertActiveLocalOwner(normalizedOwner);
+  const before=workoutStorageUsageDiagnostic(normalizedOwner);
+  const actions=[];
+  const protectedBefore={
+    routine:localStorage.getItem("gymos:routine"),
+    canonicalRoutine:localStorage.getItem(CANONICAL_ROUTINE_KEY),
+    history:localStorage.getItem("gymos:history"),
+    recovery:localStorage.getItem("gymos:dailyRecovery"),
+    recoveryCheckins:localStorage.getItem("gymos:recoveryCheckins"),
+    syncPending:localStorage.getItem("gymos:syncPending")
+  };
+
+  // Son cachés diagnósticas limitadas; nunca son una fuente funcional.
+  [SYNC_AUDIT_KEY,APP_LOGS_KEY].forEach(key=>{
+    if(localStorage.getItem(key)===null) return;
+    try{
+      localStorage.removeItem(key);
+      actions.push({type:"remove_internal_cache",key});
+    }catch(_){}
+  });
+
+  // El vault activo solo se retira si es byte a byte el mismo snapshot funcional.
+  const vaultKey=`${LOCAL_VAULT_PREFIX}${normalizedOwner}`;
+  const vaultRaw=localStorage.getItem(vaultKey);
+  if(vaultRaw!==null){
+    let identical=false;
+    try{identical=vaultRaw===JSON.stringify(snapshotCurrentLocalData());}
+    catch(_){}
+    if(identical){
+      try{
+        localStorage.removeItem(vaultKey);
+        actions.push({type:"remove_identical_owner_vault",key:vaultKey});
+      }catch(_){}
+    }
+  }
+
+  // RC.3 anterior podía anidar legacyRaw dentro de la siguiente legacyRaw.
+  // Se reconstruye desde el draft canónico sin esa propiedad y se verifica.
+  const canonicalRoutine=getCanonicalRoutine();
+  const canonicalDrafts=getCanonicalDrafts();
+  if(canonicalRoutine&&canonicalDrafts?.draftsBySessionId){
+    const compactedContainer=JSON.parse(JSON.stringify(canonicalDrafts));
+    let containerChanged=false;
+    Object.values(compactedContainer.draftsBySessionId).forEach(draft=>{
+      if(draft?.ownerId!==normalizedOwner||typeof draft.legacyRaw!=="string") return;
+      const session=canonicalRoutine.sessions?.find(
+        item=>item.sessionId===draft.sessionId
+      );
+      if(!session?.legacySessionKey) return;
+      const shadow={...draft,session:session.legacySessionKey};
+      delete shadow.legacyRaw;
+      const compactRaw=JSON.stringify(shadow);
+      if(compactRaw.length>=draft.legacyRaw.length) return;
+      draft.legacyRaw=compactRaw;
+      containerChanged=true;
+    });
+    const compactedValidation=containerChanged
+      ?routineSessionMigrationApi().validateDraftContainer(
+        compactedContainer,{ownerId:normalizedOwner,canonicalRoutine}
+      )
+      :{valid:false};
+    if(containerChanged&&compactedValidation.valid){
+      try{
+        localStorage.setItem(
+          CANONICAL_DRAFTS_KEY,JSON.stringify(compactedContainer)
+        );
+        const verified=getCanonicalDrafts();
+        const validation=routineSessionMigrationApi().validateDraftContainer(
+          verified,{ownerId:normalizedOwner,canonicalRoutine}
+        );
+        if(validation.valid){
+          Object.values(verified.draftsBySessionId||{}).forEach(draft=>{
+            const session=canonicalRoutine.sessions?.find(
+              item=>item.sessionId===draft.sessionId
+            );
+            if(!session?.legacySessionKey||typeof draft.legacyRaw!=="string") return;
+            const key=draftKey(session.legacySessionKey);
+            if(localStorage.getItem(key)!==null){
+              try{localStorage.setItem(key,draft.legacyRaw);}catch(_){}
+            }
+          });
+          actions.push({
+            type:"compact_nested_legacy_shadow",
+            key:CANONICAL_DRAFTS_KEY
+          });
+        }
+      }catch(_){}
+    }
+  }
+
+  // legacyRaw ya vive verificado en el contenedor canónico y no pertenece al
+  // modelo owner-scoped. Retirarlo reduce una copia completa sin tocar resultados.
+  storedWorkoutProgressRecords(normalizedOwner).forEach(record=>{
+    if(typeof record.legacyRaw!=="string") return;
+    const canonical=getCanonicalDrafts()?.draftsBySessionId?.[record.sessionId];
+    if(
+      !canonical||canonical.ownerId!==normalizedOwner||
+      canonical.legacyRaw!==record.legacyRaw
+    ) return;
+    const compacted={...record};
+    delete compacted.legacyRaw;
+    const key=workoutProgressApi().progressStorageKey(
+      normalizedOwner,record.workoutInstanceId
+    );
+    try{
+      localStorage.setItem(key,JSON.stringify(compacted));
+      const verified=readStoredJson(key);
+      if(verified&&verified.ownerId===normalizedOwner&&!verified.legacyRaw){
+        actions.push({type:"remove_redundant_progress_shadow",key});
+      }
+    }catch(_){}
+  });
+
+  // Una sombra legacy solo es prescindible si el entrenamiento no está activo,
+  // no hay cambios pendientes y dos copias owner-scoped/canónica la contienen.
+  if(protectedBefore.syncPending!=="1"){
+    const canonical=getCanonicalRoutine();
+    ["A","B","C"].forEach(legacySession=>{
+      const session=canonical?.sessions?.find(
+        item=>item.legacySessionKey===legacySession
+      );
+      if(!session) return;
+      const key=draftKey(legacySession);
+      const raw=localStorage.getItem(key);
+      if(!verifiedLegacyShadowDuplicate(
+        normalizedOwner,session.sessionId,raw,{allowActive:false}
+      )) return;
+      try{
+        localStorage.removeItem(key);
+        actions.push({type:"remove_verified_legacy_shadow",key});
+      }catch(_){}
+    });
+  }
+
+  assertActiveLocalOwner(normalizedOwner);
+  const protectedAfter={
+    routine:localStorage.getItem("gymos:routine"),
+    canonicalRoutine:localStorage.getItem(CANONICAL_ROUTINE_KEY),
+    history:localStorage.getItem("gymos:history"),
+    recovery:localStorage.getItem("gymos:dailyRecovery"),
+    recoveryCheckins:localStorage.getItem("gymos:recoveryCheckins"),
+    syncPending:localStorage.getItem("gymos:syncPending")
+  };
+  if(JSON.stringify(protectedAfter)!==JSON.stringify(protectedBefore)){
+    throw workoutPersistenceError(
+      "local_progress_write_failed","quota_compaction_guard",
+      new Error("protected_storage_changed")
+    );
+  }
+  const after=workoutStorageUsageDiagnostic(normalizedOwner);
+  if(typeof state!=="undefined") state.workoutStorageDiagnostic={before,after,actions};
+  return {
+    attempted:true,
+    ownerId:normalizedOwner,
+    actions,
+    freedApproximateBytes:Math.max(
+      0,before.approximateBytes-after.approximateBytes
+    ),
+    before,
+    after
+  };
+}
 function storeWorkoutProgressRecord(draft,{active=true,source="local"}={}){
   const ownerId=currentRoutineOwnerOrNull();
-  if(!ownerId) throw new Error("owner_not_active");
-  assertActiveLocalOwner(ownerId);
-  const normalized=workoutProgressApi().normalizeDraft(draft,{
-    owner:ownerId,
-    sessionId:draft?.sessionId||resolveRuntimeSessionId(draft?.session),
-    routineId:draft?.routineId||getCanonicalRoutine()?.routineId,
-    clientInstanceId:getWorkoutClientInstanceId(),
-    idFactory:secureSessionModelId
-  });
-  if(normalized.ownerId!==ownerId) throw new Error("owner_mismatch");
-  localStorage.setItem(
+  if(!ownerId) throw workoutPersistenceError(
+    "owner_mismatch","progress_owner",new Error("owner_not_active")
+  );
+  let normalized;
+  try{
+    assertActiveLocalOwner(ownerId);
+    normalized=workoutProgressApi().normalizeDraft(draft,{
+      owner:ownerId,
+      sessionId:draft?.sessionId||resolveRuntimeSessionId(draft?.session),
+      routineId:draft?.routineId||getCanonicalRoutine()?.routineId,
+      clientInstanceId:getWorkoutClientInstanceId(),
+      idFactory:secureSessionModelId
+    });
+  }catch(error){
+    throw classifyWorkoutPersistenceError(error,{
+      fallback:"invalid_workout_identity",phase:"progress_identity"
+    });
+  }
+  if(normalized.ownerId!==ownerId) throw workoutPersistenceError(
+    "owner_mismatch","progress_owner",new Error("owner_mismatch")
+  );
+  const progressRecord={...normalized};
+  delete progressRecord.legacyRaw;
+  writeWorkoutStorage(
     workoutProgressApi().progressStorageKey(ownerId,normalized.workoutInstanceId),
-    JSON.stringify(normalized)
+    JSON.stringify(progressRecord),
+    {code:"local_progress_write_failed",phase:"progress_record"}
   );
   const activeKey=workoutProgressApi().activeWorkoutStorageKey(ownerId,normalized.sessionId);
   if(active&&normalized.status==="active"){
@@ -5417,14 +5837,25 @@ function storeWorkoutProgressRecord(draft,{active=true,source="local"}={}){
         localPending:source==="remote"&&localStorage.getItem("gymos:syncPending")==="1"
       }
     );
-    localStorage.setItem(activeKey,JSON.stringify(selection.pointer));
+    writeWorkoutStorage(
+      activeKey,JSON.stringify(selection.pointer),
+      {code:"active_pointer_write_failed",phase:"active_pointer"}
+    );
     if(selection.conflict&&typeof state!=="undefined"){
       state.workoutDraftSaveStatus="conflict";
     }
   }else if(activeWorkoutPointerId(ownerId,normalized.sessionId)===normalized.workoutInstanceId){
-    localStorage.removeItem(activeKey);
+    removeWorkoutStorage(activeKey,{
+      code:"active_pointer_write_failed",phase:"active_pointer_remove"
+    });
   }
-  assertActiveLocalOwner(ownerId);
+  try{
+    assertActiveLocalOwner(ownerId);
+  }catch(error){
+    throw classifyWorkoutPersistenceError(error,{
+      fallback:"owner_mismatch",phase:"progress_owner_verify"
+    });
+  }
   return normalized;
 }
 function removeWorkoutProgressRecord(ownerId,sessionId,workoutInstanceId){
@@ -5527,6 +5958,12 @@ function ensureWorkoutProgressMigration({ownerId=currentRoutineOwnerOrNull(),mar
         }
         migrated.push(progress.workoutInstanceId);
       }catch(error){
+        if(
+          error?.name==="WorkoutPersistenceError"||
+          isWorkoutStorageQuotaError(error)
+        ){
+          throw workoutPersistenceError("migration_failed","legacy_progress_migration",error);
+        }
         rejected.push({sessionId:session.sessionId,code:error?.message||"invalid_legacy_draft"});
       }
     });
@@ -5549,11 +5986,23 @@ function ensureWorkoutProgressMigration({ownerId=currentRoutineOwnerOrNull(),mar
       ownerId:normalizedOwner,records:marker.migratedWorkoutInstanceIds,rejected
     };
   }catch(error){
-    restoreOwnerWorkoutProgressStorage(normalizedOwner,progressBefore);
-    restoreStorageValue(CANONICAL_DRAFTS_KEY,canonicalBefore);
-    Object.entries(legacyBefore).forEach(([key,raw])=>restoreStorageValue(draftKey(key),raw));
-    restoreStorageValue(markerKey,markerBefore);
-    throw error;
+    const failure=classifyWorkoutPersistenceError(error,{
+      fallback:"migration_failed",phase:"legacy_progress_migration"
+    });
+    try{
+      restoreOwnerWorkoutProgressStorage(normalizedOwner,progressBefore);
+      restoreStorageValue(CANONICAL_DRAFTS_KEY,canonicalBefore);
+      Object.entries(legacyBefore).forEach(
+        ([key,raw])=>restoreStorageValue(draftKey(key),raw)
+      );
+      restoreStorageValue(markerKey,markerBefore);
+    }catch(restoreError){
+      console.error("Workout migration rollback failure",{
+        code:isWorkoutStorageQuotaError(restoreError)?"storage_quota":"migration_failed",
+        phase:"legacy_progress_migration_rollback"
+      });
+    }
+    throw failure;
   }
 }
 function mergeIncomingWorkoutProgress(records,{writeCanonical=true}={}){
@@ -5747,20 +6196,24 @@ function saveDraft(d){
   const canonical=getCanonicalRoutine();
   const ownerId=currentRoutineOwnerOrNull();
   if(!canonical||!ownerId){
-    localStorage.setItem(draftKey(d?.session),JSON.stringify(d));
-    return;
+    try{
+      state.workoutDraftMemory=JSON.parse(JSON.stringify(d));
+    }catch(error){
+      throw workoutPersistenceError("memory_update_failed","legacy_memory",error);
+    }
+    writeWorkoutStorage(
+      draftKey(d?.session),JSON.stringify(d),
+      {code:"legacy_shadow_write_failed",phase:"legacy_draft"}
+    );
+    return state.workoutDraftMemory;
   }
   const sessionId=resolveRuntimeSessionId(d?.sessionId||d?.session);
   const session=routineSessionRuntimeApi().sessionById(canonical,sessionId);
-  if(!session) throw new Error("draft_session_not_found");
+  if(!session) throw workoutPersistenceError(
+    "invalid_workout_identity","session_resolution",new Error("draft_session_not_found")
+  );
   const legacySession=session.legacySessionKey||null;
-  const previousLegacy=legacySession?localStorage.getItem(draftKey(legacySession)):null;
-  const previousCanonical=localStorage.getItem(CANONICAL_DRAFTS_KEY);
-  const previousUpdatedAt=localStorage.getItem("gymos:updatedAt");
-  const previousSyncPending=localStorage.getItem("gymos:syncPending");
-  const previousLocalRevision=localStorage.getItem("gymos:localRevision");
-  let progressKey=null,activeProgressKey=null;
-  let previousProgress=null,previousActiveProgress=null;
+  let phase="draft_prepare";
   try{
     assertActiveLocalOwner(ownerId);
     const existing=getCanonicalDrafts()||routineSessionMigrationApi().emptyDraftContainer(canonical.routineId);
@@ -5806,44 +6259,65 @@ function saveDraft(d){
         legacySessionKey:legacySession
       }
     };
+    // Nunca serializar legacyRaw dentro de sí mismo: cada guardado anterior
+    // anidaba la sombra previa y hacía crecer el draft sin límite.
+    delete nextDraft.legacyRaw;
     if(legacySession) nextDraft.legacyRaw=JSON.stringify({
       ...nextDraft,session:legacySession
     });
-    else delete nextDraft.legacyRaw;
     const next=routineSessionRuntimeApi().upsertDraft(existing,nextDraft,{
       ownerId,routine:canonical
     });
     if(legacySession) delete next.orphanedLegacyDrafts?.[legacySession];
     if(currentRoutineOwnerOrNull()!==ownerId) throw new Error("owner_changed");
-    progressKey=workoutProgressApi().progressStorageKey(ownerId,nextDraft.workoutInstanceId);
-    activeProgressKey=workoutProgressApi().activeWorkoutStorageKey(ownerId,sessionId);
-    previousProgress=localStorage.getItem(progressKey);
-    previousActiveProgress=localStorage.getItem(activeProgressKey);
+
+    // La memoria es la fuente inmediata. Las capas persistentes nunca la revierten.
+    phase="memory_update";
+    state.workoutDraftMemory=JSON.parse(JSON.stringify(nextDraft));
+
+    phase="progress_record";
     storeWorkoutProgressRecord(nextDraft,{active:true});
-    localStorage.setItem(CANONICAL_DRAFTS_KEY,JSON.stringify(next));
-    if(legacySession) localStorage.setItem(draftKey(legacySession),nextDraft.legacyRaw);
+
+    phase="canonical_shadow";
+    writeWorkoutStorage(
+      CANONICAL_DRAFTS_KEY,JSON.stringify(next),
+      {code:"legacy_shadow_write_failed",phase}
+    );
+    if(legacySession){
+      phase="legacy_shadow";
+      writeWorkoutStorage(
+        draftKey(legacySession),nextDraft.legacyRaw,
+        {code:"legacy_shadow_write_failed",phase}
+      );
+    }
     const storedContainer=getCanonicalDrafts();
     const storedValidation=routineSessionMigrationApi().validateDraftContainer(storedContainer,{
       ownerId,canonicalRoutine:canonical
     });
     if(!storedValidation.valid||!storedContainer.draftsBySessionId?.[sessionId]){
-      throw new Error("canonical_draft_write_validation_failed");
+      throw workoutPersistenceError(
+        "legacy_shadow_write_failed","canonical_shadow_verify",
+        new Error("canonical_draft_write_validation_failed")
+      );
     }
     if(currentRoutineOwnerOrNull()!==ownerId) throw new Error("owner_changed");
+    phase="local_revision";
     if(mark) markLocalUpdated({schedule});
-    state.workoutDraftMemory=JSON.parse(JSON.stringify(nextDraft));
     state.workoutDraftSaveStatus=navigator.onLine&&isAppAuthenticated()
       ?"pending_sync":"saved_local";
+    state.workoutDraftLastError=null;
     state.workoutDraftMessage=null;
+    if(state.workoutInlineMessage?.type==="error"&&state.workoutInlineMessage.retry){
+      state.workoutInlineMessage=null;
+      updateActiveWorkoutInlineMessage();
+    }
+    return state.workoutDraftMemory;
   }catch(error){
-    if(progressKey) restoreStorageValue(progressKey,previousProgress);
-    if(activeProgressKey) restoreStorageValue(activeProgressKey,previousActiveProgress);
-    if(legacySession) restoreStorageValue(draftKey(legacySession),previousLegacy);
-    restoreStorageValue(CANONICAL_DRAFTS_KEY,previousCanonical);
-    restoreStorageValue("gymos:updatedAt",previousUpdatedAt);
-    restoreStorageValue("gymos:syncPending",previousSyncPending);
-    restoreStorageValue("gymos:localRevision",previousLocalRevision);
-    throw error;
+    const fallback=phase==="memory_update"
+      ?"memory_update_failed"
+      :phase.includes("shadow")?"legacy_shadow_write_failed"
+      :"local_progress_write_failed";
+    throw classifyWorkoutPersistenceError(error,{fallback,phase});
   }
 }
 function workoutSaveStatusLabel(){
@@ -5852,7 +6326,8 @@ function workoutSaveStatusLabel(){
     saved:"Guardado",
     saved_local:"Guardado en este dispositivo",
     pending_sync:"Pendiente de sincronización",
-    conflict:"Conflicto pendiente"
+    conflict:"Conflicto pendiente",
+    local_error:"Cambios conservados temporalmente"
   }[state.workoutDraftSaveStatus]||"Guardado";
 }
 function updateWorkoutSaveIndicator(){
@@ -5864,11 +6339,68 @@ function updateWorkoutSaveIndicator(){
 function markWorkoutProgressSynced(){
   if(!state.workoutDraftMemory) return;
   state.workoutDraftSaveStatus="saved";
+  state.workoutDraftLastError=null;
   updateWorkoutSaveIndicator();
+}
+function workoutPersistenceUserMessage(error){
+  const failure=classifyWorkoutPersistenceError(error);
+  if(failure.code==="remote_sync_failed"){
+    return {
+      type:"info",
+      text:"Guardado en este dispositivo · pendiente de sincronización.",
+      retry:true
+    };
+  }
+  if(failure.code==="storage_quota"){
+    return {
+      type:"error",
+      text:"No hay espacio suficiente para guardar. Los cambios se conservan temporalmente en esta sesión. Mantén esta pantalla abierta y reintenta.",
+      retry:true
+    };
+  }
+  if(["owner_mismatch","invalid_workout_identity","migration_failed"].includes(failure.code)){
+    return {
+      type:"error",
+      text:failure.code==="owner_mismatch"
+        ?"La cuenta activa cambió. Vuelve a abrir el entrenamiento."
+        :"No se pudo reparar la identidad de este entrenamiento. Tus cambios siguen en memoria.",
+      retry:true
+    };
+  }
+  return {
+    type:"error",
+    text:"Los cambios siguen en memoria. No se pudieron guardar en este dispositivo.",
+    retry:true
+  };
+}
+function renderActiveWorkoutInlineMessage(){
+  const message=state.workoutInlineMessage;
+  if(!message) return "";
+  return `<div class="form-message ${esc(message.type||"info")}" role="${message.type==="error"?"alert":"status"}">
+    <span>${esc(message.text)}</span>
+    ${message.retry?'<button type="button" class="text-button" data-workout-retry-save>Reintentar</button>':""}
+  </div>`;
+}
+function updateActiveWorkoutInlineMessage(){
+  const region=document.querySelector("[data-workout-inline-message]");
+  if(region) region.innerHTML=renderActiveWorkoutInlineMessage();
+}
+function handleWorkoutPersistenceFailure(error){
+  const failure=logWorkoutPersistenceError(error);
+  state.workoutDraftLastError=failure;
+  state.workoutDraftSaveStatus=failure.code==="remote_sync_failed"
+    ?"pending_sync":"local_error";
+  const message=workoutPersistenceUserMessage(failure);
+  setActiveWorkoutMessage(message.type,message.text,{retry:message.retry});
+  updateWorkoutSaveIndicator();
+  updateActiveWorkoutInlineMessage();
+  return failure;
 }
 function stageWorkoutDraft(draft,{immediate=false,scheduleSync=false}={}){
   const ownerId=currentRoutineOwnerOrNull();
-  if(!ownerId||draft?.ownerId!==ownerId) throw new Error("owner_changed");
+  if(!ownerId||draft?.ownerId!==ownerId) throw workoutPersistenceError(
+    "owner_mismatch","memory_stage",new Error("owner_changed")
+  );
   const base=state.workoutDraftMemory?.workoutInstanceId===draft.workoutInstanceId
     ?state.workoutDraftMemory
     :draft;
@@ -5880,7 +6412,7 @@ function stageWorkoutDraft(draft,{immediate=false,scheduleSync=false}={}){
   state.workoutDraftSaveStatus="saving";
   updateWorkoutSaveIndicator();
   if(immediate){
-    flushWorkoutDraftProgress({scheduleSync,silent:false});
+    flushWorkoutDraftProgress({scheduleSync,silent:true});
     return state.workoutDraftMemory;
   }
   clearTimeout(state.workoutDraftAutosaveTimer);
@@ -5896,7 +6428,9 @@ function stageWorkoutDraft(draft,{immediate=false,scheduleSync=false}={}){
   },400);
   return stamped.draft;
 }
-function flushWorkoutDraftProgress({scheduleSync=false,silent=false}={}){
+function flushWorkoutDraftProgress({
+  scheduleSync=false,silent=false,requireLocal=false
+}={}){
   clearTimeout(state?.workoutDraftAutosaveTimer);
   if(typeof state!=="undefined") state.workoutDraftAutosaveTimer=null;
   const draft=state?.workoutDraftMemory;
@@ -5909,10 +6443,54 @@ function flushWorkoutDraftProgress({scheduleSync=false,silent=false}={}){
     updateWorkoutSaveIndicator();
     return state.workoutDraftMemory;
   }catch(error){
-    state.workoutDraftSaveStatus="conflict";
-    updateWorkoutSaveIndicator();
-    if(!silent) throw error;
-    return null;
+    let failure=classifyWorkoutPersistenceError(error);
+    if(
+      failure.code==="storage_quota"&&!state.workoutQuotaRecoveryInProgress
+    ){
+      state.workoutQuotaRecoveryInProgress=true;
+      try{
+        try{
+          compactWorkoutStorageForQuota({ownerId});
+        }catch(compactionError){
+          logWorkoutPersistenceError(
+            classifyWorkoutPersistenceError(compactionError,{
+              fallback:"local_progress_write_failed",phase:"quota_compaction"
+            })
+          );
+        }
+        if(currentRoutineOwnerOrNull()!==ownerId){
+          throw workoutPersistenceError(
+            "owner_mismatch","quota_retry_owner",new Error("owner_changed")
+          );
+        }
+        const latestDraft=JSON.parse(JSON.stringify(state.workoutDraftMemory));
+        saveDraft(latestDraft,{mark:true,schedule:scheduleSync});
+        state.workoutDraftSaveStatus="saved_local";
+        state.workoutDraftLastError=null;
+        const pending=localStorage.getItem("gymos:syncPending")==="1";
+        setActiveWorkoutMessage(
+          "success",
+          pending
+            ?"Guardado en este dispositivo · pendiente de sincronización."
+            :"Guardado en este dispositivo."
+        );
+        updateWorkoutSaveIndicator();
+        updateActiveWorkoutInlineMessage();
+        if(scheduleSync&&isAppAuthenticated()&&navigator.onLine){
+          scheduleAutoSync(250);
+        }
+        return state.workoutDraftMemory;
+      }catch(retryError){
+        failure=classifyWorkoutPersistenceError(retryError,{
+          fallback:"local_progress_write_failed",phase:"quota_retry"
+        });
+      }finally{
+        state.workoutQuotaRecoveryInProgress=false;
+      }
+    }
+    failure=handleWorkoutPersistenceFailure(failure);
+    if(requireLocal||!silent) throw failure;
+    return state.workoutDraftMemory;
   }
 }
 function clearDraft(sessionId,{mark=true,preserveProgress=false}={}){
@@ -8989,8 +9567,8 @@ function setWorkoutSessionTimerAction(sessionId,action,now=Date.now()){
   draft.sessionTimer=timer;
   if(action==="reset") draft.startedAt=timer.startedAt;
   else if((action==="start"||action==="resume")&&!draft.startedAt) draft.startedAt=now;
-  saveDraft(draft);
-  return draft;
+  // El control es local y visible de inmediato; Supabase nunca participa aquí.
+  return stageWorkoutDraft(draft,{immediate:true,scheduleSync:false});
 }
 function ensureWorkoutSessionTimerStarted(sessionId,now=Date.now()){
   const draft=getDraft(sessionId);
@@ -9115,7 +9693,7 @@ function renderWorkout(){
         ${header.focus?`<p>${esc(header.focus)}</p>`:""}
       </header>
       ${header.elapsed.anomalous?`<section class="form-message info active-workout-old-draft" role="status"><p>Este borrador lleva abierto un periodo inusual. Conservamos todos sus datos, pero debes reiniciar el contador antes de finalizar.</p><button type="button" class="secondary" data-workout-session-reset>Retomar tiempo desde ahora</button></section>`:""}
-      ${state.workoutInlineMessage?`<p class="form-message ${esc(state.workoutInlineMessage.type||"info")}" role="${state.workoutInlineMessage.type==="error"?"alert":"status"}">${esc(state.workoutInlineMessage.text)}</p>`:""}
+      <div data-workout-inline-message>${renderActiveWorkoutInlineMessage()}</div>
       ${state.workoutDraftMessage?`<p class="workout-draft-message ${esc(state.workoutDraftMessage.type)}" role="${state.workoutDraftMessage.type==="warning"?"alert":"status"}">${esc(state.workoutDraftMessage.text)}</p>`:""}
       ${exercise?`<div class="active-workout-layout">
         <section class="active-workout-exercise-heading" aria-labelledby="activeExerciseTitle">
@@ -9187,6 +9765,13 @@ function activeWorkoutIdentityValid(context){
   if(currentRoutineOwnerOrNull()!==context.ownerId) return false;
   const session=activeRoutineSession(context.sessionId);
   if(!session) return false;
+  const memory=state.workoutDraftMemory;
+  if(
+    memory?.status==="active"&&memory.ownerId===context.ownerId&&
+    memory.sessionId===context.sessionId&&memory.draftId===context.draftId&&
+    (!context.workoutInstanceId||memory.workoutInstanceId===context.workoutInstanceId)&&
+    memory.routineId===getCanonicalRoutine()?.routineId
+  ) return true;
   const stored=readHomeDraft(session,getCanonicalRoutine());
   return Boolean(stored.draft)&&(
     stored.draft.draftId===context.draftId&&
@@ -9196,6 +9781,9 @@ function activeWorkoutIdentityValid(context){
   );
 }
 function activeWorkoutHumanError(error){
+  if(error?.name==="WorkoutPersistenceError"){
+    return workoutPersistenceUserMessage(error).text;
+  }
   return {
     owner_changed:"La cuenta activa cambió. Vuelve a abrir el entrenamiento.",
     owner_mismatch:"La cuenta activa cambió. Vuelve a abrir el entrenamiento.",
@@ -9203,17 +9791,21 @@ function activeWorkoutHumanError(error){
     exercise_changed:"El ejercicio cambió en otra vista. Se ha conservado la versión más reciente.",
     draft_session_not_found:"La sesión ya no está disponible.",
     session_not_found:"La sesión ya no está disponible."
-  }[error?.message]||"No se pudieron guardar los cambios. Inténtalo de nuevo.";
+  }[error?.message]||"Los cambios siguen en memoria. Revisa el estado de guardado.";
 }
-function setActiveWorkoutMessage(type,text){
-  state.workoutInlineMessage={type,text};
+function setActiveWorkoutMessage(type,text,{retry=false}={}){
+  state.workoutInlineMessage={type,text,retry:Boolean(retry)};
 }
 function bindActiveWorkoutEvents(context){
   const shell=document.querySelector(".active-workout-shell");
   const main=shell?.querySelector(".active-workout-screen");
   if(!shell||!main) return;
   const getCurrent=()=>{
-    if(!activeWorkoutIdentityValid(context)) throw new Error("owner_changed");
+    if(!activeWorkoutIdentityValid(context)){
+      const code=currentRoutineOwnerOrNull()===context.ownerId
+        ?"invalid_workout_identity":"owner_mismatch";
+      throw workoutPersistenceError(code,"active_context",new Error("owner_changed"));
+    }
     const draft=getDraft(context.sessionId);
     if(draft.draftId!==context.draftId) throw new Error("draft_changed");
     if(draft.workoutInstanceId!==context.workoutInstanceId) throw new Error("draft_changed");
@@ -9227,13 +9819,25 @@ function bindActiveWorkoutEvents(context){
   const persist=(mutator,{immediate=false,scheduleSync=false}={})=>{
     const draft=getCurrent();
     mutator(draft,currentExercise(draft));
-    if(!activeWorkoutIdentityValid(context)) throw new Error("owner_changed");
+    if(!activeWorkoutIdentityValid(context)){
+      throw workoutPersistenceError(
+        "owner_mismatch","memory_commit_guard",new Error("owner_changed")
+      );
+    }
     const staged=stageWorkoutDraft(draft,{immediate,scheduleSync});
-    if(immediate&&!activeWorkoutIdentityValid(context)) throw new Error("owner_changed");
+    if(immediate&&!activeWorkoutIdentityValid(context)){
+      throw workoutPersistenceError(
+        "owner_mismatch","local_commit_guard",new Error("owner_changed")
+      );
+    }
     return staged;
   };
   const rerenderWithError=error=>{
-    setActiveWorkoutMessage("error",activeWorkoutHumanError(error));
+    if(error?.name==="WorkoutPersistenceError"){
+      handleWorkoutPersistenceFailure(error);
+    }else{
+      setActiveWorkoutMessage("error",activeWorkoutHumanError(error));
+    }
     renderWorkout();
   };
   main.addEventListener("input",event=>{
@@ -9284,12 +9888,18 @@ function bindActiveWorkoutEvents(context){
         state.workoutInlineMessage=null;
         state.screen="home";
         renderHome();
+      }else if(button.matches("[data-workout-retry-save]")){
+        flushWorkoutDraftProgress({scheduleSync:false,silent:true});
+        if(!state.workoutDraftLastError){
+          setActiveWorkoutMessage("success","Cambios guardados en este dispositivo.");
+        }
+        renderWorkout();
       }else if(button.matches("[data-workout-session-toggle]")){
         const draft=getCurrent();
         const timer=workoutSessionTimerForDraft(draft);
         const action=timer.status==="running"?"pause":timer.status==="paused"?"resume":"start";
         setWorkoutSessionTimerAction(context.sessionId,action);
-        setActiveWorkoutMessage(
+        if(!state.workoutDraftLastError) setActiveWorkoutMessage(
           "success",
           action==="pause"?"Cronómetro de sesión pausado.":"Cronómetro de sesión en marcha."
         );
@@ -9300,7 +9910,9 @@ function bindActiveWorkoutEvents(context){
           "¿Reiniciar el cronómetro de sesión? Las series registradas no se modificarán."
         )) return;
         setWorkoutSessionTimerAction(context.sessionId,"reset");
-        setActiveWorkoutMessage("success","El cronómetro de sesión se ha reiniciado.");
+        if(!state.workoutDraftLastError){
+          setActiveWorkoutMessage("success","El cronómetro de sesión se ha reiniciado.");
+        }
         renderWorkout();
       }else if(button.matches("[data-workout-session-overview]")){
         state.workoutReturnFocusSelector="[data-workout-session-overview]";
@@ -9728,7 +10340,7 @@ function updateTimerUI(){
 }
 function finishWorkout(){
   if(state.finishingWorkout) return;
-  flushWorkoutDraftProgress({scheduleSync:false});
+  flushWorkoutDraftProgress({scheduleSync:false,requireLocal:true});
   const ownerId=currentRoutineOwnerOrNull();
   const canonical=getCanonicalRoutine();
   const s=resolveRuntimeSessionId();

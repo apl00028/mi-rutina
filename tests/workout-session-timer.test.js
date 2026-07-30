@@ -141,7 +141,10 @@ test("operar el cronómetro no escribe rutina, historial ni propuestas",()=>{
     appSource.indexOf("function setWorkoutSessionTimerAction"),
     appSource.indexOf("function ensureWorkoutSessionTimerStarted")
   );
-  assert.match(source,/saveDraft\(draft\)/);
+  assert.match(
+    source,
+    /stageWorkoutDraft\(draft,\{immediate:true,scheduleSync:false\}\)/
+  );
   assert.doesNotMatch(source,/saveRoutine|gymos:history|routineProposal|localStorage/);
 });
 

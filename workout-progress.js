@@ -136,8 +136,16 @@
     const updatedAt=iso(draft.updatedAt)||iso(now)||new Date().toISOString();
     const revision=Math.max(1,Number(draft.revision)||1);
     const client=text(draft.clientInstanceId||draft.deviceId||clientInstanceId)||"legacy";
+    const legacyStartedAt=iso(draft.startedAt)||iso(draft.sessionTimer?.startedAt);
+    const legacyIdentity=deterministicId(
+      "workout",normalizedOwner,routine,session,legacyStartedAt||"legacy-active"
+    );
     const generated=typeof idFactory==="function"?idFactory("workout"):null;
-    const workoutId=token(draft.workoutInstanceId||draft.draftId||generated,"workout_instance_id");
+    const workoutId=token(
+      draft.workoutInstanceId||draft.draftId||
+      (draft.startedAt||draft.sessionTimer||draft.updatedAt?legacyIdentity:generated),
+      "workout_instance_id"
+    );
     const fallback=stamp(updatedAt,revision,client);
     const exerciseOccurrences=new Map();
     const exercises=list(draft.exercises).map((exercise,exerciseIndex)=>{

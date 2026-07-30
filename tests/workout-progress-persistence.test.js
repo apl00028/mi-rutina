@@ -18,6 +18,23 @@ function api(){
   vm.runInContext(source,context,{filename:"workout-progress.js"});
   return context.GymOSWorkoutProgress;
 }
+function runtimeApi(){
+  const context={console};
+  context.globalThis=context;
+  context.window=context;
+  vm.createContext(context);
+  for(const file of [
+    "routine-session-model.js",
+    "routine-session-migration.js",
+    "routine-session-runtime.js"
+  ]){
+    vm.runInContext(
+      fs.readFileSync(path.join(root,file),"utf8"),
+      context,{filename:file}
+    );
+  }
+  return context.GymOSRoutineSessionRuntime;
+}
 function draft(owner=OWNER_A,{workout="workout-1",session="session-1"}={}){
   return {
     draftId:`draft-${workout}`,workoutInstanceId:workout,ownerId:owner,
@@ -77,6 +94,73 @@ function extractFunction(code,name){
     if(character==="}"&&--depth===0) return code.slice(start,index+1);
   }
   throw new Error(`FunciÃ³n incompleta: ${name}`);
+}
+function autosaveHarness({saveDraft}){
+  const engine=api();
+  const state={
+    workoutDraftMemory:engine.normalizeDraft(draft(),{}),
+    workoutDraftAutosaveTimer:null,
+    workoutDraftOperationId:0,
+    workoutDraftSaveStatus:"saved",
+    workoutDraftLastError:null,
+    workoutInlineMessage:null,
+    workoutQuotaRecoveryInProgress:false
+  };
+  const context={
+    state,Date,JSON,setTimeout,clearTimeout,
+    navigator:{onLine:true},
+    currentRoutineOwnerOrNull:()=>OWNER_A,
+    workoutProgressApi:()=>engine,
+    getWorkoutClientInstanceId:()=>"failure-test",
+    updateWorkoutSaveIndicator:()=>{},
+    updateActiveWorkoutInlineMessage:()=>{},
+    setActiveWorkoutMessage:(type,text,options={})=>{
+      state.workoutInlineMessage={type,text,...options};
+    },
+    isAppAuthenticated:()=>true,
+    scheduleAutoSync:()=>{context.remoteRequests+=1;},
+    saveDraft:value=>saveDraft(value,state),
+    remoteRequests:0,
+    compactionAttempts:0,
+    localStorage:{getItem:key=>key==="gymos:syncPending"?"1":null}
+  };
+  context.classifyWorkoutPersistenceError=(error,options={})=>{
+    if(error?.code) return error;
+    const classified=new Error(options.fallback||"local_progress_write_failed");
+    classified.code=options.fallback||"local_progress_write_failed";
+    classified.phase=options.phase||"test";
+    classified.cause=error;
+    return classified;
+  };
+  context.workoutPersistenceError=(code,phase,cause)=>{
+    const error=new Error(code);
+    error.code=code;error.phase=phase;error.cause=cause;
+    return error;
+  };
+  context.logWorkoutPersistenceError=error=>error;
+  context.compactWorkoutStorageForQuota=()=>{
+    context.compactionAttempts+=1;
+    return {attempted:true,actions:[]};
+  };
+  context.handleWorkoutPersistenceFailure=error=>{
+    state.workoutDraftLastError=error;
+    state.workoutDraftSaveStatus="local_error";
+    state.workoutInlineMessage={
+      type:"error",
+      text:error?.code==="storage_quota"
+        ?"No hay espacio suficiente para guardar. Los cambios se conservan temporalmente en esta sesión. Mantén esta pantalla abierta y reintenta."
+        :"Los cambios siguen en memoria.",
+      retry:true
+    };
+    return error;
+  };
+  vm.createContext(context);
+  vm.runInContext(
+    `${extractFunction(appSource,"flushWorkoutDraftProgress")}
+     ${extractFunction(appSource,"stageWorkoutDraft")}`,
+    context
+  );
+  return {context,state,engine};
 }
 
 test("cada progreso se aísla por ownerId y workoutInstanceId",()=>{
@@ -585,4 +669,528 @@ test("integración técnica mantiene un consumidor, un listener storage y aislam
   assert.match(appSource,/state\.workoutDraftOperationId=.*\+1/);
   assert.match(appSource,/assertActiveLocalOwner\(ownerId\)/);
   assert.equal((appSource.match(/function saveDraft\(d\)/g)||[]).length,1);
+});
+
+test("un fallo local conserva la edición en memoria y permite reintentar sin Supabase",()=>{
+  let attempts=0;
+  const {context,state}=autosaveHarness({
+    saveDraft(value,currentState){
+      attempts+=1;
+      if(attempts===1){
+        const error=new Error("blocked storage");
+        error.code="local_progress_write_failed";
+        throw error;
+      }
+      currentState.workoutDraftMemory=JSON.parse(JSON.stringify(value));
+      currentState.workoutDraftLastError=null;
+      currentState.workoutDraftSaveStatus="saved_local";
+    }
+  });
+  const edited=JSON.parse(JSON.stringify(state.workoutDraftMemory));
+  edited.exercises[0].series[0].weight="87.5";
+  context.edited=edited;
+  vm.runInContext(
+    "stageWorkoutDraft(edited,{immediate:true,scheduleSync:true})",
+    context
+  );
+  assert.equal(state.workoutDraftMemory.exercises[0].series[0].weight,"87.5");
+  assert.equal(state.workoutDraftSaveStatus,"local_error");
+  assert.equal(state.workoutInlineMessage.retry,true);
+  assert.equal(context.remoteRequests,0);
+  vm.runInContext(
+    "flushWorkoutDraftProgress({scheduleSync:false,silent:true})",
+    context
+  );
+  assert.equal(attempts,2);
+  assert.equal(state.workoutDraftMemory.exercises[0].series[0].weight,"87.5");
+  assert.equal(state.workoutDraftSaveStatus,"saved_local");
+  assert.equal(state.workoutDraftLastError,null);
+});
+
+test("un error remoto ocurre después del guardado local y no revierte una serie",()=>{
+  let localWrites=0;
+  const {context,state}=autosaveHarness({
+    saveDraft(value,currentState){
+      localWrites+=1;
+      currentState.workoutDraftMemory=JSON.parse(JSON.stringify(value));
+      currentState.workoutDraftLastError=null;
+      currentState.workoutDraftSaveStatus="pending_sync";
+    }
+  });
+  const edited=JSON.parse(JSON.stringify(state.workoutDraftMemory));
+  edited.exercises[0].series[0].reps="11";
+  context.edited=edited;
+  vm.runInContext(
+    "stageWorkoutDraft(edited,{immediate:true,scheduleSync:true})",
+    context
+  );
+  assert.equal(localWrites,1);
+  assert.equal(context.remoteRequests,1);
+  assert.equal(state.workoutDraftMemory.exercises[0].series[0].reps,"11");
+  // Una respuesta remota fallida solo cambia el estado de sincronización.
+  state.workoutDraftLastError={code:"remote_sync_failed",phase:"supabase_sync"};
+  state.workoutDraftSaveStatus="pending_sync";
+  assert.equal(state.workoutDraftMemory.exercises[0].series[0].reps,"11");
+  assert.equal(state.workoutDraftSaveStatus,"pending_sync");
+});
+
+test("QuotaExceededError compacta una vez y el segundo intento persiste el último estado",()=>{
+  let attempts=0;
+  let persisted=null;
+  const {context,state}=autosaveHarness({
+    saveDraft(value,currentState){
+      attempts+=1;
+      if(attempts===1){
+        const error=new Error("quota");
+        error.name="QuotaExceededError";
+        error.code="storage_quota";
+        throw error;
+      }
+      persisted=JSON.parse(JSON.stringify(value));
+      currentState.workoutDraftMemory=persisted;
+      currentState.workoutDraftLastError=null;
+    }
+  });
+  const edited=JSON.parse(JSON.stringify(state.workoutDraftMemory));
+  edited.exercises[0].notes="Última nota antes de recuperar espacio";
+  context.edited=edited;
+  vm.runInContext(
+    "stageWorkoutDraft(edited,{immediate:true,scheduleSync:false})",
+    context
+  );
+  assert.equal(attempts,2);
+  assert.equal(context.compactionAttempts,1);
+  assert.equal(
+    persisted.exercises[0].notes,
+    "Última nota antes de recuperar espacio"
+  );
+  assert.equal(state.workoutDraftSaveStatus,"saved_local");
+  assert.equal(state.workoutDraftLastError,null);
+  assert.match(state.workoutInlineMessage.text,/Guardado en este dispositivo/);
+  assert.match(state.workoutInlineMessage.text,/pendiente de sincronización/);
+  const restored=api().normalizeDraft(JSON.parse(JSON.stringify(persisted)),{});
+  assert.equal(
+    restored.exercises[0].notes,
+    "Última nota antes de recuperar espacio"
+  );
+});
+
+test("si el segundo intento también agota cuota no existe un bucle y el aviso persiste",()=>{
+  let attempts=0;
+  const {context,state}=autosaveHarness({
+    saveDraft(){
+      attempts+=1;
+      const error=new Error("quota");
+      error.name="QuotaExceededError";
+      error.code="storage_quota";
+      throw error;
+    }
+  });
+  const edited=JSON.parse(JSON.stringify(state.workoutDraftMemory));
+  edited.exercises[0].series[0].rir="1";
+  context.edited=edited;
+  vm.runInContext(
+    "stageWorkoutDraft(edited,{immediate:true,scheduleSync:false})",
+    context
+  );
+  assert.equal(attempts,2);
+  assert.equal(context.compactionAttempts,1);
+  assert.equal(state.workoutDraftMemory.exercises[0].series[0].rir,"1");
+  assert.equal(state.workoutDraftSaveStatus,"local_error");
+  assert.match(state.workoutInlineMessage.text,/No hay espacio suficiente/);
+  assert.match(state.workoutInlineMessage.text,/Mantén esta pantalla abierta/);
+  assert.equal(state.workoutInlineMessage.retry,true);
+  assert.equal(state.workoutQuotaRecoveryInProgress,false);
+});
+
+test("una nota con cuota llena conserva foco lógico y el valor más reciente en memoria",async()=>{
+  let attempts=0;
+  const {context,state}=autosaveHarness({
+    saveDraft(){
+      attempts+=1;
+      const error=new Error("quota");
+      error.code="storage_quota";
+      throw error;
+    }
+  });
+  for(const value of ["N","Nota","Nota más reciente"]){
+    const edited=JSON.parse(JSON.stringify(state.workoutDraftMemory));
+    edited.exercises[0].notes=value;
+    context.edited=edited;
+    vm.runInContext("stageWorkoutDraft(edited)",context);
+  }
+  await new Promise(resolve=>setTimeout(resolve,450));
+  assert.equal(attempts,2);
+  assert.equal(context.compactionAttempts,1);
+  assert.equal(state.workoutDraftMemory.exercises[0].notes,"Nota más reciente");
+  assert.equal(state.workoutDraftSaveStatus,"local_error");
+});
+
+test("escritura rápida con fallo local no deshabilita ni reconstruye los campos",async()=>{
+  let writes=0;
+  const {context,state}=autosaveHarness({
+    saveDraft(){
+      writes+=1;
+      const error=new Error("storage unavailable");
+      error.code="local_progress_write_failed";
+      throw error;
+    }
+  });
+  for(const value of ["8","82","82.5"]){
+    const edited=JSON.parse(JSON.stringify(state.workoutDraftMemory));
+    edited.exercises[0].series[0].weight=value;
+    context.edited=edited;
+    vm.runInContext("stageWorkoutDraft(edited)",context);
+  }
+  assert.equal(state.workoutDraftMemory.exercises[0].series[0].weight,"82.5");
+  await new Promise(resolve=>setTimeout(resolve,450));
+  assert.equal(writes,1);
+  assert.equal(state.workoutDraftMemory.exercises[0].series[0].weight,"82.5");
+  const activeRender=appSource.slice(
+    appSource.indexOf("function renderWorkout("),
+    appSource.indexOf("function renderLegacyWorkout(")
+  );
+  assert.doesNotMatch(
+    activeRender,
+    /workoutDraft(?:LastError|SaveStatus)[\s\S]{0,120}disabled/
+  );
+  assert.match(appSource,/data-workout-retry-save/);
+});
+
+test("errores de cuota, propietario, identidad y sincronización tienen códigos distintos",()=>{
+  const context={
+    console:{error(){}},
+    Set,Error,String,
+    WORKOUT_PERSISTENCE_ERROR_CODES:new Set([
+      "memory_update_failed","local_progress_write_failed",
+      "active_pointer_write_failed","legacy_shadow_write_failed",
+      "remote_sync_failed","owner_mismatch","invalid_workout_identity",
+      "storage_quota","migration_failed"
+    ])
+  };
+  vm.createContext(context);
+  vm.runInContext(
+    `${extractFunction(appSource,"isWorkoutStorageQuotaError")}
+     ${extractFunction(appSource,"workoutPersistenceError")}
+     ${extractFunction(appSource,"classifyWorkoutPersistenceError")}
+     ${extractFunction(appSource,"workoutPersistenceUserMessage")}`,
+    context
+  );
+  const quota={name:"QuotaExceededError",code:22};
+  context.quota=quota;
+  const classified=vm.runInContext(
+    'classifyWorkoutPersistenceError(quota,{phase:"progress_record"})',
+    context
+  );
+  assert.equal(classified.code,"storage_quota");
+  assert.equal(classified.phase,"progress_record");
+  assert.equal(classified.cause,quota);
+  const remote=vm.runInContext(
+    'workoutPersistenceUserMessage(workoutPersistenceError("remote_sync_failed","supabase_sync"))',
+    context
+  );
+  const local=vm.runInContext(
+    'workoutPersistenceUserMessage(workoutPersistenceError("local_progress_write_failed","progress_record"))',
+    context
+  );
+  assert.match(remote.text,/Guardado en este dispositivo/);
+  assert.match(remote.text,/pendiente de sincronización/);
+  assert.match(local.text,/siguen en memoria/);
+  assert.notEqual(remote.text,local.text);
+  assert.equal(
+    vm.runInContext(
+      'classifyWorkoutPersistenceError(new Error("owner_changed"),{phase:"guard"}).code',
+      context
+    ),
+    "owner_mismatch"
+  );
+});
+
+test("un draft RC.2 sin identidades conserva timer e IDs estables en migración repetida",()=>{
+  const engine=api();
+  const legacy=draft();
+  delete legacy.workoutInstanceId;
+  delete legacy.draftId;
+  delete legacy.revision;
+  delete legacy.updatedAt;
+  legacy.sessionTimer={
+    ownerId:OWNER_A,sessionId:"session-1",status:"running",
+    elapsedMs:7_200_000,startedAt:Date.parse(NOW)
+  };
+  legacy.exercises.forEach(exercise=>{
+    delete exercise.exerciseInstanceId;
+    exercise.series.forEach(set=>delete set.setInstanceId);
+  });
+  const first=engine.normalizeDraft(legacy,{
+    owner:OWNER_A,sessionId:"session-1",routineId:"routine-1",
+    clientInstanceId:"migration",idFactory:()=>`random-${Math.random()}`
+  });
+  const second=engine.normalizeDraft(legacy,{
+    owner:OWNER_A,sessionId:"session-1",routineId:"routine-1",
+    clientInstanceId:"migration",idFactory:()=>`random-${Math.random()}`
+  });
+  assert.equal(first.workoutInstanceId,second.workoutInstanceId);
+  assert.deepEqual(
+    first.exercises.map(item=>item.exerciseInstanceId),
+    second.exercises.map(item=>item.exerciseInstanceId)
+  );
+  assert.equal(first.sessionTimer.elapsedMs,7_200_000);
+  assert.equal(first.sessionTimer.status,"running");
+});
+
+test("puntero corrupto se descarta y la migración parcial sigue siendo reparable",()=>{
+  const pointerReader=appSource.slice(
+    appSource.indexOf("function activeWorkoutProgressRecord("),
+    appSource.indexOf("function activeWorkoutPointerId(")
+  );
+  assert.match(pointerReader,/normalizePointer\(rawPointer/);
+  assert.match(pointerReader,/localStorage\.removeItem\(activeKey\)/);
+  const migration=appSource.slice(
+    appSource.indexOf("function ensureWorkoutProgressMigration("),
+    appSource.indexOf("function mergeIncomingWorkoutProgress(")
+  );
+  assert.match(migration,/migration_failed/);
+  assert.match(migration,/storeWorkoutProgressRecord\(progress/);
+  assert.match(migration,/workout_progress_verification_failed/);
+  assert.ok(
+    migration.indexOf("localStorage.setItem(progressKey")<
+    migration.indexOf("storeWorkoutProgressRecord(progress")
+  );
+});
+
+test("cronómetro y campos escriben memoria antes de persistir y no esperan a Supabase",()=>{
+  const timerAction=appSource.slice(
+    appSource.indexOf("function setWorkoutSessionTimerAction("),
+    appSource.indexOf("function ensureWorkoutSessionTimerStarted(")
+  );
+  assert.match(timerAction,/stageWorkoutDraft\(draft,\{immediate:true,scheduleSync:false\}\)/);
+  assert.doesNotMatch(timerAction,/supabase|syncNow|autoSync|await/);
+  const save=appSource.slice(
+    appSource.indexOf("function saveDraft("),
+    appSource.indexOf("function workoutSaveStatusLabel(")
+  );
+  assert.ok(
+    save.indexOf("state.workoutDraftMemory=JSON.parse")<
+    save.indexOf("storeWorkoutProgressRecord(nextDraft")
+  );
+  assert.doesNotMatch(save,/restoreStorageValue/);
+  assert.match(save,/local_progress_write_failed/);
+  assert.match(save,/legacy_shadow_write_failed/);
+});
+
+test("reiniciar el cronómetro cambia la memoria aunque falle la persistencia local",()=>{
+  const runtime=runtimeApi();
+  const {context,state}=autosaveHarness({
+    saveDraft(){
+      const error=new Error("storage blocked");
+      error.name="QuotaExceededError";
+      error.code="storage_quota";
+      throw error;
+    }
+  });
+  state.workoutDraftMemory.sessionTimer=runtime.normalizeSessionTimer({
+    ownerId:OWNER_A,sessionId:"session-1",status:"running",
+    elapsedMs:90_000,startedAt:Date.parse(NOW)
+  },{ownerId:OWNER_A,sessionId:"session-1"});
+  context.routineSessionRuntimeApi=()=>runtime;
+  context.resolveRuntimeSessionId=()=> "session-1";
+  context.getDraft=()=>JSON.parse(JSON.stringify(state.workoutDraftMemory));
+  context.workoutSessionTimerForDraft=value=>runtime.normalizeSessionTimer(
+    value.sessionTimer,{ownerId:OWNER_A,sessionId:"session-1"}
+  );
+  vm.runInContext(
+    extractFunction(appSource,"setWorkoutSessionTimerAction"),
+    context
+  );
+  vm.runInContext(
+    'setWorkoutSessionTimerAction("session-1","reset",Date.parse("2026-07-30T12:00:00.000Z"))',
+    context
+  );
+  assert.equal(state.workoutDraftMemory.sessionTimer.elapsedMs,0);
+  assert.equal(
+    state.workoutDraftMemory.sessionTimer.startedAt,
+    Date.parse("2026-07-30T12:00:00.000Z")
+  );
+  assert.equal(state.workoutDraftMemory.exercises[0].series[0].weight,"");
+  assert.equal(state.workoutDraftSaveStatus,"local_error");
+  assert.equal(context.compactionAttempts,1);
+});
+
+test("una respuesta remota antigua no sustituye valores visibles pendientes",()=>{
+  const getter=appSource.slice(
+    appSource.indexOf("function getDraft("),
+    appSource.indexOf("function saveDraft(")
+  );
+  assert.ok(
+    getter.indexOf("state.workoutDraftMemory?.ownerId")<
+    getter.indexOf("activeWorkoutProgressRecord(ownerId,resolved)")
+  );
+  assert.match(getter,/return JSON\.parse\(JSON\.stringify\(state\.workoutDraftMemory\)\)/);
+  const engine=api();
+  const base=engine.normalizeDraft(draft(),{});
+  const local=edit(base,value=>{
+    value.exercises[0].notes="texto visible nuevo";
+  },{time:"2026-07-30T10:05:00.000Z",client:"local"});
+  const remote=edit(base,value=>{
+    value.exercises[1].notes="respuesta remota";
+  },{time:"2026-07-30T10:01:00.000Z",client:"remote"});
+  const merged=engine.mergeDrafts(local,remote).draft;
+  assert.equal(merged.exercises[0].notes,"texto visible nuevo");
+  assert.equal(merged.exercises[1].notes,"respuesta remota");
+});
+
+test("el diagnóstico de almacenamiento solo expone metadatos seguros",()=>{
+  const context={
+    CANONICAL_DRAFTS_KEY:"gymos:routineDrafts",
+    CANONICAL_ROUTINE_KEY:"gymos:routine:canonical"
+  };
+  vm.createContext(context);
+  vm.runInContext(
+    `${extractFunction(appSource,"approximateStorageBytes")}
+     ${extractFunction(appSource,"workoutStorageEntryDescriptor")}`,
+    context
+  );
+  context.secret=JSON.stringify({
+    ownerId:OWNER_A,notes:"nota que no debe aparecer",weight:"105"
+  });
+  const descriptor=vm.runInContext(
+    `workoutStorageEntryDescriptor(
+      "gymos:workoutProgress:${OWNER_A}:workout-1",secret,"${OWNER_A}"
+    )`,
+    context
+  );
+  const serialized=JSON.stringify(descriptor);
+  assert.equal(descriptor.ownerId,OWNER_A);
+  assert.equal(descriptor.contentType,"workout_progress");
+  assert.equal(descriptor.role,"authoritative");
+  assert.equal(descriptor.writer,"storeWorkoutProgressRecord");
+  assert.ok(descriptor.approximateBytes>0);
+  assert.doesNotMatch(serialized,/nota que no debe aparecer|105/);
+});
+
+test("legacyRaw deja de crecer y no se duplica dentro de workoutProgress",()=>{
+  const save=appSource.slice(
+    appSource.indexOf("function saveDraft("),
+    appSource.indexOf("function workoutSaveStatusLabel(")
+  );
+  assert.ok(
+    save.indexOf("delete nextDraft.legacyRaw")<
+    save.indexOf("nextDraft.legacyRaw=JSON.stringify")
+  );
+  const store=appSource.slice(
+    appSource.indexOf("function storeWorkoutProgressRecord("),
+    appSource.indexOf("function removeWorkoutProgressRecord(")
+  );
+  assert.match(store,/delete progressRecord\.legacyRaw/);
+  const makeShadow=value=>{
+    const next=JSON.parse(JSON.stringify(value));
+    delete next.legacyRaw;
+    next.legacyRaw=JSON.stringify({...next,session:"A"});
+    return next;
+  };
+  const once=makeShadow({...draft(),session:"A"});
+  const twice=makeShadow(once);
+  const three=makeShadow(twice);
+  assert.equal(twice.legacyRaw.length,three.legacyRaw.length);
+  assert.doesNotMatch(JSON.parse(three.legacyRaw).legacyRaw||"",/./);
+});
+
+test("la compactación protege datos funcionales, pendientes y otros propietarios",()=>{
+  const compaction=appSource.slice(
+    appSource.indexOf("function compactWorkoutStorageForQuota("),
+    appSource.indexOf("function storeWorkoutProgressRecord(")
+  );
+  for(const protectedKey of [
+    '"gymos:routine"',
+    "CANONICAL_ROUTINE_KEY",
+    '"gymos:history"',
+    '"gymos:dailyRecovery"',
+    '"gymos:recoveryCheckins"',
+    '"gymos:syncPending"'
+  ]){
+    assert.match(compaction,new RegExp(protectedKey.replace(/[.*+?^${}()|[\]\\]/g,"\\$&")));
+  }
+  assert.doesNotMatch(
+    compaction,
+    /removeItem\((?:"gymos:(?:routine|history|dailyRecovery|recoveryCheckins)"|CANONICAL_ROUTINE_KEY)/
+  );
+  assert.match(compaction,/protectedBefore\.syncPending!=="1"/);
+  assert.match(compaction,/storedWorkoutProgressRecords\(normalizedOwner\)/);
+  assert.match(compaction,/LOCAL_VAULT_PREFIX.*normalizedOwner/);
+  assert.match(compaction,/assertActiveLocalOwner\(normalizedOwner\)/);
+  assert.match(compaction,/remove_verified_legacy_shadow/);
+});
+
+test("una sombra legacy solo es eliminable tras doble verificación y nunca si está activa",()=>{
+  const legacy={
+    draftId:"draft-old",workoutInstanceId:"workout-old",
+    ownerId:OWNER_A,routineId:"routine-1",sessionId:"session-1",
+    session:"A",status:"finalized",exercises:[{
+      name:"Remo",series:[{weight:"80",reps:"10",rir:"2",done:true}]
+    }]
+  };
+  const raw=JSON.stringify(legacy);
+  const finalized={...legacy,updatedAt:NOW};
+  const context={
+    storedWorkoutProgressRecords:()=>[finalized],
+    activeWorkoutProgressRecord:()=>null,
+    getCanonicalDrafts:()=>({
+      draftsBySessionId:{
+        "session-1":{...finalized,legacyRaw:raw}
+      }
+    })
+  };
+  vm.createContext(context);
+  vm.runInContext(
+    `${extractFunction(appSource,"storageValueContains")}
+     ${extractFunction(appSource,"verifiedLegacyShadowDuplicate")}`,
+    context
+  );
+  context.raw=raw;
+  assert.equal(
+    vm.runInContext(
+      `verifiedLegacyShadowDuplicate(
+        "${OWNER_A}","session-1",raw,{allowActive:false}
+      )`,
+      context
+    ),
+    true
+  );
+  context.activeWorkoutProgressRecord=()=>({...finalized,status:"active"});
+  assert.equal(
+    vm.runInContext(
+      `verifiedLegacyShadowDuplicate(
+        "${OWNER_A}","session-1",raw,{allowActive:false}
+      )`,
+      context
+    ),
+    false
+  );
+  context.activeWorkoutProgressRecord=()=>null;
+  context.getCanonicalDrafts=()=>({draftsBySessionId:{}});
+  assert.equal(
+    vm.runInContext(
+      `verifiedLegacyShadowDuplicate(
+        "${OWNER_A}","session-1",raw,{allowActive:false}
+      )`,
+      context
+    ),
+    false
+  );
+});
+
+test("el mensaje genérico anterior se elimina y cada fase conserva la causa original",()=>{
+  assert.doesNotMatch(
+    appSource,
+    /No se pudieron guardar los cambios\. Inténtalo de nuevo\./
+  );
+  assert.match(appSource,/error\.cause=cause/);
+  for(const code of [
+    "memory_update_failed","local_progress_write_failed",
+    "active_pointer_write_failed","legacy_shadow_write_failed",
+    "remote_sync_failed","owner_mismatch","invalid_workout_identity",
+    "storage_quota","migration_failed"
+  ]){
+    assert.match(appSource,new RegExp(`"${code}"`),code);
+  }
 });

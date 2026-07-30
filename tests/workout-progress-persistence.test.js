@@ -1696,3 +1696,23 @@ test("salidas y entradas funcionales sanean legacyRaw antes de persistir",()=>{
   assert.match(storageListener,/repairInflatedLegacyWorkoutStorage/);
   assert.match(storageListener,/mergeDrafts\(memory,incoming\)/);
 });
+
+test("navegación móvil conserva un writer, identidad canónica y difiere storage durante edición",()=>{
+  const navigation=appSource.slice(
+    appSource.indexOf("const navigateMobileWorkoutExercise="),
+    appSource.indexOf("const rerenderWithError=")
+  );
+  assert.match(navigation,/flushWorkoutDraftProgress/);
+  assert.match(navigation,/requireLocal:true/);
+  assert.match(navigation,/currentExerciseInstanceId=target\.exerciseInstanceId/);
+  assert.match(navigation,/stageWorkoutDraft/);
+  assert.doesNotMatch(navigation,/localStorage|saveRoutine|saveHistory/);
+  const storageListener=appSource.slice(
+    appSource.indexOf('window.addEventListener("storage"'),
+    appSource.indexOf("setInterval(()=>autoSync")
+  );
+  assert.match(storageListener,/requestSafeActiveWorkoutRender/);
+  assert.equal((appSource.match(/function saveDraft\(d\)/g)||[]).length,1);
+  assert.equal((appSource.match(/function stageWorkoutDraft\(/g)||[]).length,1);
+  assert.equal((appSource.match(/function flushWorkoutDraftProgress\(/g)||[]).length,1);
+});

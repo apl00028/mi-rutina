@@ -62,7 +62,8 @@ function store(api,records,value,options={}){
     ownerId:options.ownerId||OWNER_A,
     proposal:value,
     currentRoutine:options.currentRoutine||activeRoutineFromProposal(value),
-    timestamp:options.timestamp||value.generatedAt
+    timestamp:options.timestamp||value.generatedAt,
+    supersedePrevious:options.supersedePrevious??true
   }));
 }
 function deepFreeze(value){
@@ -110,6 +111,20 @@ test("5. una propuesta nueva marca la anterior como superseded",()=>{
   const second=store(api,first.records,{...proposal("proposal-2"),generatedAt:T2},{timestamp:T2});
   assert.equal(second.records.find(item=>item.proposal.proposalId==="proposal-1").lifecycle.status,"superseded");
   assert.equal(second.records.find(item=>item.proposal.proposalId==="proposal-2").lifecycle.status,"pending_review");
+});
+
+test("5b. una propuesta pendiente no se reemplaza sin confirmación explícita",()=>{
+  const api=loadApi();
+  const first=store(api,[],proposal("proposal-1"),{timestamp:T1});
+  const incoming={...proposal("proposal-2"),generatedAt:T2};
+  const result=plain(api.storeProposal(first.records,{
+    ownerId:OWNER_A,proposal:incoming,currentRoutine:activeRoutineFromProposal(incoming),
+    timestamp:T2,supersedePrevious:false
+  }));
+  assert.equal(result.requiresReplacementConfirmation,true);
+  assert.equal(result.created,false);
+  assert.equal(result.records.length,1);
+  assert.equal(result.records[0].lifecycle.status,"pending_review");
 });
 
 test("6. rechazo conserva propuesta original",()=>{
@@ -326,7 +341,7 @@ test("rechaza propietarios no válidos",()=>{
   assert.throws(()=>store(api,[],proposal(),{ownerId:"correo@example.com"}),/invalid owner/);
 });
 
-test("rechazar la propuesta activa selecciona otra pending de forma determinista",()=>{
+test("una segunda pending exige reemplazo y no crea una bandeja implícita",()=>{
   const api=loadApi();
   const first=plain(api.storeProposal([],{
     ownerId:OWNER_A,proposal:proposal("proposal-a"),
@@ -338,11 +353,9 @@ test("rechazar la propuesta activa selecciona otra pending de forma determinista
     ownerId:OWNER_A,proposal:secondValue,currentRoutine:activeRoutineFromProposal(secondValue),
     timestamp:T2,supersedePrevious:false,activeProposalId:"proposal-a"
   }));
-  const rejected=plain(api.rejectProposal(second.records,{
-    ownerId:OWNER_A,proposalId:"proposal-b",rejectionReason:"No",timestamp:"2026-07-28T12:00:00.000Z"
-  }));
-  assert.equal(api.selectActiveProposalId(rejected,OWNER_A,"proposal-b"),"proposal-a");
-  assert.equal(rejected.find(item=>item.proposal.proposalId==="proposal-b").lifecycle.status,"rejected");
+  assert.equal(second.requiresReplacementConfirmation,true);
+  assert.equal(second.records.length,1);
+  assert.equal(second.records[0].proposal.proposalId,"proposal-a");
 });
 
 test("activeRoutineProposalId inexistente cae a pending más reciente",()=>{

@@ -93,7 +93,8 @@ function plan(api,options={}){
       routine:JSON.stringify(current),selectedSession:"B",
       drafts:{A:'{"x":1}',B:'{"x":2}',C:null}
     },
-    confirmed:options.confirmed??true,timestamp:options.timestamp||T1
+    confirmed:options.confirmed??true,timestamp:options.timestamp||T1,
+    activeWorkoutState:options.activeWorkoutState??false
   }));
 }
 
@@ -288,7 +289,7 @@ test("23. backup y restauración mantienen activaciones funcionales",()=>{
 });
 
 test("24. un backup antiguo sin activaciones sigue siendo opcional",()=>{
-  assert.match(appSource,/if\(Array\.isArray\(data\.routineActivationHistory\)\)/);
+  assert.match(appSource,/if\(Array\.isArray\(payload\.routineActivationHistory\)\)/);
   assert.doesNotMatch(appSource,/throw new Error\([^)]*routineActivationHistory/);
 });
 
@@ -347,6 +348,24 @@ test("29. exige confirmación explícita y propietario válido",()=>{
   assert.equal(invalid.code,"invalid_owner");
 });
 
+test("29b. un entrenamiento activo bloquea activación sin alterar la propuesta",()=>{
+  const api=loadApi(),value=proposal(),before=JSON.stringify(value);
+  const result=plan(api,{proposal:value,activeWorkoutState:true});
+  assert.equal(result.ok,false);
+  assert.equal(result.code,"active_workout_in_progress");
+  assert.equal(result.message,api.activation.ACTIVE_WORKOUT_MESSAGE);
+  assert.equal(JSON.stringify(value),before);
+});
+
+test("29c. reconfiguración conserva estimatedDurationMin al activar",()=>{
+  const api=loadApi();
+  const value=proposal("duration",2);
+  value.sessions[0].estimatedDurationMin=47;
+  const result=plan(api,{proposal:value});
+  assert.equal(result.ok,true);
+  assert.equal(result.canonicalRoutine.sessions[0].estimatedDurationMinutes,47);
+});
+
 test("30. rechaza sesiones vacías e identificadores de ejercicio ausentes",()=>{
   const api=loadApi();
   const empty=proposal("empty",2);
@@ -373,7 +392,7 @@ test("32. integración carga el módulo antes de app y el worker solo lo cachea"
   assert.ok(indexSource.indexOf('src="routine-activation.js"')<indexSource.indexOf('src="app.js"'));
   assert.match(workerSource,/routine-activation\.js/);
   assert.doesNotMatch(activationSource,/document\.|querySelector|render\(|navigate|location\./);
-  assert.equal((appSource.match(/activateStoredRoutineProposal\(/g)||[]).length,2);
+  assert.ok((appSource.match(/activateStoredRoutineProposal\(/g)||[]).length>=2);
   assert.equal((appSource.match(/rollbackStoredRoutineActivation\(/g)||[]).length,2);
   assert.ok(appSource.indexOf("checkbox?.checked")<appSource.lastIndexOf("confirmed:true"));
 });

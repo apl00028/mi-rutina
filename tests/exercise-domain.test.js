@@ -197,6 +197,7 @@ test("el merge conserva colisiones heredadas y repetir el backup no duplica",()=
     CANONICAL_DRAFTS_KEY:"gymos:routineDrafts",
     SELECTED_SESSION_ID_KEY:"gymos:selectedSessionId",
     SESSION_MODEL_MIGRATION_KEY:"gymos:sessionModelMigration",
+    draftKey:key=>`gymos:draft:${key}`,
     AUTH_REQUIRED:true,
     assertActiveLocalOwner:value=>String(value).toLowerCase(),
     captureRoutineSessionStartupStorage:()=>localStorage.snapshot(),
@@ -225,6 +226,7 @@ test("el merge conserva colisiones heredadas y repetir el backup no duplica",()=
   vm.runInContext(extractFunction(appSource,"importGymOSBackup"),context);
   const backup={
     app:"GymOS",
+    ownerId,
     storage:{"gymos:exerciseLibrary":JSON.stringify(incoming)}
   };
 
@@ -445,6 +447,6 @@ test("aplicar dos veces el mismo payload conserva igualdad serializada exacta",(
 
 test("el modulo se carga antes de app y queda incluido en la cache PWA",()=>{
   assert.ok(indexSource.indexOf("exercise-domain.js")<indexSource.indexOf("app.js"));
-  assert.match(serviceWorkerSource,/gymos-cache-4\.2\.0-rc\.3/);
+  assert.match(serviceWorkerSource,/gymos-cache-4\.2\.0-routine-hub/);
   assert.match(serviceWorkerSource,/exercise-domain\.js/);
 });

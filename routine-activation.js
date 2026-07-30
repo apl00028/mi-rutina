@@ -4,6 +4,7 @@
   const MODEL_VERSION="4.2.0-alpha.1-phase-h2";
   const MAX_ACTIVATIONS_PER_OWNER=10;
   const ALLOWED_STATUSES=Object.freeze(["activated","rolled_back","rollback_blocked"]);
+  const ACTIVE_WORKOUT_MESSAGE="Tienes un entrenamiento en curso. Podrás activar esta rutina cuando lo finalices o descartes.";
 
   function clone(value){return value===undefined?undefined:JSON.parse(JSON.stringify(value));}
   function text(value){return String(value??"").trim();}
@@ -157,11 +158,17 @@
           sessionModel().deriveSessionLabel(Math.min(index+1,6)),
         name:text(session?.name||session?.label)||`Sesión ${index+1}`,
         focus:text(session?.focus),
-        estimatedDurationMinutes:Number.isInteger(Number(session?.estimatedDurationMinutes))
+        estimatedDurationMinutes:Number.isInteger(Number(session?.estimatedDurationMinutes))&&
+          Number(session.estimatedDurationMinutes)>0
           ?Number(session.estimatedDurationMinutes)
-          :Number.isInteger(Number(session?.estimatedMinutes))
+          :Number.isInteger(Number(session?.estimatedDurationMin))&&
+            Number(session.estimatedDurationMin)>0
+            ?Number(session.estimatedDurationMin)
+          :Number.isInteger(Number(session?.estimatedMinutes))&&
+            Number(session.estimatedMinutes)>0
             ?Number(session.estimatedMinutes)
             :null,
+        notes:text(session?.notes)||null,
         ...(index<3?{legacySessionKey:sessionModel().deriveSessionLabel(index+1)}:{}),
         exercises:list(session?.exercises).map((exercise,exerciseIndex)=>
           mapExercise(exercise,session,exerciseIndex)
@@ -198,11 +205,14 @@
     };
   }
   function validateActivationRequest({
-    ownerId,proposalRecord,currentRoutine,confirmed=false
+    ownerId,proposalRecord,currentRoutine,confirmed=false,activeWorkoutState
   }={}){
     let normalizedOwner;
     try{normalizedOwner=normalizeOwnerId(ownerId);}
     catch(_){return incident("invalid_owner","El propietario no es válido.");}
+    if(activeWorkoutState){
+      return incident("active_workout_in_progress",ACTIVE_WORKOUT_MESSAGE);
+    }
     if(confirmed!==true) return incident("explicit_confirmation_required","La activación requiere confirmación explícita.");
     if(!proposalRecord) return incident("proposal_not_found","La propuesta no existe.");
     if(proposalRecord.ownerId!==normalizedOwner){
@@ -247,10 +257,11 @@
   function createActivationPlan({
     ownerId,proposalRecord,currentRoutine,currentCanonicalRoutine=null,
     selectedSession,selectedSessionId=null,drafts,canonicalDrafts=null,
-    targetRoutineId,sessionIds={},rawBaseline={},confirmed=false,timestamp
+    targetRoutineId,sessionIds={},rawBaseline={},confirmed=false,timestamp,
+    activeWorkoutState
   }={}){
     const validation=validateActivationRequest({
-      ownerId,proposalRecord,currentRoutine,confirmed
+      ownerId,proposalRecord,currentRoutine,confirmed,activeWorkoutState
     });
     if(!validation.ok) return validation;
     const effectiveTimestamp=text(timestamp);
@@ -499,10 +510,15 @@
       activeActivationId:selectActiveActivationId(next,normalizedOwner,record.activationId)
     };
   }
-  function rollbackDecision({ownerId,activationRecord,currentRoutine,currentCanonicalRoutine=null}={}){
+  function rollbackDecision({
+    ownerId,activationRecord,currentRoutine,currentCanonicalRoutine=null,activeWorkoutState
+  }={}){
     let normalizedOwner;
     try{normalizedOwner=normalizeOwnerId(ownerId);}
     catch(_){return incident("invalid_owner","El propietario no es válido.");}
+    if(activeWorkoutState){
+      return incident("active_workout_in_progress",ACTIVE_WORKOUT_MESSAGE);
+    }
     if(!activationRecord) return incident("activation_not_found","La activación no existe.");
     const validation=validateRecord(activationRecord,normalizedOwner);
     if(!validation.valid){
@@ -592,7 +608,7 @@
   }
 
   global.GymOSRoutineActivation=Object.freeze({
-    MODEL_VERSION,MAX_ACTIVATIONS_PER_OWNER,ALLOWED_STATUSES,
+    MODEL_VERSION,MAX_ACTIVATIONS_PER_OWNER,ALLOWED_STATUSES,ACTIVE_WORKOUT_MESSAGE,
     stableStringify,validateProposalSessions,validateActivationRequest,
     mapProposalToRoutine,mapProposalToCanonicalRoutine,activationCompatibilityFields,
     createActivationPlan,validateRecord,

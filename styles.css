@@ -3455,6 +3455,7 @@ body.reduce-motion .active-workout-session-progress span{transition:none}
 .active-workout-screen{
   gap:.75rem;
   width:min(100%,72rem);
+  overflow-x:clip;
   padding:0 clamp(.65rem,2vw,1.25rem) max(8rem,calc(6.5rem + env(safe-area-inset-bottom)));
 }
 .active-workout-context{
@@ -3501,7 +3502,7 @@ body.reduce-motion .active-workout-session-progress span{transition:none}
 .active-workout-session-progress{grid-column:1/-1;height:.25rem}
 .active-workout-summary{
   display:grid;
-  grid-template-columns:minmax(0,2fr) repeat(3,minmax(5rem,1fr));
+  grid-template-columns:minmax(0,1.6fr) repeat(4,minmax(5rem,1fr));
   gap:0;
   overflow:hidden;
   border:1px solid var(--border);
@@ -3679,6 +3680,7 @@ body.reduce-motion .active-workout-session-progress span{transition:none}
   border-radius:.48rem;
   background:var(--surface-soft);
 }
+.active-set-mobile-label{display:none}
 .active-set-complete-mark{color:var(--success);font-size:.7rem}
 .active-set-extra-label{
   padding:.12rem .25rem;
@@ -3797,6 +3799,40 @@ body.reduce-motion .active-workout-session-progress span{transition:none}
   padding:.5rem;
   border-radius:.85rem;
 }
+.active-workout-final-summary{
+  display:grid;
+  gap:.75rem;
+  padding:.9rem;
+  border:1px solid var(--border);
+  border-radius:.9rem;
+  background:var(--surface);
+}
+.active-workout-final-summary h2{margin:.12rem 0 0;font-size:1rem}
+.active-workout-final-summary dl{
+  display:grid;
+  grid-template-columns:repeat(4,minmax(0,1fr));
+  gap:.5rem;
+  margin:0;
+}
+.active-workout-final-summary dl>div{
+  display:grid;
+  gap:.15rem;
+  min-width:0;
+  padding:.55rem .65rem;
+  border-radius:.65rem;
+  background:var(--surface-soft);
+}
+.active-workout-final-summary dt{color:var(--muted);font-size:.62rem;font-weight:750}
+.active-workout-final-summary dd{margin:0;font-size:.8rem;font-weight:850}
+.active-workout-final-summary .active-exercise-navigation{
+  position:static;
+  grid-template-columns:repeat(3,minmax(0,1fr)) auto;
+  padding:0;
+  border:0;
+  box-shadow:none;
+  backdrop-filter:none;
+}
+.active-rest-timer[hidden]{display:none}
 .active-exercise-navigation>button{min-height:2.65rem}
 .workout-reference-modal{width:min(100%,42rem)}
 .active-workout-reference-content{
@@ -3837,7 +3873,7 @@ body.reduce-motion .active-workout-session-progress span{transition:none}
   }
   .active-workout-save-status{grid-column:2;justify-self:start}
   .active-workout-session-progress{grid-row:3}
-  .active-workout-summary{grid-template-columns:minmax(0,1.6fr) repeat(3,minmax(0,1fr))}
+  .active-workout-summary{grid-template-columns:minmax(0,1.4fr) repeat(4,minmax(0,1fr))}
   .active-workout-summary>div{padding:.5rem}
   .active-workout-summary span{font-size:.54rem}
   .active-workout-summary strong{font-size:.66rem}
@@ -3869,6 +3905,7 @@ body.reduce-motion .active-workout-session-progress span{transition:none}
     background:transparent;
   }
   .active-set-card>header{align-self:start;padding-top:1.05rem}
+  .active-set-mobile-label{display:inline}
   .active-set-reference{align-self:start;padding-top:.2rem}
   .active-set-fields{grid-template-columns:repeat(3,minmax(0,1fr))}
   .active-set-warmup{grid-column:3}
@@ -3879,18 +3916,31 @@ body.reduce-motion .active-workout-session-progress span{transition:none}
     grid-template-columns:1fr;
     grid-template-areas:"image" "muscles" "technique";
   }
+  .active-workout-final-summary dl{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .active-workout-final-summary .active-exercise-navigation{
+    grid-template-columns:1fr 1fr;
+  }
+  .active-workout-final-summary .active-exercise-navigation>.active-workout-more{
+    justify-self:end;
+  }
 }
 @media(max-width:430px){
   .active-workout-session-title h1{font-size:.92rem}
   .active-workout-session-clock time{font-size:.9rem}
   .active-workout-session-clock button{font-size:.58rem}
   .active-workout-summary>div:first-child{grid-column:1/-1;border-right:0;border-bottom:1px solid var(--border)}
-  .active-workout-summary{grid-template-columns:repeat(3,minmax(0,1fr))}
+  .active-workout-summary{grid-template-columns:repeat(2,minmax(0,1fr))}
   .workout-exercise-title small{max-width:13rem}
   .workout-exercise-prescription{font-size:.6rem}
   .active-set-card{
-    grid-template-columns:1.6rem minmax(0,1fr) minmax(4.3rem,.55fr);
+    grid-template-columns:3rem minmax(0,1fr) minmax(4.3rem,.55fr);
     grid-template-areas:"number reference actions" "number fields actions" ". warmup actions";
+  }
+  .active-set-card>header strong{
+    width:auto;
+    min-width:2.7rem;
+    padding-inline:.25rem;
+    white-space:nowrap;
   }
   .active-set-card>header{grid-area:number}
   .active-set-reference{grid-area:reference}

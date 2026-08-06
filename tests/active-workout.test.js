@@ -595,7 +595,7 @@ test("abrir un panel no escribe y cerrarlo solo hace flush si hay cambios",()=>{
   assert.match(flushHelper,/requireLocal:true/);
 });
 
-test("completar guarda localmente antes de plegar y avanza de forma suave",()=>{
+test("completar ejercicio guarda localmente y actualiza solo la tarjeta visible",()=>{
   const completeBranch=between(
     bindingSource,
     '}else if(button.matches("[data-complete-active-exercise]"))',
@@ -604,15 +604,8 @@ test("completar guarda localmente antes de plegar y avanza de forma suave",()=>{
   assert.match(completeBranch,/flushWorkoutDraftProgress\(\{[\s\S]*?requireLocal:true/);
   assert.match(completeBranch,/persist\([\s\S]*?completedAt=new Date\(\)\.toISOString/);
   assert.match(completeBranch,/if\(!workoutLocalSaveSucceeded\(\)\) return/);
-  assert.match(completeBranch,/collapseCompletedWorkoutExercise\(exerciseInstanceId\)/);
-  const collapseHelper=between(
-    appSource,
-    "function focusNextPendingWorkoutExercise(",
-    "function renderActiveWorkoutExercise("
-  );
-  assert.match(collapseHelper,/workoutExpandedExercises\.delete/);
-  assert.match(collapseHelper,/scrollIntoView\(\{[\s\S]*?behavior:[\s\S]*?"smooth"/);
-  assert.match(collapseHelper,/data-workout-toggle-exercise[\s\S]*?focus/);
+  assert.match(completeBranch,/updateActiveWorkoutExerciseUi\(exerciseInstanceId,saved\)/);
+  assert.doesNotMatch(completeBranch,/collapseCompletedWorkoutExercise/);
 });
 
 test("fallo remoto permite plegar y fallo local lo impide",()=>{
@@ -819,19 +812,13 @@ test("reducer móvil mantiene un único panel y una única selección efímera",
   assert.equal(ui.selectedSetInstanceId,"set-press-3");
 });
 
-test("renderer móvil es inmersivo, muestra un formulario y mantiene desktop separado",()=>{
-  assert.match(appSource,/data-workout-layout="mobile"/);
-  assert.match(appSource,/if\(activeWorkoutUsesMobileLayout\(\)\)/);
-  assert.match(appSource,/renderMobileWorkout\(/);
-  const mobileSource=between(
-    appSource,"function renderMobileWorkout({","function renderWorkout()"
-  );
-  assert.doesNotMatch(mobileSource,/\$\{nav\("workout"\)\}/);
-  assert.equal((mobileSource.match(/class="mobile-workout-active-set"/g)||[]).length,1);
-  assert.equal((mobileSource.match(/data-set-field="weight"/g)||[]).length,1);
-  assert.match(mobileSource,/mobile-workout-summary-rows/);
+test("renderer móvil reutiliza la lista completa y no activa el wizard separado",()=>{
+  assert.doesNotMatch(renderSource,/if\(activeWorkoutUsesMobileLayout\(\)\)/);
+  assert.doesNotMatch(renderSource,/renderMobileWorkout\(/);
   assert.match(renderSource,/draft\.exercises\.map/);
   assert.match(renderSource,/\$\{nav\("workout"\)\}/);
+  assert.match(renderSource,/active-workout-final-summary/);
+  assert.match(renderSource,/data-workout-completed-sets/);
   assert.match(
     bindingSource,
     /\.active-workout-screen,\.active-workout-mobile-screen/

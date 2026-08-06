@@ -33,10 +33,10 @@ function routine(count=2){
   };
 }
 
-test("hub expone exactamente las siete vistas owner-scoped",()=>{
+test("hub expone las ocho vistas owner-scoped",()=>{
   const api=loadApi();
   assert.deepEqual(JSON.parse(JSON.stringify(api.VIEWS)),[
-    "overview","active","manual","import","reconfigure","proposal","versions"
+    "overview","active","manual","import","share","reconfigure","proposal","versions"
   ]);
 });
 
@@ -68,9 +68,9 @@ test("validación manual mantiene 2–6 y prescripción completa",()=>{
   assert.match(api.validateManual(valid).join(" "),/descanso/);
 });
 
-test("sidebar y Ajustes navegan al mismo routineHub y no al editor directo",()=>{
-  assert.match(appSource,/\["routineHub","routine","Rutina"\]/);
-  assert.match(appSource,/data-nav="routineHub"/);
+test("sidebar navega a Rutinas y Ajustes no duplica el acceso principal",()=>{
+  assert.match(appSource,/\["routineHub","routine","Rutinas"\]/);
+  assert.doesNotMatch(appSource,/class="card routine-workflow-entry"/);
   assert.equal((appSource.match(/function renderRoutineHub\(/g)||[]).length,1);
   assert.doesNotMatch(appSource,/bindScreen\("openRoutineEditor"/);
   assert.doesNotMatch(appSource,/bindScreen\("openRoutineWorkflow"/);

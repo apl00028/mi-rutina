@@ -2,7 +2,7 @@
   "use strict";
 
   const VIEWS=Object.freeze([
-    "overview","active","manual","import","reconfigure","proposal","versions"
+    "overview","active","manual","import","share","reconfigure","proposal","versions"
   ]);
   const RECONFIGURE_REASONS=Object.freeze([
     ["goal","Objetivo"],
@@ -37,7 +37,8 @@
       visualState={
         ownerId,view:"overview",selectedSession:0,manual:null,
         reconfigureReasons:[],reconfigureValues:{},replacementCandidate:null,
-        activationConfirmation:false,restoreFocusSelector:null,message:null,busy:null
+        activationConfirmation:false,restoreFocusSelector:null,message:null,busy:null,
+        importText:"",importAnalysis:null,shareModel:null,shareMarkdown:"",copyFallback:false
       };
     }
     return visualState;
@@ -137,27 +138,29 @@
     const previous=data.previousActivation;
     return `<main class="screen routine-hub-screen" aria-labelledby="routineHubTitle">
       <header class="routine-hub-heading"><div><span class="section-kicker">PLANIFICACIÓN</span>
-        <h1 id="routineHubTitle">Rutina</h1></div>
+        <h1 id="routineHubTitle">Mi rutina</h1></div>
         ${data.activeWorkout?`<span class="routine-hub-workout-state">Entrenamiento en curso</span>`:""}
       </header>
       ${messageHtml()}
       <section class="routine-hub-current" aria-labelledby="routineCurrentTitle">
         <div><span class="section-kicker">RUTINA ACTUAL</span><h2 id="routineCurrentTitle">${esc(summary.name)}</h2>
           <p>${summary.sessionCount} sesiones · ${summary.exerciseCount} ejercicios</p>
-          ${summary.focus?`<span>${esc(summary.focus)}</span>`:""}
+          ${data.routine?.objective||summary.focus?`<span>${esc(data.routine?.objective||summary.focus)}</span>`:""}
+          ${data.routine?.startedAt||data.routine?.createdAt?`<p>Inicio: ${formatDate(data.routine.startedAt||data.routine.createdAt)}</p>`:""}
         </div>
         <div class="routine-hub-primary-actions">
-          <button type="button" class="secondary" data-hub-view="active">Ver rutina</button>
+          <button type="button" class="secondary" data-hub-view="active">Ver rutina completa</button>
           <button type="button" class="primary" data-hub-action="start-manual">Editar</button>
         </div>
       </section>
       <section class="routine-hub-management" aria-labelledby="routineManagementTitle">
         <h2 id="routineManagementTitle">Centro de gestión</h2>
         <div class="routine-hub-action-grid">
-          <button type="button" data-hub-view="import"><strong>Importar</strong><span>Desde Excel</span></button>
+          <button type="button" data-hub-view="import"><strong>Importar nueva rutina</strong><span>Texto, Markdown, JSON o Excel</span></button>
           <button type="button" data-hub-action="template"><strong>Plantilla</strong><span>Descargar Excel</span></button>
           <button type="button" data-hub-action="export"><strong>Exportar</strong><span>Rutina activa</span></button>
-          <button type="button" data-hub-view="reconfigure"><strong>Reconfigurar</strong><span>Adaptar cambios</span></button>
+          <button type="button" data-hub-view="reconfigure"><strong>Crear propuesta de cambio</strong><span>Adaptar la rutina actual</span></button>
+          <button type="button" data-hub-view="share"><strong>Exportar progreso</strong><span>Preparar para ChatGPT</span></button>
         </div>
         <p class="routine-hub-file-note">Este archivo contiene tu planificación. No es una copia de seguridad completa.</p>
       </section>
@@ -295,12 +298,22 @@
   function renderImport(data){
     const current=data.importState;
     const preview=current?.preview;
+    const analysis=visualState.importAnalysis;
     return `<main class="screen routine-hub-screen" aria-labelledby="routineImportTitle">
-      ${subHeader("Importar desde Excel","routineImportTitle")}
-      <p class="routine-hub-intro">Importar prepara una propuesta. Tu rutina actual no cambiará hasta que la actives.</p>
+      <header class="routine-hub-heading"><div><span class="section-kicker">RUTINAS</span><h1 id="routineImportTitle">Importar rutina</h1></div></header>
+      <p class="routine-hub-intro">Pega una rutina preparada por ChatGPT o importa un archivo compatible. Podrás revisarla antes de activarla.</p>
+      ${messageHtml()}
+      <section class="routine-import-text">
+        <label for="routineImportText"><strong>Contenido de la rutina</strong><span>Incluye sesiones, ejercicios y, si los conoces, series, repeticiones, RIR y descanso.</span></label>
+        <textarea id="routineImportText" rows="12" maxlength="100000" spellcheck="false" placeholder="Pega aquí la rutina que te ha preparado ChatGPT…&#10;&#10;Sesión A&#10;- Sentadilla: 3 × 8, RIR 2, descanso 120 s">${esc(visualState.importText)}</textarea>
+        <div class="routine-import-actions"><button type="button" class="secondary" data-hub-action="save-text-draft">Guardar como borrador</button><button type="button" class="primary" data-hub-action="analyze-text">Analizar rutina</button></div>
+      </section>
+      <section class="routine-hub-progress" aria-label="Progreso de la rutina"><div><span class="section-kicker">PROGRESO</span><strong>${data.progress?.adherence?.completed||0} sesiones realizadas</strong></div><div><span>Última sesión</span><strong>${data.progress?.workouts?.length?formatDate(data.progress.workouts[data.progress.workouts.length-1].date):"Aún no registrada"}</strong></div><div><span>Próxima sesión sugerida</span><strong>${esc(data.nextSessionLabel||"Sin sugerencia")}</strong></div><div><span>Estado</span><strong>${data.activeWorkout?"Entrenamiento en curso":"Rutina activa"}</strong></div></section>
+      ${analysis?renderTextImportPreview(analysis):""}
+      ${analysis?.canPropose?`<footer class="routine-hub-sticky-actions"><button type="button" class="secondary" data-hub-action="edit-text-import">Volver a editar</button><button type="button" class="secondary" data-hub-action="create-text-proposal">Crear propuesta</button><button type="button" class="primary" data-hub-action="review-text-proposal">Revisar y activar</button></footer>`:""}
       <section class="routine-import-drop">
-        <h2>Archivo XLSX de GymOS</h2>
-        <p>Utiliza la plantilla actual para conservar sesiones, prescripción, RIR, descanso y notas.</p>
+        <h2>O importar un archivo seguro</h2>
+        <p>También puedes usar la plantilla XLSX local de GymOS.</p>
         <div><button type="button" class="secondary" data-hub-action="template">Descargar plantilla</button>
           <button type="button" class="primary" data-hub-action="choose-file" ${current?.status==="reading"?"disabled":""}>${current?.status==="reading"?"Validando…":"Seleccionar Excel"}</button></div>
       </section>
@@ -310,6 +323,28 @@
         <button type="button" class="primary" data-hub-action="save-import">Guardar como propuesta</button></footer>`:""}
       ${replacementHtml()}
     </main>`;
+  }
+  function renderTextImportPreview(result){
+    const routine=result.parsed;
+    const issues=[...list(result.errors),...list(result.warnings)];
+    const ambiguous=[];
+    list(routine?.sessions).forEach((session,sessionIndex)=>list(session.exercises).forEach((exercise,exerciseIndex)=>{
+      if(exercise.matchStatus==="ambiguous") ambiguous.push({sessionIndex,exerciseIndex,exercise});
+    }));
+    return `<section class="routine-import-preview" aria-live="polite"><header><div><span class="section-kicker">VISTA PREVIA</span><h2>${esc(routine?.name||"Rutina importada")}</h2></div><strong>${list(routine?.sessions).length} sesiones</strong></header>
+      ${issues.length?`<ul class="routine-import-warning-list">${issues.map(item=>`<li>${esc(item.message||item)}</li>`).join("")}</ul>`:""}
+      ${ambiguous.length?`<div class="routine-import-matches"><h3>Ejercicios pendientes de identificar</h3>${ambiguous.map(item=>`<label>${esc(item.exercise.importedName)}<select data-import-match="${item.sessionIndex}:${item.exerciseIndex}"><option value="">Mantener el nombre importado</option>${list(item.exercise.candidates).map(candidate=>`<option value="${esc(candidate.id)}">${esc(candidate.name)}</option>`).join("")}</select></label>`).join("")}</div>`:""}
+      <div class="routine-import-full-preview">${list(routine?.sessions).map((session,index)=>renderSessionDetail(session,index,{compact:true})).join("")}</div>
+      <p class="routine-hub-file-note">Los nombres se enlazan con la biblioteca solo cuando existe una coincidencia única. Las coincidencias ambiguas permanecen señaladas para revisión.</p></section>`;
+  }
+  function shareOptionsHtml(){
+    return `<form id="routineShareForm" class="routine-share-form"><fieldset><legend>Periodo</legend><select name="period"><option value="week">Última semana</option><option value="two_weeks" selected>Últimas 2 semanas</option><option value="month">Último mes</option><option value="routine">Desde el inicio de la rutina</option><option value="custom">Personalizado</option></select><div class="routine-share-custom"><label>Desde<input type="date" name="customStart"></label><label>Hasta<input type="date" name="customEnd"></label></div></fieldset>
+      <fieldset><legend>Privacidad y detalle</legend><label><input type="checkbox" name="includeLoads" checked> Cargas y repeticiones</label><label><input type="checkbox" name="includeDuration" checked> Duración</label><label><input type="checkbox" name="includeNotes" checked> Notas</label><label><input type="checkbox" name="includeDiscomfort" checked> Molestias</label><label><input type="checkbox" name="includeRecovery"> Recuperación</label><label><input type="checkbox" name="includeMissed" checked> Sesiones no realizadas</label></fieldset>
+      <fieldset><legend>Preguntas para ChatGPT</legend><label><input type="checkbox" name="questions" value="¿Cómo ha evolucionado mi rendimiento?"> Evolución del rendimiento</label><label><input type="checkbox" name="questions" value="¿Qué patrones observas en mi adherencia?"> Patrones de adherencia</label><label><input type="checkbox" name="questions" value="¿Qué debería revisar con mi entrenador?"> Temas para revisar</label><label for="routineShareQuestion">Otra pregunta</label><textarea id="routineShareQuestion" name="customQuestion" rows="2" maxlength="500"></textarea></fieldset><button type="submit" class="primary">Generar vista previa</button></form>`;
+  }
+  function renderShare(){
+    return `<main class="screen routine-hub-screen" aria-labelledby="routineShareTitle"><header class="routine-hub-heading"><div><span class="section-kicker">RUTINAS</span><h1 id="routineShareTitle">Compartir progreso</h1></div></header><p class="routine-hub-intro">Prepara un resumen de tus entrenamientos para revisarlo con ChatGPT o con tu entrenador. GymOS no inventará recomendaciones.</p>${messageHtml()}${shareOptionsHtml()}
+      ${visualState.shareModel?.secondWeekComplete?`<p class="routine-hub-message success" role="status">Has completado tu segunda semana. Ya puedes preparar una revisión de progreso.</p>`:""}${visualState.shareMarkdown?`<section class="routine-share-preview"><h2>Vista previa para ChatGPT</h2><textarea readonly rows="18" id="routineSharePreview">${esc(visualState.shareMarkdown)}</textarea><div><button type="button" class="primary" data-hub-action="copy-progress">Copiar para ChatGPT</button><button type="button" class="secondary" data-hub-action="download-progress-md">Descargar Markdown</button><button type="button" class="secondary" data-hub-action="download-progress-json">Descargar datos estructurados</button></div>${visualState.copyFallback?`<p role="status">No se pudo copiar automáticamente. Selecciona el texto de la vista previa y cópialo manualmente.</p>`:""}</section>`:""}</main>`;
   }
   function issueLocation(item){
     const value=item?.location||{};
@@ -576,7 +611,21 @@
     visualState.message={type:"success",text:"Propuesta guardada. La rutina actual no ha cambiado."};
     refresh();
   }
+  function primaryTabs(){
+    const selected=visualState.view==="import"?"import":visualState.view==="share"?"share":"overview";
+    return `<nav class="routines-primary-tabs" role="tablist" aria-label="Secciones de Rutinas">${[["overview","Mi rutina"],["import","Importar"],["share","Compartir progreso"]].map(([view,label])=>`<button type="button" role="tab" aria-selected="${selected===view}" tabindex="${selected===view?0:-1}" data-routines-section="${view}">${label}</button>`).join("")}</nav>`;
+  }
   function bind(data,actions){
+    const primary=[...document.querySelectorAll("[data-routines-section]")];
+    primary.forEach((button,index)=>{
+      button.onclick=()=>setView(button.dataset.routinesSection);
+      button.onkeydown=event=>{
+        if(!["ArrowLeft","ArrowRight","Home","End"].includes(event.key)) return;
+        event.preventDefault();
+        const next=event.key==="Home"?0:event.key==="End"?primary.length-1:(index+(event.key==="ArrowRight"?1:-1)+primary.length)%primary.length;
+        primary[next]?.click();
+      };
+    });
     document.querySelectorAll("[data-hub-view]").forEach(button=>button.onclick=()=>{
       if(visualState.view==="manual") captureManual();
       setView(button.dataset.hubView);
@@ -615,6 +664,36 @@
       catch(error){visualState.message={type:"error",text:error?.message||"No se pudo exportar la rutina."};refresh();}
     });
     action("choose-file")?.addEventListener("click",()=>actions.chooseFile());
+    const importText=document.getElementById("routineImportText");
+    importText?.addEventListener("input",()=>{visualState.importText=importText.value;});
+    action("analyze-text")?.addEventListener("click",()=>{
+      visualState.importText=importText?.value||"";
+      visualState.importAnalysis=actions.analyzeText(visualState.importText);
+      visualState.message=visualState.importAnalysis?.errors?.length?{type:"error",text:"Revisa los errores antes de crear una propuesta."}:null;
+      refresh();
+    });
+    action("edit-text-import")?.addEventListener("click",()=>{visualState.importAnalysis=null;refresh();});
+    action("save-text-draft")?.addEventListener("click",()=>{
+      visualState.importText=importText?.value||"";actions.saveTextDraft(visualState.importText);
+      visualState.message={type:"success",text:"Borrador guardado solo en este dispositivo y para esta cuenta."};refresh();
+    });
+    const submitTextImport=async()=>{
+      const candidate=actions.textImportCandidate(visualState.importAnalysis);
+      if(candidate) await submitCandidate(candidate);
+    };
+    action("create-text-proposal")?.addEventListener("click",submitTextImport);
+    action("review-text-proposal")?.addEventListener("click",submitTextImport);
+    document.querySelectorAll("[data-import-match]").forEach(select=>select.onchange=()=>{
+      const [sessionIndex,exerciseIndex]=select.dataset.importMatch.split(":").map(Number);
+      const exercise=visualState.importAnalysis?.parsed?.sessions?.[sessionIndex]?.exercises?.[exerciseIndex];
+      if(!exercise) return;
+      const match=list(exercise.candidates).find(item=>item.id===select.value);
+      exercise.exerciseId=match?.id||exercise.exerciseId;
+      exercise.name=match?.name||exercise.importedName;
+      exercise.matchStatus=match?"matched":"unmatched";
+      visualState.importAnalysis=actions.validateTextImport(visualState.importAnalysis);
+      refresh();
+    });
     action("save-import")?.addEventListener("click",async()=>{
       if(visualState.busy) return;
       visualState.busy="preparing_import";refresh();
@@ -779,18 +858,35 @@
       visualState.busy=null;
       refresh();
     });
+    document.getElementById("routineShareForm")?.addEventListener("submit",event=>{
+      event.preventDefault();
+      const fields=new FormData(event.currentTarget);
+      const options={period:fields.get("period"),customStart:fields.get("customStart"),customEnd:fields.get("customEnd"),customQuestion:fields.get("customQuestion"),questions:fields.getAll("questions")};
+      ["includeLoads","includeDuration","includeNotes","includeDiscomfort","includeRecovery","includeMissed"].forEach(key=>{options[key]=fields.has(key);});
+      const result=actions.buildProgress(options);
+      visualState.shareModel=result.model;visualState.shareMarkdown=result.markdown;visualState.copyFallback=false;refresh();
+    });
+    action("copy-progress")?.addEventListener("click",async()=>{
+      const copied=await actions.copyProgress(visualState.shareMarkdown);
+      visualState.copyFallback=!copied;
+      visualState.message=copied?{type:"success",text:"Progreso copiado. Ya puedes pegarlo en ChatGPT."}:null;refresh();
+    });
+    action("download-progress-md")?.addEventListener("click",()=>actions.downloadProgressMarkdown(visualState.shareMarkdown));
+    action("download-progress-json")?.addEventListener("click",()=>actions.downloadProgressJson(visualState.shareModel));
   }
   function render(options){
     currentOptions=options;
     const data=options.data;
     ensureState(data.ownerId);
+    if(!visualState.importText) visualState.importText=options.actions.loadTextDraft?.()||"";
     const renderers={
       overview:renderOverview,active:renderActive,manual:renderManual,
-      import:renderImport,reconfigure:renderReconfigure,proposal:renderProposal,
+      import:renderImport,share:renderShare,reconfigure:renderReconfigure,proposal:renderProposal,
       versions:renderVersions
     };
     options.root.innerHTML=`<div class="app-shell routine-hub-shell" aria-busy="${visualState.busy?"true":"false"}">
-      <header class="topbar routine-hub-topbar"><div><div class="brand">Rutina</div><div class="subtle">Planificación y cambios bajo tu control</div></div></header>
+      <header class="topbar routine-hub-topbar"><div><div class="brand">Rutinas</div><div class="subtle">Planificación y progreso bajo tu control</div></div></header>
+      ${primaryTabs()}
       ${renderers[visualState.view](data)}
       ${options.navigation||""}
     </div>`;
@@ -833,7 +929,8 @@
   function reset(ownerId=null){
     visualState=ownerId?{ownerId,view:"overview",selectedSession:0,manual:null,
       reconfigureReasons:[],reconfigureValues:{},replacementCandidate:null,activationConfirmation:false,
-      restoreFocusSelector:null,message:null,busy:null}:null;
+      restoreFocusSelector:null,message:null,busy:null,importText:"",importAnalysis:null,
+      shareModel:null,shareMarkdown:"",copyFallback:false}:null;
   }
 
   global.GymOSRoutineHub=Object.freeze({

@@ -7350,10 +7350,10 @@ const NAVIGATION_GROUPS=[
     ["home","home","Inicio"],["workout","dumbbell","Entrenar"],["recovery","recovery","Recuperación"]
   ]},
   {label:"Seguimiento",items:[
-    ["progressDashboard","progress","Progreso"],["coach","coach","Coach"],["nutrition","nutrition","Nutrición"]
+    ["progressDashboard","progress","Progreso"],["routineHub","routine","Rutinas"],["coach","coach","Coach"],["nutrition","nutrition","Nutrición"]
   ]},
   {label:"Planificación",items:[
-    ["routineHub","routine","Rutina"],["exerciseLibrary","library","Biblioteca"]
+    ["exerciseLibrary","library","Biblioteca"]
   ]}
 ];
 const NAVIGATION_FOOTER_ITEMS=[
@@ -16319,6 +16319,34 @@ function routineHubReconfigureCandidate(values){
     ]
   });
 }
+function routineImportDraftKey(ownerId){
+  return `gymos:routine-import-draft:${encodeURIComponent(String(ownerId||""))}`;
+}
+function routineHubLoadTextDraft(ownerId){
+  if(currentRoutineOwnerOrNull()!==ownerId) return "";
+  return localStorage.getItem(routineImportDraftKey(ownerId))||"";
+}
+function routineHubSaveTextDraft(ownerId,value){
+  if(currentRoutineOwnerOrNull()!==ownerId) throw new Error("La cuenta activa ha cambiado.");
+  localStorage.setItem(routineImportDraftKey(ownerId),String(value||"").slice(0,100000));
+}
+function routineHubTextImportCandidate(result){
+  if(!result?.canPropose||!result.parsed) throw new Error("Revisa la vista previa antes de crear la propuesta.");
+  const api=window.GymOSRoutinesExperience;
+  return routineHubBuildCandidate("import",api.proposalSessionsFromImport(result.parsed),{
+    source:{type:"import",format:result.format},
+    warnings:(result.warnings||[]).map(item=>item.message||String(item)),
+    unresolvedQuestions:(result.warnings||[]).filter(item=>["sets_missing","target_missing","exercise_ambiguous"].includes(item.code)).map(item=>item.message),
+    rationale:["Rutina importada y revisada como propuesta pendiente."]
+  });
+}
+function routineHubProgressExport(ownerId,routine,options){
+  const api=window.GymOSRoutinesExperience;
+  const model=api.buildProgressExportViewModel({
+    ownerId,routine,history:getHistory(),recovery:window.GymOSRecovery?.getEntries?.()||[],options
+  });
+  return {model,markdown:api.buildChatGPTMarkdown(model)};
+}
 function renderRoutineHub(){
   if(!window.GymOSRoutineHub) throw new Error("El Centro de Rutina no está disponible.");
   const ownerId=routineWorkflowOwnerId();
@@ -16335,6 +16363,8 @@ function renderRoutineHub(){
     pending:routineHubPendingRecord(ownerId),
     previousActivation:routineHubPreviousActivation(ownerId),
     activeWorkout:routineOwnerHasActiveWorkout(ownerId),
+    progress:routineHubProgressExport(ownerId,routine,{period:"routine",includeRecovery:false}).model,
+    nextSessionLabel:nextSuggestedSession(),
     importState:state.routineImport,
     library:getExerciseLibrary(),
     profile:window.GymOSProfileData.getUserProfile()||{},
@@ -16348,6 +16378,24 @@ function renderRoutineHub(){
       downloadTemplate:()=>downloadOfficialRoutineTemplate("xlsx"),
       exportRoutine:()=>exportCurrentRoutineFile("xlsx",ownerId),
       chooseFile:()=>routineFile.click(),
+      loadTextDraft:()=>routineHubLoadTextDraft(ownerId),
+      saveTextDraft:value=>routineHubSaveTextDraft(ownerId,value),
+      analyzeText:value=>window.GymOSRoutinesExperience.parseRoutineImport(value,{library:getExerciseLibrary()}),
+      validateTextImport:result=>{
+        const validation=window.GymOSRoutinesExperience.validateRoutineImport(result.parsed,{forActivation:true});
+        return {...result,...validation,status:validation.valid?(validation.warnings.length?"warning":"valid"):"invalid"};
+      },
+      textImportCandidate:routineHubTextImportCandidate,
+      buildProgress:options=>routineHubProgressExport(ownerId,routine,options),
+      copyProgress:async value=>{
+        try{await navigator.clipboard.writeText(String(value||""));return true;}
+        catch(_){return false;}
+      },
+      downloadProgressMarkdown:value=>downloadRoutineFile(value,"progreso-gymos.md","text/markdown;charset=utf-8"),
+      downloadProgressJson:model=>downloadRoutineFile(
+        JSON.stringify(window.GymOSRoutinesExperience.buildStructuredProgressExport(model),null,2),
+        "progreso-gymos.json","application/json;charset=utf-8"
+      ),
       importProposal:async()=>routineHubImportCandidate(),
       buildCandidate:routineHubBuildCandidate,
       reconfigure:async values=>routineHubReconfigureCandidate(values),
@@ -17105,7 +17153,7 @@ function organizeSettingsScreen(main){
       id:"routine-planning",title:"Rutina y planificación",
       description:"Revisa tu objetivo, planificación y biblioteca de ejercicios.",
       cards:[
-        cardFor(".onboarding-profile-card"),cardFor(".routine-workflow-entry"),
+        cardFor(".onboarding-profile-card"),
         cardFor("#openProgressDashboard"),cardFor("#openFavoriteExercises"),
         cardFor("#openSubstitutionHistory"),cardFor("#openExerciseLibrary"),
         cardFor("#openGlobalAnalytics"),cardFor("#openBlocksSettings")
@@ -17189,13 +17237,6 @@ function renderSettings(){
           <span class="mode-pill">${onboardingCompleted()?"Configurado":"Pendiente"}</span>
         </div>
         <button id="openOnboarding" class="primary full">${onboardingCompleted()?"Editar perfil de entrenamiento":"Configurar mi perfil"}</button>
-      </section>
-
-      <section class="card routine-workflow-entry">
-        <button type="button" class="settings-route-row" data-nav="routineHub">
-          <span><strong>Rutina</strong><small>Gestionar, importar, exportar o reconfigurar</small></span>
-          <span aria-hidden="true">›</span>
-        </button>
       </section>
 
       <section class="card ai-settings-entry">

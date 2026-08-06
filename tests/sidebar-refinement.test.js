@@ -38,14 +38,14 @@ test("sidebar: contiene ocho destinos en el orden definitivo",()=>{
   const {groups}=navigationConfiguration();
   assert.deepEqual(
     groups.flatMap(group=>group.items.map(item=>item[2])),
-    ["Inicio","Entrenar","Recuperación","Progreso","Coach","Nutrición","Rutina","Biblioteca"]
+    ["Inicio","Entrenar","Recuperación","Progreso","Rutinas","Coach","Nutrición","Biblioteca"]
   );
 });
 
 test("sidebar: utiliza exactamente tres grupos lógicos",()=>{
   const {groups}=navigationConfiguration();
   assert.deepEqual(groups.map(group=>group.label),["Entrenamiento","Seguimiento","Planificación"]);
-  assert.deepEqual(groups.map(group=>group.items.length),[3,3,2]);
+  assert.deepEqual(groups.map(group=>group.items.length),[3,4,1]);
 });
 
 test("sidebar: Recuperación conserva el destino interno sin mostrar el nombre inglés",()=>{
@@ -60,7 +60,7 @@ test("sidebar: cada destino usa un icono SVG semántico local",()=>{
   const {groups,footer}=navigationConfiguration();
   assert.deepEqual(
     [...groups.flatMap(group=>group.items),...footer].map(item=>item[1]),
-    ["home","dumbbell","recovery","progress","coach","nutrition","routine","library","settings"]
+    ["home","dumbbell","recovery","progress","routine","coach","nutrition","library","settings"]
   );
   const icons=between("const NAVIGATION_ICON_PATHS=","function navigationIcon(");
   for(const key of [

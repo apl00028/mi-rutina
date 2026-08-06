@@ -5143,6 +5143,9 @@ body.reduce-motion .active-workout-shell[data-workout-layout="mobile"] *{
 .settings-route-row span:last-child{font-size:1.7rem;color:var(--muted)}
 .routine-hub-shell{min-height:100vh}
 .routine-hub-screen{width:min(1180px,100%);margin:0 auto;padding-bottom:110px}
+.routines-primary-tabs{width:min(1180px,calc(100% - 28px));margin:0 auto 24px;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));border-bottom:1px solid var(--border)}
+.routines-primary-tabs button{min-height:48px;padding:8px 12px;border:0;border-bottom:3px solid transparent;background:transparent;color:var(--muted);font-weight:800}
+.routines-primary-tabs button[aria-selected="true"]{border-bottom-color:var(--brand);color:var(--text)}
 .routine-hub-heading,.routine-hub-subheader,.routine-hub-current,.routine-hub-notice,.routine-import-preview>header,.routine-proposal-summary{display:flex;align-items:center;justify-content:space-between;gap:20px}
 .routine-hub-heading{margin-bottom:22px}
 .routine-hub-heading h1,.routine-hub-subheader h1{margin:3px 0 0;font-size:1.75rem;letter-spacing:0}
@@ -5151,6 +5154,8 @@ body.reduce-motion .active-workout-shell[data-workout-layout="mobile"] *{
 .routine-hub-current h2{margin:5px 0;font-size:1.35rem}
 .routine-hub-current p,.routine-hub-current span{color:var(--muted)}
 .routine-hub-primary-actions{display:flex;gap:10px;flex:0 0 auto}
+.routine-hub-progress{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;padding:18px 0;border-bottom:1px solid var(--border)}
+.routine-hub-progress>div{display:grid;gap:4px}.routine-hub-progress span{color:var(--muted);font-size:.8rem}.routine-hub-progress strong{font-size:.92rem}
 .routine-hub-management{padding:24px 0}
 .routine-hub-management>h2{font-size:1rem;margin:0 0 14px}
 .routine-hub-action-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
@@ -5200,6 +5205,16 @@ body.reduce-motion .active-workout-shell[data-workout-layout="mobile"] *{
 .routine-import-drop h2{margin:0 0 6px;font-size:1.1rem}
 .routine-import-drop p{color:var(--muted)}
 .routine-import-drop>div{display:flex;justify-content:center;gap:10px}
+.routine-import-text,.routine-share-preview{display:grid;gap:12px;padding:20px;border:1px solid var(--border);border-radius:8px;background:var(--card);margin-bottom:20px}
+.routine-import-text label{display:grid;gap:4px}.routine-import-text label span{color:var(--muted);font-size:.86rem}
+.routine-import-text textarea,.routine-share-preview textarea,.routine-share-form textarea{width:100%;resize:vertical}
+.routine-import-actions,.routine-share-preview>div{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:10px}
+.routine-import-full-preview{display:grid;gap:14px}
+.routine-share-form{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;margin-bottom:22px}
+.routine-share-form fieldset{display:grid;align-content:start;gap:9px;margin:0;padding:16px;border:1px solid var(--border);border-radius:8px}
+.routine-share-form legend{padding:0 5px;font-weight:850}.routine-share-form label{display:flex;align-items:center;gap:8px}.routine-share-form input[type="checkbox"]{width:auto}
+.routine-share-form select,.routine-share-form input[type="date"]{width:100%}.routine-share-custom{display:grid;grid-template-columns:1fr 1fr;gap:8px}.routine-share-custom label{display:grid;gap:4px}
+.routine-share-form>button{grid-column:1/-1;justify-self:end}.routine-share-preview h2{margin:0}
 .routine-import-preview{padding:22px 0}
 .routine-import-preview h2{margin:3px 0}
 .routine-import-error-list,.routine-import-warning-list{display:grid;gap:8px;padding:0;list-style:none}
@@ -5239,9 +5254,11 @@ body.reduce-motion .active-workout-shell[data-workout-layout="mobile"] *{
 @media(max-width:767px){
   .routine-hub-screen{padding-inline:14px;padding-bottom:100px}
   .routine-hub-topbar{padding-inline:14px}
+  .routines-primary-tabs{width:calc(100% - 28px);margin-bottom:18px}.routines-primary-tabs button{padding-inline:4px;font-size:.82rem;white-space:normal}
   .routine-hub-heading{align-items:flex-start}
   .routine-hub-heading h1{font-size:1.55rem}
   .routine-hub-current{display:grid;gap:14px}
+  .routine-hub-progress{grid-template-columns:repeat(2,minmax(0,1fr))}
   .routine-hub-primary-actions{width:100%}
   .routine-hub-primary-actions button{flex:1;min-height:44px}
   .routine-hub-action-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
@@ -5258,6 +5275,7 @@ body.reduce-motion .active-workout-shell[data-workout-layout="mobile"] *{
   .routine-manual-grid,.routine-manual-exercise .routine-manual-grid,.routine-reconfigure-fields{grid-template-columns:repeat(2,minmax(0,1fr))}
   .routine-reason-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
   .routine-import-session-preview{grid-template-columns:1fr}
+  .routine-share-form{grid-template-columns:1fr}.routine-share-form>button{width:100%}.routine-import-actions>*{flex:1}.routine-share-preview>div>*{width:100%}
   .routine-comparison{grid-template-columns:1fr;gap:8px}
   .routine-comparison>div>h2{position:static}
   .routine-hub-sticky-actions{margin-inline:-14px;padding-inline:14px;overflow-x:auto;justify-content:flex-start}

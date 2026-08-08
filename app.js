@@ -9983,7 +9983,7 @@ function renderActiveWorkoutUnresolved(resolution,exercise,key){
     ${candidates}
   </section>`;
 }
-function renderActiveWorkoutSet(row,exerciseIndex,sessionId,nextPendingIndex){
+function renderActiveWorkoutSet(row,exerciseIndex,sessionId){
   const previous=row.previous
     ?row.timed
       ?row.previous.seconds?`${esc(String(row.previous.seconds))} s`:"—"
@@ -9991,28 +9991,39 @@ function renderActiveWorkoutSet(row,exerciseIndex,sessionId,nextPendingIndex){
         ?`${esc(String(row.previous.weight||"—"))} kg × ${esc(String(row.previous.reps||"—"))}`
         :"—"
     :"—";
-  return `<article class="active-set-card ${row.done?"completed":row.index===nextPendingIndex?"next":""}" data-active-set="${row.index}" data-set-instance-id="${esc(row.setInstanceId||"")}">
-    <header><strong><span class="active-set-mobile-label">Serie </span>${row.number}</strong>${row.planned?"":'<span class="active-set-extra-label">Extra</span>'}<span class="active-set-complete-mark" aria-label="Serie completada" ${row.done?"":"hidden"}>✓</span></header>
-    <div class="active-set-reference"><span><small>Anterior</small><strong>${previous}</strong></span><span><small>Objetivo</small><strong>${esc(row.target||"Sin definir")}</strong></span></div>
-    <div class="active-set-fields">
-      ${row.timed
-        ?`<div class="active-set-stopwatch">
-            <span>Tiempo</span>
-            <strong data-exercise-timer-display="${esc(exerciseTimerKey(sessionId,exerciseIndex,row.index))}">${formatExerciseTimer(currentExerciseTimerMs(getExerciseTimer(sessionId,exerciseIndex,row.index)))}</strong>
-            <div><button type="button" data-active-timer-start="${row.index}" ${row.done?"disabled":""}>Iniciar</button><button type="button" data-active-timer-stop="${row.index}" ${row.done?"disabled":""}>Parar</button><button type="button" data-active-timer-reset="${row.index}" aria-label="Reiniciar cronómetro" ${row.done?"disabled":""}>↺</button></div>
-          </div>
-          <label><span>Duración <small>(segundos)</small></span><input inputmode="numeric" data-set-field="seconds" data-set-index="${row.index}" value="${esc(String(row.seconds))}" ${row.done?"disabled":""}></label>`
-        :`<label><span>Peso <small>(kg)</small></span><input inputmode="decimal" data-set-field="weight" data-set-index="${row.index}" value="${esc(String(row.weight))}" ${row.done?"disabled":""}></label>
-          <label><span>Repeticiones</span><input inputmode="numeric" data-set-field="reps" data-set-index="${row.index}" value="${esc(String(row.reps))}" ${row.done?"disabled":""}></label>`}
-      <label><span>RIR</span><select data-set-field="rir" data-set-index="${row.index}" ${row.done?"disabled":""}>
-        <option value="" ${row.rir===""?"selected":""}>—</option>
-        ${[0,1,2,3,4,5].map(value=>`<option value="${value}" ${String(row.rir)===String(value)?"selected":""}>${value}</option>`).join("")}
-      </select></label>
-    </div>
-    <label class="active-set-warmup" title="Serie de calentamiento"><input type="checkbox" data-set-warmup="${row.index}" ${row.warmup?"checked":""} ${row.done?"disabled":""}><span>Calentamiento</span></label>
-    <div class="active-set-actions">
-      <button type="button" class="${row.done?"secondary":"primary"}" data-complete-active-set="${row.index}" aria-pressed="${row.done}" aria-label="${row.done?`Corregir serie ${row.number}`:`Completar serie ${row.number}`}">${row.done?"Corregir":"Completar"}</button>
-      ${row.canDelete?`<button type="button" class="text-button" data-delete-active-set="${row.index}" aria-label="Eliminar serie ${row.number}">Eliminar</button>`:""}
+  const contentId=`activeSetContent${exerciseIndex}-${row.index}`;
+  return `<article class="active-set-card ${row.done?"completed":""}" data-active-set="${row.index}" data-set-instance-id="${esc(row.setInstanceId||"")}">
+    <header>
+      <button type="button" class="active-set-toggle" data-workout-toggle-set aria-expanded="false" aria-controls="${esc(contentId)}">
+        <span><span class="active-set-mobile-label">Serie </span>${row.number}</span>
+        <span>
+          ${row.planned?"":'<span class="active-set-extra-label">Extra</span>'}
+          <span class="active-set-complete-mark" aria-label="Serie completada" ${row.done?"":"hidden"}>✓</span>
+        </span>
+      </button>
+    </header>
+    <div id="${esc(contentId)}" class="active-set-content" hidden>
+      <div class="active-set-reference"><span><small>Anterior</small><strong>${previous}</strong></span><span><small>Objetivo</small><strong>${esc(row.target||"Sin definir")}</strong></span></div>
+      <div class="active-set-fields">
+        ${row.timed
+          ?`<div class="active-set-stopwatch">
+              <span>Tiempo</span>
+              <strong data-exercise-timer-display="${esc(exerciseTimerKey(sessionId,exerciseIndex,row.index))}">${formatExerciseTimer(currentExerciseTimerMs(getExerciseTimer(sessionId,exerciseIndex,row.index)))}</strong>
+              <div><button type="button" data-active-timer-start="${row.index}" ${row.done?"disabled":""}>Iniciar</button><button type="button" data-active-timer-stop="${row.index}" ${row.done?"disabled":""}>Parar</button><button type="button" data-active-timer-reset="${row.index}" aria-label="Reiniciar cronómetro" ${row.done?"disabled":""}>↺</button></div>
+            </div>
+            <label><span>Duración <small>(segundos)</small></span><input inputmode="numeric" data-set-field="seconds" data-set-index="${row.index}" value="${esc(String(row.seconds))}" ${row.done?"disabled":""}></label>`
+          :`<label><span>Peso <small>(kg)</small></span><input inputmode="decimal" data-set-field="weight" data-set-index="${row.index}" value="${esc(String(row.weight))}" ${row.done?"disabled":""}></label>
+            <label><span>Repeticiones</span><input inputmode="numeric" data-set-field="reps" data-set-index="${row.index}" value="${esc(String(row.reps))}" ${row.done?"disabled":""}></label>`}
+        <label><span>RIR</span><select data-set-field="rir" data-set-index="${row.index}" ${row.done?"disabled":""}>
+          <option value="" ${row.rir===""?"selected":""}>—</option>
+          ${[0,1,2,3,4,5].map(value=>`<option value="${value}" ${String(row.rir)===String(value)?"selected":""}>${value}</option>`).join("")}
+        </select></label>
+      </div>
+      <label class="active-set-warmup" title="Serie de calentamiento"><input type="checkbox" data-set-warmup="${row.index}" ${row.warmup?"checked":""} ${row.done?"disabled":""}><span>Calentamiento</span></label>
+      <div class="active-set-actions">
+        <button type="button" class="${row.done?"secondary":"primary"}" data-complete-active-set="${row.index}" aria-pressed="${row.done}" aria-label="${row.done?`Corregir serie ${row.number}`:`Completar serie ${row.number}`}">${row.done?"Corregir":"Completar"}</button>
+        ${row.canDelete?`<button type="button" class="text-button" data-delete-active-set="${row.index}" aria-label="Eliminar serie ${row.number}">Eliminar</button>`:""}
+      </div>
     </div>
   </article>`;
 }
@@ -10127,7 +10138,6 @@ function renderActiveWorkoutExercise({
     set,index:setIndex,previous:previous?.series?.[setIndex]||null,
     target:exercise.target,timed
   }));
-  const nextPendingIndex=rows.find(row=>!row.done)?.index??-1;
   const status=activeWorkoutExerciseStatus(exercise);
   const seriesSummary=api.setSeriesSummaryModel({
     series:exercise.series,plannedSets:exercise.sets
@@ -10179,7 +10189,7 @@ function renderActiveWorkoutExercise({
       <section class="active-workout-sets" aria-labelledby="activeWorkoutSetsTitle${index}">
         <div class="active-workout-section-heading"><h2 id="activeWorkoutSetsTitle${index}">Series <small>${esc(seriesSummary.label)}</small></h2><button type="button" class="text-button add-extra-set-header" data-add-extra-set>+ Añadir serie</button></div>
         <div class="active-set-desktop-head" aria-hidden="true"><span>#</span><span>Anterior / objetivo</span><span>Registro</span><span>Acciones</span></div>
-        ${rows.map(row=>renderActiveWorkoutSet(row,index,sessionId,nextPendingIndex)).join("")}
+        ${rows.map(row=>renderActiveWorkoutSet(row,index,sessionId)).join("")}
         <button type="button" class="text-button add-extra-set-footer" data-add-extra-set>+ Serie extra</button>
       </section>
       <div class="workout-exercise-details">
@@ -10796,14 +10806,6 @@ function renderWorkout(){
     state.workoutExpandedDetailPanels=new Set();
     state.workoutDirtyDetailPanels=new Set();
     state.workoutMobileUi=api.reduceMobileWorkoutUi({},{});
-    const firstPendingExercise=
-      draft.exercises.find(
-        item=>activeWorkoutExerciseStatus(item)!=="completed"
-      )||draft.exercises[0];
-
-    if(firstPendingExercise?.exerciseInstanceId){
-      state.workoutExpandedExercises.add(firstPendingExercise.exerciseInstanceId);
-    }
   }
   const canonicalExerciseIndex=draft.exercises.findIndex(
     item=>item.exerciseInstanceId===draft.currentExerciseInstanceId
@@ -11258,6 +11260,13 @@ function bindActiveWorkoutEvents(context){
         button.closest(".workout-exercise-card")?.classList.toggle("expanded",!expanded);
         if(expanded) state.workoutExpandedExercises.delete(exerciseInstanceId);
         else state.workoutExpandedExercises.add(exerciseInstanceId);
+      }else if(button.matches("[data-workout-toggle-set]")){
+        const setCard=button.closest("[data-active-set]");
+        const panel=document.getElementById(button.getAttribute("aria-controls"));
+        const expanded=button.getAttribute("aria-expanded")==="true";
+        button.setAttribute("aria-expanded",String(!expanded));
+        if(panel) panel.hidden=expanded;
+        setCard?.classList.toggle("expanded",!expanded);
       }else if(button.matches("[data-workout-detail-toggle]")){
         const {exerciseInstanceId}=exerciseMetaFromNode(button);
         const kind=button.dataset.workoutDetailToggle;
@@ -11296,7 +11305,6 @@ function bindActiveWorkoutEvents(context){
             item=>activeWorkoutExerciseStatus(item)!=="completed"
           )||updated.exercises[0];
           if(firstPending?.exerciseInstanceId){
-            state.workoutExpandedExercises.add(firstPending.exerciseInstanceId);
             state.workoutExerciseIndex=Math.max(
               0,updated.exercises.findIndex(
                 item=>item.exerciseInstanceId===firstPending.exerciseInstanceId

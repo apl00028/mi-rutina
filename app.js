@@ -10796,11 +10796,14 @@ function renderWorkout(){
     state.workoutExpandedDetailPanels=new Set();
     state.workoutDirtyDetailPanels=new Set();
     state.workoutMobileUi=api.reduceMobileWorkoutUi({},{});
-    draft.exercises.forEach(item=>{
-      if(item?.exerciseInstanceId){
-        state.workoutExpandedExercises.add(item.exerciseInstanceId);
-      }
-    });
+    const firstPendingExercise=
+      draft.exercises.find(
+        item=>activeWorkoutExerciseStatus(item)!=="completed"
+      )||draft.exercises[0];
+
+    if(firstPendingExercise?.exerciseInstanceId){
+      state.workoutExpandedExercises.add(firstPendingExercise.exerciseInstanceId);
+    }
   }
   const canonicalExerciseIndex=draft.exercises.findIndex(
     item=>item.exerciseInstanceId===draft.currentExerciseInstanceId
@@ -11572,6 +11575,7 @@ function bindActiveWorkoutEvents(context){
         setActiveWorkoutMessage("success","Ejercicio guardado.");
         updateActiveWorkoutInlineMessage();
         updateActiveWorkoutExerciseUi(exerciseInstanceId,saved);
+        collapseCompletedWorkoutExercise(exerciseInstanceId);
       }else if(button.matches("[data-workout-discard-menu]")){
         state.workoutDiscardMenuOpen=!state.workoutDiscardMenuOpen;renderWorkout();
       }else if(button.matches("[data-workout-discard]")){

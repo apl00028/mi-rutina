@@ -11583,7 +11583,6 @@ function bindActiveWorkoutEvents(context){
         setActiveWorkoutMessage("success","Ejercicio guardado.");
         updateActiveWorkoutInlineMessage();
         updateActiveWorkoutExerciseUi(exerciseInstanceId,saved);
-        collapseCompletedWorkoutExercise(exerciseInstanceId);
       }else if(button.matches("[data-workout-discard-menu]")){
         state.workoutDiscardMenuOpen=!state.workoutDiscardMenuOpen;renderWorkout();
       }else if(button.matches("[data-workout-discard]")){

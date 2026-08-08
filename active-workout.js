@@ -218,7 +218,10 @@
       const completedSets=sets.filter(set=>set?.done).length;
       const startedSets=sets.filter(setHasResults).length;
       const note=text(exercise?.notes);
-      const status=completedSets===sets.length&&sets.length
+      const completed=Boolean(
+        exercise?.completedAt&&sets.length&&completedSets===sets.length
+      );
+      const status=completed
         ?"completed"
         :startedSets||completedSets?"partial":"not_started";
       return {

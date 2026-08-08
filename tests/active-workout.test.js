@@ -296,7 +296,7 @@ test("revisión: distingue ejercicios completos, parciales y no iniciados",()=>{
   const model=loadApi().workoutCompletionReviewModel({
     elapsedMs:120000,
     exercises:[
-      {exerciseId:"a",name:"A",series:[{done:true}],notes:"Bien"},
+      {exerciseId:"a",name:"A",series:[{done:true}],notes:"Bien",completedAt:"2026-07-30T10:00:00.000Z"},
       {exerciseId:"b",name:"B",series:[{weight:20,done:false},{done:false}],substitution:{}},
       {exerciseId:"c",name:"C",series:[{done:false}]}
     ]
@@ -307,6 +307,18 @@ test("revisión: distingue ejercicios completos, parciales y no iniciados",()=>{
   assert.equal(model.pendingSets,3);
   assert.equal(model.substitutions,1);
   assert.equal(model.notes,1);
+  assert.equal(model.complete,false);
+});
+
+test("revisión: una serie hecha no completa un ejercicio sin confirmación de finalización",()=>{
+  const api=loadApi();
+  const model=api.workoutCompletionReviewModel({
+    exercises:[{series:[{done:true},{done:true}]}]
+  });
+  assert.equal(model.completedExercises,0);
+  assert.equal(model.partialExercises,1);
+  assert.equal(model.untouchedExercises,0);
+  assert.equal(model.pendingSets,0);
   assert.equal(model.complete,false);
 });
 
@@ -445,7 +457,7 @@ test("registro: ofrece campos etiquetados, calentamiento completo y acciones ine
   ]) assert.ok(workoutUiSource.includes(token),token);
   assert.doesNotMatch(workoutUiSource,/>Cal\.</);
   assert.doesNotMatch(workoutUiSource,/>Hecha</);
-  assert.match(workoutUiSource,/active-set-card \$\{row\.done\?"completed":row\.index===nextPendingIndex\?"next":""\}/);
+  assert.match(workoutUiSource,/active-set-card \$\{row\.done\?"completed":""\}/);
 });
 
 test("registro: completar usa busy, inicia descanso solo en serie de trabajo y permite confirmación interna",()=>{
@@ -522,8 +534,10 @@ test("responsive: la hoja compacta conserva filas densas y adaptación móvil",(
   assert.match(stylesSource,/\.workout-exercise-toggle\{[\s\S]*?grid-template-columns:2rem minmax\(11rem,1\.45fr\)/);
   assert.match(stylesSource,/@media\(max-width:767px\)\{[\s\S]*?\.active-set-card\{[\s\S]*?grid-template-columns:1\.8rem/);
   assert.match(stylesSource,/\.active-workout-screen\{[\s\S]*?overflow-x:clip/);
-  assert.match(stylesSource,/@media\(max-width:430px\)/);
-  assert.match(stylesSource,/@media\(max-width:360px\)/);
+  assert.match(stylesSource,/\@media\(max-width:430px\)/);
+  assert.match(stylesSource,/\.active-set-card\{[\s\S]*?grid-template-areas:[\s\S]*?"actions actions"/);
+  assert.match(stylesSource,/\.active-set-actions\{[\s\S]*?grid-template-columns:repeat\(2,minmax\(0,1fr\)\)/);
+  assert.match(stylesSource,/\@media\(max-width:360px\)/);
   assert.match(stylesSource,/env\(safe-area-inset-bottom\)/);
 });
 

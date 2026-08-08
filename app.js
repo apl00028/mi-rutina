@@ -790,7 +790,7 @@ function exerciseTrainingHistory(name){
     const exercises=workout.exercises||workout.items||[];
     exercises.forEach(exercise=>{
       if(normalizeExerciseName(exercise.name)!==key) return;
-      const sets=exercise.sets||exercise.completedSets||[];
+      const sets=exercise.series||exercise.sets||exercise.completedSets||[];
       sets.forEach((set,index)=>{
         const weight=Number(set.weight??set.kg??0);
         const reps=Number(set.reps??0);
@@ -1920,65 +1920,56 @@ function workoutDateValue(workout){
 function completedWorkoutExercises(workout){
   return Array.isArray(workout.exercises)?workout.exercises:(Array.isArray(workout.items)?workout.items:[]);
 }
-function weeklyTrainingAnalytics(rangeWeeks=8){
-  const weeks=[];
-  const now=startOfWeek(new Date());
-  for(let i=rangeWeeks-1;i>=0;i--){
-    const start=new Date(now);
-    start.setDate(start.getDate()-i*7);
-    const key=weekKey(start);
-    weeks.push({
-      key,
-      start,
-      label:start.toLocaleDateString("es-ES",{day:"2-digit",month:"2-digit"}),
-      workouts:0,
-      sets:0,
-      volume:0,
-      avgRir:null,
-      avgRpe:null,
-      muscleSets:{}
-    });
+function progressAnalyticsSnapshot(rangeWeeks=state.progressRangeWeeks){
+  const ownerId=currentRoutineOwnerOrNull();
+  if(!ownerId||!window.GymOSProgressAnalytics) throw new Error("progress_analytics_unavailable");
+  const lastSyncAt=Date.parse(localStorage.getItem("gymos:lastSyncAt")||0)||0;
+  const progressRecords=storedWorkoutProgressRecords(ownerId).map(record=>({
+    ...record,
+    pendingSync:localStorage.getItem("gymos:syncPending")==="1"&&
+      (Date.parse(record.updatedAt||record.completedAt||record.startedAt||0)||0)>lastSyncAt
+  }));
+  const remote=state.progressRemoteData?.ownerId===ownerId?state.progressRemoteData:{};
+  const weeklyGoal=localStorage.getItem("gymos:weeklyGoal");
+  return window.GymOSProgressAnalytics.aggregate({
+    ownerId,history:getHistory(),progressRecords,
+    remoteHistory:remote.history||[],remoteProgress:remote.progress||[],
+    exerciseLibrary:getExerciseLibrary(),rangeWeeks,
+    plannedSessionsPerWeek:weeklyGoal===null?null:Number(weeklyGoal),now:new Date()
+  });
+}
+async function loadRemoteProgressData(){
+  const ownerId=currentRoutineOwnerOrNull();
+  if(!ownerId||state.progressRemoteStatus==="loading") return;
+  if(state.progressRemoteData?.ownerId===ownerId) return;
+  const client=getSupabaseClient();
+  if(!client||!isAppAuthenticated()){
+    state.progressRemoteData={ownerId,history:[],progress:[],unavailable:true};
+    state.progressRemoteStatus="offline";
+    if(state.screen==="progressDashboard") renderProgressDashboard();
+    return;
   }
-  const byKey=new Map(weeks.map(w=>[w.key,w]));
-  getHistory().forEach(workout=>{
-    const date=workoutDateValue(workout);
-    if(Number.isNaN(date.getTime())) return;
-    const bucket=byKey.get(weekKey(date));
-    if(!bucket) return;
-    bucket.workouts+=1;
-    const rirValues=[];
-    const rpeValues=[];
-    completedWorkoutExercises(workout).forEach(exercise=>{
-      const libraryItem=exerciseLibraryItemByName(exercise.name);
-      const muscle=libraryItem?.muscle||"Sin clasificar";
-      const sets=Array.isArray(exercise.sets)?exercise.sets:(Array.isArray(exercise.completedSets)?exercise.completedSets:[]);
-      sets.forEach(set=>{
-        const weight=Number(set.weight??set.kg??0);
-        const reps=Number(set.reps??0);
-        if(!weight&&!reps) return;
-        bucket.sets+=1;
-        bucket.volume+=weight*reps;
-        bucket.muscleSets[muscle]=(bucket.muscleSets[muscle]||0)+1;
-        const rir=set.rir??set.RIR;
-        const rpe=set.rpe??set.RPE;
-        if(rir!==null&&rir!==undefined&&rir!=="") rirValues.push(Number(rir));
-        if(rpe!==null&&rpe!==undefined&&rpe!=="") rpeValues.push(Number(rpe));
-      });
-    });
-    if(rirValues.length){
-      bucket._rir=(bucket._rir||[]).concat(rirValues);
-    }
-    if(rpeValues.length){
-      bucket._rpe=(bucket._rpe||[]).concat(rpeValues);
-    }
-  });
-  weeks.forEach(bucket=>{
-    if(bucket._rir?.length) bucket.avgRir=bucket._rir.reduce((a,b)=>a+b,0)/bucket._rir.length;
-    if(bucket._rpe?.length) bucket.avgRpe=bucket._rpe.reduce((a,b)=>a+b,0)/bucket._rpe.length;
-    delete bucket._rir;
-    delete bucket._rpe;
-  });
-  return weeks;
+  state.progressRemoteStatus="loading";
+  try{
+    const userId=state.syncUser.id;
+    const {data,error}=await client.from("gymos_sync").select("payload").eq("user_id",userId).maybeSingle();
+    if(error) throw error;
+    if(currentRoutineOwnerOrNull()!==ownerId||state.syncUser?.id!==userId) return;
+    state.progressRemoteData={
+      ownerId,
+      history:Array.isArray(data?.payload?.history)?data.payload.history:[],
+      progress:Array.isArray(data?.payload?.workoutProgress)?data.payload.workoutProgress:[]
+    };
+    state.progressRemoteStatus="loaded";
+  }catch(error){
+    console.warn("Progress remote diagnostics unavailable",{code:error?.code||"remote_read_failed"});
+    state.progressRemoteData={ownerId,history:[],progress:[],unavailable:true};
+    state.progressRemoteStatus="offline";
+  }
+  if(state.screen==="progressDashboard") renderProgressDashboard();
+}
+function weeklyTrainingAnalytics(rangeWeeks=8){
+  return progressAnalyticsSnapshot(rangeWeeks).weeks;
 }
 function fatigueAssessment(){
   const weeks=weeklyTrainingAnalytics(4);
@@ -2048,21 +2039,13 @@ function bodyWeightTrend(){
   return {entries:valid,change,weeklyRate:change/(days/7)};
 }
 function adherenceSummary(rangeWeeks=8){
-  const weeks=weeklyTrainingAnalytics(rangeWeeks);
-  const target=3;
-  const completed=weeks.reduce((sum,w)=>sum+w.workouts,0);
-  const possible=target*rangeWeeks;
-  return {completed,possible,percent:possible?Math.min(100,completed/possible*100):0};
+  const value=progressAnalyticsSnapshot(rangeWeeks).summary.adherence;
+  return value.available
+    ?{completed:value.completed,possible:value.planned,percent:value.percent,available:true}
+    :{completed:0,possible:0,percent:0,available:false};
 }
 function personalRecords(){
-  const records=[];
-  getExerciseLibrary().forEach(item=>{
-    const stats=exerciseDetailStats(item.name);
-    if(stats.bestWeight||stats.best1RM){
-      records.push({name:item.name,bestWeight:stats.bestWeight,best1RM:stats.best1RM});
-    }
-  });
-  return records.sort((a,b)=>b.best1RM-a.best1RM).slice(0,8);
+  return progressAnalyticsSnapshot(state.progressRangeWeeks).records.slice(0,8);
 }
 
 
@@ -4010,6 +3993,8 @@ let state = {
   workoutAnalysisId: null,
   workoutDraftMessage: null,
   workoutDraftObservedIds: new Set(),
+  progressRemoteData: null,
+  progressRemoteStatus: "idle",
   aiSettingsMessage: null,
   routineWorkflow: null,
   routineImport: null,
@@ -7145,7 +7130,7 @@ function getExerciseHistory(name){
   getHistory().forEach(workout=>{
     const exercise=workout.exercises.find(e=>e.name===name);
     if(!exercise) return;
-    const validSeries=workingSeries(exercise.series)
+    const validSeries=workingSeries(exercise.series||exercise.sets||exercise.completedSets)
       .map(s=>({weight:numericValue(s.weight),reps:numericValue(s.reps),rir:numericValue(s.rir)}))
       .filter(s=>s.weight!==null&&s.reps!==null);
     if(!validSeries.length) return;
@@ -7205,7 +7190,7 @@ function allExercisePerformances(name,excludeWorkoutId=null,historyInput=null){
     if(excludeWorkoutId!==null&&workout.id===excludeWorkoutId) return;
     const exercise=workout.exercises.find(e=>e.name===name);
     if(!exercise) return;
-    exercise.series.map(normalizeSeries).forEach((series,index)=>{
+    (exercise.series||exercise.sets||exercise.completedSets||[]).map(normalizeSeries).forEach((series,index)=>{
       if(series.warmup) return;
       const weight=numericValue(series.weight);
       const reps=numericValue(series.reps);
@@ -13798,20 +13783,30 @@ function renderNutrition(){
 }
 
 function renderProgressDashboard(){
+  let analytics=null;
   let weeks=[],fatigue={score:0,level:"baja",reasons:[]};
   let periodization={phase:"Acumulación",action:"Mantener el plan actual.",reason:"Sin datos suficientes."};
-  let adherence={completed:0,possible:0,percent:0};
+  let adherence={available:false,completed:0,possible:0,percent:0};
   let weightTrend={entries:[],change:null,weeklyRate:null};
   let records=[];
   const recentRecovery=window.GymOSRecovery?.getEntries?.().slice(-7)||[];
   const averageRecovery=recentRecovery.length?Math.round(recentRecovery.reduce((sum,item)=>sum+Number(item.recoveryScore||0),0)/recentRecovery.length):null;
-  try{weeks=weeklyTrainingAnalytics(state.progressRangeWeeks);}catch(error){console.error("Progress weeks",error);}
+  try{
+    analytics=progressAnalyticsSnapshot(state.progressRangeWeeks);
+    weeks=analytics.weeks;
+    const value=analytics.summary.adherence;
+    adherence=value.available
+      ?{available:true,completed:value.completed,possible:value.planned,percent:value.percent}
+      :adherence;
+  }catch(error){console.error("Progress analytics",error);}
   try{fatigue=fatigueAssessment();}catch(error){console.error("Progress fatigue",error);}
   try{periodization=periodizationRecommendation();}catch(error){console.error("Progress periodization",error);}
-  try{adherence=adherenceSummary(state.progressRangeWeeks);}catch(error){console.error("Progress adherence",error);}
   try{weightTrend=bodyWeightTrend();}catch(error){console.error("Progress body trend",error);}
-  try{records=personalRecords();}catch(error){console.error("Progress records",error);}
+  try{records=analytics?.records?.slice(0,8)||personalRecords();}catch(error){console.error("Progress records",error);}
   const current=weeks.at(-1)||{workouts:0,sets:0,volume:0,muscleSets:{}};
+  const summary=analytics?.summary||{sessions7:0,sessions14:0,sessions30:0,completed:0,incomplete:0,completedSets:0,totalReps:0,averageDurationMs:null,averageRir:null};
+  const comparison=analytics?.comparison||{previous:{volume:0,sets:0,reps:0},current:{volume:0,sets:0,reps:0},volumeChange:0,setChange:0,repsChange:0,increasedWeight:[],increasedReps:[],newRecords:[],bestSet:null,trend:"estable"};
+  const diagnostics=analytics?.diagnostics||{rawCounts:{localHistory:0,localProgress:0,remoteHistory:0,remoteProgress:0},deduplicatedSessions:0,completed:0,incomplete:0,pendingSync:0,withCompletedSets:0,discarded:{}};
   const muscleTotals={};
   weeks.forEach(week=>Object.entries(week.muscleSets).forEach(([muscle,count])=>{
     muscleTotals[muscle]=(muscleTotals[muscle]||0)+count;
@@ -13835,7 +13830,38 @@ function renderProgressDashboard(){
         <article class="stat-card"><span>Entrenos esta semana</span><strong>${current.workouts}</strong></article>
         <article class="stat-card"><span>Series esta semana</span><strong>${current.sets}</strong></article>
         <article class="stat-card"><span>Volumen semanal</span><strong>${Math.round(current.volume).toLocaleString("es-ES")} kg</strong></article>
-        <article class="stat-card"><span>Adherencia</span><strong>${Math.round(adherence.percent)} %</strong></article>
+        <article class="stat-card"><span>Adherencia</span><strong>${adherence.available?`${Math.round(adherence.percent)} %`:"Sin plan"}</strong></article>
+      </section>
+
+      <section class="card progress-window-summary">
+        <div class="card-heading-row"><div><h2>Actividad registrada</h2><p class="subtle">Sesiones locales y remotas válidas, sin duplicados.</p></div></div>
+        <div class="progress-metric-grid">
+          <article><span>Últimos 7 días</span><strong>${summary.sessions7}</strong></article>
+          <article><span>Últimos 14 días</span><strong>${summary.sessions14}</strong></article>
+          <article><span>Últimos 30 días</span><strong>${summary.sessions30}</strong></article>
+          <article><span>Finalizadas</span><strong>${summary.completed}</strong></article>
+          <article><span>Incompletas</span><strong>${summary.incomplete}</strong></article>
+          <article><span>Series</span><strong>${summary.completedSets}</strong></article>
+          <article><span>Repeticiones</span><strong>${summary.totalReps}</strong></article>
+          <article><span>Duración media</span><strong>${summary.averageDurationMs?formatDuration(summary.averageDurationMs):"Sin datos"}</strong></article>
+          <article><span>RIR medio</span><strong>${summary.averageRir===null?"Sin datos":summary.averageRir.toFixed(1).replace(".",",")}</strong></article>
+        </div>
+        ${adherence.available?"":`<p class="progress-data-note">La adherencia no se calcula hasta que configures un objetivo semanal explícito.</p>`}
+      </section>
+
+      <section class="card progress-comparison-card">
+        <div class="card-heading-row"><div><h2>Evolución de las dos últimas semanas</h2><p class="subtle">La tendencia combina carga, repeticiones, series y calidad de finalización.</p></div><span class="trend-badge ${comparison.trend}">${esc(comparison.trend)}</span></div>
+        <div class="progress-week-comparison">
+          <article><span>Volumen</span><strong>${comparison.volumeChange>=0?"+":""}${comparison.volumeChange.toFixed(1).replace(".",",")} %</strong><small>${Math.round(comparison.previous.volume).toLocaleString("es-ES")} → ${Math.round(comparison.current.volume).toLocaleString("es-ES")} kg</small></article>
+          <article><span>Series</span><strong>${comparison.setChange>=0?"+":""}${comparison.setChange.toFixed(1).replace(".",",")} %</strong><small>${comparison.previous.sets} → ${comparison.current.sets}</small></article>
+          <article><span>Repeticiones</span><strong>${comparison.repsChange>=0?"+":""}${comparison.repsChange.toFixed(1).replace(".",",")} %</strong><small>${comparison.previous.reps} → ${comparison.current.reps}</small></article>
+        </div>
+        <div class="progress-improvements">
+          <p><strong>Más peso:</strong> ${comparison.increasedWeight.length?comparison.increasedWeight.map(esc).join(", "):"Sin aumentos comparables"}</p>
+          <p><strong>Más repeticiones:</strong> ${comparison.increasedReps.length?comparison.increasedReps.map(esc).join(", "):"Sin aumentos comparables"}</p>
+          <p><strong>Nuevos récords:</strong> ${comparison.newRecords.length?comparison.newRecords.map(esc).join(", "):"Ninguno en la semana actual"}</p>
+          <p><strong>Mejor serie actual:</strong> ${comparison.bestSet?`${esc(comparison.bestSet.exercise)} · ${formatWeight(comparison.bestSet.weight||0)} × ${comparison.bestSet.reps||0}`:"Sin series comparables"}</p>
+        </div>
       </section>
 
       <section class="card periodization-card">
@@ -13871,6 +13897,13 @@ function renderProgressDashboard(){
       </section>
 
       <section class="card">
+        <h2>Volumen por ejercicio</h2>
+        <div class="exercise-volume-list">
+          ${analytics?.exercises?.length?analytics.exercises.slice(0,12).map(exercise=>`<div><span>${esc(exercise.name)}</span><strong>${Math.round(exercise.volume).toLocaleString("es-ES")} kg</strong></div>`).join(""):`<div class="routine-empty"><strong>Sin series registradas</strong><p>Las sesiones incompletas aparecerán aquí cuando contengan series completadas.</p></div>`}
+        </div>
+      </section>
+
+      <section class="card">
         <h2>Distribución muscular</h2>
         <div class="muscle-volume-list">
           ${muscles.length?muscles.map(([muscle,sets])=>`<div>
@@ -13898,6 +13931,27 @@ function renderProgressDashboard(){
           </article>`).join(""):`<div class="routine-empty"><strong>Sin récords todavía</strong><p>Los mejores valores aparecerán al registrar series.</p></div>`}
         </div>
       </section>
+
+      <details class="card progress-diagnostics">
+        <summary>Diagnóstico de datos</summary>
+        <p class="subtle">Recuento seguro sin identificadores técnicos. La consulta remota es de solo lectura.</p>
+        <div class="progress-metric-grid">
+          <article><span>Historial local</span><strong>${diagnostics.rawCounts.localHistory}</strong></article>
+          <article><span>Progreso local</span><strong>${diagnostics.rawCounts.localProgress}</strong></article>
+          <article><span>Historial remoto</span><strong>${state.progressRemoteStatus==="loaded"?diagnostics.rawCounts.remoteHistory:"—"}</strong></article>
+          <article><span>Progreso remoto</span><strong>${state.progressRemoteStatus==="loaded"?diagnostics.rawCounts.remoteProgress:"—"}</strong></article>
+          <article><span>Sin duplicados</span><strong>${diagnostics.deduplicatedSessions}</strong></article>
+          <article><span>Finalizadas</span><strong>${diagnostics.completed}</strong></article>
+          <article><span>Incompletas</span><strong>${diagnostics.incomplete}</strong></article>
+          <article><span>Pendientes</span><strong>${diagnostics.pendingSync}</strong></article>
+          <article><span>Con series</span><strong>${diagnostics.withCompletedSets}</strong></article>
+        </div>
+        <div class="progress-discard-list">
+          ${Object.entries(diagnostics.discarded).length?Object.entries(diagnostics.discarded).map(([reason,count])=>`<div><span>${esc(reason)}</span><strong>${count}</strong></div>`).join(""):`<p>No hay registros descartados.</p>`}
+        </div>
+        <p class="progress-data-note">${state.progressRemoteStatus==="loading"?"Consultando la copia remota…":state.progressRemoteStatus==="loaded"?"Copia remota comprobada.":"Sin conexión remota; se muestran los datos disponibles offline."}</p>
+        <button id="refreshProgressDiagnostics" class="secondary" type="button" ${state.progressRemoteStatus==="loading"?"disabled":""}>Actualizar diagnóstico remoto</button>
+      </details>
     </main>
     ${nav("progressDashboard")}
   </div>`;
@@ -13907,6 +13961,14 @@ function renderProgressDashboard(){
     state.progressRangeWeeks=Number(e.target.value);
     renderProgressDashboard();
   };
+  document.getElementById("refreshProgressDiagnostics").onclick=()=>{
+    state.progressRemoteData=null;
+    state.progressRemoteStatus="idle";
+    renderProgressDashboard();
+  };
+  if(state.progressRemoteStatus==="idle"||state.progressRemoteData?.ownerId!==currentRoutineOwnerOrNull()){
+    loadRemoteProgressData();
+  }
 }
 
 

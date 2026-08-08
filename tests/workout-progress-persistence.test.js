@@ -838,7 +838,7 @@ test("integración técnica mantiene un consumidor, un listener storage y aislam
   const progressIndex=indexSource.indexOf('<script src="workout-progress.js"></script>');
   const appIndex=indexSource.indexOf('<script src="app.js"></script>');
   assert.ok(progressIndex>=0&&progressIndex<appIndex);
-  assert.match(workerSource,/gymos-cache-4\.2\.0-routine-hub/);
+  assert.match(workerSource,/gymos-cache-4\.2\.0-rc\.6-progress/);
   assert.match(workerSource,/"workout-progress\.js"/);
   assert.equal((appSource.match(/addEventListener\("storage"/g)||[]).length,1);
   assert.match(appSource,/state\.syncOperationId\+=1/);

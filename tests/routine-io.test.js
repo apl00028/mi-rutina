@@ -479,7 +479,7 @@ test("integración de script, input y service worker",()=>{
   assert.ok(indexSource.indexOf("routine-io.js")<indexSource.indexOf("routine-excel.js"));
   assert.ok(indexSource.indexOf("routine-excel.js")<indexSource.indexOf("routine-hub.js"));
   assert.match(indexSource,/id="routineFile" type="file" accept="\.xlsx"/);
-  assert.match(workerSource,/gymos-cache-4\.2\.0-routine-hub/);
+  assert.match(workerSource,/gymos-cache-4\.2\.0-rc\.6-progress/);
   assert.match(workerSource,/routine-io\.js/);
   assert.match(workerSource,/routine-excel\.js/);
   assert.match(workerSource,/routine-hub\.js/);

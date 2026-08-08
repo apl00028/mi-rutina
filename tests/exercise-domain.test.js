@@ -447,6 +447,6 @@ test("aplicar dos veces el mismo payload conserva igualdad serializada exacta",(
 
 test("el modulo se carga antes de app y queda incluido en la cache PWA",()=>{
   assert.ok(indexSource.indexOf("exercise-domain.js")<indexSource.indexOf("app.js"));
-  assert.match(serviceWorkerSource,/gymos-cache-4\.2\.0-routine-hub/);
+  assert.match(serviceWorkerSource,/gymos-cache-4\.2\.0-rc\.6-progress/);
   assert.match(serviceWorkerSource,/exercise-domain\.js/);
 });

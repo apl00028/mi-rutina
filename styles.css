@@ -1090,6 +1090,26 @@ select{
 .records-list article{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:11px 0;border-bottom:1px solid #e5e7eb}
 .records-list article:last-child{border-bottom:0}
 .records-list article div span{display:block;font-size:.65rem;color:#6b7280;margin-top:3px}
+.progress-metric-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-top:14px}
+.progress-metric-grid article,.progress-week-comparison article{padding:12px;border:1px solid #e5e7eb;border-radius:14px;background:#f8fafc}
+.progress-metric-grid span,.progress-week-comparison span{display:block;color:#64748b;font-size:.72rem}
+.progress-metric-grid strong,.progress-week-comparison strong{display:block;margin-top:5px;font-size:1.05rem;color:#111827}
+.progress-week-comparison{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-top:14px}
+.progress-week-comparison small{display:block;margin-top:4px;color:#64748b}
+.progress-data-note{margin:12px 0 0;color:#64748b;font-size:.76rem}
+.progress-improvements{margin-top:14px;padding-top:4px;border-top:1px solid #e5e7eb}
+.progress-improvements p{margin:8px 0;font-size:.82rem;line-height:1.4}
+.trend-badge{padding:6px 10px;border-radius:999px;background:#e2e8f0;color:#475569;font-size:.72rem;text-transform:capitalize}
+.trend-badge.ascendente{background:#dcfce7;color:#166534}
+.trend-badge.descendente{background:#fee2e2;color:#991b1b}
+.exercise-volume-list>div,.progress-discard-list>div{display:flex;justify-content:space-between;gap:12px;padding:10px 0;border-bottom:1px solid #e5e7eb}
+.exercise-volume-list>div:last-child,.progress-discard-list>div:last-child{border-bottom:0}
+.progress-diagnostics summary{cursor:pointer;font-weight:700}
+.progress-diagnostics[open] summary{margin-bottom:10px}
+@media(max-width:540px){
+  .progress-metric-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .progress-week-comparison{grid-template-columns:1fr}
+}
 @media(max-width:420px){
   .weight-trend-summary{grid-template-columns:1fr}
   .weekly-volume-chart{height:160px}

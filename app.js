@@ -3065,9 +3065,35 @@ function readStoredJson(key){
   try{return JSON.parse(raw);}
   catch(_){return null;}
 }
-function getCanonicalDrafts(){
-  const value=readStoredJson(CANONICAL_DRAFTS_KEY);
-  return value&&typeof value==="object"?value:null;
+function workoutSetAccordionOverridesStorageKey(ownerId,workoutInstanceId){
+  return `gymos:workoutSetAccordionOverrides:${String(ownerId||"local")}:${String(workoutInstanceId||"unknown")}`;
+}
+function loadWorkoutSetAccordionOverrides(ownerId,workoutInstanceId){
+  const raw=localStorage.getItem(workoutSetAccordionOverridesStorageKey(ownerId,workoutInstanceId));
+  if(raw===null) return new Map();
+  try{
+    const parsed=JSON.parse(raw);
+    if(parsed&&typeof parsed==="object"&&!Array.isArray(parsed)){
+      return new Map(Object.entries(parsed).filter(
+        ([_,value])=>value===true||value===false
+      ));
+    }
+  }catch(_){/* ignored */}
+  return new Map();
+}
+function saveWorkoutSetAccordionOverrides(ownerId,workoutInstanceId){
+  const key=workoutSetAccordionOverridesStorageKey(ownerId,workoutInstanceId);
+  const overrides=Object.fromEntries(
+    [...state.workoutSetAccordionOverrides.entries()]
+  );
+  if(Object.keys(overrides).length) localStorage.setItem(key,JSON.stringify(overrides));
+  else localStorage.removeItem(key);
+}
+function clearWorkoutSetAccordionOverrides(ownerId,workoutInstanceId){
+  localStorage.removeItem(workoutSetAccordionOverridesStorageKey(ownerId,workoutInstanceId));
+  if(state.workoutActiveInstanceId===workoutInstanceId){
+    state.workoutSetAccordionOverrides=new Map();
+  }
 }
 function writeLegacyDraftShadows(canonicalRoutine,container){
   ["A","B","C"].forEach(key=>{
@@ -3464,6 +3490,7 @@ function resetRoutineSessionOwnerState(){
   state.workoutReferenceExerciseId=null;
   state.workoutActionExerciseId=null;
   state.workoutExpandedExercises=new Set();
+  state.workoutSetAccordionOverrides=new Map();
   state.workoutExpandedDetailPanels=new Set();
   state.workoutDirtyDetailPanels=new Set();
   state.workoutCompletionReviewOpen=false;
@@ -3879,6 +3906,7 @@ let state = {
   workoutReferenceExerciseId: null,
   workoutActionExerciseId: null,
   workoutExpandedExercises: new Set(),
+  workoutSetAccordionOverrides: new Map(),
   workoutExpandedDetailPanels: new Set(),
   workoutDirtyDetailPanels: new Set(),
   workoutCompletionReviewOpen: false,
@@ -9983,7 +10011,13 @@ function renderActiveWorkoutUnresolved(resolution,exercise,key){
     ${candidates}
   </section>`;
 }
-function renderActiveWorkoutSet(row,exerciseIndex,sessionId,nextPendingIndex){
+function renderActiveWorkoutSet(row,exerciseIndex,sessionId,nextPendingIndex,exerciseInstanceId){
+  const setKey=activeWorkoutSetKey(sessionId,exerciseInstanceId,row.setInstanceId,row.index);
+  const bodyId=activeWorkoutSetBodyId(setKey);
+  const override=state.workoutSetAccordionOverrides.get(setKey);
+  const explicitlyCollapsed=override===false;
+  const explicitlyExpanded=override===true;
+  const expanded=explicitlyExpanded||(!explicitlyCollapsed&&row.index===nextPendingIndex);
   const previous=row.previous
     ?row.timed
       ?row.previous.seconds?`${esc(String(row.previous.seconds))} s`:"—"
@@ -9991,8 +10025,28 @@ function renderActiveWorkoutSet(row,exerciseIndex,sessionId,nextPendingIndex){
         ?`${esc(String(row.previous.weight||"—"))} kg × ${esc(String(row.previous.reps||"—"))}`
         :"—"
     :"—";
-  return `<article class="active-set-card ${row.done?"completed":row.index===nextPendingIndex?"next":""}" data-active-set="${row.index}" data-set-instance-id="${esc(row.setInstanceId||"")}">
-    <header><strong><span class="active-set-mobile-label">Serie </span>${row.number}</strong>${row.planned?"":'<span class="active-set-extra-label">Extra</span>'}<span class="active-set-complete-mark" aria-label="Serie completada" ${row.done?"":"hidden"}>✓</span></header>
+  return `<article class="active-set-card ${row.done?"completed":row.index===nextPendingIndex?"next":""}${expanded?" expanded":""}" data-active-set="${row.index}" data-set-instance-id="${esc(row.setInstanceId||"")}" data-set-key="${esc(setKey)}">
+  <header>
+    <button
+      type="button"
+      class="active-set-toggle"
+      data-workout-toggle-set
+      aria-expanded="${expanded}"
+      aria-controls="${esc(bodyId)}"
+    >
+      <strong>
+        <span class="active-set-mobile-label">Serie </span>${row.number}
+      </strong>
+      ${row.planned?"":'<span class="active-set-extra-label">Extra</span>'}
+      <span
+        class="active-set-complete-mark"
+        aria-label="Serie completada"
+        ${row.done?"":"hidden"}
+      >✓</span>
+      <span class="active-set-chevron" aria-hidden="true">⌄</span>
+    </button>
+  </header>
+  <div id="${esc(bodyId)}" class="active-set-body" ${expanded?"":"hidden"}>
     <div class="active-set-reference"><span><small>Anterior</small><strong>${previous}</strong></span><span><small>Objetivo</small><strong>${esc(row.target||"Sin definir")}</strong></span></div>
     <div class="active-set-fields">
       ${row.timed
@@ -10014,6 +10068,7 @@ function renderActiveWorkoutSet(row,exerciseIndex,sessionId,nextPendingIndex){
       <button type="button" class="${row.done?"secondary":"primary"}" data-complete-active-set="${row.index}" aria-pressed="${row.done}" aria-label="${row.done?`Corregir serie ${row.number}`:`Completar serie ${row.number}`}">${row.done?"Corregir":"Completar"}</button>
       ${row.canDelete?`<button type="button" class="text-button" data-delete-active-set="${row.index}" aria-label="Eliminar serie ${row.number}">Eliminar</button>`:""}
     </div>
+    </div>
   </article>`;
 }
 function hasInputValue(value){
@@ -10021,6 +10076,14 @@ function hasInputValue(value){
 }
 function workoutDetailPanelKey(exerciseInstanceId,kind){
   return `${exerciseInstanceId}:${kind}`;
+}
+function activeWorkoutSetKey(sessionId,exerciseInstanceId,setInstanceId,index){
+  const ownerId=currentRoutineOwnerOrNull()||"";
+  const workoutInstanceId=state.workoutActiveInstanceId||sessionId||"";
+  return `${ownerId}:${workoutInstanceId}:${exerciseInstanceId}:${setInstanceId||index}`;
+}
+function activeWorkoutSetBodyId(setKey){
+  return `activeSetBody-${String(setKey).replace(/[^a-zA-Z0-9_-]/g,"-")}`;
 }
 function workoutLocalSaveSucceeded(){
   return state.workoutDraftSaveStatus!=="local_error"&&(
@@ -10179,7 +10242,7 @@ function renderActiveWorkoutExercise({
       <section class="active-workout-sets" aria-labelledby="activeWorkoutSetsTitle${index}">
         <div class="active-workout-section-heading"><h2 id="activeWorkoutSetsTitle${index}">Series <small>${esc(seriesSummary.label)}</small></h2><button type="button" class="text-button add-extra-set-header" data-add-extra-set>+ Añadir serie</button></div>
         <div class="active-set-desktop-head" aria-hidden="true"><span>#</span><span>Anterior / objetivo</span><span>Registro</span><span>Acciones</span></div>
-        ${rows.map(row=>renderActiveWorkoutSet(row,index,sessionId,nextPendingIndex)).join("")}
+        ${rows.map(row=>renderActiveWorkoutSet(row,index,sessionId,nextPendingIndex,instanceId)).join("")}
         <button type="button" class="text-button add-extra-set-footer" data-add-extra-set>+ Serie extra</button>
       </section>
       <div class="workout-exercise-details">
@@ -10793,17 +10856,10 @@ function renderWorkout(){
       :(Number(draft.currentExerciseIndex)||0);
     state.workoutActiveInstanceId=draft.workoutInstanceId;
     state.workoutExpandedExercises=new Set();
+    state.workoutSetAccordionOverrides=loadWorkoutSetAccordionOverrides(ownerId,draft.workoutInstanceId);
     state.workoutExpandedDetailPanels=new Set();
     state.workoutDirtyDetailPanels=new Set();
     state.workoutMobileUi=api.reduceMobileWorkoutUi({},{});
-    const firstPendingExercise=
-      draft.exercises.find(
-        item=>activeWorkoutExerciseStatus(item)!=="completed"
-      )||draft.exercises[0];
-
-    if(firstPendingExercise?.exerciseInstanceId){
-      state.workoutExpandedExercises.add(firstPendingExercise.exerciseInstanceId);
-    }
   }
   const canonicalExerciseIndex=draft.exercises.findIndex(
     item=>item.exerciseInstanceId===draft.currentExerciseInstanceId
@@ -11281,6 +11337,18 @@ function bindActiveWorkoutEvents(context){
             )?.focus({preventScroll:true}));
           }
         }
+      }else if(button.matches("[data-workout-toggle-set]")){
+        const row=button.closest("[data-set-key]");
+        const setKey=row?.dataset.setKey;
+        if(!setKey) return;
+        const expanded=button.getAttribute("aria-expanded")==="true";
+        const nextState=!expanded;
+        state.workoutSetAccordionOverrides.set(setKey,nextState);
+        saveWorkoutSetAccordionOverrides(context.ownerId,context.workoutInstanceId);
+        button.setAttribute("aria-expanded",String(nextState));
+        const panel=document.getElementById(button.getAttribute("aria-controls"));
+        if(panel) panel.hidden=expanded;
+        button.closest(".active-set-card")?.classList.toggle("expanded",nextState);
       }else if(button.matches("[data-workout-reference]")){
         const {exerciseInstanceId}=exerciseMetaFromNode(button);
         state.workoutReferenceExerciseId=exerciseInstanceId;
@@ -11428,6 +11496,59 @@ function bindActiveWorkoutEvents(context){
             `${updatedSet.done?"Corregir":"Completar"} serie ${setIndex+1}`
           );
           button.textContent=updatedSet.done?"Corregir":"Completar";
+        }
+        let accordionOverridesChanged=false;
+        if(row){
+          const setToggle=row.querySelector("[data-workout-toggle-set]");
+          const setBody=setToggle?document.getElementById(setToggle.getAttribute("aria-controls")):null;
+          const currentSetKey=row.dataset.setKey;
+          if(updatedSet?.done){
+            if(currentSetKey){
+              state.workoutSetAccordionOverrides.set(currentSetKey,false);
+              accordionOverridesChanged=true;
+              row.classList.remove("expanded");
+              if(setToggle) setToggle.setAttribute("aria-expanded","false");
+              if(setBody) setBody.hidden=true;
+            }
+            const nextPendingIndex=updatedExercise.series.findIndex(item=>!item.done);
+            const nextPending=nextPendingIndex>=0?updatedExercise.series[nextPendingIndex]:null;
+            if(nextPending){
+              const nextKey=activeWorkoutSetKey(
+                context.sessionId,exerciseInstanceId,nextPending.setInstanceId,
+                nextPendingIndex
+              );
+              const nextOverride=state.workoutSetAccordionOverrides.get(nextKey);
+              if(nextOverride!==false){
+                state.workoutSetAccordionOverrides.set(nextKey,true);
+                accordionOverridesChanged=true;
+                requestAnimationFrame(()=>{
+                  const nextRow=document.querySelector(
+                    `[data-set-key="${CSS.escape(nextKey)}"]`
+                  );
+                  const toggle=nextRow?.querySelector("[data-workout-toggle-set]");
+                  const panel=toggle?document.getElementById(toggle.getAttribute("aria-controls")):null;
+                  if(nextRow) nextRow.classList.add("expanded");
+                  if(toggle) toggle.setAttribute("aria-expanded","true");
+                  if(panel) panel.hidden=false;
+                  if(nextRow) nextRow.scrollIntoView({
+                    behavior:document.body.classList.contains("reduce-motion")?"auto":"smooth",
+                    block:"nearest"
+                  });
+                  if(toggle) toggle.focus({preventScroll:true});
+                  else panel?.querySelector("input,select,textarea")?.focus({preventScroll:true});
+                });
+              }
+            }
+          }else if(currentSetKey){
+            state.workoutSetAccordionOverrides.set(currentSetKey,true);
+            accordionOverridesChanged=true;
+            row.classList.add("expanded");
+            if(setToggle) setToggle.setAttribute("aria-expanded","true");
+            if(setBody) setBody.hidden=false;
+          }
+        }
+        if(accordionOverridesChanged){
+          saveWorkoutSetAccordionOverrides(context.ownerId,context.workoutInstanceId);
         }
         updateActiveWorkoutExerciseUi(exerciseInstanceId,updated);
       }else if(button.matches("[data-add-extra-set]")){
@@ -12003,6 +12124,7 @@ function finishWorkout(){
       revision:Math.max(1,Number(d.revision)||1)+1,
       updatedAt:workout.date
     },{active:false});
+    clearWorkoutSetAccordionOverrides(ownerId,d.workoutInstanceId);
     clearDraft(s,{mark:false,preserveProgress:true});
     const next=routineSessionRuntimeApi().nextSessionId(canonical,s);
     persistSelectedRoutineSession(next);

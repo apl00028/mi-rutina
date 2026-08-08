@@ -152,15 +152,23 @@
       dropset:false,restPause:false,unilateral:false,warmup:false,done:false
     };
   }
+  function normalizeSeriesSummarySet(set={}){
+    return {
+      ...set,
+      done:Boolean(set?.done),
+      planned:set?.planned!==false,
+      warmup:Boolean(set?.warmup)
+    };
+  }
   function setSeriesSummaryModel({series=[],plannedSets=null}={}){
-    const rows=list(series);
-    const inferredPlanned=rows.filter(set=>set?.planned!==false).length;
+    const rows=list(series).map(normalizeSeriesSummarySet);
+    const inferredPlanned=rows.filter(set=>set.planned).length;
     const requested=plannedSets===null||plannedSets===undefined||plannedSets===""
       ?null
       :finite(plannedSets);
     const planned=Math.max(0,Math.floor(requested===null?inferredPlanned:requested));
-    const extras=rows.filter(set=>set?.planned===false).length;
-    const completed=rows.filter(set=>set?.done).length;
+    const extras=rows.filter(set=>!set.planned).length;
+    const completed=rows.filter(set=>set.done).length;
     const label=extras
       ?`${planned} ${planned===1?"prevista":"previstas"} + ${extras} ${extras===1?"extra":"extras"}`
       :`${completed} de ${planned} ${planned===1?"serie prevista":"series previstas"}`;
@@ -214,8 +222,8 @@
   }
   function workoutCompletionReviewModel({exercises=[],elapsedMs=0}={}){
     const rows=list(exercises).map((exercise,index)=>{
-      const sets=list(exercise?.series);
-      const completedSets=sets.filter(set=>set?.done).length;
+      const sets=list(exercise?.series).map(normalizeSeriesSummarySet);
+      const completedSets=sets.filter(set=>set.done).length;
       const startedSets=sets.filter(setHasResults).length;
       const note=text(exercise?.notes);
       const completed=Boolean(

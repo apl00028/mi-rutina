@@ -9833,8 +9833,8 @@ function previousExerciseForWorkout(last,exercise,index){
   return last.exercises[index]||null;
 }
 function activeWorkoutExerciseStatus(exercise){
-  const sets=Array.isArray(exercise?.series)?exercise.series:[];
-  const completed=sets.filter(set=>set?.done).length;
+  const sets=(Array.isArray(exercise?.series)?exercise.series:[]).map(normalizeSeries);
+  const completed=sets.filter(set=>set.done).length;
   const started=sets.some(activeWorkoutApi().setHasResults);
   if(completed===sets.length&&sets.length&&exercise?.completedAt) return "completed";
   if(started||completed) return "started";
@@ -9904,6 +9904,11 @@ function updateActiveWorkoutExerciseUi(exerciseInstanceId,draft){
   card.querySelectorAll("[data-active-set]").forEach((row,index)=>{
     row.classList.toggle("next",index===nextIndex);
   });
+  const seriesSummary=activeWorkoutApi().setSeriesSummaryModel({
+    series:exercise.series,plannedSets:exercise.sets
+  });
+  const sectionSummary=card.querySelector(".active-workout-section-heading small");
+  if(sectionSummary) sectionSummary.textContent=seriesSummary.label;
   updateActiveWorkoutProgressUi(draft);
 }
 function renderActiveWorkoutGuide(
@@ -9972,9 +9977,9 @@ function renderActiveWorkoutUnresolved(resolution,exercise,key){
   }
   return `<section class="active-workout-resolution" role="status">
     <div class="active-workout-resolution-copy">
-      <span class="section-kicker">FICHA PENDIENTE</span>
-      <h3>Necesitamos confirmar la ficha correcta</h3>
-      <p>Hay varias coincidencias posibles. Puedes seguir registrando el ejercicio.</p>
+      <span class="section-kicker">Ficha pendiente</span>
+      <h3>Información del ejercicio sin confirmar</h3>
+      <p>Selecciona una ficha para ver técnica y músculos trabajados.</p>
     </div>
     <div class="active-workout-resolution-actions">
       ${resolution.candidates.length?`<button type="button" class="secondary" data-workout-show-candidates aria-expanded="${showCandidates}">Elegir ficha</button>`:""}
@@ -10140,7 +10145,7 @@ function renderActiveWorkoutExercise({
   }));
   const status=activeWorkoutExerciseStatus(exercise);
   const seriesSummary=api.setSeriesSummaryModel({
-    series:exercise.series,plannedSets:exercise.sets
+    series:rows,plannedSets:exercise.sets
   });
   const detailSummary=api.exerciseDetailDisclosureModel(exercise);
   const completedSets=seriesSummary.completed;
@@ -11583,6 +11588,7 @@ function bindActiveWorkoutEvents(context){
         setActiveWorkoutMessage("success","Ejercicio guardado.");
         updateActiveWorkoutInlineMessage();
         updateActiveWorkoutExerciseUi(exerciseInstanceId,saved);
+        collapseCompletedWorkoutExercise(exerciseInstanceId);
       }else if(button.matches("[data-workout-discard-menu]")){
         state.workoutDiscardMenuOpen=!state.workoutDiscardMenuOpen;renderWorkout();
       }else if(button.matches("[data-workout-discard]")){

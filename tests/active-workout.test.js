@@ -285,7 +285,127 @@ test("serie extra completada debe desmarcarse antes de poder eliminarse",()=>{
   }).canDelete,true);
 });
 
-test("descanso: conserva el valor iniciado y separa el siguiente valor por defecto",()=>{
+test("series: cuenta 0 de 3 sin checks",()=>{
+  const api=loadApi();
+  const summary=api.setSeriesSummaryModel({
+    series:[
+      {weight:"80",reps:"10",rir:"2",done:false},
+      {weight:"80",reps:"10",rir:"2",done:false},
+      {weight:"80",reps:"10",rir:"2",done:false}
+    ],
+    plannedSets:3
+  });
+  assert.equal(summary.completed,0);
+  assert.equal(summary.label,"0 de 3 series previstas");
+});
+
+test("series: cuenta 1 de 3 con un check",()=>{
+  const api=loadApi();
+  const summary=api.setSeriesSummaryModel({
+    series:[{done:true},{done:false},{done:false}],
+    plannedSets:3
+  });
+  assert.equal(summary.completed,1);
+  assert.equal(summary.label,"1 de 3 series previstas");
+});
+
+test("series: cuenta 2 de 3 con dos checks",()=>{
+  const api=loadApi();
+  const summary=api.setSeriesSummaryModel({
+    series:[{done:true},{done:true},{done:false}],
+    plannedSets:3
+  });
+  assert.equal(summary.completed,2);
+  assert.equal(summary.label,"2 de 3 series previstas");
+});
+
+test("series: cuenta 3 de 3 con tres checks",()=>{
+  const api=loadApi();
+  const summary=api.setSeriesSummaryModel({
+    series:[{done:true},{done:true},{done:true}],
+    plannedSets:3
+  });
+  assert.equal(summary.completed,3);
+  assert.equal(summary.label,"3 de 3 series previstas");
+});
+
+test("series: peso precargado sin completar no cuenta ni muestra checks",()=>{
+  const api=loadApi();
+  const summary=api.setSeriesSummaryModel({
+    series:[
+      {weight:"80",reps:"",rir:"",done:false},
+      {weight:"",reps:"",rir:"",done:false},
+      {weight:"",reps:"",rir:"",done:false}
+    ],
+    plannedSets:3
+  });
+  assert.equal(summary.completed,0);
+  assert.equal(summary.label,"0 de 3 series previstas");
+});
+
+test("series: peso y repeticiones escritos sin completar no cuenta ni muestra checks",()=>{
+  const api=loadApi();
+  const summary=api.setSeriesSummaryModel({
+    series:[
+      {weight:"80",reps:"8",rir:"2",done:false},
+      {weight:"80",reps:"8",rir:"2",done:false},
+      {weight:"80",reps:"8",rir:"2",done:false}
+    ],
+    plannedSets:3
+  });
+  assert.equal(summary.completed,0);
+  assert.equal(summary.label,"0 de 3 series previstas");
+});
+
+test("series: recarga conserva exactamente contador y checks",()=>{
+  const api=loadApi();
+  const series=[{done:true},{done:true},{done:false}];
+  const original=api.setSeriesSummaryModel({series,plannedSets:3});
+  const reloaded=api.setSeriesSummaryModel({series:JSON.parse(JSON.stringify(series)),plannedSets:3});
+  assert.deepEqual(original,reloaded);
+});
+
+test("serie completada editada permanece completada salvo reabrirla",()=>{
+  const api=loadApi();
+  const exercise={
+    exerciseId:"test",series:[{done:true},{done:true}],completedAt:"2026-07-30T10:00:00.000Z"
+  };
+  assert.equal(api.workoutCompletionReviewModel({exercises:[exercise]}).completedExercises,1);
+  const edited={...exercise,series:[{...exercise.series[0],weight:"82.5"},{...exercise.series[1]}]};
+  assert.equal(api.workoutCompletionReviewModel({exercises:[edited]}).completedExercises,1);
+  const reopened={...exercise,series:[{...exercise.series[0],done:false},{...exercise.series[1]}]};
+  assert.equal(api.workoutCompletionReviewModel({exercises:[reopened]}).completedExercises,0);
+});
+
+test("serie migrada sin bandera inequívoca se considera incompleta",()=>{
+  const api=loadApi();
+  const summary=api.setSeriesSummaryModel({
+    series:[{weight:"80",reps:"10",rir:"2",done:false}],
+    plannedSets:1
+  });
+  assert.equal(summary.completed,0);
+  assert.equal(summary.label,"0 de 1 serie prevista");
+});
+
+test("ficha pendiente: copy y botones exactos",()=>{
+  assert.match(workoutUiSource,/Ficha pendiente/);
+  assert.match(workoutUiSource,/Información del ejercicio sin confirmar/);
+  assert.match(workoutUiSource,/Selecciona una ficha para ver técnica y músculos trabajados\./);
+  assert.match(workoutUiSource,/Elegir ficha/);
+  assert.match(workoutUiSource,/Continuar sin ficha/);
+});
+
+test("completar ejercicio pliega el actual y abre el siguiente pendiente",()=>{
+  const completeBranch=between(bindingSource,'}else if(button.matches("[data-complete-active-exercise]"))','}else if(button.matches("[data-workout-discard-menu]"))');
+  assert.match(completeBranch,/collapseCompletedWorkoutExercise\(/);
+});
+
+test("updateActiveWorkoutExerciseUi actualiza el resumen de series tras completar una serie",()=>{
+  assert.match(appSource,/const sectionSummary=card\.querySelector\("\.active-workout-section-heading small"\);/);
+  assert.match(appSource,/if\(sectionSummary\) sectionSummary\.textContent=seriesSummary\.label;/);
+});
+
+test("ficha pendiente no bloquea series, ejercicio ni finalización",()=>{
   const model=loadApi().restTimerModel({seconds:72,running:true,defaultSeconds:120});
   assert.deepEqual(plain(model),{
     remainingSeconds:72,running:true,defaultSeconds:120,finished:false
@@ -619,7 +739,7 @@ test("completar ejercicio guarda localmente y actualiza solo la tarjeta visible"
   assert.match(completeBranch,/persist\([\s\S]*?completedAt=new Date\(\)\.toISOString/);
   assert.match(completeBranch,/if\(!workoutLocalSaveSucceeded\(\)\) return/);
   assert.match(completeBranch,/updateActiveWorkoutExerciseUi\(exerciseInstanceId,saved\)/);
-  assert.doesNotMatch(completeBranch,/collapseCompletedWorkoutExercise/);
+  assert.match(completeBranch,/collapseCompletedWorkoutExercise\(/);
 });
 
 test("fallo remoto permite plegar y fallo local lo impide",()=>{

@@ -1,0 +1,8 @@
+{
+    "chat.tools.terminal.autoApprove": {
+        "/^node --check active-workout\\.js app\\.js ; git diff --check$/": {
+            "approve": true,
+            "matchCommandLine": true
+        }
+    }
+}

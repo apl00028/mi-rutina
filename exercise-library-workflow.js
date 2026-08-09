@@ -1,7 +1,7 @@
 (function(global){
   "use strict";
 
-  const MODEL_VERSION="4.2.0-alpha.1-phase-g";
+  const MODEL_VERSION="4.2.0-alpha.2-phase-g";
   const FILTER_DEFAULTS=Object.freeze({
     query:"",category:"all",pattern:"all",muscle:"all",equipment:"all",
     difficulty:"all",favorites:false,custom:false,status:"all",archived:false,
@@ -25,6 +25,11 @@
     elbow_flexion:"Flexión de codo",elbow_extension:"Extensión de codo",
     shoulder_abduction:"Abducción de hombro",
     shoulder_external_rotation:"Rotación externa de hombro",
+    shoulder_flexion:"Flexión de hombro",hip_abduction:"Abducción de cadera",
+    hip_adduction:"Aducción de cadera",trunk_flexion:"Flexión de tronco",
+    hip_flexion_core:"Core con flexión de cadera",locomotion:"Locomoción",
+    spinal_mobility:"Movilidad de columna",thoracic_rotation:"Rotación torácica",
+    hip_flexor_mobility:"Movilidad de flexores de cadera",
     anti_extension_core:"Core antiextensión",anti_rotation_core:"Core antirrotación",
     lateral_core:"Core lateral",loaded_carry:"Transporte con carga",
     unilateral_lower_body:"Tren inferior unilateral",
@@ -37,6 +42,15 @@
     bench:"Banco",adjustable_bench:"Banco ajustable",dumbbells:"Mancuernas",
     barbell:"Barra",plates:"Discos",squat_rack:"Rack",smith_machine:"Máquina Smith",
     cable_machine:"Polea",resistance_band:"Banda elástica",
+    decline_bench:"Banco declinado",preacher_bench:"Banco predicador",
+    ez_bar:"Barra EZ",trap_bar:"Barra hexagonal",pull_up_bar:"Barra de dominadas",
+    dip_station:"Estación de fondos",ab_wheel:"Rueda abdominal",pec_deck:"Peck deck",
+    row_machine:"Máquina de remo",t_bar_row_machine:"Máquina de remo en T",
+    hack_squat_machine:"Máquina hack",lateral_raise_machine:"Máquina de elevación lateral",
+    hip_abduction_machine:"Máquina de abductores",hip_adduction_machine:"Máquina de aductores",
+    seated_calf_raise_machine:"Máquina de gemelos sentado",
+    assisted_pullup_dip_machine:"Máquina de dominadas y fondos asistidos",
+    nordic_bench:"Banco nórdico",
     chest_press_machine:"Máquina de press de pecho",
     shoulder_press_machine:"Máquina de press de hombros",leg_press:"Prensa",
     leg_extension:"Extensión de piernas",seated_leg_curl:"Curl femoral sentado",
@@ -47,6 +61,14 @@
     stability_ball:"Fitball",chest:"Pecho",back:"Espalda",lats:"Dorsales",
     triceps:"Tríceps",biceps:"Bíceps",quadriceps:"Cuádriceps",hamstrings:"Isquios",
     glutes:"Glúteos",calves:"Gemelos",core:"Core",anterior_deltoid:"Deltoide anterior",
+    upper_back:"Espalda alta",latissimus_dorsi:"Dorsal ancho",deltoids:"Deltoides",
+    upper_chest:"Pecho superior",upper_traps:"Trapecio superior",lower_traps:"Trapecio inferior",
+    rotator_cuff:"Manguito rotador",forearms:"Antebrazos",brachialis:"Braquial",
+    spinal_erectors:"Erectores espinales",trunk:"Tronco",shoulders:"Hombros",
+    obliques:"Oblicuos",rectus_abdominis:"Recto abdominal",hip_flexors:"Flexores de cadera",
+    adductors:"Aductores",gracilis:"Grácil",gluteus_medius:"Glúteo medio",
+    gluteus_minimus:"Glúteo menor",cardiorespiratory:"Sistema cardiorrespiratorio",
+    spinal_mobility:"Movilidad vertebral",thoracic_spine:"Columna torácica",
     lateral_deltoid:"Deltoide lateral",posterior_deltoid:"Deltoide posterior",
     full_body:"Cuerpo completo",main:"Principal",accessory:"Accesorio",support:"Apoyo",
     home:"Casa",gym:"Gimnasio",outdoors:"Exterior",mixed:"Mixto",other:"Otro"

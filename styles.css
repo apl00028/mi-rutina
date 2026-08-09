@@ -3983,10 +3983,11 @@ body.reduce-motion .active-workout-session-progress span{transition:none}
     white-space:nowrap;
   }
   .active-set-card>header{grid-area:number}
+  .active-set-content{grid-template-columns:1fr}
   .active-set-reference{grid-area:reference}
-  .active-set-fields{grid-area:fields}
-  .active-set-warmup{grid-area:warmup}
-  .active-set-actions{grid-area:actions;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.35rem;width:100%;max-width:100%}
+  .active-set-fields{grid-column:1/-1}
+  .active-set-warmup{grid-column:1/-1}
+  .active-set-actions{grid-column:1/-1;grid-row:auto;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.35rem;width:100%;max-width:100%}
   .active-set-actions button{width:100%}
   .workout-exercise-details{grid-template-columns:1fr}
   .active-exercise-navigation{grid-template-columns:minmax(0,.8fr) minmax(0,1.2fr) auto}

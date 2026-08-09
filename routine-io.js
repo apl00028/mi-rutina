@@ -796,12 +796,37 @@
       }))
     }));
   }
-  function importFingerprint({ownerId,result,baselineHash,templateVersion=ROUTINE_TEMPLATE_VERSION}={}){
+  function importFingerprint({
+    ownerId,result,baselineHash,
+    templateVersion=ROUTINE_TEMPLATE_VERSION
+  }={}){
+    const compatibilityWarnings=list(result?.warnings)
+      .map(item=>({
+        code:text(item?.code),
+        row:Number.isFinite(Number(item?.row))?Number(item.row):null,
+        column:text(item?.column)||null,
+        value:text(item?.value)||null,
+        message:text(item?.message)
+      }))
+      .sort((a,b)=>
+        stableStringify(a).localeCompare(stableStringify(b),"en")
+      );
+
     return stableHash({
       ownerId:normalizeOwnerId(ownerId),
       routine:canonicalImportedRoutine(result),
       templateVersion:Number(templateVersion)||ROUTINE_TEMPLATE_VERSION,
-      baselineHash:text(baselineHash)
+      baselineHash:text(baselineHash),
+      compatibility:{
+        reviewRequired:Boolean(result?.reviewRequired),
+        warnings:compatibilityWarnings,
+        unresolvedQuestions:unique(
+          list(result?.unresolvedQuestions).map(text).filter(Boolean)
+        ).sort((a,b)=>a.localeCompare(b,"en")),
+        activationCompatibility:clone(
+          result?.activationCompatibility||null
+        )
+      }
     });
   }
   function buildImportedProposal({

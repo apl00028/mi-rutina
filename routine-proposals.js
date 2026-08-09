@@ -369,13 +369,38 @@
     const normalizedOwner=normalizeOwnerId(ownerId);
     const effectiveTimestamp=timestamp||proposal?.generatedAt;
     const current=normalizeRecords(records,normalizedOwner,{activeProposalId});
-    const duplicate=current.find(record=>record.proposal.proposalId===proposal?.proposalId);
+    const duplicate=current.find(
+      record=>record.proposal.proposalId===proposal?.proposalId
+    );
+
     if(duplicate){
-      if(!same(duplicate.proposal,proposal)) throw new Error("proposal_id_conflict");
+      const existingFingerprint=text(
+        duplicate.proposal?.source?.importFingerprint
+      );
+      const incomingFingerprint=text(
+        proposal?.source?.importFingerprint
+      );
+
+      const sameImportedRoutine=
+        duplicate.proposal?.type==="imported" &&
+        proposal?.type==="imported" &&
+        existingFingerprint &&
+        existingFingerprint===incomingFingerprint;
+
+      if(!same(duplicate.proposal,proposal) && !sameImportedRoutine){
+        throw new Error("proposal_id_conflict");
+      }
+
       return {
-        records:current,record:clone(duplicate),
-        activeProposalId:selectActiveProposalId(current,normalizedOwner,activeProposalId),
-        created:false,incidents:[]
+        records:current,
+        record:clone(duplicate),
+        activeProposalId:selectActiveProposalId(
+          current,
+          normalizedOwner,
+          activeProposalId
+        ),
+        created:false,
+        incidents:[]
       };
     }
     const existingPending=current.find(record=>record.lifecycle.status==="pending_review");

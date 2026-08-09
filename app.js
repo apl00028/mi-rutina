@@ -2275,16 +2275,29 @@ function routineActivationBaseline(ownerId){
 }
 function routineOwnerHasActiveWorkout(ownerId){
   const normalizedOwner=routineProposalOwnerId(ownerId);
+  const currentRoutineId=activeRoutineForComparison()?.routineId||null;
+
+  const belongsToCurrentRoutine=record=>
+    record?.ownerId===normalizedOwner&&
+    ["active","paused"].includes(record?.status)&&
+    Boolean(record?.startedAt)&&
+    (
+      !currentRoutineId||
+      !record?.routineId||
+      record.routineId===currentRoutineId
+    );
+
   const memory=state?.workoutDraftMemory;
-  if(memory?.ownerId===normalizedOwner&&["active","paused"].includes(memory.status)){
+  if(belongsToCurrentRoutine(memory)){
     return true;
   }
+
   try{
-    return storedWorkoutProgressRecords(normalizedOwner).some(record=>
-      record?.ownerId===normalizedOwner&&["active","paused"].includes(record?.status)
-    );
-  }catch(_){
-    return true;
+    return storedWorkoutProgressRecords(normalizedOwner)
+      .some(belongsToCurrentRoutine);
+  }catch(error){
+    console.warn("Unable to check active workout state.",error);
+    return false;
   }
 }
 function activateStoredRoutineProposal(proposalId,{

@@ -155,9 +155,13 @@
       </section>
       <section class="routine-hub-management" aria-labelledby="routineManagementTitle">
         <h2 id="routineManagementTitle">Centro de gestión</h2>
+        <p class="routine-hub-management-intro">Gestiona aquí tus rutinas. El flujo recomendado es: descarga la plantilla, rellénala o pásasela a ChatGPT, impórtala en GymOS, revisa la propuesta y actívala cuando estés conforme.</p>
+        <ol class="routine-hub-flow" aria-label="Flujo recomendado para gestionar una rutina">
+          <li>Descargar plantilla</li><li>Rellenar</li><li>Importar</li><li>Revisar</li><li>Activar</li>
+        </ol>
         <div class="routine-hub-action-grid">
-          <button type="button" data-hub-view="import"><strong>Importar nueva rutina</strong><span>Texto, Markdown, JSON o Excel</span></button>
           <button type="button" data-hub-action="template"><strong>Plantilla</strong><span>Descargar Excel</span></button>
+          <button type="button" data-hub-view="import"><strong>Importar nueva rutina</strong><span>Texto, Markdown, JSON o Excel</span></button>
           <button type="button" data-hub-action="export"><strong>Exportar</strong><span>Rutina activa</span></button>
           <button type="button" data-hub-view="reconfigure"><strong>Crear propuesta de cambio</strong><span>Adaptar la rutina actual</span></button>
           <button type="button" data-hub-view="share"><strong>Exportar progreso</strong><span>Preparar para ChatGPT</span></button>
@@ -311,6 +315,7 @@
       <section class="routine-hub-progress" aria-label="Progreso de la rutina"><div><span class="section-kicker">PROGRESO</span><strong>${data.progress?.adherence?.completed||0} sesiones realizadas</strong></div><div><span>Última sesión</span><strong>${data.progress?.workouts?.length?formatDate(data.progress.workouts[data.progress.workouts.length-1].date):"Aún no registrada"}</strong></div><div><span>Próxima sesión sugerida</span><strong>${esc(data.nextSessionLabel||"Sin sugerencia")}</strong></div><div><span>Estado</span><strong>${data.activeWorkout?"Entrenamiento en curso":"Rutina activa"}</strong></div></section>
       ${analysis?renderTextImportPreview(analysis):""}
       ${analysis?.canPropose?`<footer class="routine-hub-sticky-actions"><button type="button" class="secondary" data-hub-action="edit-text-import">Volver a editar</button><button type="button" class="secondary" data-hub-action="create-text-proposal">Crear propuesta</button><button type="button" class="primary" data-hub-action="review-text-proposal">Revisar y activar</button></footer>`:""}
+      <p class="routine-import-flow-note">Descarga la plantilla, rellénala, impórtala, revisa la propuesta y actívala solo cuando estés conforme.</p>
       <section class="routine-import-drop">
         <h2>O importar un archivo seguro</h2>
         <p>También puedes usar la plantilla XLSX local de GymOS.</p>

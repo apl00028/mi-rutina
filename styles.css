@@ -5199,9 +5199,13 @@ body.reduce-motion .active-workout-shell[data-workout-layout="mobile"] *{
 .routine-hub-progress{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;padding:18px 0;border-bottom:1px solid var(--border)}
 .routine-hub-progress>div{display:grid;gap:4px}.routine-hub-progress span{color:var(--muted);font-size:.8rem}.routine-hub-progress strong{font-size:.92rem}
 .routine-hub-management{padding:24px 0}
-.routine-hub-management>h2{font-size:1rem;margin:0 0 14px}
-.routine-hub-action-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
-.routine-hub-action-grid button{min-height:72px;display:grid;align-content:center;gap:4px;text-align:left;padding:14px;border:1px solid var(--border);border-radius:8px;background:var(--card);color:inherit}
+.routine-hub-management>h2{font-size:1rem;margin:0 0 8px}
+.routine-hub-management-intro{max-width:780px;margin:0 0 12px;color:var(--muted);line-height:1.5}
+.routine-hub-flow{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;margin:0 0 18px;padding:0;list-style:none;font-size:.86rem;font-weight:750}
+.routine-hub-flow li{display:flex;align-items:center;gap:10px}
+.routine-hub-flow li:not(:last-child)::after{content:"→";color:var(--muted);font-weight:500}
+.routine-hub-action-grid{display:grid;grid-template-columns:1fr;gap:10px;width:100%}
+.routine-hub-action-grid button{width:100%;min-height:64px;display:grid;align-content:center;gap:4px;text-align:left;padding:14px 16px;border:1px solid var(--border);border-radius:8px;background:var(--card);color:inherit;overflow-wrap:anywhere}
 .routine-hub-action-grid button:hover,.routine-hub-action-grid button:focus-visible{border-color:var(--brand);background:var(--brand-soft)}
 .routine-hub-action-grid span,.routine-hub-file-note{color:var(--muted);font-size:.82rem}
 .routine-hub-file-note{margin:10px 0 0}
@@ -5230,6 +5234,7 @@ body.reduce-motion .active-workout-shell[data-workout-layout="mobile"] *{
 .routine-hub-exercise p{margin:7px 0 0;color:var(--muted)}
 .routine-hub-mobile-sessions{display:none}
 .routine-hub-intro{max-width:720px;color:var(--muted);margin:-8px 0 20px}
+.routine-import-flow-note{max-width:720px;margin:0 0 12px;color:var(--muted);line-height:1.5}
 .routine-manual-form,.routine-reconfigure-form{display:grid;gap:18px}
 .routine-manual-session{display:grid;gap:14px}
 .routine-manual-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
@@ -5303,8 +5308,7 @@ body.reduce-motion .active-workout-shell[data-workout-layout="mobile"] *{
   .routine-hub-progress{grid-template-columns:repeat(2,minmax(0,1fr))}
   .routine-hub-primary-actions{width:100%}
   .routine-hub-primary-actions button{flex:1;min-height:44px}
-  .routine-hub-action-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
-  .routine-hub-action-grid button{min-height:68px}
+  .routine-hub-action-grid button{min-height:56px}
   .routine-hub-notice{align-items:flex-start}
   .routine-hub-notice>div:last-child{flex-direction:column}
   .routine-hub-session-tabs,.routine-hub-desktop-session{display:none}
@@ -5324,7 +5328,10 @@ body.reduce-motion .active-workout-shell[data-workout-layout="mobile"] *{
   .routine-hub-sticky-actions button{min-height:44px;flex:0 0 auto}
 }
 @media(max-width:359px){
-  .routine-hub-action-grid,.routine-manual-grid,.routine-manual-exercise .routine-manual-grid,.routine-reason-grid,.routine-reconfigure-fields{grid-template-columns:1fr}
+  .routine-manual-grid,.routine-manual-exercise .routine-manual-grid,.routine-reason-grid,.routine-reconfigure-fields{grid-template-columns:1fr}
+  .routine-hub-flow{display:grid;align-items:start;gap:3px;padding-left:20px;list-style:decimal}
+  .routine-hub-flow li{display:list-item}
+  .routine-hub-flow li:not(:last-child)::after{content:""}
   .routine-hub-workout-state{max-width:118px;text-align:center}
   .routine-hub-confirmation>div{display:grid}
   .routine-hub-confirmation>div button{width:100%}

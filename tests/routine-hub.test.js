@@ -8,6 +8,7 @@ const vm=require("node:vm");
 
 const root=path.resolve(__dirname,"..");
 const source=fs.readFileSync(path.join(root,"routine-hub.js"),"utf8");
+const stylesSource=fs.readFileSync(path.join(root,"styles.css"),"utf8");
 const appSource=fs.readFileSync(path.join(root,"app.js"),"utf8");
 const indexSource=fs.readFileSync(path.join(root,"index.html"),"utf8");
 
@@ -107,6 +108,64 @@ test("el hub no contiene writers ni muestra nombres de IDs técnicos",()=>{
   assert.doesNotMatch(source,/>ownerId<|>routineId<|>sessionId<|>Hash<|>JSON</i);
   assert.match(appSource,/activeWorkoutState:routineOwnerHasActiveWorkout\(normalizedOwner\)/);
   assert.match(appSource,/function routineOwnerHasActiveWorkout[\s\S]*catch\([^)]*\)[\s\S]*return true;/);
+});
+
+test("Centro de gestión explica el flujo completo con texto accesible",()=>{
+  const overview=source.slice(
+    source.indexOf("function renderOverview("),source.indexOf("function renderActive(")
+  );
+  assert.match(overview,/Centro de gestión/);
+  assert.match(overview,/Gestiona aquí tus rutinas/);
+  assert.match(overview,/aria-label="Flujo recomendado para gestionar una rutina"/);
+  for(const step of ["Descargar plantilla","Rellenar","Importar","Revisar","Activar"]){
+    assert.match(overview,new RegExp(step, "i"),step);
+  }
+});
+
+test("las cinco acciones permanecen en filas accesibles de ancho completo",()=>{
+  const overview=source.slice(
+    source.indexOf("function renderOverview("),source.indexOf("function renderActive(")
+  );
+  for(const action of [
+    "Importar nueva rutina","Plantilla","Exportar","Crear propuesta de cambio","Exportar progreso"
+  ]) assert.match(overview,new RegExp(action),action);
+  const actionGrid=overview.slice(
+    overview.indexOf('<div class="routine-hub-action-grid">'),
+    overview.indexOf('<p class="routine-hub-file-note">')
+  );
+  assert.equal((actionGrid.match(/<button type="button"/g)||[]).length,5);
+  assert.ok(actionGrid.indexOf('data-hub-action="template"')<actionGrid.indexOf('data-hub-view="import"'));
+  assert.doesNotMatch(actionGrid,/onclick\s*=/i);
+  assert.match(stylesSource,/\.routine-hub-action-grid\{[^}]*grid-template-columns:1fr[^}]*width:100%/);
+  assert.match(stylesSource,/\.routine-hub-action-grid button\{[^}]*width:100%[^}]*min-height:/);
+  assert.match(stylesSource,/\.routine-hub-action-grid button:hover,\.routine-hub-action-grid button:focus-visible/);
+});
+
+test("ningún breakpoint devuelve las acciones del Centro a varias columnas",()=>{
+  const declarations=[...stylesSource.matchAll(
+    /\.routine-hub-action-grid\s*\{([^}]*)\}/g
+  )].map(match=>match[1]);
+  const columnRules=declarations.filter(rule=>/grid-template-columns/.test(rule));
+  assert.equal(columnRules.length,1);
+  assert.match(columnRules[0],/grid-template-columns:1fr/);
+  assert.doesNotMatch(columnRules[0],/repeat\(|minmax\(/);
+});
+
+test("Importar recuerda el flujo antes del bloque de subida",()=>{
+  const importView=source.slice(
+    source.indexOf("function renderImport("),source.indexOf("function renderTextImportPreview(")
+  );
+  const note=importView.indexOf('class="routine-import-flow-note"');
+  const upload=importView.indexOf('class="routine-import-drop"');
+  assert.ok(note>=0&&upload>note);
+  assert.match(importView,/Descarga la plantilla, rellénala, impórtala, revisa la propuesta y actívala solo cuando estés conforme/);
+});
+
+test("el cierre visual no altera handlers de importación ni activación",()=>{
+  assert.match(source,/action\("template"\)\?\.addEventListener\("click"[\s\S]*?actions\.downloadTemplate\(\)/);
+  assert.match(source,/action\("save-import"\)\?\.addEventListener\("click"[\s\S]*?actions\.importProposal\(\)/);
+  assert.match(source,/confirmButton\.onclick=async\(\)=>[\s\S]*?actions\.activate\(/);
+  assert.doesNotMatch(source,/onclick\s*=\s*["']/i);
 });
 
 test("guard de rutina permite continuar solo si confirma que no hay entrenamiento activo",()=>{

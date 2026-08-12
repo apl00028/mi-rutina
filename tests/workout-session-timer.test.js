@@ -286,16 +286,17 @@ test("finalizar usa el tiempo del cronómetro y pausar no finaliza la sesión",(
   assert.match(finishSource,/durationMs:workoutSessionElapsedMs\(d\)/);
 });
 
-test("descanso móvil usa deadline en memoria y sigue independiente del cronómetro de sesión",()=>{
+test("descanso móvil usa deadline persistente local y sigue independiente del cronómetro de sesión",()=>{
   const restSource=appSource.slice(
-    appSource.indexOf("function startTimer(sec)"),
+    appSource.indexOf("function restTimerContextForDraft("),
     appSource.indexOf("function formatTimer(")
   );
-  assert.match(restSource,/timerDeadline=Date\.now\(\)/);
-  assert.match(restSource,/Math\.ceil/);
+  assert.match(restSource,/deadlineEpochMs/);
+  assert.match(restSource,/restTimerRemaining/);
+  assert.match(restSource,/localStorage\.setItem/);
   assert.doesNotMatch(
     restSource,
-    /sessionTimer|workoutSessionTimer|saveDraft|stageWorkoutDraft|localStorage/
+    /sessionTimer|workoutSessionTimer|saveDraft|stageWorkoutDraft|supabase/i
   );
   assert.match(appSource,/timerDeadline:\s*null/);
   assert.match(appSource,/data-active-rest-time aria-live="off"/);

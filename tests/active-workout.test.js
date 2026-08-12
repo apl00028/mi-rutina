@@ -689,7 +689,8 @@ test("registro: completar usa busy, inicia descanso solo en serie de trabajo y p
   const completeBranch=between(bindingSource,'}else if(button.matches("[data-complete-active-set]"))','}else if(button.matches("[data-add-extra-set]"))');
   assert.match(completeBranch,/workoutSetBusyKey===busyKey/);
   assert.match(completeBranch,/startRest=!wasDone&&!set\.warmup/);
-  assert.match(completeBranch,/startTimer\(getRestSeconds\(\)\)/);
+  assert.match(completeBranch,/effectiveRestSeconds\(\s*beforeExercise,getRestSeconds\(\)\s*\)/);
+  assert.match(completeBranch,/startTimer\(restDuration\)/);
   assert.match(bindingSource,/workoutSeriesDeleteCandidate/);
   assert.match(workoutUiSource,/data-confirm-delete-active-set/);
   assert.doesNotMatch(completeBranch,/window\.confirm|confirm\(/);
@@ -700,8 +701,8 @@ test("descanso: muestra Omitir y +30 sin confundirlo con el tiempo de sesión",(
   assert.match(renderSource,/>Omitir</);
   assert.match(renderSource,/\+30 s/);
   assert.match(renderSource,/id="activeRestStatus"[\s\S]*aria-live="polite"/);
-  assert.match(bindingSource,/state\.timerSeconds=Math\.max\(0,state\.timerSeconds\)\+30/);
-  assert.match(bindingSource,/state\.timerSeconds=0/);
+  assert.match(bindingSource,/extendActiveRestTimer\(30\)/);
+  assert.match(bindingSource,/clearActiveRestTimer\(\{removePersisted:true\}\)/);
 });
 
 test("finalización: revisa pendientes, duración, sustituciones y notas antes del writer oficial",()=>{
@@ -1107,15 +1108,16 @@ test("teclado y storage difieren reconstrucción mientras existe una edición ac
   assert.match(stylesSource,/data-keyboard-open/);
 });
 
-test("descanso usa deadline en memoria y no crea writer",()=>{
+test("descanso usa deadline persistente local sin crear writer de entrenamiento",()=>{
   const timerSource=between(
-    appSource,"function startTimer(sec)","function formatTimer("
+    appSource,"function restTimerContextForDraft(","function formatTimer("
   );
-  assert.match(timerSource,/state\.timerDeadline=Date\.now\(\)/);
-  assert.match(timerSource,/Math\.ceil/);
+  assert.match(timerSource,/deadlineEpochMs/);
+  assert.match(timerSource,/restTimerRemaining/);
+  assert.match(timerSource,/localStorage\.setItem/);
   assert.match(timerSource,/Descanso finalizado/);
   assert.match(timerSource,/},1000\)/);
-  assert.doesNotMatch(timerSource,/localStorage|saveDraft|stageWorkoutDraft|flushWorkoutDraftProgress/);
+  assert.doesNotMatch(timerSource,/saveDraft|stageWorkoutDraft|flushWorkoutDraftProgress|supabase/i);
   assert.match(stylesSource,/\.mobile-workout-rest/);
   assert.match(appSource,/data-active-rest-time aria-live="off"/);
 });

@@ -100,12 +100,19 @@ test("I4 el cambio de propietario limpia estado privado y operaciones pendientes
     appSource.indexOf("function assertActiveLocalOwner")
   );
   for(const token of [
-    "sessions=[]","timerInterval","syncTimer","syncInProgress",
+    "sessions=[]","clearActiveRestTimer","syncTimer","syncInProgress",
     "routineWorkflow","routineImport","completedWorkoutSummary",
     "workoutAnalysisId","coachChatMessages","nutritionPreview",
     "professionalNutritionDraft","quickActionsDraft","bodySummaryDraft",
     "recoveryDraft","accountProfile","onboardingDraft"
   ]) assert.match(reset,new RegExp(token.replace(/[.*+?^${}()|[\]\\]/g,"\\$&")),token);
+  const clearRest=appSource.slice(
+    appSource.indexOf("function clearActiveRestTimer"),
+    appSource.indexOf("function finishActiveRestTimer")
+  );
+  assert.match(clearRest,/clearInterval\(state\.timerInterval\)/);
+  assert.match(clearRest,/state\.restTimerGeneration=/);
+  assert.match(clearRest,/removeStoredRestTimer/);
 });
 
 test("I4 sincronización captura propietario, bloquea dobles ejecuciones y revalida awaits",()=>{

@@ -3491,10 +3491,7 @@ function resetRoutineSessionOwnerState(){
   state.workoutDeferredRender=false;
   document.body.classList.remove("mobile-workout-sheet-open");
   sessions=[];
-  clearInterval(state.timerInterval);
-  state.timerInterval=null;
-  state.timerSeconds=0;
-  state.timerDeadline=null;
+  clearActiveRestTimer({removePersisted:true});
   state.workoutRestAnnouncement=null;
   state.restPreferenceBusy=false;
   clearTimeout(state.syncTimer);
@@ -3668,6 +3665,7 @@ function deleteOwnerLocalData(ownerId,{removeOwner=false}={}){
   localStorage.removeItem(exerciseDomainMigrationBackupKey(normalizedOwnerId));
   removeOwnerRecoveryReminderData(normalizedOwnerId);
   removeOwnerWorkoutProgressData(normalizedOwnerId);
+  removeOwnerRestTimerData(normalizedOwnerId);
   if(removeOwner&&current===normalizedOwnerId) localStorage.removeItem(LOCAL_OWNER_KEY);
 }
 
@@ -3881,6 +3879,9 @@ let state = {
   timerSeconds: 0,
   timerInterval: null,
   timerDeadline: null,
+  restTimerPayload: null,
+  restTimerGeneration: 0,
+  restTimerPersistenceFailed: false,
   workoutRestAnnouncement: null,
   workoutSessionTimer: null,
   workoutSessionTimerInterval: null,
@@ -4254,6 +4255,7 @@ function getRestSeconds(){
   const value=Number(localStorage.getItem("gymos:restSeconds")||90);
   return [60,90,120,180].includes(value)?value:90;
 }
+const REST_TIMER_STORAGE_PREFIX="gymos:restTimer:";
 function saveRestSeconds(value){
   const seconds=Number(value);
   if(![60,90,120,180].includes(seconds)) throw new Error("invalid_rest_seconds");
@@ -10179,6 +10181,7 @@ function renderActiveWorkoutExercise({
   const recommendation=!timed
     ?exerciseRecommendation(previous,exercise.target,exercise.increment,exercise.type)
     :null;
+  const restDuration=api.effectiveRestSeconds(exercise,defaultRest);
   return `<article class="workout-exercise-card status-${status}${expanded?" expanded":""}" data-exercise-instance-id="${esc(instanceId)}" data-exercise-index="${index}">
     <header class="workout-exercise-card-header">
       <button type="button" class="workout-exercise-toggle" data-workout-toggle-exercise aria-expanded="${expanded}" aria-controls="workoutExercisePanel${index}">
@@ -10187,7 +10190,7 @@ function renderActiveWorkoutExercise({
           <strong id="workoutExerciseTitle${index}">${esc(exercise.name)}</strong>
           <small>${esc(muscle)}${pattern?` · ${esc(pattern)}`:""}</small>
         </span>
-        <span class="workout-exercise-prescription">${exercise.sets||rows.length} × ${esc(exercise.target||"—")} · RIR ${esc(exercise.targetRir||"—")}</span>
+        <span class="workout-exercise-prescription">${exercise.sets||rows.length} × ${esc(exercise.target||"—")} · RIR ${esc(exercise.targetRir||"—")} · ${restDuration} s descanso</span>
         <span class="workout-exercise-state" data-status="${status}">${status==="completed"?"✓ ":""}${statusLabel}<small>${esc(seriesSummary.performedLabel)}</small></span>
         <span class="workout-exercise-chevron" aria-hidden="true">⌄</span>
       </button>
@@ -10828,6 +10831,9 @@ function renderWorkout(){
     state.workoutDirtyDetailPanels=new Set();
     state.workoutMobileUi=api.reduceMobileWorkoutUi({},{});
   }
+  restoreActiveRestTimer(draft,{
+    now:Date.now(),announceExpired:Boolean(state.restTimerPayload)
+  });
   const canonicalExerciseIndex=draft.exercises.findIndex(
     item=>item.exerciseInstanceId===draft.currentExerciseInstanceId
   );
@@ -10862,7 +10868,8 @@ function renderWorkout(){
   );
   const defaultRest=getRestSeconds();
   const rest=api.restTimerModel({
-    seconds:state.timerSeconds,running:Boolean(state.timerInterval),defaultSeconds:defaultRest
+    deadlineEpochMs:state.timerDeadline,now:Date.now(),
+    seconds:state.timerSeconds,running:Boolean(state.restTimerPayload),defaultSeconds:defaultRest
   });
   const completedExercises=draft.exercises.filter(
     item=>activeWorkoutExerciseStatus(item)==="completed"
@@ -11418,6 +11425,9 @@ function bindActiveWorkoutEvents(context){
           let startRest=false;
           const before=getCurrent();
           const beforeExercise=currentExercise(before,exerciseInstanceId);
+          const restDuration=activeWorkoutApi().effectiveRestSeconds(
+            beforeExercise,getRestSeconds()
+          );
           const beforeSet=beforeExercise.series.find(item=>item.setInstanceId===setInstanceId);
           if(
             beforeSet&&!beforeSet.done&&
@@ -11433,7 +11443,7 @@ function bindActiveWorkoutEvents(context){
             if(wasDone) exercise.completedAt=null;
             startRest=!wasDone&&!set.warmup;
           },{immediate:true,scheduleSync:true,exerciseInstanceId});
-          if(startRest) startTimer(getRestSeconds());
+          if(startRest) startTimer(restDuration);
         }finally{state.workoutSetBusyKey=null;}
         updateMobileWorkoutUi({type:"CLEAR_SET"});
         const updated=getCurrent();
@@ -11523,14 +11533,12 @@ function bindActiveWorkoutEvents(context){
           renderWorkout();
         }
       }else if(button.matches("[data-skip-rest]")){
-        clearInterval(state.timerInterval);state.timerInterval=null;state.timerSeconds=0;state.timerDeadline=null;
+        clearActiveRestTimer({removePersisted:true});
         updateTimerUI();
         const restContainer=main.querySelector("[data-active-rest-container]");
         if(restContainer) restContainer.hidden=true;
       }else if(button.matches("[data-add-rest]")){
-        state.timerSeconds=Math.max(0,state.timerSeconds)+30;
-        state.timerDeadline=(state.timerDeadline||Date.now())+30_000;
-        updateTimerUI();renderWorkout();
+        extendActiveRestTimer(30);renderWorkout();
       }else if(button.matches("[data-workout-next-pending]")){
         const draft=getCurrent();
         const pendingIndex=draft.exercises.findIndex(
@@ -11677,8 +11685,8 @@ function bindActiveWorkoutEvents(context){
       try{
         if(!activeWorkoutIdentityValid(context)) throw new Error("owner_changed");
         stopWorkoutSessionTimer();stopAllExerciseTimers();
-        clearInterval(state.timerInterval);state.timerInterval=null;state.timerSeconds=0;state.timerDeadline=null;
         clearDraft(context.sessionId);
+        clearActiveRestTimer({removePersisted:true});
         document.body.classList.remove("mobile-workout-sheet-open");
         state.workoutDiscardConfirmOpen=false;
         state.workoutExerciseIndex=0;
@@ -11892,7 +11900,11 @@ function renderLegacyWorkout(){
       }
       draft.exercises[i].series[j].done=!draft.exercises[i].series[j].done;
       saveDraft(draft);
-      if(draft.exercises[i].series[j].done) startTimer(getRestSeconds());
+      if(draft.exercises[i].series[j].done){
+        startTimer(activeWorkoutApi().effectiveRestSeconds(
+          draft.exercises[i],getRestSeconds()
+        ),draft);
+      }
       renderWorkout();
     });
   });
@@ -11931,40 +11943,168 @@ function renderLegacyWorkout(){
   });
 }
 
-function startTimer(sec){
+function restTimerContextForDraft(draft=state.workoutDraftMemory){
+  const ownerId=currentRoutineOwnerOrNull();
+  const workoutInstanceId=String(draft?.workoutInstanceId||"").trim();
+  const sessionId=String(draft?.sessionId||"").trim();
+  return ownerId&&workoutInstanceId
+    ?{ownerId,workoutInstanceId,sessionId:sessionId||null}
+    :null;
+}
+function removeOwnerRestTimerData(ownerId){
+  const normalized=workoutProgressApi().ownerId(ownerId);
+  const prefix=`${REST_TIMER_STORAGE_PREFIX}${encodeURIComponent(normalized)}:`;
+  const keys=[];
+  for(let index=0;index<localStorage.length;index+=1){
+    const key=localStorage.key(index);
+    if(key?.startsWith(prefix)) keys.push(key);
+  }
+  keys.forEach(key=>localStorage.removeItem(key));
+}
+function restTimerStorageKey(context){
+  if(!context?.ownerId||!context?.workoutInstanceId) return null;
+  return `${REST_TIMER_STORAGE_PREFIX}${encodeURIComponent(context.ownerId)}:${encodeURIComponent(context.workoutInstanceId)}`;
+}
+function removeStoredRestTimer(context){
+  const key=restTimerStorageKey(context);
+  if(!key) return false;
+  try{localStorage.removeItem(key);return true;}catch(_){return false;}
+}
+function persistRestTimer(payload){
+  const key=restTimerStorageKey(payload);
+  if(!key) return false;
+  try{
+    localStorage.setItem(key,JSON.stringify(payload));
+    state.restTimerPersistenceFailed=false;
+    return true;
+  }catch(_){
+    state.restTimerPersistenceFailed=true;
+    return false;
+  }
+}
+function readStoredRestTimer(context){
+  const key=restTimerStorageKey(context);
+  if(!key) return null;
+  let raw;
+  try{raw=localStorage.getItem(key);}catch(_){
+    state.restTimerPersistenceFailed=true;
+    return null;
+  }
+  if(raw===null) return null;
+  let parsed=null;
+  try{parsed=JSON.parse(raw);}catch(_){/* invalid payload is cleared below */}
+  const api=activeWorkoutApi();
+  const normalized=api.normalizeRestTimerPayload(parsed);
+  if(!normalized||!api.restTimerBelongsTo(normalized,context)){
+    removeStoredRestTimer(context);
+    return null;
+  }
+  return normalized;
+}
+function clearActiveRestTimer({removePersisted=true}={}){
+  const previous=state.restTimerPayload;
+  state.restTimerGeneration=(state.restTimerGeneration||0)+1;
   clearInterval(state.timerInterval);
-  state.timerSeconds=Math.max(0,Math.floor(Number(sec)||0));
-  state.timerDeadline=Date.now()+(state.timerSeconds*1000);
+  state.timerInterval=null;
+  state.timerSeconds=0;
+  state.timerDeadline=null;
+  state.restTimerPayload=null;
+  state.restTimerPersistenceFailed=false;
+  if(removePersisted&&previous) removeStoredRestTimer(previous);
+}
+function finishActiveRestTimer({
+  generation=state.restTimerGeneration,announce=true,rerender=true
+}={}){
+  if(generation!==state.restTimerGeneration||!state.restTimerPayload) return false;
+  clearActiveRestTimer({removePersisted:true});
+  updateTimerUI();
+  if(announce){
+    const status=document.getElementById("activeRestStatus");
+    if(status) status.textContent="Descanso finalizado.";
+    state.workoutRestAnnouncement="Descanso finalizado.";
+    if(navigator.vibrate) navigator.vibrate([200,100,200]);
+  }
+  if(rerender) requestSafeActiveWorkoutRender();
+  return true;
+}
+function reconcileActiveRestTimer({now=Date.now(),announceExpired=true,generation=state.restTimerGeneration}={}){
+  if(generation!==state.restTimerGeneration||!state.restTimerPayload) return false;
+  const remaining=activeWorkoutApi().restTimerRemaining(state.restTimerPayload,now);
+  state.timerSeconds=remaining;
+  state.timerDeadline=state.restTimerPayload.deadlineEpochMs;
+  updateTimerUI();
+  if(remaining<=0) return finishActiveRestTimer({generation,announce:announceExpired});
+  return true;
+}
+function scheduleActiveRestTimer(){
+  if(state.timerInterval||!state.restTimerPayload) return;
+  const generation=state.restTimerGeneration;
+  state.timerInterval=setInterval(()=>{
+    reconcileActiveRestTimer({generation,announceExpired:true});
+  },1000);
+}
+function restoreActiveRestTimer(draft,{now=Date.now(),announceExpired=false}={}){
+  const context=restTimerContextForDraft(draft);
+  if(!context){clearActiveRestTimer({removePersisted:true});return null;}
+  const api=activeWorkoutApi();
+  if(state.restTimerPayload&&!api.restTimerBelongsTo(state.restTimerPayload,context)){
+    clearActiveRestTimer({removePersisted:true});
+  }
+  if(!state.restTimerPayload) state.restTimerPayload=readStoredRestTimer(context);
+  if(!state.restTimerPayload){
+    state.timerSeconds=0;state.timerDeadline=null;
+    clearInterval(state.timerInterval);state.timerInterval=null;
+    return null;
+  }
+  if(api.restTimerRemaining(state.restTimerPayload,now)<=0){
+    finishActiveRestTimer({announce:announceExpired,rerender:false});
+    return null;
+  }
+  state.timerDeadline=state.restTimerPayload.deadlineEpochMs;
+  state.timerSeconds=api.restTimerRemaining(state.restTimerPayload,now);
+  scheduleActiveRestTimer();
+  updateTimerUI();
+  return state.restTimerPayload;
+}
+function startTimer(sec,draft=state.workoutDraftMemory,now=Date.now()){
+  const duration=activeWorkoutApi().validRestSeconds(sec);
+  const context=restTimerContextForDraft(draft);
+  clearActiveRestTimer({removePersisted:true});
+  if(duration===null||duration<=0||!context){updateTimerUI();return null;}
+  const payload=activeWorkoutApi().buildRestTimerPayload({
+    ...context,startedAtEpochMs:now,deadlineEpochMs:now+(duration*1000),durationSeconds:duration
+  });
+  if(!payload) return null;
+  state.restTimerPayload=payload;
+  state.timerDeadline=payload.deadlineEpochMs;
+  state.timerSeconds=duration;
+  persistRestTimer(payload);
   updateTimerUI();
   const activeRest=document.querySelector("[data-active-rest-container]");
   if(activeRest) activeRest.hidden=false;
   const p=document.getElementById("timerPanel"); if(p)p.classList.remove("hidden");
-  state.workoutRestAnnouncement=`Descanso iniciado: ${formatTimer(state.timerSeconds)}.`;
+  state.workoutRestAnnouncement=`Descanso iniciado: ${formatTimer(duration)}.`;
   const startedStatus=document.getElementById("activeRestStatus");
   if(startedStatus) startedStatus.textContent=state.workoutRestAnnouncement;
-  let announcedFinished=false;
-  const tick=()=>{
-    state.timerSeconds=Math.max(
-      0,Math.ceil(((state.timerDeadline||Date.now())-Date.now())/1000)
-    );
-    updateTimerUI();
-    if(state.timerSeconds<=0){
-      clearInterval(state.timerInterval);
-      state.timerInterval=null;
-      state.timerDeadline=null;
-      const status=document.getElementById("activeRestStatus");
-      if(status&&!announcedFinished){
-        announcedFinished=true;
-        status.textContent="Descanso finalizado.";
-      }
-      state.workoutRestAnnouncement="Descanso finalizado.";
-      if(navigator.vibrate)navigator.vibrate([200,100,200]);
-      requestSafeActiveWorkoutRender();
-    }
-  };
-  state.timerInterval=setInterval(()=>{
-    tick();
-  },1000);
+  scheduleActiveRestTimer();
+  return payload;
+}
+function extendActiveRestTimer(seconds=30,now=Date.now()){
+  const current=state.restTimerPayload;
+  const extension=Math.max(0,Math.floor(Number(seconds)||0));
+  if(!current||!extension) return null;
+  const deadline=Math.max(current.deadlineEpochMs,now)+(extension*1000);
+  const payload=activeWorkoutApi().buildRestTimerPayload({
+    ...current,deadlineEpochMs:deadline,
+    durationSeconds:Math.ceil((deadline-current.startedAtEpochMs)/1000)
+  });
+  if(!payload) return null;
+  state.restTimerPayload=payload;
+  state.timerDeadline=deadline;
+  persistRestTimer(payload);
+  reconcileActiveRestTimer({now,announceExpired:false});
+  scheduleActiveRestTimer();
+  return payload;
 }
 function formatTimer(sec){return `${Math.floor(sec/60)}:${String(sec%60).padStart(2,"0")}`;}
 function updateTimerUI(){
@@ -11992,6 +12132,7 @@ function finishWorkout(){
     },{active:false});
     clearDraft(s,{mark:false,preserveProgress:true});
     saveCurrentUserVault(ownerId);
+    clearActiveRestTimer({removePersisted:true});
     state.completedWorkoutSummary=existing;
     state.screen="workoutComplete";
     window.GymOSRecovery.renderWorkoutComplete();
@@ -12053,7 +12194,7 @@ function finishWorkout(){
     if(workoutAnalysis) window.GymOSWorkoutAnalysis?.maybeGenerateAiNarrative?.(workoutAnalysis);
     newRecords=recordsForWorkout(workout);
     stopWorkoutSessionTimer();
-    clearInterval(state.timerInterval);state.timerInterval=null;state.timerSeconds=0;state.timerDeadline=null;
+    clearActiveRestTimer({removePersisted:true});
     state.completedWorkoutSummary=workout;
     state.screen="workoutComplete";
   }finally{
@@ -17778,6 +17919,12 @@ document.addEventListener("visibilitychange",()=>{
   if(document.visibilityState==="hidden"){
     flushWorkoutDraftProgress({scheduleSync:false,silent:true});
   }else{
+    if(state.screen==="workout"&&state.workoutDraftMemory){
+      restoreActiveRestTimer(state.workoutDraftMemory,{
+        now:Date.now(),announceExpired:true
+      });
+      requestSafeActiveWorkoutRender();
+    }
     autoSync("app reabierta");
   }
 });

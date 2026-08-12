@@ -2,6 +2,8 @@
   "use strict";
 
   const MODEL_VERSION="4.2.0-rc.3-active-workout-sheet-1";
+  const REST_TIMER_VERSION=1;
+  const MAX_REST_TIMER_DURATION_SECONDS=24*60*60;
   const clone=value=>value===undefined?undefined:JSON.parse(JSON.stringify(value));
   const text=value=>String(value??"").trim();
   const list=value=>Array.isArray(value)?value:[];
@@ -237,10 +239,77 @@
       intervalRequired:state==="RUNNING"
     };
   }
-  function restTimerModel({seconds=0,running=false,defaultSeconds=90}={}){
-    const remaining=Math.max(0,Math.floor(finite(seconds)||0));
+  function validRestSeconds(value){
+    const number=Number(value);
+    return Number.isFinite(number)&&number>=15&&number<=600
+      ?Math.floor(number)
+      :null;
+  }
+  function effectiveRestSeconds(exercise={},preference=90){
+    for(const value of [
+      exercise?.prescription?.restSeconds,exercise?.restSeconds,preference,90
+    ]){
+      const valid=validRestSeconds(value);
+      if(valid!==null) return valid;
+    }
+    return 90;
+  }
+  function restTimerRemaining(payload,now=Date.now()){
+    const deadline=Number(payload?.deadlineEpochMs);
+    const timestamp=Number(now);
+    if(!Number.isFinite(deadline)||!Number.isFinite(timestamp)) return 0;
+    return Math.max(0,Math.ceil((deadline-timestamp)/1000));
+  }
+  function buildRestTimerPayload({
+    ownerId,workoutInstanceId,sessionId=null,startedAtEpochMs,deadlineEpochMs,durationSeconds
+  }={}){
+    const started=Number(startedAtEpochMs);
+    const deadline=Number(deadlineEpochMs);
+    const duration=Number(durationSeconds);
+    const payload={
+      version:REST_TIMER_VERSION,
+      ownerId:text(ownerId),workoutInstanceId:text(workoutInstanceId),
+      sessionId:text(sessionId)||null,
+      startedAtEpochMs:started,deadlineEpochMs:deadline,durationSeconds:duration
+    };
+    if(!payload.ownerId||!payload.workoutInstanceId) return null;
+    if(
+      !Number.isSafeInteger(started)||!Number.isSafeInteger(deadline)||
+      !Number.isSafeInteger(duration)||duration<=0||
+      duration>MAX_REST_TIMER_DURATION_SECONDS||deadline<started||
+      deadline-started!==duration*1000
+    ) return null;
+    return payload;
+  }
+  function normalizeRestTimerPayload(payload){
+    if(!payload||typeof payload!=="object"||Array.isArray(payload)) return null;
+    if(Number(payload.version)!==REST_TIMER_VERSION) return null;
+    return buildRestTimerPayload(payload);
+  }
+  function restTimerBelongsTo(payload,{ownerId,workoutInstanceId,sessionId=null}={}){
+    const normalized=normalizeRestTimerPayload(payload);
+    if(!normalized) return false;
+    if(
+      normalized.ownerId!==text(ownerId)||
+      normalized.workoutInstanceId!==text(workoutInstanceId)
+    ) return false;
+    const expectedSession=text(sessionId)||null;
+    return !expectedSession||normalized.sessionId===expectedSession;
+  }
+  function restTimerModel({
+    seconds=0,deadlineEpochMs=null,now=Date.now(),running=false,defaultSeconds=90
+  }={}){
+    const hasDeadline=deadlineEpochMs!==null&&deadlineEpochMs!==undefined&&deadlineEpochMs!==""&&
+      Number.isFinite(Number(deadlineEpochMs));
+    const remaining=hasDeadline
+      ?restTimerRemaining({deadlineEpochMs},now)
+      :Math.max(0,Math.floor(finite(seconds)||0));
     const fallback=Math.max(0,Math.floor(finite(defaultSeconds)||0));
-    return {remainingSeconds:remaining,running:Boolean(running&&remaining>0),defaultSeconds:fallback,finished:Boolean(running&&remaining===0)};
+    const active=hasDeadline?remaining>0:Boolean(running&&remaining>0);
+    return {
+      remainingSeconds:remaining,running:active,defaultSeconds:fallback,
+      finished:Boolean((hasDeadline||running)&&remaining===0)
+    };
   }
   function workoutCompletionReviewModel({exercises=[],elapsedMs=0}={}){
     const rows=list(exercises).map((exercise,index)=>{
@@ -432,7 +501,7 @@
   }
 
   global.GymOSActiveWorkout=Object.freeze({
-    MODEL_VERSION,
+    MODEL_VERSION,REST_TIMER_VERSION,MAX_REST_TIMER_DURATION_SECONDS,
     exerciseIdentity,
     setHasResults,
     sessionElapsedModel,
@@ -446,7 +515,8 @@
     setSeriesSummaryModel,
     exerciseDetailDisclosureModel,
     sessionTimerControlModel,
-    restTimerModel,
+    validRestSeconds,effectiveRestSeconds,restTimerRemaining,
+    buildRestTimerPayload,normalizeRestTimerPayload,restTimerBelongsTo,restTimerModel,
     workoutCompletionReviewModel,
     mobileWorkoutViewModel,
     reduceMobileWorkoutUi

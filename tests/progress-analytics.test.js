@@ -105,6 +105,27 @@ test("ejercicio sin ficha conserva volumen bajo Sin clasificar",()=>{
   assert.equal(result.records[0].name,"Ejercicio propio");
 });
 
+test("distribucion muscular consolida aliases canonicos sin duplicar series",()=>{
+  const item=workout({id:"muscle-aliases"});
+  item.exercises=[
+    {name:"Press",exerciseId:"press-alias",series:[{done:true}]},
+    {name:"Curl femoral",exerciseId:"curl-femoral",series:[{done:true}]},
+    {name:"Elevacion lateral",exerciseId:"lateral",series:[{done:true}]},
+    {name:"Sentadilla",exerciseId:"squat",series:[{done:true}]}
+  ];
+  const exerciseLibrary=[
+    {id:"press-alias",name:"Press",primaryMuscles:["chest","Pecho"]},
+    {id:"curl-femoral",name:"Curl femoral",primaryMuscles:["hamstrings","Isquios"]},
+    {id:"lateral",name:"Elevacion lateral",primaryMuscles:["lateral_deltoid","posterior_deltoid","rotator_cuff","Hombros"]},
+    {id:"squat",name:"Sentadilla",primaryMuscles:["quadriceps","glutes"]}
+  ];
+  const result=aggregate({history:[item],exerciseLibrary});
+  const muscleSets=JSON.parse(JSON.stringify(result.weeks.at(-1).muscleSets));
+  assert.deepEqual(muscleSets,{Pecho:1,Isquios:1,Hombros:1,"Cuádriceps":1});
+  assert.equal(Object.values(muscleSets).reduce((sum,value)=>sum+value,0),4);
+  assert.equal(Object.keys(muscleSets).some(key=>key.includes("_")),false);
+});
+
 test("sesión sin RIR y sin duración no inventa promedios",()=>{
   const item=workout({id:"sparse",rir:null,durationMs:null});
   const result=aggregate({history:[item]});
@@ -258,6 +279,19 @@ test("empty previous period yields unavailable comparisons",()=>{
   assert.equal(result.comparison.dimensions.volume.status,"sin_comparacion");
 });
 
+test("empty current period never becomes minus one hundred or descending",()=>{
+  const result=aggregate({
+    history:[workout({id:"only-previous",date:"2026-07-29T10:00:00+02:00"})],
+    now:"2026-08-05T12:00:00+02:00"
+  });
+  assert.equal(result.comparison.trend,"sin_comparacion");
+  assert.equal(result.comparison.volumeChange,null);
+  assert.equal(result.comparison.setChange,null);
+  assert.equal(result.comparison.repsChange,null);
+  assert.equal(result.comparison.dimensions.volume.status,"sin_comparacion");
+  assert.equal(result.comparison.dimensions.volume.current,null);
+});
+
 test("two empty periods are reported as no data",()=>{
   const result=aggregate({now:"2026-08-05T12:00:00+02:00"});
   assert.equal(result.comparison.trend,"sin_datos");
@@ -297,6 +331,7 @@ test("app renders unavailable comparison without calling toFixed on null",()=>{
   assert.ok(helper);
   const format=Function(`${helper};return progressComparisonChange;`)();
   assert.doesNotThrow(()=>format(null));
-  assert.equal(format(null),"Sin comparaciÃ³n");
+  assert.equal(format(null),"Sin comparaci\u00f3n suficiente");
   assert.equal(format(12.34),"+12,3 %");
+  assert.equal(appSource.includes("Sin comparaci\u00c3"),false);
 });

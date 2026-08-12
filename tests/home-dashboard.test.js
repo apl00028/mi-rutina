@@ -44,9 +44,9 @@ function models(){
   };
   vm.createContext(context);
   vm.runInContext(`${modelSource};this.api={
-    homeHeaderModel,nextSessionModel,weeklyGoalModel,recoverySummaryModel,
+    homeHeaderModel,nextSessionModel,homeSessionPreviewModel,weeklyGoalModel,recoverySummaryModel,
     weeklyActivityModel,recentProgressModel,lastWorkoutModel,
-    renderHomeNextSession,renderHomeWeeklyGoal,renderHomeRecovery,
+    renderHomeNextSession,renderHomeSessionPreview,renderHomeWeeklyGoal,renderHomeRecovery,
     renderHomeWeek,renderHomeProgress,renderHomeLastWorkout
   };`,context);
   return context.api;
@@ -115,6 +115,51 @@ test("home: la acción principal distingue draft, sesión nueva, ausencia e inva
   assert.equal(api.nextSessionModel({
     sessions:[{sessionId:"broken"}],routineValid:false
   }).primaryLabel,"Revisar mi rutina");
+});
+
+test("home: Ver sesion presenta el plan completo y la referencia sin iniciarlo",()=>{
+  const api=models();
+  const planned={
+    sessionId:"session-preview",name:"Torso A",focus:"Pecho y espalda",
+    estimatedDurationMinutes:52,notes:"Prioriza la tecnica",exercises:[{
+      exerciseId:"press",name:"Press banca",notes:"Pausa breve",
+      prescription:{sets:4,target:{type:"repetitions",min:8,max:10},targetRir:{min:1,max:2},restSeconds:120}
+    }]
+  };
+  const exerciseLibrary=[{
+    id:"press",name:"Press banca",
+    instructions:{short:"Empuje horizontal",setup:["Apoya los pies"],execution:["Baja con control"]}
+  }];
+  const model=api.nextSessionModel({sessions:[planned],exerciseLibrary});
+  assert.equal(model.preview.name,"Torso A");
+  assert.equal(model.preview.duration,52);
+  assert.equal(model.preview.exerciseCount,1);
+  assert.deepEqual(JSON.parse(JSON.stringify(model.preview.exercises[0])),{
+    order:1,name:"Press banca",sets:4,target:"8\u201310 reps",rir:"1\u20132",restSeconds:120,
+    notes:"Pausa breve",reference:{
+      name:"Press banca",short:"Empuje horizontal",setup:["Apoya los pies"],execution:["Baja con control"]
+    }
+  });
+  const html=api.renderHomeSessionPreview(model.preview);
+  for(const text of ["Torso A","Pecho y espalda","52 min","4","8\u201310 reps","1\u20132","120 s","Pausa breve","Ver ficha t\u00e9cnica"]){
+    assert.ok(html.includes(text),text);
+  }
+});
+
+test("home: las acciones se ordenan comenzar, ver y cambiar; la vista solo abre y cierra",()=>{
+  const api=models();
+  const html=api.renderHomeNextSession(api.nextSessionModel({
+    sessions:[session(1),session(2)],selectedSessionId:"session-1"
+  }));
+  assert.ok(html.indexOf("Comenzar entrenamiento")<html.indexOf("Ver sesi\u00f3n"));
+  assert.ok(html.indexOf("Ver sesi\u00f3n")<html.indexOf("Cambiar sesi\u00f3n"));
+  const from=renderSource.indexOf("const homeViewSession=");
+  const to=renderSource.indexOf("const homeSecondaryAction=",from);
+  assert.ok(from>=0&&to>from);
+  const previewHandlers=renderSource.slice(from,to);
+  assert.match(previewHandlers,/showModal\(\)/);
+  assert.match(previewHandlers,/\.close\(\)/);
+  assert.doesNotMatch(previewHandlers,/navigateToScreen|save|draft|timer|history|localStorage/i);
 });
 
 test("home: el objetivo semanal cuenta historial válido, completa y evita NaN sin objetivo",()=>{
@@ -225,6 +270,7 @@ test("home: los modelos son puros, serializables e inmutables respecto a sus ent
   const before=JSON.stringify(input);
   const results=[
     api.nextSessionModel({sessions:input.sessions,selectedSessionId:"session-1"}),
+    api.homeSessionPreviewModel({session:input.sessions[0],exerciseLibrary:[]}),
     api.weeklyGoalModel({history:input.history,goal:3,now}),
     api.weeklyActivityModel({sessions:input.sessions,history:input.history,now}),
     api.recentProgressModel({bodyHistory:input.bodyHistory,history:input.history,now}),
@@ -259,7 +305,8 @@ test("home: responsive, accesibilidad y listeners permanecen explícitos",()=>{
   assert.match(stylesSource,/@media\(max-width:390px\)/);
   for(const token of [
     'aria-labelledby="homeGreetingTitle"','role="progressbar"',
-    'aria-valuemin="0"','aria-valuemax="100"','type="button"'
+    'aria-valuemin="0"','aria-valuemax="100"','type="button"',
+    'aria-labelledby="homeSessionPreviewTitle"','aria-label="Cerrar vista de sesi\u00f3n"'
   ]) assert.ok(appSource.includes(token),token);
   assert.doesNotMatch(renderSource,/\.onclick\s*=/);
   assert.match(renderSource,/addEventListener\("click"[\s\S]*\{once:true\}/);

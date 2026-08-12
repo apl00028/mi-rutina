@@ -8671,7 +8671,8 @@ function homeHeaderModel({now=new Date(),name="",session=null,focus="",hasRoutin
 }
 function nextSessionModel({
   sessions=[],selectedSessionId=null,draft=null,draftStatus="missing",
-  routineAvailable=true,routineValid=true,defaultDuration=45,restSeconds=90
+  routineAvailable=true,routineValid=true,defaultDuration=45,restSeconds=90,
+  exerciseLibrary=[]
 }={}){
   const list=Array.isArray(sessions)?sessions:[];
   const selected=list.find(item=>item?.sessionId===selectedSessionId)||list[0]||null;
@@ -8679,7 +8680,8 @@ function nextSessionModel({
     return {
       available:false,valid:false,sessionId:null,name:"Sin rutina activa",focus:"",
       duration:null,exerciseCount:0,restSeconds:null,hasDraft:false,
-      primaryAction:"routine-create",primaryLabel:"Crear mi rutina",canChange:false,heroType:"rest"
+      primaryAction:"routine-create",primaryLabel:"Crear mi rutina",canChange:false,
+      preview:null,heroType:"rest"
     };
   }
   const valid=routineValid!==false&&Boolean(selected.sessionId)&&Array.isArray(selected.exercises);
@@ -8689,7 +8691,7 @@ function nextSessionModel({
       name:String(selected.name||"Rutina no disponible"),focus:"",
       duration:null,exerciseCount:0,restSeconds:null,hasDraft:false,
       primaryAction:"routine-review",primaryLabel:"Revisar mi rutina",
-      canChange:list.length>1,heroType:"rest"
+      canChange:list.length>1,preview:null,heroType:"rest"
     };
   }
   const index=list.indexOf(selected);
@@ -8706,7 +8708,69 @@ function nextSessionModel({
     primaryAction:"workout",
     primaryLabel:hasDraft?"Continuar entrenamiento":"Comenzar entrenamiento",
     canChange:list.length>1,
+    preview:homeSessionPreviewModel({session:selected,exerciseLibrary}),
     heroType:sessionProfile.heroType
+  };
+}
+function homeSessionPreviewModel({session=null,exerciseLibrary=[]}={}){
+  if(!session||!Array.isArray(session.exercises)) return null;
+  const clean=value=>String(value??"").trim();
+  const normalized=value=>clean(value).normalize("NFD")
+    .replace(/[\u0300-\u036f]/g,"").toLowerCase();
+  const library=Array.isArray(exerciseLibrary)?exerciseLibrary:[];
+  const findReference=exercise=>{
+    const id=clean(exercise?.exerciseId||exercise?.id);
+    if(id){
+      const exact=library.find(item=>clean(item?.id||item?.exerciseId)===id);
+      if(exact) return exact;
+    }
+    const name=normalized(exercise?.name);
+    const matches=library.filter(item=>
+      normalized(item?.name)===name||
+      (Array.isArray(item?.aliases)&&item.aliases.some(alias=>normalized(alias)===name))
+    );
+    return matches.length===1?matches[0]:null;
+  };
+  const rangeLabel=(value,{duration=false}={})=>{
+    if(typeof value==="string"&&clean(value)) return clean(value);
+    const min=Number(value?.min??value?.minimum);
+    const max=Number(value?.max??value?.maximum);
+    if(!Number.isFinite(min)&&!Number.isFinite(max)) return "Sin indicar";
+    const start=Number.isFinite(min)?min:max;
+    const end=Number.isFinite(max)?max:min;
+    return `${start}${end!==start?`–${end}`:""} ${duration?"s":"reps"}`;
+  };
+  const exercises=session.exercises.map((exercise,index)=>{
+    const prescription=exercise?.prescription||{};
+    const target=prescription.target??exercise?.target??prescription.repRange;
+    const targetType=normalized(target?.type||prescription.targetType);
+    const reference=findReference(exercise);
+    const rir=prescription.targetRir??exercise?.targetRir??exercise?.rir;
+    return {
+      order:index+1,name:clean(exercise?.name)||`Ejercicio ${index+1}`,
+      sets:Math.max(0,Number(prescription.sets??exercise?.sets)||0),
+      target:rangeLabel(target,{
+        duration:targetType.includes("dur")||targetType.includes("time")
+      }),
+      rir:rangeLabel(rir).replace(/ reps$/, ""),
+      restSeconds:Number.isFinite(Number(prescription.restSeconds??exercise?.restSeconds))
+        ?Number(prescription.restSeconds??exercise?.restSeconds):null,
+      notes:clean(exercise?.notes||prescription.notes),
+      reference:reference?{
+        name:clean(reference.name),short:clean(reference.instructions?.short),
+        setup:Array.isArray(reference.instructions?.setup)
+          ?reference.instructions.setup.map(clean).filter(Boolean):[],
+        execution:Array.isArray(reference.instructions?.execution)
+          ?reference.instructions.execution.map(clean).filter(Boolean):[]
+      }:null
+    };
+  });
+  const profile=homeSessionProfile(session);
+  return {
+    sessionId:clean(session.sessionId),name:clean(session.name||session.label)||"Sesión",
+    focus:clean(session.focus||profile.focus)||"Enfoque general",
+    duration:Math.max(1,Number(session.estimatedDurationMinutes)||45),
+    exerciseCount:exercises.length,notes:clean(session.notes),exercises
   };
 }
 function weeklyGoalModel({history=[],goal=null,now=new Date()}={}){
@@ -8865,6 +8929,13 @@ function readHomeBodyHistory(){
       .sort((a,b)=>new Date(a.date)-new Date(b.date));
   }catch(error){return [];}
 }
+function readHomeExerciseLibrary(){
+  try{
+    const stored=JSON.parse(localStorage.getItem(EXERCISE_LIBRARY_KEY)||"null");
+    if(Array.isArray(stored)&&stored.length) return stored;
+  }catch(_){/* the session preview remains available without references */}
+  return defaultExerciseLibrary();
+}
 function buildHomeDashboardModel(now=new Date()){
   const history=getHistory();
   const canonical=getCanonicalRoutine();
@@ -8887,7 +8958,8 @@ function buildHomeDashboardModel(now=new Date()){
   const next=nextSessionModel({
     sessions,selectedSessionId:selected?.sessionId||null,draft:draft.draft,
     draftStatus:draft.status,routineAvailable:sessions.length>0,routineValid,
-    defaultDuration:getOnboardingProfile()?.duration,restSeconds:getRestSeconds()
+    defaultDuration:getOnboardingProfile()?.duration,restSeconds:getRestSeconds(),
+    exerciseLibrary:readHomeExerciseLibrary()
   });
   const draftRows=selected&&draft.draft
     ?[{sessionId:selected.sessionId,status:draft.status}]
@@ -8936,9 +9008,32 @@ function renderHomeNextSession(model){
     ${model.hasDraft?'<p class="home-draft-state" role="status">Entrenamiento pendiente de continuar.</p>':""}
     <div class="home-next-actions">
       <button id="homePrimaryAction" class="primary" type="button" data-home-action="${esc(model.primaryAction)}">${esc(model.primaryLabel)}</button>
+      ${model.preview?'<button id="homeViewSession" class="text-button" type="button">Ver sesión</button>':""}
       ${model.canChange?'<button id="homeSecondaryAction" class="text-button" type="button">Cambiar sesión</button>':""}
     </div>
   </section>`;
+}
+function renderHomeSessionPreview(model){
+  if(!model) return "";
+  const instructionList=items=>items.length
+    ?`<ul>${items.map(item=>`<li>${esc(item)}</li>`).join("")}</ul>`:"";
+  return `<dialog id="homeSessionPreview" class="home-session-preview" aria-labelledby="homeSessionPreviewTitle">
+    <div class="home-session-preview-header"><div><span class="section-kicker">SESIÓN PLANIFICADA</span>
+      <h2 id="homeSessionPreviewTitle">${esc(model.name)}</h2></div>
+      <button id="closeHomeSessionPreview" class="icon-button" type="button" aria-label="Cerrar vista de sesión">×</button>
+    </div>
+    <p class="home-session-preview-summary">${esc(model.focus)} <span aria-hidden="true">·</span> ${model.duration} min <span aria-hidden="true">·</span> ${model.exerciseCount} ${model.exerciseCount===1?"ejercicio":"ejercicios"}</p>
+    ${model.notes?`<p class="home-session-preview-notes"><strong>Notas:</strong> ${esc(model.notes)}</p>`:""}
+    <div class="home-session-preview-exercises">${model.exercises.map(exercise=>`<article>
+      <span class="home-session-preview-order">${exercise.order}</span><div><h3>${esc(exercise.name)}</h3>
+      <dl><div><dt>Series</dt><dd>${exercise.sets||"—"}</dd></div><div><dt>Objetivo</dt><dd>${esc(exercise.target)}</dd></div>
+        <div><dt>RIR</dt><dd>${esc(exercise.rir)}</dd></div><div><dt>Descanso</dt><dd>${exercise.restSeconds===null?"Sin indicar":`${exercise.restSeconds} s`}</dd></div></dl>
+      ${exercise.notes?`<p>${esc(exercise.notes)}</p>`:""}
+      ${exercise.reference?`<details class="home-session-reference"><summary>Ver ficha técnica</summary>
+        <strong>${esc(exercise.reference.name)}</strong>${exercise.reference.short?`<p>${esc(exercise.reference.short)}</p>`:""}
+        ${instructionList(exercise.reference.setup)}${instructionList(exercise.reference.execution)}</details>`:""}
+      </div></article>`).join("")}</div>
+  </dialog>`;
 }
 function renderHomeWeeklyGoal(model){
   if(!model.configured){
@@ -9615,6 +9710,7 @@ function renderHome(){
         ${renderHomeLastWorkout(dashboard.lastWorkout)}
       </div>
       ${thought}
+      ${renderHomeSessionPreview(dashboard.next.preview)}
     </main>${nav("home")}
   </div>`;
   const homeHero=document.querySelector(".home-next-session");
@@ -9642,6 +9738,15 @@ function renderHome(){
     if(action==="workout") navigateToScreen("workout");
     else navigateToScreen("routineHub");
   },{once:true});
+  const homeViewSession=document.getElementById("homeViewSession");
+  const homeSessionPreview=document.getElementById("homeSessionPreview");
+  homeViewSession?.addEventListener("click",()=>{
+    if(typeof homeSessionPreview?.showModal==="function") homeSessionPreview.showModal();
+  });
+  document.getElementById("closeHomeSessionPreview")?.addEventListener("click",()=>{
+    homeSessionPreview?.close();
+  });
+  homeSessionPreview?.addEventListener("close",()=>homeViewSession?.focus());
   const homeSecondaryAction=document.getElementById("homeSecondaryAction");
   homeSecondaryAction?.addEventListener("click",cycleHomeSession,{once:true});
   document.getElementById("configureWeeklyGoal")?.addEventListener("click",()=>navigateToScreen("settings"),{once:true});
@@ -14021,10 +14126,25 @@ function renderNutrition(){
 
 function progressComparisonChange(value){
   if(value===null||value===undefined||!Number.isFinite(Number(value))){
-    return "Sin comparaciÃ³n";
+    return "Sin comparación suficiente";
   }
   const numeric=Number(value);
   return `${numeric>=0?"+":""}${numeric.toFixed(1).replace(".",",")} %`;
+}
+function progressComparisonValues(dimension,{unit=""}={}){
+  if(
+    dimension?.status!=="comparable"||
+    !Number.isFinite(Number(dimension.previous))||
+    !Number.isFinite(Number(dimension.current))
+  ) return "No hay datos suficientes en ambas semanas";
+  const format=value=>Math.round(Number(value)).toLocaleString("es-ES");
+  return `${format(dimension.previous)} → ${format(dimension.current)}${unit?` ${unit}`:""}`;
+}
+function progressTrendLabel(value){
+  return ({
+    ascendente:"Ascendente",descendente:"Descendente",mixta:"Mixta",estable:"Estable",
+    sin_comparacion:"Sin comparación",sin_datos:"Sin datos"
+  })[value]||"Sin datos";
 }
 function renderProgressDashboard(){
   let analytics=null;
@@ -14049,7 +14169,12 @@ function renderProgressDashboard(){
   try{records=analytics?.records?.slice(0,8)||personalRecords();}catch(error){console.error("Progress records",error);}
   const current=weeks.at(-1)||{workouts:0,sets:0,volume:0,muscleSets:{}};
   const summary=analytics?.summary||{sessions7:0,sessions14:0,sessions30:0,completed:0,incomplete:0,completedSets:0,totalReps:0,averageDurationMs:null,averageRir:null};
-  const comparison=analytics?.comparison||{previous:{volume:0,sets:0,reps:0},current:{volume:0,sets:0,reps:0},volumeChange:0,setChange:0,repsChange:0,increasedWeight:[],increasedReps:[],newRecords:[],bestSet:null,trend:"estable"};
+  const comparison=analytics?.comparison||{
+    previous:{volume:0,sets:0,reps:0},current:{volume:0,sets:0,reps:0},
+    dimensions:{volume:{status:"sin_datos"},sets:{status:"sin_datos"},reps:{status:"sin_datos"}},
+    volumeChange:null,setChange:null,repsChange:null,increasedWeight:[],increasedReps:[],
+    newRecords:[],bestSet:null,trend:"sin_datos"
+  };
   const diagnostics=analytics?.diagnostics||{rawCounts:{localHistory:0,localProgress:0,remoteHistory:0,remoteProgress:0},deduplicatedSessions:0,completed:0,incomplete:0,pendingSync:0,withCompletedSets:0,discarded:{}};
   const muscleTotals={};
   weeks.forEach(week=>Object.entries(week.muscleSets).forEach(([muscle,count])=>{
@@ -14094,11 +14219,11 @@ function renderProgressDashboard(){
       </section>
 
       <section class="card progress-comparison-card">
-        <div class="card-heading-row"><div><h2>Evolución de las dos últimas semanas</h2><p class="subtle">La tendencia combina carga, repeticiones, series y calidad de finalización.</p></div><span class="trend-badge ${comparison.trend}">${esc(comparison.trend)}</span></div>
+        <div class="card-heading-row"><div><h2>Evolución de las dos últimas semanas</h2><p class="subtle">${comparison.trend==="sin_comparacion"||comparison.trend==="sin_datos"?"No hay datos suficientes en ambas semanas.":"La tendencia combina carga, repeticiones, series y calidad de finalización."}</p></div><span class="trend-badge ${comparison.trend}">${esc(progressTrendLabel(comparison.trend))}</span></div>
         <div class="progress-week-comparison">
-          <article><span>Volumen</span><strong>${progressComparisonChange(comparison.volumeChange)}</strong><small>${Math.round(comparison.previous.volume).toLocaleString("es-ES")} → ${Math.round(comparison.current.volume).toLocaleString("es-ES")} kg</small></article>
-          <article><span>Series</span><strong>${progressComparisonChange(comparison.setChange)}</strong><small>${comparison.previous.sets} → ${comparison.current.sets}</small></article>
-          <article><span>Repeticiones</span><strong>${progressComparisonChange(comparison.repsChange)}</strong><small>${comparison.previous.reps} → ${comparison.current.reps}</small></article>
+          <article><span>Volumen</span><strong>${progressComparisonChange(comparison.volumeChange)}</strong><small>${progressComparisonValues(comparison.dimensions?.volume,{unit:"kg"})}</small></article>
+          <article><span>Series</span><strong>${progressComparisonChange(comparison.setChange)}</strong><small>${progressComparisonValues(comparison.dimensions?.sets)}</small></article>
+          <article><span>Repeticiones</span><strong>${progressComparisonChange(comparison.repsChange)}</strong><small>${progressComparisonValues(comparison.dimensions?.reps)}</small></article>
         </div>
         <div class="progress-improvements">
           <p><strong>Más peso:</strong> ${comparison.increasedWeight.length?comparison.increasedWeight.map(esc).join(", "):"Sin aumentos comparables"}</p>

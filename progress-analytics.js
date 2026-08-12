@@ -12,6 +12,26 @@
   };
   const normalizedName=value=>text(value).normalize("NFD")
     .replace(/[\u0300-\u036f]/g,"").toLowerCase().replace(/\s+/g," ");
+  const MUSCLE_GROUP_ALIASES=Object.freeze({
+    chest:"Pecho",pectoral:"Pecho",pectorals:"Pecho",pecho:"Pecho",
+    back:"Espalda",espalda:"Espalda",lats:"Espalda",latissimus:"Espalda",
+    latissimus_dorsi:"Espalda",upper_back:"Espalda",middle_back:"Espalda",
+    traps:"Espalda",trapezius:"Espalda",upper_traps:"Espalda",
+    spinal_erectors:"Espalda",spinal_mobility:"Espalda",thoracic_spine:"Espalda",
+    shoulder:"Hombros",shoulders:"Hombros",hombro:"Hombros",hombros:"Hombros",
+    deltoid:"Hombros",deltoids:"Hombros",anterior_deltoid:"Hombros",
+    lateral_deltoid:"Hombros",posterior_deltoid:"Hombros",rotator_cuff:"Hombros",
+    biceps:"Bíceps",bicep:"Bíceps",brachialis:"Bíceps",forearms:"Bíceps",
+    triceps:"Tríceps",tricep:"Tríceps",
+    quadriceps:"Cuádriceps",quadricep:"Cuádriceps",quads:"Cuádriceps",
+    piernas:"Cuádriceps",legs:"Cuádriceps",
+    hamstrings:"Isquios",hamstring:"Isquios",isquios:"Isquios",adductors:"Isquios",
+    glutes:"Glúteos",gluteus:"Glúteos",gluteos:"Glúteos",
+    gluteus_medius:"Glúteos",gluteus_minimus:"Glúteos",
+    calves:"Gemelos",calf:"Gemelos",gemelos:"Gemelos",
+    core:"Core",trunk:"Core",abdominals:"Core",abdominales:"Core",abs:"Core",
+    obliques:"Core",rectus_abdominis:"Core",hip_flexors:"Core"
+  });
   function validDate(value){
     const date=new Date(value);
     return Number.isFinite(date.getTime())?date:null;
@@ -98,9 +118,14 @@
   }
   function muscleLabels(item){
     if(!confirmedLibraryItem(item)) return ["Sin clasificar"];
-    const labels=[...list(item.primaryMuscles),...list(item.muscles),item.muscle]
-      .map(text).filter(Boolean);
-    return labels.length?[...new Set(labels)]:["Sin clasificar"];
+    const canonical=value=>{
+      const key=normalizedName(value).replace(/[\s-]+/g,"_");
+      return MUSCLE_GROUP_ALIASES[key]||null;
+    };
+    const primary=list(item.primaryMuscles).map(canonical).find(Boolean);
+    if(primary) return [primary];
+    const fallback=[item.muscle,...list(item.muscles)].map(canonical).find(Boolean);
+    return [fallback||"Sin clasificar"];
   }
   function normalizeCandidate(record,{source,ownerId,findLibrary}){
     if(!record||typeof record!=="object") return {rejected:"registro no válido"};
@@ -306,8 +331,11 @@
     if(!periodHasBefore&&!periodHasCurrent){
       return {status:"sin_datos",previous:null,current:null,delta:null,change:null};
     }
-    if(!periodHasBefore){
-      return {status:"sin_comparacion",previous:null,current:value,delta:null,change:null};
+    if(!periodHasBefore||!periodHasCurrent){
+      return {
+        status:"sin_comparacion",previous:periodHasBefore?before:null,
+        current:periodHasCurrent?value:null,delta:null,change:null
+      };
     }
     return comparisonDimension(before,value);
   }
@@ -380,7 +408,7 @@
       .filter(item=>item.status==="comparable"&&item.delta!==0).map(item=>Math.sign(item.delta));
     let trend;
     if(!previousHasSessions&&!currentHasSessions) trend="sin_datos";
-    else if(!previousHasSessions) trend="sin_comparacion";
+    else if(!previousHasSessions||!currentHasSessions) trend="sin_comparacion";
     else if(directional.some(value=>value>0)&&directional.some(value=>value<0)) trend="mixta";
     else if(directional.some(value=>value>0)) trend="ascendente";
     else if(directional.some(value=>value<0)) trend="descendente";

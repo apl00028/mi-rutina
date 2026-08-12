@@ -2760,6 +2760,7 @@ body.high-contrast .recovery-availability{color:var(--text)}
 }
 .home-next-actions{
   display:flex;
+  flex-wrap:wrap;
   align-items:center;
   gap:1rem;
   margin-top:1.4rem;
@@ -2772,6 +2773,30 @@ body.high-contrast .recovery-availability{color:var(--text)}
   box-shadow:0 10px 24px rgba(0,0,0,.2);
 }
 .home-next-actions .text-button{color:rgba(255,255,255,.78)}
+.home-session-preview{
+  width:min(760px,calc(100% - 28px));
+  max-height:calc(100dvh - 28px);
+  margin:auto;
+  padding:1.4rem;
+  overflow:auto;
+  border:1px solid var(--border);
+  border-radius:var(--radius);
+  background:var(--card);
+  color:var(--text);
+  box-shadow:0 24px 80px rgba(15,23,42,.32);
+}
+.home-session-preview::backdrop{background:rgba(15,23,42,.62);backdrop-filter:blur(3px)}
+.home-session-preview-header{display:flex;align-items:flex-start;justify-content:space-between;gap:1rem}
+.home-session-preview-header h2{margin:.3rem 0 0}
+.home-session-preview-summary,.home-session-preview-notes{color:var(--muted)}
+.home-session-preview-exercises{display:grid;gap:.75rem;margin-top:1rem}
+.home-session-preview-exercises>article{display:grid;grid-template-columns:2rem minmax(0,1fr);gap:.8rem;padding:1rem 0;border-top:1px solid var(--border)}
+.home-session-preview-order{display:grid;place-items:center;width:2rem;height:2rem;border:1px solid var(--border);border-radius:50%;font-weight:800}
+.home-session-preview-exercises h3{margin:.25rem 0 .65rem;font-size:1rem}
+.home-session-preview-exercises dl{display:flex;flex-wrap:wrap;gap:.5rem 1.25rem;margin:0}
+.home-session-preview-exercises dl div{display:flex;gap:.35rem}.home-session-preview-exercises dt{color:var(--muted)}.home-session-preview-exercises dd{margin:0;font-weight:750}
+.home-session-reference{margin-top:.75rem;padding:.65rem .75rem;border:1px solid var(--border);border-radius:.65rem}
+.home-session-reference summary{min-height:2rem;cursor:pointer;font-weight:800}.home-session-reference ul{margin:.55rem 0 0;padding-left:1.25rem}
 .home-summary-stack{display:grid;grid-template-rows:1fr 1fr;gap:1rem}
 .home-summary-card,.home-detail-card{
   min-width:0;
@@ -2906,6 +2931,8 @@ body.high-contrast .recovery-availability{color:var(--text)}
   .home-next-actions{width:100%;align-items:stretch;flex-direction:column}
   .home-next-actions .primary{width:100%;min-width:0}
   .home-next-actions .text-button{align-self:center}
+  .home-session-preview{padding:1rem}
+  .home-session-preview-exercises dl{display:grid;grid-template-columns:1fr 1fr;gap:.35rem .75rem}
   .home-week-list{
     display:flex;
     overflow-x:auto;

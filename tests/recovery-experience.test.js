@@ -577,7 +577,7 @@ test("el modelo y el render no mutan rutina ni historial",()=>{
 });
 
 test("el SQL mantiene RLS y añade contexto histórico sin credenciales",()=>{
-  const sql=fs.readFileSync(path.join(root,"supabase-recovery-center.sql"),"utf8");
+  const sql=fs.readFileSync(path.join(root,"database/supabase/recovery-center.sql"),"utf8");
   assert.match(sql,/enable row level security/i);
   assert.match(sql,/\(select auth\.uid\(\)\) = user_id/i);
   assert.match(sql,/workout_snapshot jsonb/i);

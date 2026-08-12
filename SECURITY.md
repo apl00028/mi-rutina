@@ -5,7 +5,7 @@ final Google Play production release.
 
 ## Required before public deployment
 
-1. Create a Supabase project and run `supabase-schema.sql`.
+1. Create a Supabase project and run `database/supabase/schema.sql`.
 2. Enable email/password authentication.
 3. Configure Google OAuth only after setting the correct Android/web redirect URLs.
 4. Use only the Supabase publishable or anon key in the client.

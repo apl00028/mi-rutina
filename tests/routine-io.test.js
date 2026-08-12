@@ -490,6 +490,9 @@ test("integración de script, input y service worker",()=>{
   assets.filter(asset=>asset!=="./").forEach(asset=>{
     assert.equal(fs.existsSync(path.join(root,asset)),true,asset);
   });
+  for(const forbidden of ["README","SECURITY.md","THIRD_PARTY_NOTICES.md",".sql","docs/","tests/","scripts/"]){
+    assert.equal(assets.some(asset=>asset.includes(forbidden)),false,forbidden);
+  }
 });
 
 test("rechaza extensiones no permitidas y macros",()=>{

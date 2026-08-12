@@ -3679,7 +3679,7 @@ function renderAuthConfigurationRequired(){
       <div class="security-check-list">
         <article class="ok"><span>1</span><div><strong>Crea un proyecto Supabase</strong><small>Puede ser el plan gratuito.</small></div></article>
         <article class="ok"><span>2</span><div><strong>Edita auth-config.js</strong><small>Pega Project URL y anon public key.</small></div></article>
-        <article class="ok"><span>3</span><div><strong>Ejecuta supabase-schema.sql</strong><small>Activa tablas y políticas por usuario.</small></div></article>
+        <article class="ok"><span>3</span><div><strong>Ejecuta database/supabase/schema.sql</strong><small>Activa tablas y políticas por usuario.</small></div></article>
       </div>
       <p class="auth-config-note">No pongas nunca la clave <code>service_role</code> en GitHub Pages.</p>
     </main>
@@ -4680,7 +4680,7 @@ async function loadAccountIdentityProfile(userId=state.syncUser?.id){
   if(error){
     state.accountProfileStatus="error";
     if(state.screen==="account"){
-      showAccountManagementMessage("error","No se pudo cargar el alias y el avatar. Comprueba que has ejecutado supabase-account-profile.sql.");
+      showAccountManagementMessage("error","No se pudo cargar el alias y el avatar. Comprueba que has ejecutado database/supabase/account-profile.sql.");
     }
     return null;
   }
@@ -15073,7 +15073,7 @@ function renderAccount(){
             </button>`).join("")}
           </div>
           ${state.accountProfileStatus==="loading"?`<p class="subtle account-profile-status">Cargando perfil de cuenta…</p>`:""}
-          ${state.accountProfileStatus==="error"?`<p class="verification-message error account-profile-status">No se pudo cargar el perfil. Ejecuta <strong>supabase-account-profile.sql</strong> en Supabase y vuelve a iniciar sesión.</p>`:""}
+          ${state.accountProfileStatus==="error"?`<p class="verification-message error account-profile-status">No se pudo cargar el perfil. Ejecuta <strong>database/supabase/account-profile.sql</strong> en Supabase y vuelve a iniciar sesión.</p>`:""}
           <button id="saveAccountProfile" class="primary full">Guardar cambios</button>
         </section>
 
@@ -17779,7 +17779,7 @@ function renderSettings(){
         ${state.syncUser?`<div class="sync-user">Conectado como <strong>${state.syncUser.email||"usuario"}</strong></div>`:""}
         <details class="sync-help">
           <summary>Cómo configurarlo</summary>
-          <p>Ejecuta <strong>supabase-schema.sql</strong>, <strong>supabase-account-profile.sql</strong>, <strong>supabase-body-measurements.sql</strong> y <strong>supabase-workout-analyses.sql</strong>, y añade <strong>https://apl00028.github.io/mi-rutina/</strong> en Authentication → URL Configuration → Redirect URLs. Usa la clave <strong>Publishable</strong> o <strong>anon public</strong>, nunca una secret/service role.</p>
+          <p>Ejecuta <strong>database/supabase/schema.sql</strong>, <strong>database/supabase/account-profile.sql</strong>, <strong>database/supabase/body-measurements.sql</strong> y <strong>database/supabase/workout-analyses.sql</strong>, y añade <strong>https://apl00028.github.io/mi-rutina/</strong> en Authentication → URL Configuration → Redirect URLs. Usa la clave <strong>Publishable</strong> o <strong>anon public</strong>, nunca una secret/service role.</p>
         </details>
       </section>
       <section class="card health-entry-card">

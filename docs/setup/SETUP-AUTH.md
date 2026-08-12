@@ -30,9 +30,9 @@ No uses nunca `service_role`.
 
 Abre SQL Editor en Supabase y ejecuta todo el contenido de:
 
-`supabase-schema.sql`
+`database/supabase/schema.sql`
 
-Después puedes ejecutar `RLS-ISOLATION-TEST.sql` para revisar el aislamiento.
+Después puedes ejecutar `database/supabase/rls-isolation-test.sql` para revisar el aislamiento.
 
 ## 4. Configurar autenticación
 
@@ -48,7 +48,7 @@ En Authentication → Providers:
 Sube todo el contenido de esta carpeta al repositorio, incluyendo:
 
 - `auth-config.js`
-- `supabase-schema.sql`
+- `database/supabase/schema.sql`
 - `app.js`
 - `index.html`
 - `service-worker.js`

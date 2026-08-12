@@ -4,3 +4,10 @@ __pycache__/
 .env
 .env.*
 !.env.example
+
+# Salidas temporales y herramientas locales
+*.tmp
+*.log
+.pytest_cache/
+coverage/
+node_modules/

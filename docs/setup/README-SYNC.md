@@ -6,7 +6,7 @@ Para activar sincronización entre dispositivos:
 
 1. Crea un proyecto gratuito en Supabase.
 2. Abre SQL Editor.
-3. Ejecuta el contenido de `supabase-schema.sql`.
+3. Ejecuta el contenido de `database/supabase/schema.sql`.
 4. En GymOS, abre Ajustes → Sincronización.
 5. Introduce la Project URL y la anon public key.
 6. Solicita el enlace de acceso por correo.
@@ -399,7 +399,7 @@ de cuenta y pruebas automáticas con dos usuarios independientes.
 - Al cerrar sesión, los datos activos desaparecen de la interfaz.
 - Restablecimiento de contraseña.
 - Migración de datos locales a la cuenta.
-- Row Level Security mediante `supabase-schema.sql`.
+- Row Level Security mediante `database/supabase/schema.sql`.
 - Guía completa en `SETUP-AUTH.md`.
 
 

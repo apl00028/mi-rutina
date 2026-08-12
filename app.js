@@ -2297,7 +2297,7 @@ function routineOwnerHasActiveWorkout(ownerId){
       .some(belongsToCurrentRoutine);
   }catch(error){
     console.warn("Unable to check active workout state.",error);
-    return false;
+    return true;
   }
 }
 function activateStoredRoutineProposal(proposalId,{

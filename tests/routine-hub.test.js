@@ -19,6 +19,23 @@ function loadApi(){
   vm.runInContext(source,context,{filename:"routine-hub.js"});
   return context.GymOSRoutineHub;
 }
+function loadActiveWorkoutGuard({memory=null,records=[],readError=null,currentRoutineId="routine-current"}={}){
+  const start=appSource.indexOf("function routineOwnerHasActiveWorkout");
+  const end=appSource.indexOf("\nfunction ",start+10);
+  const context={
+    console:{warn:()=>{}},
+    state:{workoutDraftMemory:memory},
+    routineProposalOwnerId:value=>String(value),
+    activeRoutineForComparison:()=>({routineId:currentRoutineId}),
+    storedWorkoutProgressRecords:()=>{
+      if(readError) throw readError;
+      return records;
+    }
+  };
+  vm.createContext(context);
+  vm.runInContext(appSource.slice(start,end),context,{filename:"app-active-workout-guard.js"});
+  return context.routineOwnerHasActiveWorkout;
+}
 function routine(count=2){
   return {
     schemaVersion:"4.2",routineId:"hidden",revision:1,
@@ -89,7 +106,27 @@ test("el hub no contiene writers ni muestra nombres de IDs técnicos",()=>{
   assert.doesNotMatch(source,/saveCanonicalRoutine|saveRoutine\(|localStorage|gymos:history/);
   assert.doesNotMatch(source,/>ownerId<|>routineId<|>sessionId<|>Hash<|>JSON</i);
   assert.match(appSource,/activeWorkoutState:routineOwnerHasActiveWorkout\(normalizedOwner\)/);
-  assert.match(appSource,/function routineOwnerHasActiveWorkout[\s\S]*catch\(_\)\{\s*return true;/);
+  assert.match(appSource,/function routineOwnerHasActiveWorkout[\s\S]*catch\([^)]*\)[\s\S]*return true;/);
+});
+
+test("guard de rutina permite continuar solo si confirma que no hay entrenamiento activo",()=>{
+  const guard=loadActiveWorkoutGuard();
+  assert.equal(guard("owner-a"),false);
+});
+
+test("guard de rutina bloquea entrenamiento activo en memoria o persistido",()=>{
+  const active={
+    ownerId:"owner-a",routineId:"routine-current",status:"active",
+    startedAt:"2026-08-12T10:00:00.000Z"
+  };
+  assert.equal(loadActiveWorkoutGuard({memory:active})("owner-a"),true);
+  assert.equal(loadActiveWorkoutGuard({records:[active]})("owner-a"),true);
+  assert.equal(loadActiveWorkoutGuard({records:[active]})("owner-b"),false);
+});
+
+test("guard de rutina falla cerrado si la lectura no es verificable",()=>{
+  const guard=loadActiveWorkoutGuard({readError:new Error("corrupt_storage")});
+  assert.equal(guard("owner-a"),true);
 });
 
 test("entrenamiento activo bloquea activar pero permite preparar una restauracion",()=>{

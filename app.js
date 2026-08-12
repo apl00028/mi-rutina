@@ -11198,6 +11198,7 @@ function bindActiveWorkoutEvents(context){
   main.addEventListener("click",event=>{
     const button=event.target.closest("button");
     if(!button||button.disabled) return;
+    unlockRestTimerAudioFromUserInteraction();
     try{
       if(button.matches("[data-mobile-open-panel]")){
         const panel=button.dataset.mobileOpenPanel;
@@ -11894,6 +11895,7 @@ function renderLegacyWorkout(){
       draft.exercises[i].series[j].warmup=inp.checked; saveDraft(draft); renderWorkout();
     });
     card.querySelectorAll("[data-done]").forEach(btn=>btn.onclick=()=>{
+      unlockRestTimerAudioFromUserInteraction();
       const draft=getDraft(s),j=Number(btn.dataset.done);
       if(isTimedExercise(draft.exercises[i])&&!draft.exercises[i].series[j].seconds){
         stopExerciseTimer(s,i,j);
@@ -12012,6 +12014,67 @@ function clearActiveRestTimer({removePersisted=true}={}){
   state.restTimerPersistenceFailed=false;
   if(removePersisted&&previous) removeStoredRestTimer(previous);
 }
+let restTimerAudioContext=null;
+function unlockRestTimerAudioFromUserInteraction(){
+  const AudioContextConstructor=window.AudioContext||window.webkitAudioContext;
+  if(typeof AudioContextConstructor!=="function") return false;
+  try{
+    if(!restTimerAudioContext||restTimerAudioContext.state==="closed"){
+      restTimerAudioContext=new AudioContextConstructor();
+    }
+    if(restTimerAudioContext.state==="suspended"){
+      const resumeResult=restTimerAudioContext.resume();
+      if(resumeResult?.catch) resumeResult.catch(()=>{});
+    }
+    return true;
+  }catch(_){return false;}
+}
+function playRestTimerFinishedSound(){
+  const context=restTimerAudioContext;
+  if(!context||context.state!=="running") return false;
+  try{
+    const oscillator=context.createOscillator();
+    const gain=context.createGain();
+    const start=context.currentTime;
+    oscillator.type="sine";
+    oscillator.frequency.setValueAtTime(880,start);
+    oscillator.frequency.exponentialRampToValueAtTime(660,start+0.18);
+    gain.gain.setValueAtTime(0.0001,start);
+    gain.gain.exponentialRampToValueAtTime(0.12,start+0.02);
+    gain.gain.exponentialRampToValueAtTime(0.0001,start+0.18);
+    oscillator.connect(gain);
+    gain.connect(context.destination);
+    oscillator.start(start);
+    oscillator.stop(start+0.2);
+    return true;
+  }catch(_){return false;}
+}
+function vibrateRestTimerFinished(){
+  try{
+    if(typeof navigator.vibrate==="function") navigator.vibrate([200,100,200]);
+  }catch(_){/* vibration is best-effort */}
+}
+async function showRestTimerFinishedNotification(){
+  try{
+    if(
+      typeof Notification==="undefined"||Notification.permission!=="granted"||
+      document.visibilityState!=="hidden"||!navigator.serviceWorker
+    ) return false;
+    const ready=navigator.serviceWorker.ready;
+    if(!ready) return false;
+    const registration=await ready;
+    if(typeof registration?.showNotification!=="function") return false;
+    await registration.showNotification("Descanso terminado",{
+      body:"Es hora de continuar con la siguiente serie."
+    });
+    return true;
+  }catch(_){return false;}
+}
+function emitRestTimerFinishedFeedback(){
+  playRestTimerFinishedSound();
+  vibrateRestTimerFinished();
+  void showRestTimerFinishedNotification();
+}
 function finishActiveRestTimer({
   generation=state.restTimerGeneration,announce=true,rerender=true
 }={}){
@@ -12022,7 +12085,7 @@ function finishActiveRestTimer({
     const status=document.getElementById("activeRestStatus");
     if(status) status.textContent="Descanso finalizado.";
     state.workoutRestAnnouncement="Descanso finalizado.";
-    if(navigator.vibrate) navigator.vibrate([200,100,200]);
+    emitRestTimerFinishedFeedback();
   }
   if(rerender) requestSafeActiveWorkoutRender();
   return true;

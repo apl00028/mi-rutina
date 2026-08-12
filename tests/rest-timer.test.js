@@ -43,9 +43,16 @@ function storageHarness(initial=new Map(),failure={}){
     }
   };
 }
-function loadAppTimer({storage=storageHarness(),ownerId=OWNER_A,draft=DRAFT}={}){
+function loadAppTimer({
+  storage=storageHarness(),ownerId=OWNER_A,draft=DRAFT,
+  audioSupported=true,audioState="running",vibrationSupported=true,
+  notificationSupported=false,notificationPermission="default",
+  visibilityState="visible",readyFailure=false,showFailure=false
+}={}){
   const api=loadApi();
-  const intervals=new Map();let nextInterval=1,vibrations=0,renders=0;
+  const intervals=new Map();
+  let nextInterval=1,vibrations=0,renders=0,sounds=0,resumes=0;
+  const notificationCalls=[];
   const state={
     workoutDraftMemory:JSON.parse(JSON.stringify(draft)),
     timerSeconds:0,timerInterval:null,timerDeadline:null,
@@ -60,20 +67,51 @@ function loadAppTimer({storage=storageHarness(),ownerId=OWNER_A,draft=DRAFT}={})
     setInterval:callback=>{const id=nextInterval++;intervals.set(id,callback);return id;},
     clearInterval:id=>intervals.delete(id),
     document:{
-      getElementById:()=>null,querySelector:()=>null
+      visibilityState,getElementById:()=>null,querySelector:()=>null
     },
-    navigator:{vibrate:()=>{vibrations+=1;}},
+    navigator:{},
     requestSafeActiveWorkoutRender:()=>{renders+=1;},
     updateTimerUI:()=>{},formatTimer:seconds=>String(seconds)
   };
+  context.window=context;
+  if(vibrationSupported) context.navigator.vibrate=()=>{vibrations+=1;};
+  if(audioSupported){
+    context.AudioContext=class FakeAudioContext{
+      constructor(){this.state=audioState;this.currentTime=10;this.destination={};}
+      resume(){resumes+=1;this.state="running";return Promise.resolve();}
+      createOscillator(){return {
+        frequency:{setValueAtTime:()=>{},exponentialRampToValueAtTime:()=>{}},
+        connect:()=>{},start:()=>{sounds+=1;},stop:()=>{}
+      };}
+      createGain(){return {
+        gain:{setValueAtTime:()=>{},exponentialRampToValueAtTime:()=>{}},connect:()=>{}
+      };}
+    };
+  }
+  if(notificationSupported){
+    context.Notification={permission:notificationPermission};
+    context.navigator.serviceWorker={
+      get ready(){
+        if(readyFailure) return Promise.reject(new Error("ready_failed"));
+        return Promise.resolve({
+          showNotification:(...args)=>{
+            notificationCalls.push(args);
+            return showFailure?Promise.reject(new Error("show_failed")):Promise.resolve();
+          }
+        });
+      }
+    };
+  }
   vm.createContext(context);
   vm.runInContext(restAppSource,context,{filename:"app-rest-timer.js"});
   return {
     api,state,storage,intervals,context,
-    vibrations:()=>vibrations,renders:()=>renders,
+    vibrations:()=>vibrations,renders:()=>renders,sounds:()=>sounds,
+    resumes:()=>resumes,notifications:()=>notificationCalls.length,notificationCalls,
     call:(name,...args)=>context[name](...args)
   };
 }
+const settleAsyncFeedback=()=>new Promise(resolve=>setImmediate(resolve));
 
 test("deadline es la única verdad y saltarse ticks no introduce deriva",()=>{
   const api=loadApi();
@@ -181,6 +219,7 @@ test("+30 cambia y persiste el deadline conservando identidad",()=>{
 
 test("Omitir limpia memoria, intervalo y persistencia sin aviso posterior",()=>{
   const timer=loadAppTimer();
+  timer.call("unlockRestTimerAudioFromUserInteraction");
   timer.call("startTimer",60,DRAFT,1_000);
   const oldCallbacks=[...timer.intervals.values()];
   timer.call("clearActiveRestTimer",{removePersisted:true});
@@ -189,6 +228,133 @@ test("Omitir limpia memoria, intervalo y persistencia sin aviso posterior",()=>{
   assert.equal(timer.state.timerInterval,null);
   assert.equal(timer.storage.values.size,0);
   assert.equal(timer.vibrations(),0);
+  assert.equal(timer.sounds(),0);
+});
+
+test("sonido y vibración se emiten una sola vez por vencimiento",()=>{
+  const timer=loadAppTimer();
+  timer.call("unlockRestTimerAudioFromUserInteraction");
+  timer.call("startTimer",60,DRAFT,1_000);
+  timer.call("reconcileActiveRestTimer",{now:70_000,announceExpired:true});
+  timer.call("reconcileActiveRestTimer",{now:71_000,announceExpired:true});
+  assert.equal(timer.sounds(),1);
+  assert.equal(timer.vibrations(),1);
+});
+
+test("un descanso reemplazado invalida el callback y el sonido anteriores",()=>{
+  const timer=loadAppTimer();
+  timer.call("unlockRestTimerAudioFromUserInteraction");
+  timer.call("startTimer",60,DRAFT,1_000);
+  const oldCallbacks=[...timer.intervals.values()];
+  timer.call("startTimer",90,DRAFT,2_000);
+  oldCallbacks.forEach(callback=>callback());
+  assert.equal(timer.sounds(),0);
+  timer.call("reconcileActiveRestTimer",{now:100_000,announceExpired:true});
+  assert.equal(timer.sounds(),1);
+});
+
+test("Web Audio y vibración ausentes degradan sin romper el vencimiento",()=>{
+  const timer=loadAppTimer({audioSupported:false,vibrationSupported:false});
+  assert.equal(timer.call("unlockRestTimerAudioFromUserInteraction"),false);
+  timer.call("startTimer",60,DRAFT,1_000);
+  assert.doesNotThrow(()=>timer.call(
+    "reconcileActiveRestTimer",{now:70_000,announceExpired:true}
+  ));
+  assert.equal(timer.state.restTimerPayload,null);
+});
+
+test("AudioContext suspendido se reactiva solo desde la interacción autorizada",async()=>{
+  const timer=loadAppTimer({audioState:"suspended"});
+  assert.equal(timer.resumes(),0);
+  assert.equal(timer.call("unlockRestTimerAudioFromUserInteraction"),true);
+  await settleAsyncFeedback();
+  assert.equal(timer.resumes(),1);
+  timer.call("startTimer",60,DRAFT,1_000);
+  timer.call("reconcileActiveRestTimer",{now:70_000,announceExpired:true});
+  assert.equal(timer.sounds(),1);
+  const binding=appSource.slice(
+    appSource.indexOf("function bindActiveWorkoutEvents("),
+    appSource.indexOf("function renderLegacyWorkout(")
+  );
+  assert.match(binding,/main\.addEventListener\("click"[\s\S]*?unlockRestTimerAudioFromUserInteraction\(\)/);
+  assert.match(appSource,/\[data-done\][\s\S]*?unlockRestTimerAudioFromUserInteraction\(\)/);
+  assert.equal((appSource.match(/new AudioContextConstructor/g)||[]).length,1);
+});
+
+test("notificación requiere API, permiso granted y página oculta",async()=>{
+  const absent=loadAppTimer({visibilityState:"hidden"});
+  absent.call("startTimer",60,DRAFT,1_000);
+  assert.doesNotThrow(()=>absent.call(
+    "reconcileActiveRestTimer",{now:70_000,announceExpired:true}
+  ));
+
+  for(const permission of ["denied","default"]){
+    const blocked=loadAppTimer({
+      notificationSupported:true,notificationPermission:permission,visibilityState:"hidden"
+    });
+    blocked.call("startTimer",60,DRAFT,1_000);
+    blocked.call("reconcileActiveRestTimer",{now:70_000,announceExpired:true});
+    await settleAsyncFeedback();
+    assert.equal(blocked.notifications(),0,permission);
+  }
+  const visible=loadAppTimer({
+    notificationSupported:true,notificationPermission:"granted",visibilityState:"visible"
+  });
+  visible.call("startTimer",60,DRAFT,1_000);
+  visible.call("reconcileActiveRestTimer",{now:70_000,announceExpired:true});
+  await settleAsyncFeedback();
+  assert.equal(visible.notifications(),0);
+
+  const hidden=loadAppTimer({
+    notificationSupported:true,notificationPermission:"granted",visibilityState:"hidden"
+  });
+  hidden.call("startTimer",60,DRAFT,1_000);
+  hidden.call("reconcileActiveRestTimer",{now:70_000,announceExpired:true});
+  await settleAsyncFeedback();
+  assert.equal(hidden.notifications(),1);
+  assert.deepEqual(JSON.parse(JSON.stringify(hidden.notificationCalls[0])),[
+    "Descanso terminado",{body:"Es hora de continuar con la siguiente serie."}
+  ]);
+  assert.doesNotMatch(restAppSource,/requestPermission/);
+});
+
+test("fallos de serviceWorker.ready y showNotification son best-effort",async()=>{
+  for(const failure of [{readyFailure:true},{showFailure:true}]){
+    const timer=loadAppTimer({
+      notificationSupported:true,notificationPermission:"granted",
+      visibilityState:"hidden",...failure
+    });
+    timer.call("startTimer",60,DRAFT,1_000);
+    assert.doesNotThrow(()=>timer.call(
+      "reconcileActiveRestTimer",{now:70_000,announceExpired:true}
+    ));
+    await settleAsyncFeedback();
+    assert.equal(timer.state.restTimerPayload,null);
+  }
+});
+
+test("reconciliar background y callbacks cancelados no duplican ningún feedback",async()=>{
+  const timer=loadAppTimer({
+    notificationSupported:true,notificationPermission:"granted",visibilityState:"hidden"
+  });
+  timer.call("unlockRestTimerAudioFromUserInteraction");
+  timer.call("startTimer",60,DRAFT,1_000);
+  const callbacks=[...timer.intervals.values()];
+  timer.call("restoreActiveRestTimer",DRAFT,{now:70_000,announceExpired:true});
+  callbacks.forEach(callback=>callback());
+  await settleAsyncFeedback();
+  assert.equal(timer.sounds(),1);
+  assert.equal(timer.vibrations(),1);
+  assert.equal(timer.notifications(),1);
+
+  const cancelled=loadAppTimer();
+  cancelled.call("unlockRestTimerAudioFromUserInteraction");
+  cancelled.call("startTimer",60,DRAFT,1_000);
+  const cancelledCallbacks=[...cancelled.intervals.values()];
+  cancelled.call("clearActiveRestTimer",{removePersisted:true});
+  cancelledCallbacks.forEach(callback=>callback());
+  assert.equal(cancelled.sounds(),0);
+  assert.equal(cancelled.vibrations(),0);
 });
 
 test("payload corrupto o lectura fallida degrada a timer legacy ausente",()=>{

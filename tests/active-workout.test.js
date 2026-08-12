@@ -8,6 +8,7 @@ const vm=require("node:vm");
 
 const root=path.resolve(__dirname,"..");
 const moduleSource=fs.readFileSync(path.join(root,"active-workout.js"),"utf8");
+const domainSource=fs.readFileSync(path.join(root,"exercise-domain.js"),"utf8");
 const appSource=fs.readFileSync(path.join(root,"app.js"),"utf8");
 const stylesSource=fs.readFileSync(path.join(root,"styles.css"),"utf8");
 const indexSource=fs.readFileSync(path.join(root,"index.html"),"utf8");
@@ -64,6 +65,15 @@ const libraryExercise=(overrides={})=>({
   },
   ...overrides
 });
+
+function integratedLibrary(){
+  const match=appSource.match(/function defaultExerciseLibrary\(\)\{[\s\S]*?return (\[[\s\S]*?\]);\s*\}\s*function getExerciseLibrary/);
+  assert.ok(match);
+  const raw=vm.runInNewContext(`(${match[1]})`);
+  const context={console};context.window=context;context.globalThis=context;
+  vm.createContext(context);vm.runInContext(domainSource,context,{filename:"exercise-domain.js"});
+  return plain(context.GymOSExerciseDomain.migrateExerciseLibrary(raw).library);
+}
 
 test("entrenamiento activo: el módulo expone modelos puros sin dependencias de entorno",()=>{
   const api=loadApi();
@@ -170,6 +180,92 @@ test("resolución: una selección visual inequívoca requiere un ID confirmado",
   });
   assert.equal(result.status,"visual_selection");
   assert.equal(result.exercise.id,"press-maquina");
+});
+
+test("resolución integrada prioriza ID directo nombre oficial y alias exacto",()=>{
+  const api=loadApi(),library=integratedLibrary();
+  const direct=api.exerciseLibraryResolutionModel({
+    exercise:{exerciseId:"bench-press",name:"Press banca / máquina pecho"},library,normalize
+  });
+  assert.equal(direct.status,"exact");
+  assert.equal(direct.exercise.id,"bench-press");
+  const official=api.exerciseLibraryResolutionModel({
+    exercise:{name:"Press de banca"},library,normalize
+  });
+  assert.equal(official.status,"unique_name");
+  assert.equal(official.exercise.id,"bench-press");
+  const alias=api.exerciseLibraryResolutionModel({
+    exercise:{name:"Tríceps polea"},library,normalize
+  });
+  assert.equal(alias.status,"unique_name");
+  assert.equal(alias.exercise.id,"triceps-pushdown");
+});
+
+test("resolución legacy inequívoca usa un ID existente sin generar otro",()=>{
+  const library=integratedLibrary();
+  const before=JSON.stringify(library);
+  const result=loadApi().exerciseLibraryResolutionModel({
+    exercise:{name:"Remo sentado"},library,normalize
+  });
+  assert.equal(result.status,"legacy_exact");
+  assert.equal(result.exercise.id,"seated-cable-row");
+  assert.equal(JSON.stringify(library),before);
+});
+
+test("resolución legacy no oculta un ID duplicado",()=>{
+  const item=integratedLibrary().find(exercise=>exercise.id==="seated-cable-row");
+  const result=loadApi().exerciseLibraryResolutionModel({
+    exercise:{name:"Remo sentado"},library:[item,{...item,name:"Copia corrupta"}],normalize
+  });
+  assert.equal(result.status,"legacy_ambiguous");
+  assert.equal(result.exercise,null);
+  assert.equal(result.candidates.length,2);
+});
+
+test("resolución legacy compuesta devuelve candidatos explícitos",()=>{
+  const result=loadApi().exerciseLibraryResolutionModel({
+    exercise:{name:"Press hombro máquina/mancuernas"},library:integratedLibrary(),normalize
+  });
+  assert.equal(result.status,"legacy_ambiguous");
+  assert.equal(result.exercise,null);
+  assert.deepEqual(plain(result.candidates.map(item=>item.id)),[
+    "machine-shoulder-press","db-shoulder-press"
+  ]);
+});
+
+test("nombre legacy sin equivalencia segura ni candidatos queda pendiente",()=>{
+  const result=loadApi().exerciseLibraryResolutionModel({
+    exercise:{name:"Movimiento heredado sin equivalencia"},library:integratedLibrary(),normalize
+  });
+  assert.equal(result.status,"missing");
+  assert.equal(result.exercise,null);
+  assert.deepEqual(plain(result.candidates),[]);
+});
+
+test("los 18 nombres legacy quedan 12 resueltos 6 ambiguos y ninguno sin candidato",()=>{
+  const names=[
+    "Press banca / máquina pecho","Remo sentado","Prensa","Elevaciones laterales",
+    "Curl bíceps","Plancha","Peso muerto rumano","Jalón al pecho",
+    "Press hombro máquina/mancuernas","Zancadas / split squat","Tríceps polea",
+    "Abdominales","Sentadilla goblet / hack / prensa","Press inclinado mancuernas",
+    "Remo pecho apoyado","Curl femoral","Face pull","Gemelo"
+  ];
+  const api=loadApi(),library=integratedLibrary();
+  const results=names.map(name=>({name,result:api.exerciseLibraryResolutionModel({exercise:{name},library,normalize})}));
+  assert.equal(results.filter(item=>Boolean(item.result.exercise)).length,12);
+  assert.equal(results.filter(item=>item.result.candidates.length>0).length,6);
+  assert.equal(results.filter(item=>!item.result.exercise&&!item.result.candidates.length).length,0);
+});
+
+test("una resolución manual guardada se restaura desde el borrador",()=>{
+  const exercise={name:"Abdominales",resolvedLibraryExerciseId:"reverse-crunch"};
+  const first=loadApi().exerciseLibraryResolutionModel({exercise,library:integratedLibrary(),normalize});
+  const reloaded=loadApi().exerciseLibraryResolutionModel({
+    exercise:JSON.parse(JSON.stringify(exercise)),library:integratedLibrary(),normalize
+  });
+  assert.equal(first.status,"visual_selection");
+  assert.equal(reloaded.status,"visual_selection");
+  assert.equal(reloaded.exercise.id,"reverse-crunch");
 });
 
 test("guía: acepta únicamente assets locales controlados y genera un alt humano",()=>{
@@ -389,10 +485,17 @@ test("serie migrada sin bandera inequívoca se considera incompleta",()=>{
 
 test("ficha pendiente: copy y botones exactos",()=>{
   assert.match(workoutUiSource,/Ficha pendiente/);
-  assert.match(workoutUiSource,/Información del ejercicio sin confirmar/);
-  assert.match(workoutUiSource,/Selecciona una ficha para ver técnica y músculos trabajados\./);
+  assert.match(workoutUiSource,/GymOS ha encontrado varias fichas posibles/);
+  assert.match(workoutUiSource,/Este ejercicio no tiene una ficha confirmada/);
+  assert.match(workoutUiSource,/No hay una ficha compatible para seleccionar/);
+  assert.doesNotMatch(workoutUiSource,/Selecciona una ficha para ver técnica y músculos trabajados\./);
   assert.match(workoutUiSource,/Elegir ficha/);
   assert.match(workoutUiSource,/Continuar sin ficha/);
+});
+
+test("ficha pendiente solo se renderiza cuando el ejercicio sigue sin resolver",()=>{
+  assert.match(workoutUiSource,/\$\{!resolution\.exercise\?renderActiveWorkoutUnresolved/);
+  assert.match(workoutUiSource,/\$\{!resolution\.exercise\?`<button[^`]+Ficha pendiente/);
 });
 
 test("completar ejercicio pliega el actual y abre el siguiente pendiente",()=>{

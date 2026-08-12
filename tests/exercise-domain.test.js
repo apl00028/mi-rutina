@@ -87,6 +87,56 @@ function legacyLibrary(){
   ];
 }
 
+function canonicalBuiltIns(){
+  const context={result:null};
+  vm.createContext(context);
+  vm.runInContext(`${extractFunction(appSource,"defaultExerciseLibrary")};result=defaultExerciseLibrary();`,context);
+  return plain(context.result);
+}
+
+test("el catálogo canónico contiene 100 IDs únicos y conserva los 14 originales",()=>{
+  const catalog=canonicalBuiltIns();
+  const ids=catalog.map(item=>item.id);
+  const originalIds=legacyLibrary().map(item=>item.id);
+  assert.equal(catalog.length,100);
+  assert.equal(new Set(ids).size,100);
+  originalIds.forEach(id=>assert.ok(ids.includes(id),id));
+});
+
+test("app es la única lista integrada completa y dominio aporta metadatos complementarios",()=>{
+  const catalog=canonicalBuiltIns();
+  const metadata=loadDomain().LEGACY_EXERCISE_METADATA;
+  assert.equal(fs.existsSync(path.join(projectRoot,"built-in-exercise-catalog.js")),false);
+  assert.deepEqual(Object.keys(metadata).sort(),catalog.map(item=>item.id).sort());
+  assert.equal((appSource.match(/function defaultExerciseLibrary\(\)/g)||[]).length,1);
+});
+
+test("nombres y aliases integrados no colisionan entre IDs",()=>{
+  const api=loadDomain();
+  const migrated=plain(api.migrateExerciseLibrary(canonicalBuiltIns()).library);
+  const labels=new Map();
+  migrated.forEach(item=>[item.name,...(item.aliases||[])].forEach(label=>{
+    const key=api.normalizeToken(label);
+    const ids=labels.get(key)||new Set();
+    ids.add(item.id);labels.set(key,ids);
+  }));
+  const ambiguous=[...labels.entries()].filter(([,ids])=>ids.size>1);
+  assert.deepEqual(ambiguous,[]);
+});
+
+test("consolidar integrados no elimina ni pisa ejercicios personalizados",()=>{
+  const custom={
+    id:"custom-owner-stable",name:"Mi ejercicio",custom:true,source:"custom",
+    ownerId:"11111111-1111-4111-8111-111111111111",category:"strength",
+    movementPattern:"horizontal_push"
+  };
+  const migrated=plain(loadDomain().migrateExerciseLibrary([...canonicalBuiltIns(),custom]).library);
+  assert.equal(migrated.length,101);
+  assert.equal(migrated.at(-1).id,custom.id);
+  assert.equal(migrated.at(-1).name,custom.name);
+  assert.equal(migrated.at(-1).custom,true);
+});
+
 test("centraliza las taxonomias requeridas para la fase A",()=>{
   const api=loadDomain();
   [

@@ -20,6 +20,16 @@
     hasValue(set?.seconds)||hasValue(set?.distance)||text(set?.technique)
   );
   const exerciseIdentity=(exercise,index=0)=>text(exercise?.exerciseId||exercise?.id)||`position-${index}`;
+  const LEGACY_EXERCISE_RESOLUTIONS=Object.freeze([
+    {name:"Press banca / máquina pecho",mode:"candidates",exerciseIds:["bench-press","machine-chest-press"]},
+    {name:"Remo sentado",mode:"exact",exerciseIds:["seated-cable-row"]},
+    {name:"Jalón al pecho",mode:"exact",exerciseIds:["lat-pulldown"]},
+    {name:"Press hombro máquina/mancuernas",mode:"candidates",exerciseIds:["machine-shoulder-press","db-shoulder-press"]},
+    {name:"Zancadas / split squat",mode:"candidates",exerciseIds:["walking-lunge","bulgarian-split-squat"]},
+    {name:"Abdominales",mode:"candidates",exerciseIds:["cable-crunch","reverse-crunch","hanging-knee-raise","ab-wheel-rollout"]},
+    {name:"Sentadilla goblet / hack / prensa",mode:"candidates",exerciseIds:["goblet-squat","hack-squat","leg-press"]},
+    {name:"Gemelo",mode:"candidates",exerciseIds:["calf-raise","standing-calf-raise","seated-calf-raise","leg-press-calf-raise"]}
+  ]);
 
   function sessionElapsedModel({startedAt=null,now=Date.now(),maxReasonableMs=72*60*60*1000}={}){
     const start=validDate(startedAt);
@@ -53,7 +63,8 @@
   function exerciseLibraryResolutionModel({exercise=null,library=[],selectedExerciseId=null,normalize=value=>text(value).toLowerCase()}={}){
     const items=list(library);
     const runtimeId=text(exercise?.exerciseId||exercise?.id);
-    const selectedMatches=selectedExerciseId?items.filter(item=>item?.id===selectedExerciseId):[];
+    const persistedSelection=text(selectedExerciseId||exercise?.resolvedLibraryExerciseId);
+    const selectedMatches=persistedSelection?items.filter(item=>item?.id===persistedSelection):[];
     if(selectedMatches.length===1) return {status:"visual_selection",exercise:clone(selectedMatches[0]),candidates:[]};
     if(selectedMatches.length>1) return {status:"ambiguous",exercise:null,candidates:clone(selectedMatches.slice(0,8))};
     if(runtimeId){
@@ -66,6 +77,17 @@
       normalize(item?.name)===nameKey||list(item?.aliases).some(alias=>normalize(alias)===nameKey)
     ):[];
     if(matches.length===1) return {status:"unique_name",exercise:clone(matches[0]),candidates:[]};
+    const legacy=LEGACY_EXERCISE_RESOLUTIONS.find(item=>normalize(item.name)===nameKey);
+    if(legacy){
+      const candidates=legacy.exerciseIds.flatMap(id=>items.filter(item=>item?.id===id));
+      if(legacy.mode==="exact"&&candidates.length===1){
+        return {status:"legacy_exact",exercise:clone(candidates[0]),candidates:[]};
+      }
+      return {
+        status:candidates.length?"legacy_ambiguous":"missing",
+        exercise:null,candidates:clone(candidates.slice(0,8))
+      };
+    }
     const pattern=text(exercise?.movementPattern||exercise?.pattern);
     const compatible=matches.length>1
       ?matches

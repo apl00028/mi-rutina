@@ -651,6 +651,7 @@ const EXERCISE_DOMAIN_SCHEMA_KEY="gymos:exerciseDomainSchemaVersion";
 const EXERCISE_DOMAIN_MIGRATION_BACKUP_PREFIX="gymos:exerciseDomainMigrationBackup:";
 
 function defaultExerciseLibrary(){
+  // Fuente canónica del catálogo integrado: ID, nombre oficial, orden y datos base.
   return [
     {
       "id":"bench-press",
@@ -11156,8 +11157,10 @@ function renderActiveWorkoutUnresolved(resolution,exercise,key){
   return `<section class="active-workout-resolution" role="status">
     <div class="active-workout-resolution-copy">
       <span class="section-kicker">Ficha pendiente</span>
-      <h3>Información del ejercicio sin confirmar</h3>
-      <p>Selecciona una ficha para ver técnica y músculos trabajados.</p>
+      <h3>${resolution.candidates.length?"GymOS ha encontrado varias fichas posibles":"Este ejercicio no tiene una ficha confirmada"}</h3>
+      <p>${resolution.candidates.length
+        ?"Elige la ficha que corresponde a este ejercicio para ver su técnica y músculos trabajados."
+        :"Puedes continuar el entrenamiento sin ficha; las series y la finalización seguirán disponibles."}</p>
     </div>
     <div class="active-workout-resolution-actions">
       ${resolution.candidates.length?`<button type="button" class="secondary" data-workout-show-candidates aria-expanded="${showCandidates}">Elegir ficha</button>`:""}
@@ -11697,15 +11700,17 @@ function renderMobileWorkoutSheet({
       <div class="mobile-workout-sheet-actions"><button type="button" class="primary" data-mobile-save-close>Guardar y cerrar</button></div>`;
   }else if(panel==="library"){
     titleId="mobileWorkoutLibraryTitle";
-    content=`${heading("FICHA PENDIENTE","Selecciona una ficha",titleId,true)}
-      <p class="subtle">La ficha solo aporta referencia visual y técnica. Puedes seguir registrando sin resolverla.</p>
-      <div class="active-workout-candidates">
+    content=`${heading("FICHA PENDIENTE",resolution.candidates.length?"Varias fichas posibles":"Sin ficha confirmada",titleId,true)}
+      <p class="subtle">${resolution.candidates.length
+        ?"GymOS ha encontrado varias posibles fichas. Elige una solo si corresponde a este ejercicio."
+        :"No hay una ficha compatible para seleccionar. Puedes continuar el entrenamiento con normalidad."}</p>
+      ${resolution.candidates.length?`<div class="active-workout-candidates">
         ${resolution.candidates.map(candidate=>`<button type="button" data-workout-library-candidate="${esc(candidate.id)}">
           <strong>${esc(candidate.name)}</strong>
           <span>${esc(candidate.movementPattern||"Coincidencia compatible")}</span>
           <small>Usar en este entrenamiento</small>
         </button>`).join("")}
-      </div>
+      </div>`:""}
       <div class="mobile-workout-sheet-actions"><button type="button" class="secondary" data-workout-dismiss-resolution>Continuar sin ficha</button></div>`;
   }else if(panel==="exercise_options"){
     titleId="mobileWorkoutExerciseOptionsTitle";
@@ -11907,7 +11912,7 @@ function renderMobileWorkout({
             <button type="button" data-mobile-open-panel="${resolution.exercise?"technique":"library"}" data-mobile-focus-id="library">Ficha${resolution.exercise?"":" pendiente"}</button>
             <button type="button" data-mobile-open-panel="exercise_options" data-mobile-focus-id="exercise-options">Opciones</button>
           </nav>
-          ${!resolution.exercise?`<button type="button" class="mobile-workout-library-pending" data-mobile-open-panel="library" data-mobile-focus-id="library-pending"><span>Ficha pendiente</span><strong>Seleccionar</strong></button>`:""}
+          ${!resolution.exercise?`<button type="button" class="mobile-workout-library-pending" data-mobile-open-panel="library" data-mobile-focus-id="library-pending"><span>Ficha pendiente</span><strong>${resolution.candidates.length?"Revisar opciones":"Continuar sin ficha"}</strong></button>`:""}
           ${model.completedSets.length?`<section class="mobile-workout-completed" aria-labelledby="mobileWorkoutCompletedTitle">
             <button type="button" class="mobile-workout-disclosure" data-mobile-toggle-completed aria-expanded="${ui.completedExpanded}">
               <span id="mobileWorkoutCompletedTitle">${model.completedSets.length} ${model.completedSets.length===1?"serie realizada":"series realizadas"}</span><strong>${ui.completedExpanded?"Ocultar":"Ver"}</strong>

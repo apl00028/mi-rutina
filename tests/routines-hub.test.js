@@ -89,3 +89,56 @@ test("53 tabs tienen roles y aria-selected",()=>{assert.match(hubSource,/role="t
 test("54 textarea y filtros tienen labels",()=>{assert.match(hubSource,/for="routineImportText"/);assert.match(hubSource,/<legend>Privacidad y detalle<\/legend>/);});
 test("55 tabs permiten navegación por teclado",()=>assert.match(hubSource,/\["ArrowLeft","ArrowRight","Home","End"\]/));
 test("56 UI normal no muestra IDs ni JSON crudo",()=>{assert.doesNotMatch(hubSource,/>ownerId<|>workoutInstanceId<|>sessionId<|<pre/);assert.ok(indexSource.indexOf("routines-experience.js")<indexSource.indexOf("routine-hub.js"));});
+
+function exportSingleWorkout(workout){
+  return api().buildProgressExportViewModel({
+    routine:routine(),history:[workout],ownerId:"owner-a",
+    options:{now:"2026-08-06T12:00:00.000Z"}
+  });
+}
+
+test("57 planned session is not exported as completed",()=>{
+  const value=exportSingleWorkout({
+    ownerId:"owner-a",date:"2026-08-05T10:00:00.000Z",sessionName:"A",
+    exercises:[{name:"Press banca",series:[{done:false}]}]
+  });
+  assert.equal(value.workouts[0].completed,false);
+  assert.equal(value.adherence.completed,0);
+});
+
+test("58 done set without metrics is exported as performed without invented values",()=>{
+  const value=exportSingleWorkout({
+    ownerId:"owner-a",date:"2026-08-05T10:00:00.000Z",sessionName:"A",
+    exercises:[{name:"Press banca",series:[{done:true}]}]
+  });
+  const set=value.workouts[0].exercises[0].series[0];
+  assert.equal(value.workouts[0].completed,true);
+  assert.equal(value.workouts[0].completedSeries,1);
+  assert.equal(set.completed,true);
+  assert.equal(set.weight,null);
+  assert.equal(set.reps,null);
+  assert.equal(set.rir,null);
+  assert.equal(set.seconds,null);
+  assert.equal(set.distance,null);
+});
+
+test("59 set without performance evidence is not exported as completed",()=>{
+  const value=exportSingleWorkout({
+    ownerId:"owner-a",date:"2026-08-05T10:00:00.000Z",sessionName:"A",
+    exercises:[{name:"Press banca",sets:[{}]}]
+  });
+  assert.equal(value.workouts[0].exercises[0].series[0].completed,false);
+  assert.equal(value.workouts[0].completedSeries,0);
+});
+
+test("60 mixed session preserves performed and pending sets",()=>{
+  const value=exportSingleWorkout({
+    ownerId:"owner-a",date:"2026-08-05T10:00:00.000Z",sessionName:"A",completed:true,
+    exercises:[{name:"Press banca",series:[{done:true},{done:false}]}]
+  });
+  assert.deepEqual(
+    JSON.parse(JSON.stringify(value.workouts[0].exercises[0].series.map(set=>set.completed))),
+    [true,false]
+  );
+  assert.equal(value.workouts[0].completedSeries,1);
+});

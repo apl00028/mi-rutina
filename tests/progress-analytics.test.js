@@ -155,3 +155,148 @@ test("cuatro sesiones en dos semanas producen métricas distintas de cero y evol
 test("adherencia no se calcula sin planificación explícita",()=>{
   assert.equal(aggregate({history:[workout()]}).summary.adherence.available,false);
 });
+
+test("finalized session counts when performed sets have no metrics",()=>{
+  const item=workout({id:"done-without-metrics",weight:null,reps:null,rir:null,durationMs:null});
+  item.exercises[0].series.push({setInstanceId:"set-done-2",done:true});
+  const result=aggregate({history:[item]});
+  assert.equal(result.summary.completed,1);
+  assert.equal(result.summary.completedSets,2);
+  assert.equal(result.summary.currentWeekVolume,0);
+  assert.equal(result.summary.metricAvailability.volume,0);
+  assert.equal(result.sessions[0].exercises[0].sets[0].volume,null);
+});
+
+test("performed sets with and without metrics count without zero imputation",()=>{
+  const item=workout({id:"mixed-metrics"});
+  item.exercises[0].series.push({setInstanceId:"set-missing",done:true});
+  const result=aggregate({history:[item]});
+  assert.equal(result.summary.completedSets,2);
+  assert.equal(result.summary.totalReps,10);
+  assert.equal(result.summary.currentWeekVolume,500);
+  assert.equal(result.summary.metricAvailability.reps,1);
+  assert.equal(result.summary.metricAvailability.volume,1);
+});
+
+test("performed timed set keeps missing duration absent",()=>{
+  const item=workout({id:"timed-missing",weight:null,reps:null,rir:null,durationMs:null});
+  const result=aggregate({history:[item]});
+  assert.equal(result.summary.completedSets,1);
+  assert.equal(result.sessions[0].exercises[0].sets[0].seconds,null);
+  assert.equal(result.summary.metricAvailability.seconds,0);
+  assert.equal(result.summary.averageDurationMs,null);
+});
+
+test("planned active session is not treated as performed",()=>{
+  const item=workout({id:"planned",status:"active",done:false,weight:null,reps:null,rir:null,durationMs:null});
+  delete item.completedAt;
+  delete item.exercises[0].series[0].done;
+  const result=aggregate({progressRecords:[item]});
+  assert.equal(result.sessions.length,1);
+  assert.equal(result.activitySessions.length,0);
+  assert.equal(result.summary.completed,0);
+  assert.equal(result.summary.incomplete,0);
+  assert.equal(result.summary.completedSets,0);
+  assert.equal(result.diagnostics.notPerformed,1);
+});
+
+test("7 14 and 30 day windows use exact local calendar boundaries",()=>{
+  const result=aggregate({history:[
+    workout({id:"day-7",date:"2026-08-02T12:00:00+02:00"}),
+    workout({id:"day-14",date:"2026-07-26T12:00:00+02:00"}),
+    workout({id:"day-30",date:"2026-07-10T12:00:00+02:00"}),
+    workout({id:"outside-30",date:"2026-07-09T23:59:59+02:00"})
+  ]});
+  assert.equal(result.summary.sessions7,1);
+  assert.equal(result.summary.sessions14,2);
+  assert.equal(result.summary.sessions30,3);
+});
+
+test("series sets and completedSets preserve historical evidence",()=>{
+  const series=workout({id:"format-series",field:"series",done:true,weight:null,reps:null,rir:null});
+  const sets=workout({id:"format-sets",field:"sets",done:false,weight:30,reps:8,rir:null});
+  const completedSets=workout({id:"format-completed",field:"completedSets",done:false,weight:null,reps:null,rir:null});
+  const result=aggregate({history:[series,sets,completedSets]});
+  assert.equal(result.summary.completed,3);
+  assert.equal(result.summary.completedSets,3);
+  assert.equal(result.summary.currentWeekVolume,240);
+});
+
+test("deduplication enriches a sparse set without duplicating it",()=>{
+  const sparse=workout({id:"merge-rich",weight:null,reps:null,rir:null});
+  const rich=workout({id:"merge-rich",weight:50,reps:10,rir:2});
+  const result=aggregate({history:[sparse],remoteHistory:[rich]});
+  assert.equal(result.sessions.length,1);
+  assert.equal(result.summary.completedSets,1);
+  assert.equal(result.summary.currentWeekVolume,500);
+  assert.equal(result.summary.metricAvailability.volume,1);
+});
+
+test("partial week compares only through the same weekday",()=>{
+  const now="2026-08-05T12:00:00+02:00";
+  const history=[
+    workout({id:"p-mon",date:"2026-07-27T18:00:00+02:00"}),
+    workout({id:"p-tue",date:"2026-07-28T18:00:00+02:00"}),
+    workout({id:"p-wed",date:"2026-07-29T18:00:00+02:00"}),
+    workout({id:"p-sun",date:"2026-08-02T18:00:00+02:00",weight:200}),
+    workout({id:"c-mon",date:"2026-08-03T18:00:00+02:00"}),
+    workout({id:"c-tue",date:"2026-08-04T18:00:00+02:00"}),
+    workout({id:"c-wed",date:"2026-08-05T10:00:00+02:00"})
+  ];
+  const result=aggregate({history,now});
+  assert.equal(result.comparison.previous.workouts,3);
+  assert.equal(result.comparison.current.workouts,3);
+  assert.equal(result.comparison.volumeChange,0);
+});
+
+test("empty previous period yields unavailable comparisons",()=>{
+  const result=aggregate({history:[workout({id:"only-current",date:"2026-08-05T10:00:00+02:00"})],now:"2026-08-05T12:00:00+02:00"});
+  assert.equal(result.comparison.trend,"sin_comparacion");
+  assert.equal(result.comparison.volumeChange,null);
+  assert.equal(result.comparison.setChange,null);
+  assert.equal(result.comparison.repsChange,null);
+  assert.equal(result.comparison.dimensions.volume.status,"sin_comparacion");
+});
+
+test("two empty periods are reported as no data",()=>{
+  const result=aggregate({now:"2026-08-05T12:00:00+02:00"});
+  assert.equal(result.comparison.trend,"sin_datos");
+  assert.equal(result.comparison.dimensions.sessions.status,"sin_datos");
+  assert.equal(result.comparison.dimensions.volume.status,"sin_datos");
+});
+
+test("load can improve while volume declines without an opaque score",()=>{
+  const result=aggregate({history:[
+    workout({id:"mixed-before",date:"2026-07-29T18:00:00+02:00",weight:50,reps:10}),
+    workout({id:"mixed-current",date:"2026-08-05T10:00:00+02:00",weight:60,reps:5})
+  ],now:"2026-08-05T12:00:00+02:00"});
+  assert.equal(result.comparison.trend,"mixta");
+  assert.ok(result.comparison.dimensions.load.delta>0);
+  assert.ok(result.comparison.dimensions.volume.delta<0);
+  assert.equal("score" in result.comparison,false);
+});
+
+test("missing RIR stays absent and present RIR is compared",()=>{
+  const absent=aggregate({history:[
+    workout({id:"rir-a0",date:"2026-07-29T18:00:00+02:00",rir:null}),
+    workout({id:"rir-a1",date:"2026-08-05T10:00:00+02:00",rir:null})
+  ],now:"2026-08-05T12:00:00+02:00"});
+  assert.equal(absent.comparison.dimensions.rir.status,"sin_datos");
+  assert.equal(absent.comparison.dimensions.rir.previous,null);
+  const present=aggregate({history:[
+    workout({id:"rir-p0",date:"2026-07-29T18:00:00+02:00",rir:3}),
+    workout({id:"rir-p1",date:"2026-08-05T10:00:00+02:00",rir:2})
+  ],now:"2026-08-05T12:00:00+02:00"});
+  assert.equal(present.comparison.dimensions.rir.status,"comparable");
+  assert.equal(present.comparison.dimensions.rir.delta,-1);
+});
+
+test("app renders unavailable comparison without calling toFixed on null",()=>{
+  const appSource=fs.readFileSync(path.join(root,"app.js"),"utf8");
+  const helper=appSource.match(/function progressComparisonChange\(value\)\{[\s\S]*?\n\}/)?.[0];
+  assert.ok(helper);
+  const format=Function(`${helper};return progressComparisonChange;`)();
+  assert.doesNotThrow(()=>format(null));
+  assert.equal(format(null),"Sin comparaciÃ³n");
+  assert.equal(format(12.34),"+12,3 %");
+});

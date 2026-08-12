@@ -252,14 +252,42 @@
     start.setHours(0,0,0,0);
     return {start:start.toISOString(),end:end.toISOString()};
   }
+  function progressSetCollection(exercise){
+    const fields=["series","sets","completedSets"];
+    for(const field of fields){
+      if(Array.isArray(exercise?.[field])&&exercise[field].length){
+        return {sets:exercise[field],completionImplied:field==="completedSets"};
+      }
+    }
+    for(const field of fields){
+      if(Array.isArray(exercise?.[field])) return {sets:exercise[field],completionImplied:field==="completedSets"};
+    }
+    return {sets:[],completionImplied:false};
+  }
+  function progressFinite(value){
+    return value===null||value===undefined||text(value)===""?null:finite(value);
+  }
+  function progressSetHasMetric(set){
+    return ["weight","kg","load","reps","seconds","duration","distance","rir","value","assistance"]
+      .some(field=>progressFinite(set?.[field])!==null);
+  }
+  function progressSetCompleted(set,completionImplied){
+    const status=normalize(set?.status);
+    return set?.done===true||set?.completed===true||set?.performed===true
+      ||["done","completed","performed"].includes(status)||completionImplied||progressSetHasMetric(set);
+  }
+  function progressWorkoutCompleted(workout,performedSets){
+    const status=normalize(workout?.status);
+    if(["active","paused","draft","incomplete"].includes(status)) return false;
+    return workout?.completed===true||workout?.done===true||Boolean(workout?.completedAt)
+      ||["done","completed","finalized"].includes(status)
+      ||(progressFinite(workout?.completedSeries)??0)>0||performedSets>0;
+  }
   function safeWorkout(workout,options){
-    return {
-      date:text(workout?.date||workout?.completedAt),
-      sessionName:text(workout?.sessionName||workout?.session||workout?.legacySessionKey)||"Sesión",
-      completed:Boolean(workout?.completed??workout?.done??true),
-      durationMs:options.includeDuration?finite(workout?.durationMs):null,
-      completedSeries:finite(workout?.completedSeries),
-      exercises:list(workout?.exercises).map(exercise=>({
+    let performedSets=0;
+    const exercises=list(workout?.exercises).map(exercise=>{
+      const collection=progressSetCollection(exercise);
+      return {
         name:text(exercise?.name)||"Ejercicio",
         omitted:Boolean(exercise?.omitted),
         substitution:exercise?.substitution?{
@@ -268,14 +296,26 @@
         }:null,
         notes:options.includeNotes?text(exercise?.notes):"",
         discomfort:options.includeDiscomfort?text(exercise?.discomfort):"",
-        series:list(exercise?.series).map((set,index)=>({
-          number:index+1,weight:options.includeLoads?set?.weight??null:null,
-          reps:options.includeLoads?set?.reps??null:null,
-          rir:options.includeLoads?set?.rir??null:null,
-          seconds:set?.seconds??null,distance:set?.distance??null,
-          warmup:Boolean(set?.warmup),completed:Boolean(set?.done??true)
-        }))
-      }))
+        series:collection.sets.map((set,index)=>{
+          const completed=progressSetCompleted(set,collection.completionImplied);
+          if(completed) performedSets+=1;
+          return {
+            number:index+1,weight:options.includeLoads?progressFinite(set?.weight??set?.kg??set?.load):null,
+            reps:options.includeLoads?progressFinite(set?.reps):null,
+            rir:options.includeLoads?progressFinite(set?.rir):null,
+            seconds:progressFinite(set?.seconds??set?.duration),distance:progressFinite(set?.distance),
+            warmup:Boolean(set?.warmup),completed
+          };
+        })
+      };
+    });
+    return {
+      date:text(workout?.date||workout?.completedAt),
+      sessionName:text(workout?.sessionName||workout?.session||workout?.legacySessionKey)||"Sesión",
+      completed:progressWorkoutCompleted(workout,performedSets),
+      durationMs:options.includeDuration?progressFinite(workout?.durationMs):null,
+      completedSeries:progressFinite(workout?.completedSeries)??performedSets,
+      exercises
     };
   }
   function weekKey(value){
@@ -289,9 +329,9 @@
     const groups=new Map();
     workouts.filter(item=>item.completed).forEach(workout=>workout.exercises.forEach(exercise=>{
       const completed=exercise.series.filter(set=>set.completed);
-      const weights=completed.map(set=>finite(set.weight)).filter(value=>value!==null);
-      const reps=completed.map(set=>finite(set.reps)).filter(value=>value!==null);
-      const rirs=completed.map(set=>finite(set.rir)).filter(value=>value!==null);
+      const weights=completed.map(set=>progressFinite(set.weight)).filter(value=>value!==null);
+      const reps=completed.map(set=>progressFinite(set.reps)).filter(value=>value!==null);
+      const rirs=completed.map(set=>progressFinite(set.rir)).filter(value=>value!==null);
       const row={date:workout.date,maxLoad:weights.length?Math.max(...weights):null,totalReps:reps.length?reps.reduce((sum,value)=>sum+value,0):null,averageRir:rirs.length?Math.round((rirs.reduce((sum,value)=>sum+value,0)/rirs.length)*10)/10:null};
       const key=normalize(exercise.name);if(!groups.has(key)) groups.set(key,{name:exercise.name,observations:[]});groups.get(key).observations.push(row);
     }));

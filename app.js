@@ -14977,6 +14977,13 @@ function renderNutrition(){
   bindNav();
 }
 
+function progressComparisonChange(value){
+  if(value===null||value===undefined||!Number.isFinite(Number(value))){
+    return "Sin comparaciÃ³n";
+  }
+  const numeric=Number(value);
+  return `${numeric>=0?"+":""}${numeric.toFixed(1).replace(".",",")} %`;
+}
 function renderProgressDashboard(){
   let analytics=null;
   let weeks=[],fatigue={score:0,level:"baja",reasons:[]};
@@ -15047,9 +15054,9 @@ function renderProgressDashboard(){
       <section class="card progress-comparison-card">
         <div class="card-heading-row"><div><h2>Evolución de las dos últimas semanas</h2><p class="subtle">La tendencia combina carga, repeticiones, series y calidad de finalización.</p></div><span class="trend-badge ${comparison.trend}">${esc(comparison.trend)}</span></div>
         <div class="progress-week-comparison">
-          <article><span>Volumen</span><strong>${comparison.volumeChange>=0?"+":""}${comparison.volumeChange.toFixed(1).replace(".",",")} %</strong><small>${Math.round(comparison.previous.volume).toLocaleString("es-ES")} → ${Math.round(comparison.current.volume).toLocaleString("es-ES")} kg</small></article>
-          <article><span>Series</span><strong>${comparison.setChange>=0?"+":""}${comparison.setChange.toFixed(1).replace(".",",")} %</strong><small>${comparison.previous.sets} → ${comparison.current.sets}</small></article>
-          <article><span>Repeticiones</span><strong>${comparison.repsChange>=0?"+":""}${comparison.repsChange.toFixed(1).replace(".",",")} %</strong><small>${comparison.previous.reps} → ${comparison.current.reps}</small></article>
+          <article><span>Volumen</span><strong>${progressComparisonChange(comparison.volumeChange)}</strong><small>${Math.round(comparison.previous.volume).toLocaleString("es-ES")} → ${Math.round(comparison.current.volume).toLocaleString("es-ES")} kg</small></article>
+          <article><span>Series</span><strong>${progressComparisonChange(comparison.setChange)}</strong><small>${comparison.previous.sets} → ${comparison.current.sets}</small></article>
+          <article><span>Repeticiones</span><strong>${progressComparisonChange(comparison.repsChange)}</strong><small>${comparison.previous.reps} → ${comparison.current.reps}</small></article>
         </div>
         <div class="progress-improvements">
           <p><strong>Más peso:</strong> ${comparison.increasedWeight.length?comparison.increasedWeight.map(esc).join(", "):"Sin aumentos comparables"}</p>

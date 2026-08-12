@@ -70,8 +70,8 @@ function exercise(id,name,pattern="horizontal_push",extra={}){
 }
 function library(){
   return [
-    exercise("press","Press de banca","horizontal_push"),
-    exercise("row","Remo sentado","horizontal_pull"),
+    exercise("press","Press de banca","horizontal_push",{aliases:["Press banca"]}),
+    exercise("row","Remo sentado","horizontal_pull",{aliases:["Remo en polea"]}),
     exercise("squat","Sentadilla","knee_dominant"),
     exercise("hinge","Peso muerto rumano","hip_hinge"),
     exercise("pull","Jalón al pecho","vertical_pull"),
@@ -284,9 +284,42 @@ test("22. matching por ID exacto",()=>{
   assert.equal(api.matchExercise({exerciseId:"press",exerciseName:""},(()=>{const byId=new Map([["press",library()[0]]]);return {byId,byName:new Map()};})()).exercise.id,"press");
 });
 
+test("22b. ID valido y alias reconocido se acepta y normaliza",()=>{
+  const api=loadApi();
+  const result=convert(api,[row("A",1,"press","Press banca"),row("B",1,"row","Remo sentado")]);
+  assert.equal(result.valid,true);
+  assert.equal(result.sessions[0].rows[0].name,"Press de banca");
+  assert.ok(result.warnings.some(item=>item.code==="exercise_name_normalized_from_id"));
+});
+
+test("22c. ID valido y nombre vacio se acepta y completa",()=>{
+  const api=loadApi();
+  const result=convert(api,[row("A",1,"press",""),row("B",1,"row","Remo sentado")]);
+  assert.equal(result.valid,true);
+  assert.equal(result.sessions[0].rows[0].name,"Press de banca");
+  const correction=result.warnings.find(item=>item.code==="exercise_name_normalized_from_id");
+  assert.deepEqual({
+    severity:correction.severity,originalName:correction.originalName,
+    canonicalName:correction.canonicalName,exerciseId:correction.exerciseId
+  },{severity:"correction",originalName:"",canonicalName:"Press de banca",exerciseId:"press"});
+});
+
+test("22d. ID inexistente bloquea aunque el nombre pertenezca a la biblioteca",()=>{
+  const api=loadApi();
+  const result=convert(api,[row("A",1,"missing-id","Press de banca"),row("B",1,"row","Remo sentado")]);
+  assert.ok(result.errors.some(item=>item.code==="unknown_exercise_id"));
+});
+
 test("23. matching por nombre único",()=>{
   const api=loadApi();
   const result=convert(api,[row("A",1,"","Press de banca"),row("B",1,"","Remo sentado")]);
+  assert.equal(result.valid,true);
+  assert.deepEqual(result.sessions.map(item=>item.rows[0].exerciseId),["press","row"]);
+});
+
+test("23b. ID vacio y alias unico resuelve el ejercicio correcto",()=>{
+  const api=loadApi();
+  const result=convert(api,[row("A",1,"","Press banca"),row("B",1,"","Remo en polea")]);
   assert.equal(result.valid,true);
   assert.deepEqual(result.sessions.map(item=>item.rows[0].exerciseId),["press","row"]);
 });
@@ -304,10 +337,15 @@ test("25. ejercicio desconocido bloqueado",()=>{
   assert.ok(result.errors.some(item=>item.code==="unknown_exercise"));
 });
 
-test("26. ID válido y nombre distinto produce warning",()=>{
+test("26. ID válido y nombre distinto produce corrección automática",()=>{
   const api=loadApi(),result=convert(api,[row("A",1,"press","Nombre distinto"),row("B",1,"row","Remo sentado")]);
-  assert.ok(result.warnings.some(item=>item.code==="exercise_name_mismatch"));
+  assert.ok(result.warnings.some(item=>item.code==="exercise_name_normalized_from_id"&&item.severity==="correction"));
   assert.equal(result.sessions[0].rows[0].name,"Press de banca");
+});
+
+test("26b. ID y nombre inequívoco de otro ejercicio producen conflicto bloqueante",()=>{
+  const api=loadApi(),result=convert(api,[row("A",1,"press","Remo sentado"),row("B",1,"row","Remo sentado")]);
+  assert.ok(result.errors.some(item=>item.code==="exercise_id_name_conflict"));
 });
 
 test("27. patrón del archivo no sustituye la biblioteca",()=>{

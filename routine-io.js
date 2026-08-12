@@ -82,8 +82,15 @@
     }
     return global.GymOSProfileData.normalizeOwnerId(ownerId);
   }
-  function issue(code,message,{row=null,column=null,value=null,severity="error"}={}){
-    return {code,severity,row,column,value:value===null?null:text(value).slice(0,160),message};
+  function issue(code,message,{
+    row=null,column=null,value=null,severity="error",
+    originalName=null,canonicalName=null,exerciseId=null
+  }={}){
+    const result={code,severity,row,column,value:value===null?null:text(value).slice(0,160),message};
+    if(originalName!==null) result.originalName=text(originalName).slice(0,160);
+    if(canonicalName!==null) result.canonicalName=text(canonicalName).slice(0,160);
+    if(exerciseId!==null) result.exerciseId=text(exerciseId).slice(0,120);
+    return result;
   }
   function safeFileName(value){
     const leaf=text(value).split(/[\\/]/).pop()||"rutina";
@@ -326,21 +333,37 @@
   }
   function matchExercise(row,index){
     const id=text(row.exerciseId),name=text(row.exerciseName);
-    if(id&&index.byId.has(id)){
+    if(id){
+      if(!index.byId.has(id)){
+        return {errorCode:"unknown_exercise_id",error:"El ID de ejercicio no existe en la biblioteca de GymOS."};
+      }
       const exercise=index.byId.get(id);
+      const canonicalName=text(exercise.name);
+      if(name===canonicalName) return {exercise,correction:null};
+      const nameKey=normalizedExerciseName(name);
+      const nameMatches=index.byName.get(nameKey)||[];
+      const distinct=[...new Map(nameMatches.map(item=>[text(item.id),item])).values()];
+      if(name&&distinct.length===1&&text(distinct[0].id)!==id){
+        return {
+          errorCode:"exercise_id_name_conflict",
+          error:`El nombre identifica a ${text(distinct[0].name)}, pero el ID corresponde a ${canonicalName}.`
+        };
+      }
       return {
         exercise,
-        warning:name&&normalizedExerciseName(name)!==normalizedExerciseName(exercise.name)
-          ?"El nombre del archivo no coincide con el ID; se utiliza el nombre de la biblioteca."
-          :null
+        correction:{
+          originalName:name,canonicalName,exerciseId:id,
+          message:name
+            ?`El nombre “${name}” se ha normalizado a “${canonicalName}” usando el ID ${id}.`
+            :`Se ha completado el nombre “${canonicalName}” usando el ID ${id}.`
+        }
       };
     }
-    if(id&&!name) return {error:"No se reconoce el ID del ejercicio."};
     const matches=index.byName.get(normalizedExerciseName(name))||[];
     const distinct=[...new Map(matches.map(item=>[text(item.id),item])).values()];
-    if(distinct.length===1) return {exercise:distinct[0],warning:null};
-    if(distinct.length>1) return {error:"El nombre coincide con varios ejercicios. Utiliza el ID exacto."};
-    return {error:"No se reconoce el ejercicio. Utiliza un ID de la biblioteca o corrige el nombre."};
+    if(distinct.length===1) return {exercise:distinct[0],correction:null};
+    if(distinct.length>1) return {errorCode:"ambiguous_exercise",error:"El nombre coincide con varios ejercicios. Utiliza el ID exacto."};
+    return {errorCode:"unknown_exercise",error:"No se reconoce el ejercicio. Utiliza un ID de la biblioteca o corrige el nombre."};
   }
   function compatibilityLabel(code){
     return {
@@ -431,12 +454,19 @@
       if(text(row.durationMin)&&durationMin===null) rowErrors.push(issue("invalid_duration","La duración de sesión debe estar entre 1 y 300 minutos.",{row:rowNumber,column:"Duración sesión (min)",value:row.durationMin}));
       const match=identity?matchExercise(row,index):null;
       if(match?.error) rowErrors.push(issue(
-        match.error.includes("varios")?"ambiguous_exercise":"unknown_exercise",
+        match.errorCode||"unknown_exercise",
         match.error,{row:rowNumber,column:text(row.exerciseId)?"ID de ejercicio":"Ejercicio",value:identity}
       ));
       if(rowErrors.length){errors.push(...rowErrors);return;}
       const exercise=match.exercise;
-      if(match.warning) warnings.push(issue("exercise_name_mismatch",match.warning,{severity:"warning",row:rowNumber,column:"Ejercicio",value:row.exerciseName}));
+      if(match.correction) warnings.push(issue(
+        "exercise_name_normalized_from_id",match.correction.message,{
+          severity:"correction",row:rowNumber,column:"Ejercicio",value:row.exerciseName,
+          originalName:match.correction.originalName,
+          canonicalName:match.correction.canonicalName,
+          exerciseId:match.correction.exerciseId
+        }
+      ));
       if(text(row.pattern)&&normalizeToken(row.pattern)!==normalizeToken(exercise.movementPattern)){
         warnings.push(issue("pattern_mismatch","El patrón del archivo difiere; se utiliza el de la biblioteca.",{severity:"warning",row:rowNumber,column:"Patrón",value:row.pattern}));
       }

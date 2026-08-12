@@ -15938,6 +15938,10 @@ function renderRoutineImport(){
       <button id="cancelRoutineImport" class="text-button full" type="button">Cancelar importación</button>
     </section>`;
   }
+  const corrections=(preview.corrections?.length
+    ?preview.corrections
+    :preview.warnings?.filter(item=>item.severity==="correction"))||[];
+  const importWarnings=(preview.warnings||[]).filter(item=>item.severity!=="correction");
   return `<section class="routine-workflow-heading">
     <span class="section-kicker">PREVIEW DE IMPORTACIÓN</span>
     <h1>${esc(preview.fileName)}</h1>
@@ -15951,9 +15955,14 @@ function renderRoutineImport(){
     <div><span>Activación</span><strong>${preview.activationCompatible?"Compatible":preview.reviewRequired?"Requiere revisión":"Bloqueada"}</strong></div>
     <div><span>Revisión</span><strong>${preview.reviewRequired?"Necesaria":"Sin avisos"}</strong></div>
   </section>
+  <section class="card routine-import-validation" aria-live="polite">
+    <span class="section-kicker">VALIDACIÓN</span>
+    <h2>${preview.errors?.length?"Requiere correcciones":"Lista para revisar"}</h2>
+    ${corrections.length?`<p>${corrections.length} ${corrections.length===1?"nombre se ha":"nombres se han"} normalizado automáticamente usando ${corrections.length===1?"su ID":"sus IDs"} de GymOS.</p>`:""}
+  </section>
   ${current.message?`<p class="routine-workflow-message error" role="alert">${esc(current.message)}</p>`:""}
   ${routineImportIssueList(preview.errors,"Errores")}
-  ${routineImportIssueList(preview.warnings,"Avisos")}
+  ${routineImportIssueList(importWarnings,"Avisos")}
   ${preview.ignoredRows.length?`<p class="routine-import-ignored">${preview.ignoredRows.length} filas vacías ignoradas.</p>`:""}
   <section class="routine-import-sessions">
     ${preview.sessions.map(session=>`<article class="card">

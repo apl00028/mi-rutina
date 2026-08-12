@@ -360,13 +360,18 @@
     return parts.join(" · ")||"Archivo";
   }
   function renderImportPreview(preview){
+    const corrections=list(preview.corrections).length
+      ?list(preview.corrections)
+      :list(preview.warnings).filter(item=>item.severity==="correction");
+    const warnings=list(preview.warnings).filter(item=>item.severity!=="correction");
     return `<section class="routine-import-preview" aria-live="polite">
-      <header><div><span class="section-kicker">VALIDACIÓN</span><h2>${preview.errors?.length?"Requiere correcciones":"Vista previa"}</h2></div>
+      <header><div><span class="section-kicker">VALIDACIÓN</span><h2>${preview.errors?.length?"Requiere correcciones":"Lista para revisar"}</h2></div>
         <strong>${preview.sessionCount} sesiones · ${preview.exerciseCount} ejercicios</strong></header>
+      ${corrections.length?`<p class="routine-import-corrections" role="status">${corrections.length} ${corrections.length===1?"nombre se ha":"nombres se han"} normalizado automáticamente usando ${corrections.length===1?"su ID":"sus IDs"} de GymOS.</p>`:""}
       ${preview.errors?.length?`<ul class="routine-import-error-list">${preview.errors.map(item=>
         `<li><strong>${esc(issueLocation(item))}:</strong> ${esc(item.message)}${item.help?` <span>${esc(item.help)}</span>`:""}</li>`
       ).join("")}</ul>`:""}
-      ${preview.warnings?.length?`<ul class="routine-import-warning-list">${preview.warnings.map(item=>
+      ${warnings.length?`<ul class="routine-import-warning-list">${warnings.map(item=>
         `<li><strong>${esc(issueLocation(item))}:</strong> ${esc(item.message)}</li>`
       ).join("")}</ul>`:""}
       ${preview.sessions?.length?`<div class="routine-import-session-preview">${preview.sessions.map(session=>
@@ -940,6 +945,6 @@
 
   global.GymOSRoutineHub=Object.freeze({
     VIEWS,RECONFIGURE_REASONS,render,reset,routineSummary,manualFromRoutine,
-    proposalSessionsFromRoutine,validateManual
+    proposalSessionsFromRoutine,validateManual,renderImportPreview
   });
 })(typeof window!=="undefined"?window:globalThis);

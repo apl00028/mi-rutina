@@ -161,6 +161,28 @@ test("Importar recuerda el flujo antes del bloque de subida",()=>{
   assert.match(importView,/Descarga la plantilla, rellénala, impórtala, revisa la propuesta y actívala solo cuando estés conforme/);
 });
 
+test("normalizaciones seguras quedan listas para revisar con contadores reales",()=>{
+  const api=loadApi();
+  const corrections=[1,2,3].map(index=>({
+    code:"exercise_name_normalized_from_id",severity:"correction",
+    message:`Corrección ${index}`
+  }));
+  const html=api.renderImportPreview({
+    errors:[],warnings:corrections,corrections,
+    sessionCount:2,exerciseCount:3,sessions:[]
+  });
+  assert.match(html,/Lista para revisar/);
+  assert.match(html,/3 nombres se han normalizado automáticamente usando sus IDs de GymOS/);
+  assert.match(html,/2 sesiones · 3 ejercicios/);
+  assert.doesNotMatch(html,/Requiere correcciones|0 sesiones · 0 ejercicios/);
+  const appImport=appSource.slice(
+    appSource.indexOf("function renderRoutineImport("),
+    appSource.indexOf("function routineWorkflowOwnerId(")
+  );
+  assert.match(appImport,/Lista para revisar/);
+  assert.match(appImport,/severity!=="correction"/);
+});
+
 test("el cierre visual no altera handlers de importación ni activación",()=>{
   assert.match(source,/action\("template"\)\?\.addEventListener\("click"[\s\S]*?actions\.downloadTemplate\(\)/);
   assert.match(source,/action\("save-import"\)\?\.addEventListener\("click"[\s\S]*?actions\.importProposal\(\)/);

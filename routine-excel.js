@@ -65,16 +65,21 @@
     };
   }
   function issue(code,message,{
-    severity="error",sheet=null,row=null,columnIndex=null,column=null,cell=null,value=null,help=null
+    severity="error",sheet=null,row=null,columnIndex=null,column=null,cell=null,value=null,help=null,
+    originalName=null,canonicalName=null,exerciseId=null
   }={}){
     const resolvedLocation=location(sheet,row,columnIndex,column);
     if(cell) resolvedLocation.cell=text(cell);
-    return {
+    const result={
       code,severity,message,
       location:resolvedLocation,
       value:value===null?null:text(value).slice(0,160),
       help:text(help)||null
     };
+    if(originalName!==null) result.originalName=text(originalName).slice(0,160);
+    if(canonicalName!==null) result.canonicalName=text(canonicalName).slice(0,160);
+    if(exerciseId!==null) result.exerciseId=text(exerciseId).slice(0,120);
+    return result;
   }
   function headerMap(row,columns){
     const byHeader=new Map(columns.map((column,index)=>[token(column.header),{...column,index}]));
@@ -165,32 +170,6 @@
         text(exercise.equipment),text(exercise.type),text(exercise.notes)
       ];
     });
-  }
-  function validateExerciseReferences(records,exerciseLibrary){
-    const errors=[];
-    const byId=new Map(list(exerciseLibrary).map(exercise=>[text(exercise.id),exercise]));
-    records.forEach(row=>{
-      const exerciseId=text(row.exerciseId);
-      if(!exerciseId) return;
-      const exercise=byId.get(exerciseId);
-      if(!exercise){
-        errors.push(issue(
-          "unknown_exercise_id","El ID de ejercicio no existe en la biblioteca de GymOS.",
-          {...row.__locations.exerciseId,value:exerciseId}
-        ));
-        return;
-      }
-      const nameToken=token(row.exercise);
-      const accepted=[exercise.name,...list(exercise.aliases)].map(token).filter(Boolean);
-      if(!nameToken||!accepted.includes(nameToken)){
-        errors.push(issue(
-          "exercise_id_name_mismatch",
-          `El nombre no corresponde al ID ${exerciseId}. Usa “${text(exercise.name)}” o un alias reconocido.`,
-          {...row.__locations.exercise,value:row.exercise}
-        ));
-      }
-    });
-    return errors;
   }
   function validateWorkbookLimits(workbook){
     const errors=[];
@@ -283,9 +262,6 @@
     const sessionTable=rowsToRecords(sessionSheet,SESSION_COLUMNS);
     const routineTable=rowsToRecords(routineSheet,ROUTINE_COLUMNS);
     errors.push(...sessionTable.errors,...routineTable.errors);
-    if(!sessionTable.errors.length&&!routineTable.errors.length){
-      errors.push(...validateExerciseReferences(routineTable.records,context.exerciseLibrary));
-    }
     const sessions=new Map();
     const sessionIdHints=new Set();
     sessionTable.records.forEach(row=>{
@@ -358,7 +334,7 @@
       if(!order) errors.push(issue("invalid_order","El orden debe ser un entero positivo.",{
         ...row.__locations.order,value:row.order
       }));
-      if(!text(row.exercise)) errors.push(issue("exercise_required","Indica el ejercicio.",row.__locations.exercise));
+      if(!text(row.exercise)&&!text(row.exerciseId)) errors.push(issue("exercise_required","Indica el ID o el nombre del ejercicio.",row.__locations.exercise));
       if(!sets) errors.push(issue("invalid_sets","Las series deben estar entre 1 y 10.",{
         ...row.__locations.sets,value:row.sets
       }));
@@ -398,7 +374,7 @@
       sessionItems.push(order);
       perSession.set(session.key,sessionItems);
       if(order&&sets&&targetType&&targetMin&&targetMax&&rirMin!==null&&
-        rirMax!==null&&rest!==null&&text(row.exercise)){
+        rirMax!==null&&rest!==null&&(text(row.exercise)||text(row.exerciseId))){
         ioRows.push({
           __rowNumber:row.__rowNumber,
           templateVersion:1,
@@ -453,7 +429,8 @@
       ...structuralWarnings,
       ...list(converted.warnings).map(item=>issue(
         item.code,item.message,{
-          severity:"warning",sheet:"Rutina",row:item.row,column:item.column,value:item.value
+          severity:item.severity||"warning",sheet:"Rutina",row:item.row,column:item.column,value:item.value,
+          originalName:item.originalName,canonicalName:item.canonicalName,exerciseId:item.exerciseId
         }
       ))
     ];
@@ -483,6 +460,7 @@
   }
   function preview(result,errors,warnings,context={}){
     const sessions=list(result?.sessions);
+    const corrections=warnings.filter(item=>item.severity==="correction");
     return {
       state:errors.length?"errors":warnings.length?"warnings":"valid",
       fileName:text(context.fileName),format:text(context.format).toUpperCase(),
@@ -500,6 +478,7 @@
         }))
       })),
       errors:clone(errors),warnings:clone(warnings),ignoredRows:[],
+      corrections:clone(corrections),correctionCount:corrections.length,
       activationCompatible:Boolean(result?.activationCompatibility?.compatible)&&!result?.reviewRequired,
       reviewRequired:Boolean(result?.reviewRequired),
       canSave:errors.length===0&&Boolean(result),
@@ -580,9 +559,9 @@
           ["Objetivos","Usa repeticiones o duración. La duración se expresa en segundos."],
           ["RIR","Indica valores entre 0 y 10. El máximo no puede ser menor que el mínimo."],
           ["Descanso","Indica segundos entre 0 y 600."],
-          ["Biblioteca","Selecciona ejercicios de Biblioteca: no inventes uno si allí existe una alternativa válida. Copia exactamente Ejercicio y _GymOS exercise en Rutina."],
-          ["IDs","No traduzcas, abrevies ni modifiques IDs. Si el ejercicio no aparece en Biblioteca, deja _GymOS exercise vacío y conserva su nombre para el flujo existente."],
-          ["ChatGPT","Puede ayudarte a rellenar Sesiones y Rutina, pero debe respetar nombres, IDs, columnas y estructura de esta plantilla."],
+          ["Biblioteca","Selecciona ejercicios de Biblioteca: no inventes uno si allí existe una alternativa válida. Copia _GymOS exercise y Ejercicio cuando puedas."],
+          ["IDs","_GymOS exercise es el identificador contractual: no lo traduzcas, abrevies, modifiques ni inventes. Ejercicio es descriptivo y GymOS puede normalizarlo automáticamente cuando el ID es válido."],
+          ["ChatGPT","Puede ayudarte a rellenar Sesiones y Rutina. Debe copiar el ID y el nombre desde Biblioteca cuando pueda, respetando columnas y estructura."],
           ["Hojas protegidas","No cambies los nombres, cabeceras ni estructura de las hojas _Catálogos y _GymOS."],
           ["Importación","Importar prepara una propuesta para revisar. Tu rutina actual solo cambiará cuando actives esa propuesta."],
           ["Errores","GymOS indicará hoja, fila y columna para que puedas corregirlos."]

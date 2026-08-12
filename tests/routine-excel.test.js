@@ -63,6 +63,11 @@ function library(){
     {id:"row",name:"Remo sentado",aliases:[],movementPattern:"horizontal_pull",function:"main",requiredEquipment:["bodyweight"],difficulty:"beginner",recordTypes:["weight_reps"],category:"strength"}
   ];
 }
+function canonicalLibrary(api){
+  return api.catalog.get().map(exercise=>({
+    ...exercise,...plain(api.domain.LEGACY_EXERCISE_METADATA[exercise.id])
+  }));
+}
 function routine(){
   return {
     schemaVersion:"4.2",routineId:"routine-private",revision:7,
@@ -245,7 +250,9 @@ test("las instrucciones explican biblioteca, ChatGPT, estructura y activación",
     .rows.flat().join(" ");
   assert.match(text,/Biblioteca/);
   assert.match(text,/ChatGPT/);
-  assert.match(text,/No traduzcas, abrevies ni modifiques IDs/);
+  assert.match(text,/_GymOS exercise es el identificador contractual/);
+  assert.match(text,/no lo traduzcas, abrevies, modifiques ni inventes/);
+  assert.match(text,/GymOS puede normalizarlo automáticamente/);
   assert.match(text,/_Catálogos y _GymOS/);
   assert.match(text,/propuesta para revisar/);
   assert.match(text,/cuando actives/);
@@ -266,7 +273,7 @@ test("importar ignora Biblioteca y no muta el catálogo",()=>{
   assert.equal(result.sessions[0].exercises[0].name,"Press de banca");
 });
 
-test("Excel valida coherencia de ID y nombre y conserva el flujo sin ID",()=>{
+test("Excel usa el ID válido como autoridad y conserva el flujo sin ID",()=>{
   const {excel}=loadApi();
   const context={
     fileName:"rutina.xlsx",format:"xlsx",exerciseLibrary:library(),
@@ -281,11 +288,47 @@ test("Excel valida coherencia de ID y nombre y conserva el flujo sin ID",()=>{
 
   const mismatch=plain(excel.workbookModel(routine()));
   mismatch.sheets.find(item=>item.name==="Rutina").rows[1][2]="Remo sentado";
-  assert.ok(excel.inspectWorkbook(mismatch,context).errors.some(item=>item.code==="exercise_id_name_mismatch"));
+  assert.ok(excel.inspectWorkbook(mismatch,context).errors.some(item=>item.code==="exercise_id_name_conflict"));
 
   const withoutId=plain(excel.workbookModel(routine()));
   withoutId.sheets.find(item=>item.name==="Rutina").rows[1][11]="";
   assert.equal(excel.inspectWorkbook(withoutId,context).canSave,true);
+});
+
+test("tres IDs reales normalizan nombres sin bloquear ni perder contadores",()=>{
+  const api=loadApi(),{excel}=api;
+  const source=routine();
+  source.sessions[0].exercises=[
+    {
+      exerciseId:"triceps-pushdown",name:"Extensión de tríceps en polea",
+      prescription:{sets:3,target:{type:"repetitions",min:10,max:12},targetRir:{min:2,max:3},restSeconds:90}
+    },
+    {
+      exerciseId:"leg-curl",name:"Flexión de rodilla en máquina",
+      prescription:{sets:3,target:{type:"repetitions",min:10,max:15},targetRir:{min:2,max:3},restSeconds:90}
+    }
+  ];
+  source.sessions[1].exercises=[{
+    exerciseId:"calf-raise",name:"",
+    prescription:{sets:4,target:{type:"repetitions",min:12,max:15},targetRir:{min:1,max:2},restSeconds:60}
+  }];
+  const model=plain(excel.workbookModel(source));
+  const preview=plain(excel.inspectWorkbook(model,{
+    fileName:"tres-normalizaciones.xlsx",format:"xlsx",
+    exerciseLibrary:canonicalLibrary(api),userProfile:{availableEquipment:[],trainingLocation:"gym"}
+  }));
+  assert.equal(preview.canSave,true);
+  assert.equal(preview.errors.length,0);
+  assert.equal(preview.correctionCount,3);
+  assert.equal(preview.sessionCount,2);
+  assert.equal(preview.exerciseCount,3);
+  assert.equal(preview.reviewRequired,false);
+  assert.deepEqual(preview.sessions.flatMap(session=>session.exercises.map(item=>item.name)),[
+    "Extensión de tríceps en polea con barra","Curl femoral sentado","Elevación de gemelos en máquina"
+  ]);
+  assert.deepEqual(preview.corrections.map(item=>item.exerciseId),[
+    "triceps-pushdown","leg-curl","calf-raise"
+  ]);
 });
 
 test("la plantilla física contiene Biblioteca visible, 100 filas de datos y ninguna fórmula",()=>{

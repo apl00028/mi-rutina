@@ -479,7 +479,7 @@ test("integración de script, input y service worker",()=>{
   assert.ok(indexSource.indexOf("routine-io.js")<indexSource.indexOf("routine-excel.js"));
   assert.ok(indexSource.indexOf("routine-excel.js")<indexSource.indexOf("routine-hub.js"));
   assert.match(indexSource,/id="routineFile" type="file" accept="\.xlsx"/);
-  assert.match(workerSource,/gymos-cache-4\.2\.0-rc\.6-progress/);
+  assert.match(workerSource,/gymos-cache-4\.2\.0-rc\.6-excel-catalog/);
   assert.match(workerSource,/routine-io\.js/);
   assert.match(workerSource,/routine-excel\.js/);
   assert.match(workerSource,/routine-hub\.js/);
@@ -1028,8 +1028,12 @@ test("exportación y plantilla no causan efectos funcionales",()=>{
 test("exportar XLSX y descargar la plantilla conserva storage relevante exacto",()=>{
   const api=loadApi();
   const excelSource=fs.readFileSync(path.join(root,"routine-excel.js"),"utf8");
-  const excelContext={window:{}};
+  const excelContext={};
+  excelContext.window=excelContext;
+  excelContext.globalThis=excelContext;
   vm.createContext(excelContext);
+  vm.runInContext(fs.readFileSync(path.join(root,"built-in-exercise-catalog.js"),"utf8"),excelContext);
+  vm.runInContext(fs.readFileSync(path.join(root,"exercise-domain.js"),"utf8"),excelContext);
   vm.runInContext(excelSource,excelContext,{filename:"routine-excel.js"});
   const storage={
     "gymos:routine":JSON.stringify({
@@ -1053,7 +1057,7 @@ test("exportar XLSX y descargar la plantilla conserva storage relevante exacto",
     routineIoApi:()=>api,
     currentRoutineOwnerOrNull:()=>OWNER_A,
     routineHubCurrentRoutine:()=>JSON.parse(storage["gymos:routine"]),
-    window:{GymOSRoutineExcel:excelContext.window.GymOSRoutineExcel},
+    window:{GymOSRoutineExcel:excelContext.GymOSRoutineExcel},
     downloadRoutineFile:(content,name,type)=>downloads.push({kind:"blob",content,name,type}),
     downloadRoutineWorkbook:(model,name)=>downloads.push({kind:"workbook",model,name}),
     Date

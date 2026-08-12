@@ -7,6 +7,8 @@ const test=require("node:test");
 const vm=require("node:vm");
 
 const root=path.resolve(__dirname,"..");
+const catalogSource=fs.readFileSync(path.join(root,"built-in-exercise-catalog.js"),"utf8");
+const domainSource=fs.readFileSync(path.join(root,"exercise-domain.js"),"utf8");
 const ioSource=fs.readFileSync(path.join(root,"routine-io.js"),"utf8");
 const excelSource=fs.readFileSync(path.join(root,"routine-excel.js"),"utf8");
 const appSource=fs.readFileSync(path.join(root,"app.js"),"utf8");
@@ -25,7 +27,6 @@ function loadApi(){
   const context={
     console,
     GymOSProfileData:{normalizeOwnerId:value=>value},
-    GymOSExerciseDomain:{validateExerciseDefinition:()=>({valid:true,errors:[],warnings:[]})},
     GymOSRoutineProposals:{
       stableHash,
       activationCompatibility:value=>{
@@ -43,9 +44,18 @@ function loadApi(){
   context.window=context;
   context.globalThis=context;
   vm.createContext(context);
+  vm.runInContext(catalogSource,context,{filename:"built-in-exercise-catalog.js"});
+  vm.runInContext(domainSource,context,{filename:"exercise-domain.js"});
+  context.GymOSExerciseDomain={
+    ...context.GymOSExerciseDomain,
+    validateExerciseDefinition:()=>({valid:true,errors:[],warnings:[]})
+  };
   vm.runInContext(ioSource,context,{filename:"routine-io.js"});
   vm.runInContext(excelSource,context,{filename:"routine-excel.js"});
-  return {io:context.GymOSRoutineIO,excel:context.GymOSRoutineExcel};
+  return {
+    io:context.GymOSRoutineIO,excel:context.GymOSRoutineExcel,
+    catalog:context.GymOSBuiltInExerciseCatalog,domain:context.GymOSExerciseDomain
+  };
 }
 function library(){
   return [
@@ -77,11 +87,11 @@ function routine(){
   };
 }
 
-test("Excel v2 usa una única definición para sus cinco hojas",()=>{
+test("Excel v2 usa una única definición y añade Biblioteca solo a la plantilla",()=>{
   const {excel}=loadApi();
   const model=plain(excel.templateModel());
   assert.deepEqual(model.sheets.map(sheet=>sheet.name),[
-    "Instrucciones","Sesiones","Rutina","_Catálogos","_GymOS"
+    "Instrucciones","Sesiones","Rutina","Biblioteca","_Catálogos","_GymOS"
   ]);
   assert.equal(model.sheets.find(sheet=>sheet.name==="_Catálogos").hidden,true);
   assert.equal(model.sheets.find(sheet=>sheet.name==="_GymOS").veryHidden,true);
@@ -94,6 +104,7 @@ test("Excel v2 usa una única definición para sus cinco hojas",()=>{
     ["Sesión","Orden","Ejercicio","Series","Tipo de objetivo","Objetivo mínimo",
       "Objetivo máximo","RIR mínimo","RIR máximo","Descanso (s)","Notas"]
   );
+  assert.equal(plain(excel.workbookModel(routine())).sheets.some(sheet=>sheet.name==="Biblioteca"),false);
 });
 
 test("la plantilla física se genera determinísticamente desde el esquema",()=>{
@@ -202,4 +213,105 @@ test("schema incompatible e hipervínculos externos se bloquean",()=>{
     sheets:[],externalLinks:[{sheet:"Rutina",cell:"C2",target:"https://invalid.example"}]
   }));
   assert.equal(linked.errors[0].location.cell,"C2");
+});
+
+test("Biblioteca expone los 100 ejercicios canónicos con cabeceras y orden exactos",()=>{
+  const {excel,catalog,domain}=loadApi();
+  const source=plain(catalog.get());
+  const sheet=plain(excel.templateModel()).sheets.find(item=>item.name==="Biblioteca");
+  assert.deepEqual(sheet.rows[0],[
+    "_GymOS exercise","Ejercicio","Alias","Patrón","Subpatrón",
+    "Músculos principales","Músculos secundarios","Equipamiento técnico",
+    "Grupo visible","Equipamiento visible","Tipo","Notas"
+  ]);
+  assert.equal(sheet.rows.length,101);
+  assert.deepEqual(sheet.rows.slice(1).map(row=>row[0]),source.map(item=>item.id));
+  assert.deepEqual(sheet.rows.slice(1).map(row=>row[1]),source.map(item=>item.name));
+  for(const id of ["bench-press","back-squat","hip-flexor-stretch"]){
+    const row=sheet.rows.find(item=>item[0]===id);
+    const base=source.find(item=>item.id===id);
+    const metadata=domain.LEGACY_EXERCISE_METADATA[id];
+    assert.equal(row[2],plain(metadata.aliases).join(" · "));
+    assert.equal(row[3],metadata.movementPattern);
+    assert.equal(row[5],plain(metadata.primaryMuscles).join(" · "));
+    assert.equal(row[8],base.muscle);
+    assert.equal(row[11],base.notes);
+  }
+});
+
+test("las instrucciones explican biblioteca, ChatGPT, estructura y activación",()=>{
+  const {excel}=loadApi();
+  const text=plain(excel.templateModel()).sheets.find(item=>item.name==="Instrucciones")
+    .rows.flat().join(" ");
+  assert.match(text,/Biblioteca/);
+  assert.match(text,/ChatGPT/);
+  assert.match(text,/No traduzcas, abrevies ni modifiques IDs/);
+  assert.match(text,/_Catálogos y _GymOS/);
+  assert.match(text,/propuesta para revisar/);
+  assert.match(text,/cuando actives/);
+});
+
+test("importar ignora Biblioteca y no muta el catálogo",()=>{
+  const {excel}=loadApi();
+  const exercises=library();
+  const before=JSON.stringify(exercises);
+  const model=plain(excel.workbookModel(routine()));
+  model.sheets.splice(3,0,{name:"Biblioteca",rows:[["_GymOS exercise","Ejercicio"],["inventado","Inventado"]]});
+  const result=plain(excel.inspectWorkbook(model,{
+    fileName:"rutina.xlsx",format:"xlsx",exerciseLibrary:exercises,
+    userProfile:{availableEquipment:["bodyweight"],trainingLocation:"gym"}
+  }));
+  assert.equal(result.canSave,true);
+  assert.equal(JSON.stringify(exercises),before);
+  assert.equal(result.sessions[0].exercises[0].name,"Press de banca");
+});
+
+test("Excel valida coherencia de ID y nombre y conserva el flujo sin ID",()=>{
+  const {excel}=loadApi();
+  const context={
+    fileName:"rutina.xlsx",format:"xlsx",exerciseLibrary:library(),
+    userProfile:{availableEquipment:["bodyweight"],trainingLocation:"gym"}
+  };
+  const valid=plain(excel.workbookModel(routine()));
+  assert.equal(excel.inspectWorkbook(valid,context).canSave,true);
+
+  const unknown=plain(excel.workbookModel(routine()));
+  unknown.sheets.find(item=>item.name==="Rutina").rows[1][11]="inventado";
+  assert.ok(excel.inspectWorkbook(unknown,context).errors.some(item=>item.code==="unknown_exercise_id"));
+
+  const mismatch=plain(excel.workbookModel(routine()));
+  mismatch.sheets.find(item=>item.name==="Rutina").rows[1][2]="Remo sentado";
+  assert.ok(excel.inspectWorkbook(mismatch,context).errors.some(item=>item.code==="exercise_id_name_mismatch"));
+
+  const withoutId=plain(excel.workbookModel(routine()));
+  withoutId.sheets.find(item=>item.name==="Rutina").rows[1][11]="";
+  assert.equal(excel.inspectWorkbook(withoutId,context).canSave,true);
+});
+
+test("la plantilla física contiene Biblioteca visible, 100 filas de datos y ninguna fórmula",()=>{
+  const {excel,catalog,domain}=loadApi();
+  const XLSX=require("../vendor/xlsx.full.min.js");
+  const {templateBuffer}=require("../scripts/generate-routine-template.js");
+  const first=templateBuffer();
+  const second=templateBuffer();
+  assert.deepEqual(first,second);
+  const workbook=XLSX.read(first,{type:"buffer",cellFormula:true});
+  assert.deepEqual(workbook.SheetNames,[
+    "Instrucciones","Sesiones","Rutina","Biblioteca","_Catálogos","_GymOS"
+  ]);
+  const librarySheet=workbook.Sheets.Biblioteca;
+  const rows=XLSX.utils.sheet_to_json(librarySheet,{header:1,defval:""});
+  assert.equal(rows.length,101);
+  assert.equal(workbook.Workbook.Sheets.find(item=>item.name==="Biblioteca").Hidden,0);
+  assert.equal(Object.values(librarySheet).some(cell=>cell&&typeof cell==="object"&&cell.f),false);
+  const model={sheets:workbook.SheetNames.map(name=>({
+    name,rows:XLSX.utils.sheet_to_json(workbook.Sheets[name],{header:1,defval:""})
+  }))};
+  const exerciseLibrary=plain(domain.migrateExerciseLibrary(catalog.get()).library);
+  const inspection=plain(excel.inspectWorkbook(model,{
+    fileName:"plantilla-rutina-gymos.xlsx",format:"xlsx",exerciseLibrary,
+    userProfile:{availableEquipment:[],trainingLocation:"gym"}
+  }));
+  assert.deepEqual(inspection.errors,[]);
+  assert.equal(inspection.canSave,true);
 });

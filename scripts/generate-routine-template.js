@@ -5,6 +5,8 @@ const path=require("node:path");
 
 const root=path.resolve(__dirname,"..");
 const XLSX=require(path.join(root,"vendor","xlsx.full.min.js"));
+require(path.join(root,"built-in-exercise-catalog.js"));
+require(path.join(root,"exercise-domain.js"));
 require(path.join(root,"routine-excel.js"));
 
 function buildWorkbook(){
@@ -14,7 +16,7 @@ function buildWorkbook(){
     const sheet=XLSX.utils.aoa_to_sheet(source.rows);
     const width=Math.max(1,...source.rows.map(row=>row.length));
     sheet["!cols"]=Array.from({length:width},(_,index)=>({
-      wch:index===2?30:18,
+      wch:source.columnWidths?.[index]||(index===2?30:18),
       hidden:(source.hiddenColumns||[]).includes(index)
     }));
     if(sheet["!ref"]) sheet["!autofilter"]={ref:sheet["!ref"]};

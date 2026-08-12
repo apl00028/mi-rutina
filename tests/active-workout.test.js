@@ -8,6 +8,7 @@ const vm=require("node:vm");
 
 const root=path.resolve(__dirname,"..");
 const moduleSource=fs.readFileSync(path.join(root,"active-workout.js"),"utf8");
+const catalogSource=fs.readFileSync(path.join(root,"built-in-exercise-catalog.js"),"utf8");
 const domainSource=fs.readFileSync(path.join(root,"exercise-domain.js"),"utf8");
 const appSource=fs.readFileSync(path.join(root,"app.js"),"utf8");
 const stylesSource=fs.readFileSync(path.join(root,"styles.css"),"utf8");
@@ -67,12 +68,13 @@ const libraryExercise=(overrides={})=>({
 });
 
 function integratedLibrary(){
-  const match=appSource.match(/function defaultExerciseLibrary\(\)\{[\s\S]*?return (\[[\s\S]*?\]);\s*\}\s*function getExerciseLibrary/);
-  assert.ok(match);
-  const raw=vm.runInNewContext(`(${match[1]})`);
   const context={console};context.window=context;context.globalThis=context;
-  vm.createContext(context);vm.runInContext(domainSource,context,{filename:"exercise-domain.js"});
-  return plain(context.GymOSExerciseDomain.migrateExerciseLibrary(raw).library);
+  vm.createContext(context);
+  vm.runInContext(catalogSource,context,{filename:"built-in-exercise-catalog.js"});
+  vm.runInContext(domainSource,context,{filename:"exercise-domain.js"});
+  return plain(context.GymOSExerciseDomain.migrateExerciseLibrary(
+    context.GymOSBuiltInExerciseCatalog.get()
+  ).library);
 }
 
 test("entrenamiento activo: el módulo expone modelos puros sin dependencias de entorno",()=>{
@@ -920,7 +922,7 @@ test("integración offline: los módulos activos cargan antes de app.js y están
   assert.ok(moduleIndex>=0&&progressIndex>moduleIndex&&appIndex>progressIndex);
   assert.match(workerSource,/"active-workout\.js"/);
   assert.match(workerSource,/"workout-progress\.js"/);
-  assert.match(workerSource,/gymos-cache-4\.2\.0-rc\.6-progress/);
+  assert.match(workerSource,/gymos-cache-4\.2\.0-rc\.6-excel-catalog/);
   assert.match(workerSource,/url\.origin!==self\.location\.origin/);
 });
 

@@ -8,6 +8,7 @@ const test=require("node:test");
 
 const projectRoot=path.resolve(__dirname,"..");
 const moduleSource=fs.readFileSync(path.join(projectRoot,"exercise-domain.js"),"utf8");
+const catalogSource=fs.readFileSync(path.join(projectRoot,"built-in-exercise-catalog.js"),"utf8");
 const appSource=fs.readFileSync(path.join(projectRoot,"app.js"),"utf8");
 const indexSource=fs.readFileSync(path.join(projectRoot,"index.html"),"utf8");
 const serviceWorkerSource=fs.readFileSync(path.join(projectRoot,"service-worker.js"),"utf8");
@@ -88,10 +89,10 @@ function legacyLibrary(){
 }
 
 function canonicalBuiltIns(){
-  const context={result:null};
+  const context={};context.window=context;context.globalThis=context;
   vm.createContext(context);
-  vm.runInContext(`${extractFunction(appSource,"defaultExerciseLibrary")};result=defaultExerciseLibrary();`,context);
-  return plain(context.result);
+  vm.runInContext(catalogSource,context,{filename:"built-in-exercise-catalog.js"});
+  return plain(context.GymOSBuiltInExerciseCatalog.get());
 }
 
 test("el catálogo canónico contiene 100 IDs únicos y conserva los 14 originales",()=>{
@@ -103,12 +104,14 @@ test("el catálogo canónico contiene 100 IDs únicos y conserva los 14 original
   originalIds.forEach(id=>assert.ok(ids.includes(id),id));
 });
 
-test("app es la única lista integrada completa y dominio aporta metadatos complementarios",()=>{
+test("el módulo canónico es la única lista integrada completa y app la consume",()=>{
   const catalog=canonicalBuiltIns();
   const metadata=loadDomain().LEGACY_EXERCISE_METADATA;
-  assert.equal(fs.existsSync(path.join(projectRoot,"built-in-exercise-catalog.js")),false);
+  assert.equal(fs.existsSync(path.join(projectRoot,"built-in-exercise-catalog.js")),true);
   assert.deepEqual(Object.keys(metadata).sort(),catalog.map(item=>item.id).sort());
   assert.equal((appSource.match(/function defaultExerciseLibrary\(\)/g)||[]).length,1);
+  assert.match(extractFunction(appSource,"defaultExerciseLibrary"),/GymOSBuiltInExerciseCatalog\.get\(\)/);
+  assert.doesNotMatch(appSource,/const CATALOG=|"hip-flexor-stretch"/);
 });
 
 test("nombres y aliases integrados no colisionan entre IDs",()=>{
@@ -496,7 +499,9 @@ test("aplicar dos veces el mismo payload conserva igualdad serializada exacta",(
 });
 
 test("el modulo se carga antes de app y queda incluido en la cache PWA",()=>{
+  assert.ok(indexSource.indexOf("built-in-exercise-catalog.js")<indexSource.indexOf("exercise-domain.js"));
   assert.ok(indexSource.indexOf("exercise-domain.js")<indexSource.indexOf("app.js"));
-  assert.match(serviceWorkerSource,/gymos-cache-4\.2\.0-rc\.6-progress/);
+  assert.match(serviceWorkerSource,/gymos-cache-4\.2\.0-rc\.6-excel-catalog/);
+  assert.equal((serviceWorkerSource.match(/built-in-exercise-catalog\.js/g)||[]).length,1);
   assert.match(serviceWorkerSource,/exercise-domain\.js/);
 });

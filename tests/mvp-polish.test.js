@@ -141,7 +141,7 @@ test("I4 las descargas históricas bloquean esquemas y tipos no admitidos",()=>{
 });
 
 test("I5 la caché rc.2 contiene todos los módulos locales en orden de carga",()=>{
-  assert.match(workerSource,/const CACHE="gymos-cache-4\.2\.0-rc\.6-progress"/);
+  assert.match(workerSource,/const CACHE="gymos-cache-4\.2\.0-rc\.6-excel-catalog"/);
   const localScripts=Array.from(
     indexSource.matchAll(/<script src="(?!https?:)([^"]+)"/g),
     match=>match[1]

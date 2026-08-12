@@ -29,6 +29,11 @@
     {key:"notes",header:"Notas",required:false},
     {key:"exerciseId",header:"_GymOS exercise",required:false,hidden:true}
   ]);
+  const LIBRARY_COLUMNS=Object.freeze([
+    "_GymOS exercise","Ejercicio","Alias","Patrón","Subpatrón",
+    "Músculos principales","Músculos secundarios","Equipamiento técnico",
+    "Grupo visible","Equipamiento visible","Tipo","Notas"
+  ]);
   const LEGACY_HEADERS=Object.freeze([
     "sesion","orden","ejercicio","series","reps min","reps max","incremento kg","tipo"
   ]);
@@ -145,6 +150,48 @@
     if(["duracion","tiempo","segundos","seconds","duration"].includes(normalized)) return "duracion";
     return null;
   }
+  function builtInLibraryRows(){
+    const catalog=global.GymOSBuiltInExerciseCatalog?.get?.();
+    const metadata=global.GymOSExerciseDomain?.LEGACY_EXERCISE_METADATA;
+    if(!Array.isArray(catalog)||!metadata) throw new Error("GymOS canonical exercise catalog is required.");
+    return catalog.map(exercise=>{
+      const domain=metadata[exercise.id];
+      if(!domain) throw new Error(`Missing exercise metadata: ${exercise.id}`);
+      return [
+        exercise.id,exercise.name,list(domain.aliases).join(" · "),
+        text(domain.movementPattern),text(domain.movementSubpattern),
+        list(domain.primaryMuscles).join(" · "),list(domain.secondaryMuscles).join(" · "),
+        list(domain.requiredEquipment).join(" · "),text(exercise.muscle),
+        text(exercise.equipment),text(exercise.type),text(exercise.notes)
+      ];
+    });
+  }
+  function validateExerciseReferences(records,exerciseLibrary){
+    const errors=[];
+    const byId=new Map(list(exerciseLibrary).map(exercise=>[text(exercise.id),exercise]));
+    records.forEach(row=>{
+      const exerciseId=text(row.exerciseId);
+      if(!exerciseId) return;
+      const exercise=byId.get(exerciseId);
+      if(!exercise){
+        errors.push(issue(
+          "unknown_exercise_id","El ID de ejercicio no existe en la biblioteca de GymOS.",
+          {...row.__locations.exerciseId,value:exerciseId}
+        ));
+        return;
+      }
+      const nameToken=token(row.exercise);
+      const accepted=[exercise.name,...list(exercise.aliases)].map(token).filter(Boolean);
+      if(!nameToken||!accepted.includes(nameToken)){
+        errors.push(issue(
+          "exercise_id_name_mismatch",
+          `El nombre no corresponde al ID ${exerciseId}. Usa “${text(exercise.name)}” o un alias reconocido.`,
+          {...row.__locations.exercise,value:row.exercise}
+        ));
+      }
+    });
+    return errors;
+  }
   function validateWorkbookLimits(workbook){
     const errors=[];
     let totalCells=0;
@@ -236,6 +283,9 @@
     const sessionTable=rowsToRecords(sessionSheet,SESSION_COLUMNS);
     const routineTable=rowsToRecords(routineSheet,ROUTINE_COLUMNS);
     errors.push(...sessionTable.errors,...routineTable.errors);
+    if(!sessionTable.errors.length&&!routineTable.errors.length){
+      errors.push(...validateExerciseReferences(routineTable.records,context.exerciseLibrary));
+    }
     const sessions=new Map();
     const sessionIdHints=new Set();
     sessionTable.records.forEach(row=>{
@@ -521,45 +571,55 @@
         ]);
       });
     });
-    return {
-      templateVersion:TEMPLATE_VERSION,
-      sheets:[
-        {
-          name:"Instrucciones",
-          rows:[
-            ["Plantilla de Rutina GymOS",`Versión ${TEMPLATE_VERSION}`],
-            ["Sesiones","Incluye entre 2 y 6 sesiones y referencia sus claves desde la hoja Rutina."],
-            ["Objetivos","Usa repeticiones o duración. La duración se expresa en segundos."],
-            ["RIR","Indica valores entre 0 y 10. El máximo no puede ser menor que el mínimo."],
-            ["Descanso","Indica segundos entre 0 y 600."],
-            ["Importación","Importar prepara una propuesta. Tu rutina actual no cambiará hasta que la actives."],
-            ["Errores","GymOS indicará hoja, fila y columna para que puedas corregirlos."]
-          ]
-        },
-        {
-          name:"Sesiones",
-          rows:[SESSION_COLUMNS.map(column=>column.header),...sessionRows],
-          hiddenColumns:SESSION_COLUMNS.map((column,index)=>column.hidden?index:null).filter(Number.isInteger)
-        },
-        {
-          name:"Rutina",
-          rows:[ROUTINE_COLUMNS.map(column=>column.header),...routineRows],
-          hiddenColumns:ROUTINE_COLUMNS.map((column,index)=>column.hidden?index:null).filter(Number.isInteger)
-        },
-        {
-          name:"_Catálogos",hidden:true,
-          rows:[["Tipos de objetivo"],["repeticiones"],["duración"]]
-        },
-        {
-          name:"_GymOS",veryHidden:true,
-          rows:[
-            ["templateVersion",TEMPLATE_VERSION],
-            ["schemaVersion",SCHEMA_VERSION],
-            ["kind",kind]
-          ]
-        }
-      ]
-    };
+    const sheets=[
+      {
+        name:"Instrucciones",
+        rows:[
+          ["Plantilla de Rutina GymOS",`Versión ${TEMPLATE_VERSION}`],
+          ["Sesiones","Incluye entre 2 y 6 sesiones y referencia sus claves desde la hoja Rutina."],
+          ["Objetivos","Usa repeticiones o duración. La duración se expresa en segundos."],
+          ["RIR","Indica valores entre 0 y 10. El máximo no puede ser menor que el mínimo."],
+          ["Descanso","Indica segundos entre 0 y 600."],
+          ["Biblioteca","Selecciona ejercicios de Biblioteca: no inventes uno si allí existe una alternativa válida. Copia exactamente Ejercicio y _GymOS exercise en Rutina."],
+          ["IDs","No traduzcas, abrevies ni modifiques IDs. Si el ejercicio no aparece en Biblioteca, deja _GymOS exercise vacío y conserva su nombre para el flujo existente."],
+          ["ChatGPT","Puede ayudarte a rellenar Sesiones y Rutina, pero debe respetar nombres, IDs, columnas y estructura de esta plantilla."],
+          ["Hojas protegidas","No cambies los nombres, cabeceras ni estructura de las hojas _Catálogos y _GymOS."],
+          ["Importación","Importar prepara una propuesta para revisar. Tu rutina actual solo cambiará cuando actives esa propuesta."],
+          ["Errores","GymOS indicará hoja, fila y columna para que puedas corregirlos."]
+        ]
+      },
+      {
+        name:"Sesiones",
+        rows:[SESSION_COLUMNS.map(column=>column.header),...sessionRows],
+        hiddenColumns:SESSION_COLUMNS.map((column,index)=>column.hidden?index:null).filter(Number.isInteger)
+      },
+      {
+        name:"Rutina",
+        rows:[ROUTINE_COLUMNS.map(column=>column.header),...routineRows],
+        hiddenColumns:ROUTINE_COLUMNS.map((column,index)=>column.hidden?index:null).filter(Number.isInteger)
+      }
+    ];
+    if(kind==="template"){
+      sheets.push({
+        name:"Biblioteca",rows:[LIBRARY_COLUMNS,...builtInLibraryRows()],
+        columnWidths:[24,34,42,22,28,30,30,34,20,24,18,48]
+      });
+    }
+    sheets.push(
+      {
+        name:"_Catálogos",hidden:true,
+        rows:[["Tipos de objetivo"],["repeticiones"],["duración"]]
+      },
+      {
+        name:"_GymOS",veryHidden:true,
+        rows:[
+          ["templateVersion",TEMPLATE_VERSION],
+          ["schemaVersion",SCHEMA_VERSION],
+          ["kind",kind]
+        ]
+      }
+    );
+    return {templateVersion:TEMPLATE_VERSION,sheets};
   }
   function templateModel(){
     const example={
@@ -586,7 +646,7 @@
 
   global.GymOSRoutineExcel=Object.freeze({
     TEMPLATE_VERSION,SCHEMA_VERSION,MAX_TOTAL_CELLS,MAX_CELL_LENGTH,
-    TARGET_TYPES,SESSION_COLUMNS,ROUTINE_COLUMNS,
+    TARGET_TYPES,SESSION_COLUMNS,ROUTINE_COLUMNS,LIBRARY_COLUMNS,
     issue,location,headerMap,isLegacyWorkbook,inspectWorkbook,
     workbookModel,templateModel,importedProposalResult
   });

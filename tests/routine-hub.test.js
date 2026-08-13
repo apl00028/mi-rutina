@@ -163,17 +163,17 @@ test("Importar recuerda el flujo antes del bloque de subida",()=>{
 
 test("normalizaciones seguras quedan listas para revisar con contadores reales",()=>{
   const api=loadApi();
-  const corrections=[1,2,3].map(index=>({
+  const corrections=[1,2,3,4].map(index=>({
     code:"exercise_name_normalized_from_id",severity:"correction",
     message:`Corrección ${index}`
   }));
   const html=api.renderImportPreview({
     errors:[],warnings:corrections,corrections,
-    sessionCount:2,exerciseCount:3,sessions:[]
+    sessionCount:3,exerciseCount:14,sessions:[]
   });
   assert.match(html,/Lista para revisar/);
-  assert.match(html,/3 nombres se han normalizado automáticamente usando sus IDs de GymOS/);
-  assert.match(html,/2 sesiones · 3 ejercicios/);
+  assert.match(html,/4 nombres se han normalizado automáticamente usando sus IDs de GymOS/);
+  assert.match(html,/3 sesiones · 14 ejercicios/);
   assert.doesNotMatch(html,/Requiere correcciones|0 sesiones · 0 ejercicios/);
   const appImport=appSource.slice(
     appSource.indexOf("function renderRoutineImport("),

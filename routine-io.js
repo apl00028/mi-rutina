@@ -340,15 +340,6 @@
       const exercise=index.byId.get(id);
       const canonicalName=text(exercise.name);
       if(name===canonicalName) return {exercise,correction:null};
-      const nameKey=normalizedExerciseName(name);
-      const nameMatches=index.byName.get(nameKey)||[];
-      const distinct=[...new Map(nameMatches.map(item=>[text(item.id),item])).values()];
-      if(name&&distinct.length===1&&text(distinct[0].id)!==id){
-        return {
-          errorCode:"exercise_id_name_conflict",
-          error:`El nombre identifica a ${text(distinct[0].name)}, pero el ID corresponde a ${canonicalName}.`
-        };
-      }
       return {
         exercise,
         correction:{

@@ -560,7 +560,7 @@
           ["RIR","Indica valores entre 0 y 10. El máximo no puede ser menor que el mínimo."],
           ["Descanso","Indica segundos entre 0 y 600."],
           ["Biblioteca","Selecciona ejercicios de Biblioteca: no inventes uno si allí existe una alternativa válida. Copia _GymOS exercise y Ejercicio cuando puedas."],
-          ["IDs","_GymOS exercise es el identificador contractual: no lo traduzcas, abrevies, modifiques ni inventes. Ejercicio es descriptivo y GymOS puede normalizarlo automáticamente cuando el ID es válido."],
+          ["IDs","_GymOS exercise es la única identidad autoritativa: no lo traduzcas, abrevies, modifiques ni inventes. Ejercicio es descriptivo; si no coincide, GymOS lo reemplaza por el nombre oficial del ID válido, aunque el texto corresponda a otro ejercicio conocido."],
           ["ChatGPT","Puede ayudarte a rellenar Sesiones y Rutina. Debe copiar el ID y el nombre desde Biblioteca cuando pueda, respetando columnas y estructura."],
           ["Hojas protegidas","No cambies los nombres, cabeceras ni estructura de las hojas _Catálogos y _GymOS."],
           ["Importación","Importar prepara una propuesta para revisar. Tu rutina actual solo cambiará cuando actives esa propuesta."],

@@ -250,9 +250,10 @@ test("las instrucciones explican biblioteca, ChatGPT, estructura y activación",
     .rows.flat().join(" ");
   assert.match(text,/Biblioteca/);
   assert.match(text,/ChatGPT/);
-  assert.match(text,/_GymOS exercise es el identificador contractual/);
+  assert.match(text,/_GymOS exercise es la única identidad autoritativa/);
   assert.match(text,/no lo traduzcas, abrevies, modifiques ni inventes/);
-  assert.match(text,/GymOS puede normalizarlo automáticamente/);
+  assert.match(text,/GymOS lo reemplaza por el nombre oficial del ID válido/);
+  assert.match(text,/aunque el texto corresponda a otro ejercicio conocido/);
   assert.match(text,/_Catálogos y _GymOS/);
   assert.match(text,/propuesta para revisar/);
   assert.match(text,/cuando actives/);
@@ -288,11 +289,60 @@ test("Excel usa el ID válido como autoridad y conserva el flujo sin ID",()=>{
 
   const mismatch=plain(excel.workbookModel(routine()));
   mismatch.sheets.find(item=>item.name==="Rutina").rows[1][2]="Remo sentado";
-  assert.ok(excel.inspectWorkbook(mismatch,context).errors.some(item=>item.code==="exercise_id_name_conflict"));
+  const normalized=plain(excel.inspectWorkbook(mismatch,context));
+  assert.equal(normalized.canSave,true);
+  assert.equal(normalized.errors.length,0);
+  assert.equal(normalized.correctionCount,1);
+  assert.equal(normalized.sessions[0].exercises[0].name,"Press de banca");
 
   const withoutId=plain(excel.workbookModel(routine()));
   withoutId.sheets.find(item=>item.name==="Rutina").rows[1][11]="";
   assert.equal(excel.inspectWorkbook(withoutId,context).canSave,true);
+});
+
+test("cuatro IDs reales prevalecen sobre nombres canónicos de otros ejercicios",()=>{
+  const api=loadApi(),{excel}=api;
+  const exercises=plain(api.domain.migrateExerciseLibrary(api.catalog.get()).library);
+  const byId=new Map(exercises.map(item=>[item.id,item]));
+  const mismatches=new Map([
+    ["leg-curl",byId.get("lying-leg-curl").name],
+    ["biceps-curl",byId.get("barbell-curl").name],
+    ["triceps-pushdown",byId.get("rope-pushdown").name],
+    ["calf-raise",byId.get("seated-calf-raise").name]
+  ]);
+  const required=[...mismatches.keys()];
+  const extra=exercises.filter(item=>
+    !required.includes(item.id)&&item.recordTypes?.includes("weight_reps")
+  ).slice(0,10);
+  const selected=[...required.map(id=>byId.get(id)),...extra];
+  assert.equal(selected.length,14);
+  const sizes=[5,5,4];
+  let offset=0;
+  const source={schemaVersion:"4.2",routineId:"authoritative-ids",revision:1,sessions:sizes.map((size,index)=>{
+    const sessionExercises=selected.slice(offset,offset+size);
+    offset+=size;
+    return {
+      sessionId:`session-${index+1}`,order:index+1,label:String.fromCharCode(65+index),
+      name:`Sesión ${index+1}`,focus:"full_body",estimatedDurationMinutes:50,notes:"",
+      exercises:sessionExercises.map(item=>({
+        exerciseId:item.id,name:mismatches.get(item.id)||item.name,notes:"",
+        prescription:{sets:3,target:{type:"repetitions",min:8,max:12},targetRir:{min:1,max:3},restSeconds:90,recordType:"weight_reps"}
+      }))
+    };
+  })};
+  const preview=plain(excel.inspectWorkbook(plain(excel.workbookModel(source)),{
+    fileName:"cuatro-normalizaciones.xlsx",format:"xlsx",exerciseLibrary:exercises,
+    userProfile:{availableEquipment:[],trainingLocation:"gym"}
+  }));
+  assert.equal(preview.canSave,true);
+  assert.equal(preview.errors.length,0);
+  assert.equal(preview.reviewRequired,false);
+  assert.equal(preview.sessionCount,3);
+  assert.equal(preview.exerciseCount,14);
+  assert.equal(preview.correctionCount,4);
+  assert.deepEqual(preview.corrections.map(item=>item.exerciseId),required);
+  const importedNames=preview.sessions.flatMap(session=>session.exercises.map(item=>item.name));
+  required.forEach(id=>assert.ok(importedNames.includes(byId.get(id).name)));
 });
 
 test("tres IDs reales normalizan nombres sin bloquear ni perder contadores",()=>{

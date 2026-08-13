@@ -343,9 +343,16 @@ test("26. ID válido y nombre distinto produce corrección automática",()=>{
   assert.equal(result.sessions[0].rows[0].name,"Press de banca");
 });
 
-test("26b. ID y nombre inequívoco de otro ejercicio producen conflicto bloqueante",()=>{
+test("26b. ID válido prevalece aunque el nombre identifique otro ejercicio",()=>{
   const api=loadApi(),result=convert(api,[row("A",1,"press","Remo sentado"),row("B",1,"row","Remo sentado")]);
-  assert.ok(result.errors.some(item=>item.code==="exercise_id_name_conflict"));
+  assert.equal(result.valid,true);
+  assert.equal(result.sessions[0].rows[0].exerciseId,"press");
+  assert.equal(result.sessions[0].rows[0].name,"Press de banca");
+  assert.ok(result.warnings.some(item=>
+    item.code==="exercise_name_normalized_from_id"&&
+    item.exerciseId==="press"&&item.originalName==="Remo sentado"&&
+    item.canonicalName==="Press de banca"
+  ));
 });
 
 test("27. patrón del archivo no sustituye la biblioteca",()=>{

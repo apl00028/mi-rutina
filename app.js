@@ -5264,7 +5264,7 @@ function setSyncConflictState(kind,details={}){
   addSyncAudit("conflict",kind,details);
   return {direction:"conflict",kind,details};
 }
-async function writeSyncEnvelopeWithCas(client,userId,envelope,baseRevision,remoteExists){
+async function writeSyncEnvelopeWithCas(client,userId,envelope,baseRevision,remoteExists,expectedRemoteChecksum=null){
   const record={
     user_id:userId,
     payload:envelope.payload,
@@ -5274,10 +5274,11 @@ async function writeSyncEnvelopeWithCas(client,userId,envelope,baseRevision,remo
     updated_at:envelope.updatedAt
   };
   if(remoteExists){
-    const {data,error,count}=await client.from("gymos_sync").update(record,{count:"exact"})
+    let query=client.from("gymos_sync").update(record,{count:"exact"})
       .eq("user_id",userId)
-      .eq("revision",baseRevision)
-      .select("revision");
+      .eq("revision",baseRevision);
+    if(expectedRemoteChecksum) query=query.eq("checksum",expectedRemoteChecksum);
+    const {data,error,count}=await query.select("revision");
     if(error) throw error;
     if(count!==1||!Array.isArray(data)||data.length!==1) throw syncConflictError("sync_conflict");
     return data[0];
@@ -5292,6 +5293,145 @@ async function writeSyncEnvelopeWithCas(client,userId,envelope,baseRevision,remo
   }
   if(count!==1||!Array.isArray(data)||data.length!==1) throw syncConflictError("sync_conflict");
   return data[0];
+}
+
+const SYNC_RECOVERY_EXPECTED_REMOTE=Object.freeze({
+  revision:912,
+  checksum:"a455414f"
+});
+const SYNC_RECOVERY_EXPECTED_LOCAL=Object.freeze({
+  routineId:"routine-02488c9c-d38e-4b59-8814-f7e0bcbd7d5e",
+  selectedSessionId:"roadmap-2026-08-a",
+  routineHash:"223f0a1a",
+  historyHash:"c2248975",
+  syncPending:false
+});
+const SYNC_RECOVERY_CANDIDATE_REVISION=913;
+const SYNC_RECOVERY_CONFIRMATION_TEXT="PROMOVER ESTE PC";
+
+function recoveryError(code,details={}){
+  const error=new Error(code);
+  error.code=code;
+  error.details=details;
+  return error;
+}
+function downloadJsonFile(payload,filePrefix){
+  const blob=new Blob([JSON.stringify(payload,null,2)],{type:"application/json"});
+  const url=URL.createObjectURL(blob);
+  const link=document.createElement("a");
+  const stamp=new Date().toISOString().replace(/[:.]/g,"-");
+  link.href=url;
+  link.download=`${filePrefix}-${stamp}.json`;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
+async function readCurrentRemoteSyncRow(){
+  const client=getSupabaseClient();
+  if(!client||!isAppAuthenticated()) throw recoveryError("recovery_not_authenticated");
+  const {data,error}=await client.from("gymos_sync")
+    .select("payload,revision,device_id,updated_at,checksum")
+    .eq("user_id",state.syncUser.id)
+    .maybeSingle();
+  if(error) throw error;
+  return data||null;
+}
+function buildRemoteSyncRecoveryBackup(row,userId=state.syncUser?.id||null){
+  return {
+    app:"GymOS",
+    type:"remoteSyncRecoveryBackup",
+    exportedAt:new Date().toISOString(),
+    userId,
+    row:row?{
+      payload:row.payload,
+      revision:row.revision,
+      device_id:row.device_id,
+      updated_at:row.updated_at,
+      checksum:row.checksum
+    }:null
+  };
+}
+async function downloadRemoteSyncRecoveryBackup(){
+  const row=await readCurrentRemoteSyncRow();
+  downloadJsonFile(buildRemoteSyncRecoveryBackup(row),"gymos-remote-sync-backup");
+  return row;
+}
+function assertRecoveryRemoteExpected(row){
+  const revision=Number(row?.revision||0);
+  const checksum=row?.checksum||null;
+  if(revision!==SYNC_RECOVERY_EXPECTED_REMOTE.revision){
+    throw recoveryError("recovery_remote_changed",{
+      expectedRevision:SYNC_RECOVERY_EXPECTED_REMOTE.revision,
+      actualRevision:revision
+    });
+  }
+  if(checksum!==SYNC_RECOVERY_EXPECTED_REMOTE.checksum){
+    throw recoveryError("recovery_remote_changed",{
+      expectedChecksum:SYNC_RECOVERY_EXPECTED_REMOTE.checksum,
+      actualChecksum:checksum
+    });
+  }
+}
+function assertRecoveryLocalExpected(snapshot=localSyncDiagnosticSnapshot()){
+  for(const key of ["routineId","selectedSessionId","routineHash","historyHash"]){
+    if(snapshot[key]!==SYNC_RECOVERY_EXPECTED_LOCAL[key]){
+      throw recoveryError("recovery_local_changed",{
+        field:key,expected:SYNC_RECOVERY_EXPECTED_LOCAL[key],actual:snapshot[key]
+      });
+    }
+  }
+  if(snapshot.syncPending!==SYNC_RECOVERY_EXPECTED_LOCAL.syncPending){
+    throw recoveryError("recovery_local_changed",{
+      field:"syncPending",expected:SYNC_RECOVERY_EXPECTED_LOCAL.syncPending,
+      actual:snapshot.syncPending
+    });
+  }
+  if(!snapshot.deviceId){
+    throw recoveryError("recovery_local_changed",{field:"deviceId",expected:"present",actual:null});
+  }
+  return snapshot;
+}
+async function promoteLocalDeviceAsCanonicalSyncHead(){
+  const client=getSupabaseClient();
+  if(!client||!isAppAuthenticated()) throw recoveryError("recovery_not_authenticated");
+  const userId=state.syncUser.id;
+  assertRecoveryLocalExpected();
+  const syncData=buildSyncPayload();
+  const row=await readCurrentRemoteSyncRow();
+  assertRecoveryRemoteExpected(row);
+  assertRecoveryLocalExpected();
+  const envelope={
+    schemaVersion:SYNC_PROTOCOL_VERSION,
+    revision:SYNC_RECOVERY_CANDIDATE_REVISION,
+    parentRevision:SYNC_RECOVERY_EXPECTED_REMOTE.revision,
+    deviceId:localStorage.getItem(DEVICE_ID_KEY),
+    updatedAt:new Date().toISOString(),
+    checksum:simpleChecksum(syncData),
+    payload:{
+      ...syncData,
+      syncProtocolVersion:SYNC_PROTOCOL_VERSION,
+      syncParentRevision:SYNC_RECOVERY_EXPECTED_REMOTE.revision
+    }
+  };
+  await writeSyncEnvelopeWithCas(
+    client,userId,envelope,SYNC_RECOVERY_EXPECTED_REMOTE.revision,true,
+    SYNC_RECOVERY_EXPECTED_REMOTE.checksum
+  );
+  setLocalRevision(SYNC_RECOVERY_CANDIDATE_REVISION);
+  setLastRemoteRevision(SYNC_RECOVERY_CANDIDATE_REVISION);
+  setSyncBaseRevision(SYNC_RECOVERY_CANDIDATE_REVISION);
+  markSyncProtocolCurrent();
+  localStorage.removeItem("gymos:syncPending");
+  localStorage.setItem("gymos:lastSyncAt",new Date().toISOString());
+  state.syncStatus="synced";
+  state.syncIssue=null;
+  updateSyncIndicators();
+  return {
+    direction:"recovery_upload",
+    revision:SYNC_RECOVERY_CANDIDATE_REVISION,
+    checksum:envelope.checksum
+  };
 }
 async function syncNow(options={}){
   if(isSyncDebugRequested()) return {direction:"diagnostic_mode"};
@@ -8677,7 +8817,10 @@ function renderOnboarding(){
 }
 
 function isSyncDebugRequested(){
-  try{return new URLSearchParams(location.search).get("debug")==="sync";}
+  try{
+    const debug=new URLSearchParams(location.search).get("debug");
+    return debug==="sync"||debug==="sync-recovery";
+  }
   catch(_){return false;}
 }
 function buildLocalStorageDiagnosticBackup(){
@@ -8696,16 +8839,7 @@ function buildLocalStorageDiagnosticBackup(){
 }
 function downloadLocalStorageDiagnosticBackup(){
   const backup=buildLocalStorageDiagnosticBackup();
-  const blob=new Blob([JSON.stringify(backup,null,2)],{type:"application/json"});
-  const url=URL.createObjectURL(blob);
-  const link=document.createElement("a");
-  const stamp=new Date().toISOString().replace(/[:.]/g,"-");
-  link.href=url;
-  link.download=`gymos-local-storage-backup-${stamp}.json`;
-  document.body.appendChild(link);
-  link.click();
-  link.remove();
-  URL.revokeObjectURL(url);
+  downloadJsonFile(backup,"gymos-local-storage-backup");
 }
 function maskDiagnosticId(value){
   if(value===null||value===undefined||value==="") return "—";
@@ -8760,6 +8894,53 @@ function renderSyncDebugError(error){
     error.at?`at=${error.at}`:null
   ].filter(Boolean).join(" · ")||"—";
 }
+function syncDebugActionsHtml(){
+  return `<div class="sync-debug-actions">
+    <button id="downloadLocalStorageDiagnosticBackup" type="button" class="secondary">Descargar copia local de seguridad</button>
+    <button id="downloadRemoteSyncRecoveryBackup" type="button" class="secondary">Descargar copia del estado remoto actual</button>
+    <button id="promoteLocalCanonicalRecovery" type="button" class="danger">Promover este dispositivo como estado canónico</button>
+  </div>
+  <p id="syncRecoveryStatus" class="sync-debug-footnote" aria-live="polite"></p>`;
+}
+function bindSyncDebugActions(){
+  const status=document.getElementById("syncRecoveryStatus");
+  const setStatus=(message,isError=false)=>{
+    if(status){
+      status.textContent=message||"";
+      status.className=`sync-debug-footnote${isError?" error":""}`;
+    }
+  };
+  document.getElementById("downloadLocalStorageDiagnosticBackup")?.addEventListener(
+    "click",()=>downloadLocalStorageDiagnosticBackup()
+  );
+  document.getElementById("downloadRemoteSyncRecoveryBackup")?.addEventListener(
+    "click",async()=>{
+      try{
+        setStatus("Preparando copia remota…");
+        await downloadRemoteSyncRecoveryBackup();
+        setStatus("Copia remota descargada.");
+      }catch(error){
+        setStatus(renderSyncDebugError(sanitizeSyncError(error)),true);
+      }
+    }
+  );
+  document.getElementById("promoteLocalCanonicalRecovery")?.addEventListener(
+    "click",async()=>{
+      const confirmation=prompt(`Escribe ${SYNC_RECOVERY_CONFIRMATION_TEXT} para promover este dispositivo.`);
+      if(confirmation!==SYNC_RECOVERY_CONFIRMATION_TEXT){
+        setStatus("Recuperación cancelada.");
+        return;
+      }
+      try{
+        setStatus("Validando y promoviendo estado local…");
+        await promoteLocalDeviceAsCanonicalSyncHead();
+        setStatus("RECUPERACIÓN COMPLETADA — ESTE DISPOSITIVO ES LA NUEVA CABEZA CANÓNICA");
+      }catch(error){
+        setStatus(renderSyncDebugError(sanitizeSyncError(error)),true);
+      }
+    }
+  );
+}
 async function renderSyncDebugScreen(){
   app.innerHTML=`<main class="screen sync-debug-screen" aria-labelledby="syncDebugTitle">
     ${syncDebugStyles()}
@@ -8769,14 +8950,10 @@ async function renderSyncDebugScreen(){
       <p>Lectura local y Supabase sin ejecutar sincronización ni modificar datos.</p>
     </header>
     <div class="sync-debug-banner">MODO DIAGNÓSTICO — SIN SINCRONIZACIÓN AUTOMÁTICA</div>
-    <div class="sync-debug-actions">
-      <button id="downloadLocalStorageDiagnosticBackup" type="button" class="secondary">Descargar copia local de seguridad</button>
-    </div>
+    ${syncDebugActionsHtml()}
     <section class="sync-debug-panel"><p>Cargando snapshot…</p></section>
   </main>`;
-  document.getElementById("downloadLocalStorageDiagnosticBackup")?.addEventListener(
-    "click",downloadLocalStorageDiagnosticBackup
-  );
+  bindSyncDebugActions();
   try{
     const snapshot=await window.GymOSSyncDiagnostics.snapshot();
     const local=snapshot.local||{};
@@ -8789,9 +8966,7 @@ async function renderSyncDebugScreen(){
         <p>Lectura local y Supabase sin ejecutar sincronización ni modificar datos.</p>
       </header>
       <div class="sync-debug-banner">MODO DIAGNÓSTICO — SIN SINCRONIZACIÓN AUTOMÁTICA</div>
-      <div class="sync-debug-actions">
-        <button id="downloadLocalStorageDiagnosticBackup" type="button" class="secondary">Descargar copia local de seguridad</button>
-      </div>
+      ${syncDebugActionsHtml()}
       <section class="sync-debug-status" aria-label="Estado de diagnóstico">
         <dl>
           ${renderDiagnosticRows([
@@ -8831,9 +9006,7 @@ async function renderSyncDebugScreen(){
         Snapshot: ${esc(snapshot.generatedAt||"—")}
       </footer>
     </main>`;
-    document.getElementById("downloadLocalStorageDiagnosticBackup")?.addEventListener(
-      "click",downloadLocalStorageDiagnosticBackup
-    );
+    bindSyncDebugActions();
   }catch(error){
     app.innerHTML=`<main class="screen sync-debug-screen" aria-labelledby="syncDebugTitle">
       ${syncDebugStyles()}
@@ -8842,17 +9015,13 @@ async function renderSyncDebugScreen(){
         <h1 id="syncDebugTitle">Sincronización</h1>
       </header>
       <div class="sync-debug-banner">MODO DIAGNÓSTICO — SIN SINCRONIZACIÓN AUTOMÁTICA</div>
-      <div class="sync-debug-actions">
-        <button id="downloadLocalStorageDiagnosticBackup" type="button" class="secondary">Descargar copia local de seguridad</button>
-      </div>
+      ${syncDebugActionsHtml()}
       <section class="sync-debug-panel">
         <h2>No se pudo leer el diagnóstico</h2>
         <p>${esc(renderSyncDebugError(sanitizeSyncError(error)))}</p>
       </section>
     </main>`;
-    document.getElementById("downloadLocalStorageDiagnosticBackup")?.addEventListener(
-      "click",downloadLocalStorageDiagnosticBackup
-    );
+    bindSyncDebugActions();
   }
 }
 

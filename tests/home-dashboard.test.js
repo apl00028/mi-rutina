@@ -342,7 +342,7 @@ test("sync: diagnostico temporal expone solo metadatos y decisiones",()=>{
 
 test("sync: pantalla temporal de diagnostico es solo lectura y no dispara sincronizacion",()=>{
   const debugSource=sourceBetween("function isSyncDebugRequested(","function render(){");
-  assert.match(debugSource,/new URLSearchParams\(location\.search\)\.get\("debug"\)==="sync"/);
+  assert.match(debugSource,/debug==="sync"\|\|debug==="sync-recovery"/);
   assert.match(debugSource,/window\.GymOSSyncDiagnostics\.snapshot\(\)/);
   assert.match(debugSource,/renderSyncDebugPanel\("LOCAL"/);
   assert.match(debugSource,/renderSyncDebugPanel\("SUPABASE"/);
@@ -351,7 +351,12 @@ test("sync: pantalla temporal de diagnostico es solo lectura y no dispara sincro
   assert.match(debugSource,/lastError/);
   assert.match(debugSource,/MODO DIAGNÓSTICO — SIN SINCRONIZACIÓN AUTOMÁTICA/);
   assert.match(debugSource,/Descargar copia local de seguridad/);
+  assert.match(debugSource,/Descargar copia del estado remoto actual/);
+  assert.match(debugSource,/Promover este dispositivo como estado canónico/);
+  assert.match(debugSource,/SYNC_RECOVERY_CONFIRMATION_TEXT/);
   assert.match(debugSource,/downloadLocalStorageDiagnosticBackup/);
+  assert.match(debugSource,/downloadRemoteSyncRecoveryBackup/);
+  assert.match(debugSource,/promoteLocalDeviceAsCanonicalSyncHead/);
   assert.doesNotMatch(debugSource,/syncNow\(/);
   assert.doesNotMatch(debugSource,/localStorage\.setItem|localStorage\.removeItem|localStorage\.clear/);
   assert.doesNotMatch(debugSource,/access_token|refresh_token|supabaseAnonKey|payload/);
@@ -403,7 +408,8 @@ test("sync: copia local de diagnostico exporta solo gymos y no modifica almacena
     window:{GymOSSyncDiagnostics:{snapshot:async()=>({})}},
     app:{innerHTML:""},
     esc:value=>String(value),
-    sanitizeSyncError:error=>error
+    sanitizeSyncError:error=>error,
+    downloadJsonFile:()=>{}
   };
   vm.createContext(context);
   vm.runInContext(`${debugSource}; this.backup=buildLocalStorageDiagnosticBackup(); downloadLocalStorageDiagnosticBackup();`,context);

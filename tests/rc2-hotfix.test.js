@@ -172,6 +172,97 @@ function casHarness({updateResponse=null,insertResponse=null}={}){
   return context;
 }
 
+function recoveryHarness({
+  remote={
+    revision:912,checksum:"a455414f",device_id:"mobile",
+    updated_at:"2026-08-15T10:00:00.000Z",
+    payload:{source:"remote",canonicalRoutine:{routineId:"routine-0916"}}
+  },
+  localOverrides={},writeError=null
+}={}){
+  const source=appSource.slice(
+    appSource.indexOf("const SYNC_RECOVERY_EXPECTED_REMOTE"),
+    appSource.indexOf("async function syncNow")
+  );
+  const values=new Map([
+    ["gymos:deviceId","pc-device"],
+    ["gymos:localRevision","419"],
+    ["gymos:lastRemoteRevision","419"],
+    ["gymos:syncBaseRevision","419"]
+  ]);
+  const writes=[];
+  const downloads=[];
+  const writeCalls=[];
+  let lastDownloadPayloadText="";
+  const localPayload={
+    source:"local-pc",
+    canonicalRoutine:{routineId:"routine-02488c9c-d38e-4b59-8814-f7e0bcbd7d5e"},
+    selectedSessionId:"roadmap-2026-08-a",
+    history:["local-history"]
+  };
+  const client={
+    from(){return {
+      select(){return this;},
+      eq(){return this;},
+      async maybeSingle(){return {data:remote,error:null};}
+    };}
+  };
+  const context={
+    SYNC_PROTOCOL_VERSION:2,
+    DEVICE_ID_KEY:"gymos:deviceId",
+    state:{syncUser:{id:"user-a"},syncStatus:"conflict",syncIssue:{kind:"legacy_sync_conflict"}},
+    localStorage:{
+      getItem:key=>values.has(key)?values.get(key):null,
+      setItem:(key,value)=>{writes.push(["setItem",key,String(value)]);values.set(key,String(value));},
+      removeItem:key=>{writes.push(["removeItem",key]);values.delete(key);}
+    },
+    getSupabaseClient:()=>client,
+    isAppAuthenticated:()=>true,
+    localSyncDiagnosticSnapshot:()=>({
+      ownerId:"user-a",
+      deviceId:values.get("gymos:deviceId")||null,
+      localRevision:Number(values.get("gymos:localRevision")||0),
+      lastRemoteRevision:Number(values.get("gymos:lastRemoteRevision")||0),
+      syncBaseRevision:Number(values.get("gymos:syncBaseRevision")||0),
+      syncPending:values.get("gymos:syncPending")==="1",
+      routineId:"routine-02488c9c-d38e-4b59-8814-f7e0bcbd7d5e",
+      selectedSessionId:"roadmap-2026-08-a",
+      routineHash:"223f0a1a",
+      historyHash:"c2248975",
+      ...localOverrides
+    }),
+    buildSyncPayload:()=>JSON.parse(JSON.stringify(localPayload)),
+    simpleChecksum:payload=>payload?.source==="local-pc"?"pc-checksum":"other-checksum",
+    writeSyncEnvelopeWithCas:async(_client,userId,envelope,base,exists,expectedChecksum)=>{
+      writeCalls.push({
+        userId,envelope,base,exists,expectedChecksum,
+        localRevisionBefore:values.get("gymos:localRevision")
+      });
+      if(writeError) throw writeError;
+      return {revision:envelope.revision};
+    },
+    setLocalRevision:value=>{writes.push(["setItem","gymos:localRevision",String(value)]);values.set("gymos:localRevision",String(value));},
+    setLastRemoteRevision:value=>{writes.push(["setItem","gymos:lastRemoteRevision",String(value)]);values.set("gymos:lastRemoteRevision",String(value));},
+    setSyncBaseRevision:value=>{writes.push(["setItem","gymos:syncBaseRevision",String(value)]);values.set("gymos:syncBaseRevision",String(value));},
+    markSyncProtocolCurrent:()=>{writes.push(["setItem","gymos:syncProtocolVersion","2"]);values.set("gymos:syncProtocolVersion","2");},
+    updateSyncIndicators:()=>{},
+    Blob:class {constructor(parts,options){lastDownloadPayloadText=String(parts?.[0]||"null");this.options=options;}},
+    URL:{createObjectURL:()=>"blob:gymos-recovery",revokeObjectURL(){}},
+    document:{
+      body:{appendChild(){}},
+      createElement:()=>({
+        href:"",download:"",
+        click(){downloads.push({payload:JSON.parse(lastDownloadPayloadText),fileName:this.download});},
+        remove(){}
+      })
+    },
+    Date
+  };
+  vm.createContext(context);
+  vm.runInContext(`${source}; this.promote=promoteLocalDeviceAsCanonicalSyncHead; this.backup=downloadRemoteSyncRecoveryBackup;`,context);
+  return {context,values,writes,downloads,writeCalls,localPayload};
+}
+
 test("RC2 Ajustes usa exclusivamente la API pública de Recovery Center",()=>{
   const settings=appSource.slice(
     appSource.indexOf("function renderSettings("),
@@ -487,6 +578,116 @@ test("sync v2 J: upload confirmado actualiza las tres revisiones y limpia pendin
   assert.equal(harness.values.get("gymos:lastRemoteRevision"),"913");
   assert.equal(harness.values.get("gymos:syncBaseRevision"),"913");
   assert.equal(harness.values.has("gymos:syncPending"),false);
+});
+
+test("recovery: backup remoto descarga la fila completa sin escribir localmente",async()=>{
+  const harness=recoveryHarness();
+  const row=await harness.context.backup();
+  assert.equal(row.revision,912);
+  assert.equal(harness.downloads.length,1);
+  assert.match(harness.downloads[0].fileName,/^gymos-remote-sync-backup-/);
+  assert.equal(harness.downloads[0].payload.row.payload.source,"remote");
+  assert.deepEqual(harness.writes,[]);
+  assert.equal(harness.writeCalls.length,0);
+});
+
+test("recovery: aborta si remote revision no es 912",async()=>{
+  const harness=recoveryHarness({
+    remote:{revision:913,checksum:"a455414f",payload:{source:"remote"}}
+  });
+  await assert.rejects(()=>harness.context.promote(),error=>error.code==="recovery_remote_changed");
+  assert.equal(harness.writeCalls.length,0);
+  assert.deepEqual(harness.writes,[]);
+});
+
+test("recovery: aborta si remote checksum no es el esperado",async()=>{
+  const harness=recoveryHarness({
+    remote:{revision:912,checksum:"changed",payload:{source:"remote"}}
+  });
+  await assert.rejects(()=>harness.context.promote(),error=>error.code==="recovery_remote_changed");
+  assert.equal(harness.writeCalls.length,0);
+  assert.deepEqual(harness.writes,[]);
+});
+
+test("recovery: aborta si cambia routineHash local",async()=>{
+  const harness=recoveryHarness({localOverrides:{routineHash:"different"}});
+  await assert.rejects(()=>harness.context.promote(),error=>error.code==="recovery_local_changed");
+  assert.equal(harness.writeCalls.length,0);
+  assert.deepEqual(harness.writes,[]);
+});
+
+test("recovery: aborta si cambia historyHash local",async()=>{
+  const harness=recoveryHarness({localOverrides:{historyHash:"different"}});
+  await assert.rejects(()=>harness.context.promote(),error=>error.code==="recovery_local_changed");
+  assert.equal(harness.writeCalls.length,0);
+  assert.deepEqual(harness.writes,[]);
+});
+
+test("recovery: CAS con cero filas no cambia metadata local",async()=>{
+  const harness=recoveryHarness({writeError:Object.assign(new Error("sync_conflict"),{code:"sync_conflict"})});
+  await assert.rejects(()=>harness.context.promote(),error=>error.code==="sync_conflict");
+  assert.equal(harness.writeCalls.length,1);
+  assert.deepEqual(harness.writes,[]);
+  assert.equal(harness.values.get("gymos:localRevision"),"419");
+});
+
+test("recovery: error de red no cambia metadata local",async()=>{
+  const harness=recoveryHarness({writeError:{status:503,code:"network_error"}});
+  await assert.rejects(()=>harness.context.promote());
+  assert.equal(harness.writeCalls.length,1);
+  assert.deepEqual(harness.writes,[]);
+  assert.equal(harness.values.get("gymos:localRevision"),"419");
+});
+
+test("recovery: éxito escribe revisión 913 con protocolo v2 usando payload local",async()=>{
+  const harness=recoveryHarness();
+  const result=await harness.context.promote();
+  assert.equal(result.direction,"recovery_upload");
+  assert.equal(result.revision,913);
+  assert.equal(harness.writeCalls.length,1);
+  const call=harness.writeCalls[0];
+  assert.equal(call.base,912);
+  assert.equal(call.exists,true);
+  assert.equal(call.expectedChecksum,"a455414f");
+  assert.equal(call.envelope.revision,913);
+  assert.equal(call.envelope.parentRevision,912);
+  assert.equal(call.envelope.payload.syncProtocolVersion,2);
+  assert.equal(call.envelope.payload.syncParentRevision,912);
+  assert.equal(call.envelope.payload.source,"local-pc");
+  assert.equal(call.envelope.payload.source==="remote",false);
+  assert.equal(call.envelope.checksum,"pc-checksum");
+});
+
+test("recovery: metadata local se actualiza solo después del éxito remoto",async()=>{
+  const harness=recoveryHarness();
+  await harness.context.promote();
+  assert.equal(harness.writeCalls[0].localRevisionBefore,"419");
+  assert.deepEqual(harness.writes.map(write=>write[1]),[
+    "gymos:localRevision",
+    "gymos:lastRemoteRevision",
+    "gymos:syncBaseRevision",
+    "gymos:syncProtocolVersion",
+    "gymos:syncPending",
+    "gymos:lastSyncAt"
+  ]);
+  assert.equal(harness.values.get("gymos:localRevision"),"913");
+  assert.equal(harness.values.get("gymos:lastRemoteRevision"),"913");
+  assert.equal(harness.values.get("gymos:syncBaseRevision"),"913");
+  assert.equal(harness.values.get("gymos:syncProtocolVersion"),"2");
+  assert.equal(harness.values.has("gymos:syncPending"),false);
+});
+
+test("sync v2 móvil legacy base 912 pending contra remoto v2 913 queda en conflicto sin upload",async()=>{
+  const harness=syncHarness({
+    remote:{revision:913,checksum:"pc-checksum",payload:{source:"pc",syncProtocolVersion:2}},
+    localRevision:913,lastRemoteRevision:912,baseRevision:912,pending:true,
+    currentProtocol:false,checksum:"mobile-checksum"
+  });
+  const result=await harness.context.runSync();
+  assert.equal(result.direction,"conflict");
+  assert.equal(harness.counters.writeAttempts,0);
+  assert.equal(harness.counters.writes,0);
+  assert.equal(harness.values.get("gymos:syncPending"),"1");
 });
 
 test("sync v2 no queda ningun upsert ciego sobre gymos_sync",()=>{

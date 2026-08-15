@@ -16,6 +16,7 @@ const indexSource=read("index.html");
 const schemaSource=read("database/supabase/schema.sql");
 const syncRpcFunctionsSource=read("database/supabase/sync-rpc-v2-functions.sql");
 const syncRpcLockdownSource=read("database/supabase/sync-rpc-v2-lockdown.sql");
+const OWNER_A="11111111-1111-4111-8111-111111111111";
 
 function functionSource(name,nextName){
   const start=appSource.indexOf(`function ${name}(`);
@@ -84,6 +85,31 @@ function syncHarness({
     addSyncAudit:()=>{},
     buildSyncPayload:()=>({stable:true}),
     simpleChecksum:()=>checksum,
+    functionalSyncChecksum:payload=>payload?.functionalVariant||"functional-same",
+    syncChecksumComparisonMode:({
+      remote,remoteRevision,localRevision,syncBaseRevision,hasPendingChanges,
+      localChecksum,localFunctionalChecksum
+    })=>{
+      const remoteFunctional=remote?.payload?.functionalChecksum||null;
+      if(remoteFunctional){
+        return {
+          mode:"functional_v1",
+          remoteFunctionalChecksum:remoteFunctional,
+          localFunctionalChecksum,
+          equivalent:remoteFunctional===localFunctionalChecksum
+        };
+      }
+      const legacyAck=Boolean(
+        remote?.checksum&&!hasPendingChanges&&remoteRevision===localRevision&&
+        syncBaseRevision===remoteRevision&&values.get("gymos:lastSyncHash")===remote.checksum
+      );
+      return {
+        mode:legacyAck?"legacy_ack":"legacy_full",
+        remoteFunctionalChecksum:null,
+        localFunctionalChecksum,
+        equivalent:legacyAck||remote?.checksum===localChecksum
+      };
+    },
     getLocalRevision:()=>Number(values.get("gymos:localRevision")||0),
     setLocalRevision:value=>values.set("gymos:localRevision",String(value)),
     getLastRemoteRevision:()=>Number(values.get("gymos:lastRemoteRevision")||0),
@@ -97,9 +123,12 @@ function syncHarness({
     applySyncPayload:()=>{counters.applies+=1;},
     buildSyncEnvelope:(base,candidate)=>{
       return {
-        payload:{stable:true,syncProtocolVersion:2,syncParentRevision:base},
+        payload:{
+          stable:true,syncProtocolVersion:2,syncParentRevision:base,
+          syncFunctionalChecksumVersion:1,functionalChecksum:"functional-same"
+        },
         revision:candidate,parentRevision:base,deviceId:"device",
-        checksum:"same",updatedAt:"2026-07-29T10:00:00.000Z"
+        checksum:"same",functionalChecksum:"functional-same",updatedAt:"2026-07-29T10:00:00.000Z"
       };
     },
     writeSyncEnvelopeWithCas:async(_client,_userId,envelope,base,exists)=>{
@@ -204,6 +233,7 @@ function recoveryHarness({
   };
   const context={
     SYNC_PROTOCOL_VERSION:2,
+    SYNC_FUNCTIONAL_CHECKSUM_VERSION:1,
     DEVICE_ID_KEY:"gymos:deviceId",
     state:{syncUser:{id:"user-a"},syncStatus:"conflict",syncIssue:{kind:"legacy_sync_conflict"}},
     localStorage:{
@@ -228,6 +258,7 @@ function recoveryHarness({
     }),
     buildSyncPayload:()=>JSON.parse(JSON.stringify(localPayload)),
     simpleChecksum:payload=>payload?.source==="local-pc"?"pc-checksum":"other-checksum",
+    functionalSyncChecksum:payload=>payload?.source==="local-pc"?"pc-functional-checksum":"other-functional-checksum",
     writeSyncEnvelopeWithCas:async(_client,userId,envelope,base,exists,expectedChecksum)=>{
       writeCalls.push({
         userId,envelope,base,exists,expectedChecksum,
@@ -457,7 +488,7 @@ test("RC2 sincroniza, resuelve no-op y limpia pendientes solo tras éxito",()=>{
     appSource.indexOf("async function autoSync")
   );
   assert.match(sync,/if\(state\.syncInProgress\) return \{direction:"busy"\}/);
-  assert.match(sync,/remote&&!hasPendingChanges&&!options\.forceUpload&&remoteRevision===localRevision&&remote\.checksum===localChecksum/);
+  assert.match(sync,/remote&&!hasPendingChanges&&!options\.forceUpload&&remoteRevision===localRevision&&checksumComparison\.equivalent/);
   assert.match(sync,/return \{direction:"none",revision:remoteRevision\}/);
   assert.ok((sync.match(/localStorage\.removeItem\("gymos:syncPending"\)/g)||[]).length>=2);
   assert.match(sync,/localStorage\.setItem\("gymos:lastSyncHash",envelope\.checksum\)/);
@@ -1168,6 +1199,445 @@ test("sync v2 no quedan escrituras directas sobre gymos_sync en app.js",()=>{
   assert.match(appSource,/rpc\("gymos_sync_delete_own"/);
 });
 
+function syncDiagnosticHashHarness({canonical,history=[]}={}){
+  const source=appSource.slice(
+    appSource.indexOf("function simpleChecksum"),
+    appSource.indexOf("function remoteSyncDiagnosticFromRow")
+  );
+  const values=new Map([
+    ["gymos:deviceId","device-a"],
+    ["gymos:routine:canonical",JSON.stringify(canonical)],
+    ["gymos:history",JSON.stringify(history)],
+    ["gymos:selectedSessionId","session-a"]
+  ]);
+  const context={
+    DEVICE_ID_KEY:"gymos:deviceId",
+    SELECTED_SESSION_ID_KEY:"gymos:selectedSessionId",
+    localStorage:{getItem:key=>values.has(key)?values.get(key):null},
+    window:{
+      GymOSRoutineSessionModel:{
+        validateCanonicalRoutine:value=>({valid:Boolean(value?.routineId&&Array.isArray(value?.sessions))}),
+        normalizeCanonicalRoutine:value=>({
+          ...JSON.parse(JSON.stringify(value)),
+          sessions:JSON.parse(JSON.stringify(value.sessions)).sort((left,right)=>
+            Number(left.order||0)-Number(right.order||0)||
+            String(left.sessionId||"").localeCompare(String(right.sessionId||""),"en")
+          )
+        })
+      }
+    },
+    currentRoutineOwnerOrNull:()=>OWNER_A,
+    mergeWorkoutHistory:(localHistory,incomingHistory,ownerId)=>{
+      const records=new Map();
+      const identity=workout=>String(workout?.workoutInstanceId||workout?.draftId||workout?.id||"");
+      (Array.isArray(localHistory)?localHistory:[]).forEach(workout=>{
+        const id=identity(workout);
+        if(id) records.set(id,JSON.parse(JSON.stringify(workout)));
+      });
+      (Array.isArray(incomingHistory)?incomingHistory:[]).forEach(workout=>{
+        if(workout?.ownerId&&ownerId&&workout.ownerId!==ownerId) return;
+        const id=identity(workout);
+        if(!id||records.has(id)) return;
+        records.set(id,JSON.parse(JSON.stringify(workout)));
+      });
+      return [...records.values()].sort((left,right)=>
+        new Date(right?.date||0)-new Date(left?.date||0)||
+        identity(left).localeCompare(identity(right),"en")
+      );
+    },
+    getCanonicalRoutine:()=>context.window.GymOSRoutineSessionModel.normalizeCanonicalRoutine(
+      JSON.parse(values.get("gymos:routine:canonical"))
+    ),
+    getHistory:()=>JSON.parse(values.get("gymos:history")||"[]"),
+    getLocalRevision:()=>916,
+    getLastRemoteRevision:()=>916,
+    getSyncBaseRevision:()=>916,
+    getLastSyncAt:()=>null,
+    buildSyncPayload:()=>({
+      canonicalRoutine:context.getCanonicalRoutine(),
+      routine:context.getCanonicalRoutine(),
+      selectedSessionId:values.get("gymos:selectedSessionId")||null,
+      history:context.getHistory()
+    })
+  };
+  vm.createContext(context);
+  vm.runInContext(source,context);
+  return {context,values};
+}
+
+test("sync diagnóstico: round-trip semántico iguala routineHash e historyHash",()=>{
+  const canonical={
+    schemaVersion:"4.2",
+    routineId:"routine-02488c9c-d38e-4b59-8814-f7e0bcbd7d5e",
+    revision:12,
+    sessions:[
+      {sessionId:"session-b",order:2,legacySessionKey:"B",exercises:[{name:"Remo"}]},
+      {sessionId:"session-a",order:1,legacySessionKey:"A",exercises:[{name:"Press"}]}
+    ]
+  };
+  const remoteHistory=[
+    {id:"w-2",ownerId:OWNER_A,date:"2026-08-14",sets:[{kg:30,reps:8}]},
+    {id:"w-1",ownerId:OWNER_A,date:"2026-08-15",sets:[{kg:20,reps:10}]}
+  ];
+  const {context,values}=syncDiagnosticHashHarness({canonical});
+  values.set("gymos:history",JSON.stringify(context.mergeWorkoutHistory([],remoteHistory,OWNER_A)));
+  const local=context.localSyncDiagnosticSnapshot();
+  const remote=context.remotePayloadDiagnostic({
+    canonicalRoutine:JSON.parse(JSON.stringify(canonical)),
+    routine:JSON.parse(JSON.stringify(canonical)),
+    selectedSessionId:"session-a",
+    history:remoteHistory
+  });
+  assert.equal(local.routineHash,remote.routineHash);
+  assert.equal(local.historyHash,remote.historyHash);
+});
+
+test("sync diagnóstico: divergencias reales de rutina e historial siguen detectándose",()=>{
+  const canonical={
+    schemaVersion:"4.2",routineId:"routine-a",revision:1,
+    sessions:[{sessionId:"session-a",order:1,legacySessionKey:"A",exercises:[{name:"Press"}]}]
+  };
+  const {context,values}=syncDiagnosticHashHarness({
+    canonical,
+    history:[{id:"w-1",ownerId:OWNER_A,date:"2026-08-15",sets:[{kg:20,reps:10}]}]
+  });
+  const remoteCanonical=JSON.parse(JSON.stringify(canonical));
+  remoteCanonical.sessions[0].exercises[0].name="Sentadilla";
+  const remoteHistory=[{id:"w-1",ownerId:OWNER_A,date:"2026-08-15",sets:[{kg:25,reps:10}]}];
+  const local=context.localSyncDiagnosticSnapshot();
+  const remote=context.remotePayloadDiagnostic({
+    canonicalRoutine:remoteCanonical,
+    selectedSessionId:"session-a",
+    history:remoteHistory
+  });
+  assert.notEqual(local.routineHash,remote.routineHash);
+  assert.notEqual(local.historyHash,remote.historyHash);
+  values.set("gymos:history",JSON.stringify(remoteHistory));
+  assert.equal(context.localSyncDiagnosticSnapshot().historyHash,remote.historyHash);
+});
+
+function buildPayloadChecksumHarness({
+  deviceId="device",
+  deviceName="Device",
+  updatedAt="2026-08-15T10:00:00.000Z",
+  canonicalRoutine=null,
+  history=[]
+}={}){
+  const source=[
+    functionSource("buildSyncPayload","routinePayloadCompatibilityWithCanonical"),
+    functionSource("simpleChecksum","storedValueHash")
+  ].join("\n");
+  const routine=canonicalRoutine||{
+    schemaVersion:"4.2",
+    routineId:"routine-functional",
+    revision:7,
+    sessions:[{
+      sessionId:"session-a",
+      order:1,
+      legacySessionKey:"A",
+      exercises:[{name:"Press",sets:3,target:"8-10 reps"}]
+    }]
+  };
+  const drafts={schemaVersion:"4.2",ownerId:"owner-a",routineId:routine.routineId,draftsBySessionId:{},orphanedLegacyDrafts:{}};
+  const values=new Map([
+    ["gymos:selectedSessionId","session-a"],
+    ["gymos:selectedSession","A"],
+    ["gymos:sessionModelMigration",JSON.stringify({
+      completed:true,validated:true,ownerId:"owner-a",routineId:routine.routineId,
+      legacySessionMap:{A:"session-a"}
+    })]
+  ]);
+  const context={
+    window:{
+      GymOSProfessionalNutrition:{getPlans(){return [];}},
+      GymOSRecovery:{getEntries(){return [];},getCheckins(){return [];}},
+      GymOSWorkoutAnalysis:{getAnalyses(){return [];}},
+      GymOSProfileData:{exportSyncData(){return {};}}
+    },
+    localStorage:{getItem:key=>values.has(key)?values.get(key):null},
+    SELECTED_SESSION_ID_KEY:"gymos:selectedSessionId",
+    SESSION_MODEL_MIGRATION_KEY:"gymos:sessionModelMigration",
+    ACTIVE_ROUTINE_PROPOSAL_ID_KEY:"gymos:activeRoutineProposalId",
+    ACTIVE_ROUTINE_ACTIVATION_ID_KEY:"gymos:activeRoutineActivationId",
+    EXERCISE_DOMAIN_SCHEMA_KEY:"gymos:exerciseDomainSchemaVersion",
+    currentRoutineOwnerOrNull:()=>"owner-a",
+    getLocalUpdatedAt:()=>updatedAt,
+    getDeviceId:()=>deviceId,
+    getDeviceName:()=>deviceName,
+    getHistory:()=>JSON.parse(JSON.stringify(history)),
+    activeRoutineForComparison:()=>JSON.parse(JSON.stringify(routine)),
+    getCanonicalRoutine:()=>JSON.parse(JSON.stringify(routine)),
+    getCanonicalDrafts:()=>JSON.parse(JSON.stringify(drafts)),
+    sanitizeWorkoutDraftContainer:value=>JSON.parse(JSON.stringify(value)),
+    storedWorkoutProgressRecords:()=>[],
+    readStoredJson:key=>JSON.parse(values.get(key)||"null"),
+    getBodyHistory:()=>[],
+    getBodySummaryMetrics:()=>[],
+    getRestSeconds:()=>90,
+    getWeeklyGoal:()=>3,
+    getTrainingBlocks:()=>[],
+    getRoutineProposalRecords:()=>[],
+    getRoutineActivationRecords:()=>[],
+    getExerciseLibrary:()=>[],
+    getExerciseSubstitutions:()=>[],
+    getNutritionSettings:()=>null,
+    getNutritionEntries:()=>[],
+    getHealthSettings:()=>null,
+    getHealthEntries:()=>[],
+    getHealthImports:()=>[],
+    getAppPreferences:()=>({theme:"system"}),
+    getCoachSettings:()=>({aiEnabled:false}),
+    getQuickActionPreferences:()=>({quickActions:["start"],hidden:false}),
+    getFavoriteSubstitutions:()=>[]
+  };
+  vm.createContext(context);
+  vm.runInContext(source,context);
+  const payload=context.buildSyncPayload();
+  return {
+    payload,
+    checksum:context.simpleChecksum(payload),
+    functionalChecksum:context.functionalSyncChecksum(payload),
+    context
+  };
+}
+
+function functionalPayloadProjection(payload){
+  return payload;
+}
+
+test("sync checksum: mismo estado funcional con distinto deviceId/deviceName/updatedAt conserva functionalChecksum",()=>{
+  const canonicalRoutine={
+    schemaVersion:"4.2",
+    routineId:"routine-functional",
+    revision:7,
+    sessions:[{
+      sessionId:"session-a",
+      order:1,
+      legacySessionKey:"A",
+      exercises:[{name:"Press",sets:3,target:"8-10 reps"}]
+    }]
+  };
+  const history=[{id:"w-1",ownerId:"owner-a",date:"2026-08-15",sets:[{kg:20,reps:10}]}];
+  const pc=buildPayloadChecksumHarness({
+    deviceId:"pc",deviceName:"PC",updatedAt:"2026-08-15T10:00:00.000Z",
+    canonicalRoutine,history
+  });
+  const mobile=buildPayloadChecksumHarness({
+    deviceId:"mobile",deviceName:"Mobile",updatedAt:"2026-08-15T10:00:00.000Z",
+    canonicalRoutine,history
+  });
+  const mobileSameName=buildPayloadChecksumHarness({
+    deviceId:"mobile",deviceName:"PC",updatedAt:"2026-08-15T10:00:00.000Z",
+    canonicalRoutine,history
+  });
+  const mobileSameDeviceNewTime=buildPayloadChecksumHarness({
+    deviceId:"pc",deviceName:"PC",updatedAt:"2026-08-15T10:05:00.000Z",
+    canonicalRoutine,history
+  });
+  assert.equal(
+    JSON.stringify(pc.context.functionalSyncProjection(pc.payload)),
+    JSON.stringify(mobile.context.functionalSyncProjection(mobile.payload))
+  );
+  assert.equal(pc.functionalChecksum,mobile.functionalChecksum);
+  assert.equal(pc.functionalChecksum,mobileSameName.functionalChecksum);
+  assert.equal(pc.functionalChecksum,mobileSameDeviceNewTime.functionalChecksum);
+  assert.notEqual(pc.checksum,mobile.checksum);
+  assert.notEqual(pc.checksum,mobileSameName.checksum);
+  assert.notEqual(pc.checksum,mobileSameDeviceNewTime.checksum);
+  assert.equal(pc.payload.deviceId,"pc");
+  assert.equal(mobile.payload.deviceId,"mobile");
+  assert.equal(pc.payload.deviceName,"PC");
+  assert.equal(mobile.payload.deviceName,"Mobile");
+  assert.equal(pc.payload.updatedAt,"2026-08-15T10:00:00.000Z");
+});
+
+test("sync checksum: cambio funcional real también cambia functionalChecksum",()=>{
+  const base=buildPayloadChecksumHarness();
+  const routineChanged=buildPayloadChecksumHarness({
+    canonicalRoutine:{
+      schemaVersion:"4.2",routineId:"routine-functional",revision:7,
+      sessions:[{
+        sessionId:"session-a",order:1,legacySessionKey:"A",
+        exercises:[{name:"Sentadilla",sets:3,target:"8-10 reps"}]
+      }]
+    }
+  });
+  const historyChanged=buildPayloadChecksumHarness({
+    history:[{id:"w-1",ownerId:"owner-a",date:"2026-08-15",sets:[{kg:25,reps:10}]}]
+  });
+  assert.notDeepEqual(
+    base.context.functionalSyncProjection(base.payload),
+    routineChanged.context.functionalSyncProjection(routineChanged.payload)
+  );
+  assert.notDeepEqual(
+    base.context.functionalSyncProjection(base.payload),
+    historyChanged.context.functionalSyncProjection(historyChanged.payload)
+  );
+  assert.notEqual(base.functionalChecksum,routineChanged.functionalChecksum);
+  assert.notEqual(base.functionalChecksum,historyChanged.functionalChecksum);
+  assert.notEqual(base.checksum,routineChanged.checksum);
+  assert.notEqual(base.checksum,historyChanged.checksum);
+});
+
+test("sync checksum: round-trip semántico de payload mantiene checksum funcional",()=>{
+  const canonicalRoutine={
+    schemaVersion:"4.2",
+    routineId:"routine-functional",
+    revision:7,
+    sessions:[{
+      sessionId:"session-a",order:1,legacySessionKey:"A",
+      exercises:[{name:"Press",sets:3,target:"8-10 reps"}]
+    }]
+  };
+  const history=[
+    {id:"w-2",ownerId:"owner-a",date:"2026-08-16",sets:[{kg:22.5,reps:8}]},
+    {id:"w-1",ownerId:"owner-a",date:"2026-08-15",sets:[{kg:20,reps:10}]}
+  ];
+  const uploaded=buildPayloadChecksumHarness({
+    deviceId:"pc",deviceName:"PC",updatedAt:"2026-08-15T10:00:00.000Z",
+    canonicalRoutine,history
+  });
+  const storedRemotePayload={
+    ...uploaded.payload,
+    syncProtocolVersion:2,
+    syncParentRevision:916,
+    syncFunctionalChecksumVersion:1,
+    functionalChecksum:uploaded.functionalChecksum
+  };
+  const rebuilt=buildPayloadChecksumHarness({
+    deviceId:"mobile",deviceName:"Mobile",updatedAt:"2026-08-15T10:05:00.000Z",
+    canonicalRoutine:storedRemotePayload.canonicalRoutine,
+    history:storedRemotePayload.history
+  });
+  assert.equal(
+    rebuilt.context.functionalSyncChecksum(rebuilt.payload),
+    storedRemotePayload.functionalChecksum
+  );
+});
+
+test("sync decisión: legacy 916 con ACK completo hace no-op seguro aunque el checksum local difiera",async()=>{
+  const harness=syncHarness({
+    remote:{
+      revision:916,
+      checksum:"759d936c",
+      payload:{syncProtocolVersion:2,stable:true},
+      device_id:"pc"
+    },
+    checksum:"mobile-derived-checksum",
+    localRevision:916,
+    lastRemoteRevision:916,
+    baseRevision:916,
+    pending:false,
+    currentProtocol:true
+  });
+  harness.values.set("gymos:lastSyncHash","759d936c");
+  const result=await harness.context.runSync();
+  assert.equal(result.direction,"none");
+  assert.equal(harness.context.state.syncStatus,"synced");
+  assert.equal(harness.values.get("gymos:lastSyncHash"),"759d936c");
+  assert.equal(harness.counters.applies,0);
+  assert.equal(harness.counters.writeAttempts,0);
+});
+
+test("sync decisión: legacy 916 sin ACK completo conserva conflicto por checksum completo",async()=>{
+  const harness=syncHarness({
+    remote:{
+      revision:916,
+      checksum:"759d936c",
+      payload:{syncProtocolVersion:2,stable:true},
+      device_id:"pc"
+    },
+    checksum:"mobile-derived-checksum",
+    localRevision:916,
+    lastRemoteRevision:916,
+    baseRevision:916,
+    pending:false,
+    currentProtocol:true
+  });
+  harness.values.set("gymos:lastSyncHash","otro-checksum");
+  const result=await harness.context.runSync();
+  assert.equal(result.direction,"conflict");
+  assert.equal(result.kind,"sync_conflict");
+  assert.equal(harness.counters.applies,0);
+  assert.equal(harness.counters.writeAttempts,0);
+});
+
+test("sync decisión: ACK legacy no oculta cambios pendientes",async()=>{
+  const harness=syncHarness({
+    remote:{
+      revision:916,
+      checksum:"759d936c",
+      payload:{syncProtocolVersion:2,stable:true},
+      device_id:"pc"
+    },
+    checksum:"mobile-derived-checksum",
+    localRevision:916,
+    lastRemoteRevision:916,
+    baseRevision:916,
+    pending:true,
+    currentProtocol:true
+  });
+  harness.values.set("gymos:lastSyncHash","759d936c");
+  const result=await harness.context.runSync();
+  assert.equal(result.direction,"upload");
+  assert.equal(result.revision,917);
+  assert.equal(harness.counters.writeAttempts,1);
+});
+
+test("sync decisión: remoto v1 funcional usa functionalChecksum y no checksum completo",async()=>{
+  const harness=syncHarness({
+    remote:{
+      revision:917,
+      checksum:"full-checksum-pc",
+      payload:{
+        syncProtocolVersion:2,
+        syncFunctionalChecksumVersion:1,
+        functionalChecksum:"functional-same",
+        stable:true
+      },
+      device_id:"pc"
+    },
+    checksum:"full-checksum-mobile",
+    localRevision:917,
+    lastRemoteRevision:917,
+    baseRevision:917,
+    pending:false,
+    currentProtocol:true
+  });
+  const result=await harness.context.runSync();
+  assert.equal(result.direction,"none");
+  assert.equal(harness.values.get("gymos:lastSyncHash"),"full-checksum-pc");
+  assert.equal(harness.counters.applies,0);
+  assert.equal(harness.counters.writeAttempts,0);
+});
+
+test("sync decisión: misma revisión con functionalChecksum distinto sigue siendo conflicto real",async()=>{
+  const harness=syncHarness({
+    remote:{
+      revision:917,
+      checksum:"full-checksum-pc",
+      payload:{
+        syncProtocolVersion:2,
+        syncFunctionalChecksumVersion:1,
+        functionalChecksum:"functional-remoto",
+        stable:true
+      },
+      device_id:"pc"
+    },
+    checksum:"full-checksum-mobile",
+    localRevision:917,
+    lastRemoteRevision:917,
+    baseRevision:917,
+    pending:false,
+    currentProtocol:true
+  });
+  const result=await harness.context.runSync();
+  assert.equal(result.direction,"conflict");
+  assert.equal(result.kind,"sync_conflict");
+  assert.equal(harness.counters.applies,0);
+  assert.equal(harness.counters.writeAttempts,0);
+});
+
 test("RC2 diferencia los ocho estados y ofrece reintento solo para errores recuperables",()=>{
   for(const status of [
     "synced","pending","syncing","offline","conflict",
@@ -1356,7 +1826,7 @@ test("RC2 respeta foco visible y movimiento reducido",()=>{
 });
 
 test("RC2 actualiza el caché y mantiene Supabase fuera de Cache Storage",()=>{
-  assert.match(workerSource,/const GYMOS_BUILD_VERSION="4\.2\.0-rc\.11-sync-payload-compat"/);
+  assert.match(workerSource,/const GYMOS_BUILD_VERSION="4\.2\.0-rc\.12-functional-sync-checksum"/);
   assert.match(workerSource,/const CACHE=`gymos-cache-\$\{GYMOS_BUILD_VERSION\}`/);
   assert.match(workerSource,/e\.request\.method!=="GET"\|\|url\.origin!==self\.location\.origin/);
   assert.match(workerSource,/keys\.filter\(key=>key\.startsWith\("gymos-cache-"\)&&key!==CACHE\)/);

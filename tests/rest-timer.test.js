@@ -57,7 +57,7 @@ function loadAppTimer({
     workoutDraftMemory:JSON.parse(JSON.stringify(draft)),
     timerSeconds:0,timerInterval:null,timerDeadline:null,
     restTimerPayload:null,restTimerGeneration:0,restTimerPersistenceFailed:false,
-    workoutRestAnnouncement:null
+    workoutRestAnnouncement:null,restOverlayOpen:false
   };
   const context={
     console,JSON,Date,Math,encodeURIComponent,
@@ -158,11 +158,24 @@ test("iniciar persiste una sola vez y un nuevo descanso sustituye intervalo y pa
   const firstInterval=timer.state.timerInterval;
   assert.equal(first.deadlineEpochMs,61_000);
   assert.equal(timer.storage.values.size,1);
+  assert.equal(timer.state.restOverlayOpen,true);
   const second=timer.call("startTimer",90,DRAFT,2_000);
   assert.equal(second.deadlineEpochMs,92_000);
   assert.equal(timer.intervals.has(firstInterval),false);
   assert.equal(timer.intervals.size,1);
   assert.equal(timer.storage.values.size,1);
+});
+
+test("cerrar solo el estado visual conserva deadline y el countdown sigue avanzando",()=>{
+  const timer=loadAppTimer();
+  timer.call("startTimer",90,DRAFT,1_000);
+  const deadline=timer.state.restTimerPayload.deadlineEpochMs;
+  timer.state.restOverlayOpen=false;
+  assert.equal(timer.call("reconcileActiveRestTimer",{now:31_001,announceExpired:false}),true);
+  assert.equal(timer.state.timerSeconds,60);
+  assert.equal(timer.state.restTimerPayload.deadlineEpochMs,deadline);
+  assert.equal(timer.state.timerDeadline,deadline);
+  assert.equal(timer.state.restOverlayOpen,false);
 });
 
 test("reload restaura solo el owner, workout y session actuales",()=>{
@@ -171,6 +184,7 @@ test("reload restaura solo el owner, workout y session actuales",()=>{
   first.call("startTimer",90,DRAFT,1_000);
   const reloaded=loadAppTimer({storage});
   assert.ok(reloaded.call("restoreActiveRestTimer",DRAFT,{now:31_000}));
+  assert.equal(reloaded.state.restOverlayOpen,false);
   assert.equal(reloaded.state.timerSeconds,60);
   assert.equal(reloaded.intervals.size,1);
 

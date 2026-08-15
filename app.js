@@ -3882,6 +3882,7 @@ let state = {
   restTimerPayload: null,
   restTimerGeneration: 0,
   restTimerPersistenceFailed: false,
+  restOverlayOpen: false,
   workoutRestAnnouncement: null,
   workoutSessionTimer: null,
   workoutSessionTimerInterval: null,
@@ -6562,6 +6563,7 @@ function emptyDraft(sessionId){
         (item.exerciseId||item.id)&&
         (exercise.exerciseId||exercise.id)===(item.exerciseId||item.id)
       )||last?.exercises?.[exerciseIndex];
+      const durationExercise=isTimedExercise(item);
       return {
       ...JSON.parse(JSON.stringify(item)),
       exerciseInstanceId:secureSessionModelId("exercise"),
@@ -6575,9 +6577,10 @@ function emptyDraft(sessionId){
       targetRir:item.targetRir||"3-4",
       series:Array.from({length:item.sets},(_,seriesIndex)=>({
         setInstanceId:secureSessionModelId("set"),
-        weight:previous?.series?.[seriesIndex]?.weight ?? "",
+        weight:durationExercise?"":(previous?.series?.[seriesIndex]?.weight ?? ""),
         reps:"",
         rir:"",
+        seconds:"",
         warmup:false,
         done:false
       })),
@@ -9772,8 +9775,12 @@ function renderHome(){
 
 
 function isTimedExercise(exercise){
+  const recordType=activeWorkoutApi().exerciseRecordType(exercise);
+  if(recordType) return recordType==="duration";
   const type=String(exercise?.type||"").toLowerCase();
-  const target=String(exercise?.target||"").toLowerCase();
+  const target=typeof exercise?.target==="string"
+    ?exercise.target.toLowerCase()
+    :"";
   const name=String(exercise?.name||"").toLowerCase();
   return type.includes("time")||
     type.includes("tiempo")||
@@ -10130,7 +10137,7 @@ function renderActiveWorkoutSet(row,exerciseIndex,sessionId){
     </header>
     <div id="${esc(contentId)}" class="active-set-content" hidden>
       <div class="active-set-reference"><span><small>Anterior</small><strong>${previous}</strong></span><span><small>Objetivo</small><strong>${esc(row.target||"Sin definir")}</strong></span></div>
-      <div class="active-set-fields">
+      <div class="active-set-fields ${row.timed?"duration-fields":"conventional-fields"}">
         ${row.timed
           ?`<div class="active-set-stopwatch">
               <span>Tiempo</span>
@@ -10152,6 +10159,57 @@ function renderActiveWorkoutSet(row,exerciseIndex,sessionId){
       </div>
     </div>
   </article>`;
+}
+function renderActiveRestOverlay(rest){
+  if(!state.restOverlayOpen||!rest?.running) return "";
+  return `<div class="workout-rest-overlay" data-rest-overlay>
+    <section class="workout-rest-dialog" role="dialog" aria-modal="true" aria-labelledby="workoutRestOverlayTitle" tabindex="-1">
+      <header><div><span>Descanso</span><strong id="workoutRestOverlayTitle" data-active-rest-overlay-time>${formatTimer(rest.remainingSeconds)}</strong></div><button type="button" class="icon-button" data-close-rest-overlay aria-label="Cerrar aviso de descanso">×</button></header>
+      <p>El temporizador seguirá activo si cierras este aviso.</p>
+      <div class="workout-rest-dialog-actions"><button type="button" class="secondary" data-add-rest>+30 s</button><button type="button" class="text-button" data-skip-rest>Omitir</button></div>
+    </section>
+  </div>`;
+}
+function syncActiveRestOverlay(){
+  const shell=document.querySelector(".active-workout-shell");
+  if(!shell) return;
+  shell.querySelector("[data-rest-overlay]")?.remove();
+  const rest=activeWorkoutApi().restTimerModel({
+    deadlineEpochMs:state.timerDeadline,now:Date.now(),
+    seconds:state.timerSeconds,running:Boolean(state.restTimerPayload),
+    defaultSeconds:getRestSeconds()
+  });
+  const html=renderActiveRestOverlay(rest);
+  if(!html) return;
+  const workoutContent=shell.querySelector(
+    ".active-workout-screen,.mobile-workout-main-content"
+  );
+  workoutContent?.setAttribute("inert","");
+  workoutContent?.setAttribute("aria-hidden","true");
+  shell.insertAdjacentHTML("beforeend",html);
+  requestAnimationFrame(()=>shell.querySelector(".workout-rest-dialog")?.focus({preventScroll:true}));
+}
+function closeActiveRestOverlay({focusPersistent=true}={}){
+  if(!state.restOverlayOpen&&!document.querySelector("[data-rest-overlay]")) return false;
+  state.restOverlayOpen=false;
+  document.querySelector("[data-rest-overlay]")?.remove();
+  const workoutContent=document.querySelector(
+    ".active-workout-screen,.mobile-workout-main-content"
+  );
+  if(!state.workoutMobileUi?.panel){
+    workoutContent?.removeAttribute("inert");
+    workoutContent?.removeAttribute("aria-hidden");
+    document.body.classList.remove("mobile-workout-sheet-open");
+  }
+  if(focusPersistent){
+    requestAnimationFrame(()=>document.querySelector(
+      "[data-active-rest-container],.mobile-workout-rest"
+    )?.scrollIntoView({
+      behavior:document.body.classList.contains("reduce-motion")?"auto":"smooth",
+      block:"start",inline:"nearest"
+    }));
+  }
+  return true;
 }
 function hasInputValue(value){
   return value!==null&&value!==undefined&&value!=="";
@@ -10255,6 +10313,9 @@ function renderActiveWorkoutExercise({
     exercise,library,selectedExerciseId:selectedLibraryId,
     normalize:window.GymOSExerciseDomain.normalizeToken
   });
+  const googleReference=api.googleExerciseReferenceModel({
+    exercise,libraryExercise:resolution.exercise
+  });
   const guide=api.exerciseGuideModel({
     exercise:resolution.exercise,label:exerciseLibraryWorkflowApi().label
   });
@@ -10307,7 +10368,7 @@ function renderActiveWorkoutExercise({
           ...guide.muscles.primary,...guide.muscles.secondary
         ].slice(0,3).join(", ")||"Información muscular pendiente")}</span></p>
         <div>
-          <button type="button" class="text-button" data-workout-reference aria-controls="workoutReferenceDialog">Ver referencia</button>
+          <a class="text-button" data-workout-reference href="${esc(googleReference.url)}" target="_blank" rel="noopener noreferrer">Ver referencia</a>
           <button type="button" class="text-button" data-workout-change-exercise aria-controls="workoutChangeDialog">Cambiar ejercicio</button>
         </div>
       </div>
@@ -10348,7 +10409,7 @@ function renderActiveWorkoutExercise({
     </div>
   </article>`;
 }
-function renderActiveWorkoutOverlays({draft,header,review,reference,changeAllowed=false}){
+function renderActiveWorkoutOverlays({draft,header,review,reference,rest,changeAllowed=false}){
   const statusLabels={completed:"Completado",started:"Iniciado",pending:"Pendiente"};
   const summary=state.workoutSessionOverviewOpen?`<div class="workout-modal-backdrop" data-workout-close-modal>
     <section id="workoutSessionOverviewDialog" class="workout-modal session-overview-modal" role="dialog" aria-modal="true" aria-labelledby="workoutSessionOverviewTitle">
@@ -10414,7 +10475,7 @@ function renderActiveWorkoutOverlays({draft,header,review,reference,changeAllowe
       <div class="workout-modal-actions"><button type="button" class="secondary" data-workout-close-modal>Conservar entrenamiento</button><button type="button" class="danger-button" data-confirm-discard-workout>Descartar</button></div>
     </section>
   </div>`:"";
-  return summary+referenceDialog+change+completion+deleteSet+discard;
+  return summary+referenceDialog+change+completion+deleteSet+discard+renderActiveRestOverlay(rest);
 }
 function closeActiveWorkoutOverlay(){
   const returnFocusSelector=state.workoutReturnFocusSelector;
@@ -10608,6 +10669,9 @@ function renderMobileWorkoutSheet({
   panel,model,draft,exercise,index,guide,resolution,review,changeAllowed
 }){
   if(!panel) return "";
+  const googleReference=activeWorkoutApi().googleExerciseReferenceModel({
+    exercise,libraryExercise:resolution?.exercise
+  });
   const close='<button type="button" class="icon-button mobile-workout-sheet-close" data-workout-close-modal aria-label="Cerrar panel">×</button>';
   const heading=(kicker,title,id,autofocus=false)=>`<header class="mobile-workout-sheet-header">
     <div>${kicker?`<span class="section-kicker">${esc(kicker)}</span>`:""}<h2 id="${id}" ${autofocus?'tabindex="-1" data-mobile-autofocus':""}>${esc(title)}</h2></div>${close}
@@ -10629,7 +10693,8 @@ function renderMobileWorkoutSheet({
     content=`${heading("TÉCNICA Y REFERENCIA",exercise.name,titleId,true)}
       ${renderActiveWorkoutGuide(guide,exercise,{
         dialog:true,labelledBy:titleId
-      })}`;
+      })}
+      <a class="secondary mobile-workout-google-reference" href="${esc(googleReference.url)}" target="_blank" rel="noopener noreferrer">Ver referencia en Google</a>`;
   }else if(panel==="notes"){
     titleId="mobileWorkoutNotesTitle";
     content=`${heading("EJERCICIO","Notas y molestias",titleId)}
@@ -10779,7 +10844,7 @@ function renderMobileWorkout({
     :0;
   const changeAllowed=Boolean(resolution.exercise);
   const panel=ui.panel;
-  const modalOpen=Boolean(panel);
+  const modalOpen=Boolean(panel||state.restOverlayOpen);
   const activePrevious=activeRow?.previous
     ?timed
       ?activeRow.previous.seconds?`${activeRow.previous.seconds} s`:"—"
@@ -10794,7 +10859,7 @@ function renderMobileWorkout({
       <span><small>Anterior</small><strong>${esc(activePrevious)}</strong></span>
       <span><small>Objetivo</small><strong>${esc(activeRow.target||"Sin definir")}</strong></span>
     </div>
-    <div class="mobile-workout-set-fields">
+    <div class="mobile-workout-set-fields ${timed?"duration-fields":"conventional-fields"}">
       ${timed
         ?`<div class="mobile-workout-set-timer">
             <span>Cronómetro de serie</span>
@@ -10886,6 +10951,7 @@ function renderMobileWorkout({
         panel,model,draft,exercise,index,guide,resolution,review,changeAllowed
       })}
     </main>
+    ${renderActiveRestOverlay(rest)}
   </div>`;
   document.body.classList.toggle("mobile-workout-sheet-open",modalOpen);
   if(state.workoutRestAnnouncement){
@@ -11014,7 +11080,7 @@ function renderWorkout(){
   }):null;
   document.body.classList.remove("mobile-workout-sheet-open");
   app.innerHTML=`<div class="app-shell active-workout-shell">
-    <main class="screen active-workout-screen" aria-labelledby="activeWorkoutTitle">
+    <main class="screen active-workout-screen" aria-labelledby="activeWorkoutTitle" ${state.restOverlayOpen?'inert aria-hidden="true"':""}>
       <header class="active-workout-context">
         <button type="button" class="icon-button active-workout-back" data-workout-back aria-label="Volver a Inicio">←</button>
         <div class="active-workout-session-title">
@@ -11080,7 +11146,8 @@ function renderWorkout(){
       </section>`:""}
     </main>
     ${renderActiveWorkoutOverlays({
-      draft,header,review,reference,changeAllowed:Boolean(actionResolution?.exercise)
+      draft,header,review,reference,rest,
+      changeAllowed:Boolean(actionResolution?.exercise)
     })}
     ${nav("workout")}
   </div>`;
@@ -11425,10 +11492,7 @@ function bindActiveWorkoutEvents(context){
           }
         }
       }else if(button.matches("[data-workout-reference]")){
-        const {exerciseInstanceId}=exerciseMetaFromNode(button);
-        state.workoutReferenceExerciseId=exerciseInstanceId;
-        state.workoutReturnFocusSelector=`[data-exercise-instance-id="${CSS.escape(exerciseInstanceId)}"] [data-workout-reference]`;
-        renderWorkout();
+        return;
       }else if(button.matches("[data-workout-session-toggle]")){
         const draft=getCurrent();
         const timer=workoutSessionTimerForDraft(draft);
@@ -11731,6 +11795,21 @@ function bindActiveWorkoutEvents(context){
   });
   shell.addEventListener("click",event=>{
     const button=event.target.closest("button");
+    const restOverlay=event.target.closest?.("[data-rest-overlay]");
+    if(restOverlay){
+      if(
+        event.target===restOverlay||
+        button?.matches("[data-close-rest-overlay]")
+      ){
+        closeActiveRestOverlay();
+      }else if(button?.matches("[data-skip-rest]")){
+        clearActiveRestTimer({removePersisted:true});
+        updateTimerUI();
+      }else if(button?.matches("[data-add-rest]")){
+        extendActiveRestTimer(30);
+      }
+      return;
+    }
     if(button?.matches("[data-workout-close-modal]")||event.target.matches(".workout-modal-backdrop[data-workout-close-modal]")){
       closeActiveWorkoutOverlay();
       return;
@@ -11842,6 +11921,11 @@ function bindActiveWorkoutEvents(context){
       const next=fields[fields.indexOf(event.target)+1];
       if(next) next.focus();
       else event.target.blur();
+      return;
+    }
+    const restDialog=shell.querySelector('[data-rest-overlay] [role="dialog"]');
+    if(event.key==="Escape"&&restDialog){
+      event.preventDefault();closeActiveRestOverlay();
       return;
     }
     const dialog=shell.querySelector('.workout-modal[role="dialog"]');
@@ -12116,6 +12200,16 @@ function clearActiveRestTimer({removePersisted=true}={}){
   state.timerSeconds=0;
   state.timerDeadline=null;
   state.restTimerPayload=null;
+  state.restOverlayOpen=false;
+  document.querySelector("[data-rest-overlay]")?.remove();
+  if(!state.workoutMobileUi?.panel){
+    const workoutContent=document.querySelector(
+      ".active-workout-screen,.mobile-workout-main-content"
+    );
+    workoutContent?.removeAttribute("inert");
+    workoutContent?.removeAttribute("aria-hidden");
+    document.body?.classList.remove("mobile-workout-sheet-open");
+  }
   state.restTimerPersistenceFailed=false;
   if(removePersisted&&previous) removeStoredRestTimer(previous);
 }
@@ -12244,6 +12338,7 @@ function startTimer(sec,draft=state.workoutDraftMemory,now=Date.now()){
   });
   if(!payload) return null;
   state.restTimerPayload=payload;
+  state.restOverlayOpen=true;
   state.timerDeadline=payload.deadlineEpochMs;
   state.timerSeconds=duration;
   persistRestTimer(payload);
@@ -12255,6 +12350,7 @@ function startTimer(sec,draft=state.workoutDraftMemory,now=Date.now()){
   const startedStatus=document.getElementById("activeRestStatus");
   if(startedStatus) startedStatus.textContent=state.workoutRestAnnouncement;
   scheduleActiveRestTimer();
+  if(typeof syncActiveRestOverlay==="function") syncActiveRestOverlay();
   return payload;
 }
 function extendActiveRestTimer(seconds=30,now=Date.now()){
@@ -12276,7 +12372,12 @@ function extendActiveRestTimer(seconds=30,now=Date.now()){
 }
 function formatTimer(sec){return `${Math.floor(sec/60)}:${String(sec%60).padStart(2,"0")}`;}
 function updateTimerUI(){
-  const a=document.getElementById("timerValue")||document.querySelector("[data-active-rest-time]"),b=document.getElementById("timerChip");
+  const b=document.getElementById("timerChip");
+  const timers=typeof document.querySelectorAll==="function"
+    ?document.querySelectorAll("[data-active-rest-time],[data-active-rest-overlay-time]")
+    :[];
+  timers.forEach(node=>{node.textContent=formatTimer(state.timerSeconds);});
+  const a=document.getElementById("timerValue");
   if(a)a.textContent=formatTimer(state.timerSeconds);
   if(b)b.textContent=state.timerSeconds?`Descanso · ${formatTimer(state.timerSeconds)}`:"Temporizador de descanso";
 }

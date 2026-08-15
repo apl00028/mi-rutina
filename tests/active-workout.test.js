@@ -82,6 +82,7 @@ test("entrenamiento activo: el módulo expone modelos puros sin dependencias de 
   for(const name of [
     "activeWorkoutHeaderModel","sessionElapsedModel","exerciseGuideModel",
     "exerciseMuscleModel","exerciseTechniqueModel","exerciseLibraryResolutionModel",
+    "googleExerciseReferenceModel","exerciseRecordType",
     "setEntryModel","sessionTimerControlModel","restTimerModel",
     "workoutCompletionReviewModel","exerciseDetailDisclosureModel",
     "mobileWorkoutViewModel","reduceMobileWorkoutUi"
@@ -182,6 +183,38 @@ test("resolución: una selección visual inequívoca requiere un ID confirmado",
   });
   assert.equal(result.status,"visual_selection");
   assert.equal(result.exercise.id,"press-maquina");
+});
+
+test("referencia Google usa nombre canónico codificado y fallback visible seguro",()=>{
+  const api=loadApi();
+  const canonical=api.googleExerciseReferenceModel({
+    exercise:{id:"bench-press",name:"Nombre visible"},
+    libraryExercise:{id:"bench-press",name:"Press banca / máquina"}
+  });
+  assert.equal(canonical.name,"Press banca / máquina");
+  assert.equal(canonical.canonical,true);
+  assert.equal(
+    canonical.url,
+    `https://www.google.com/search?q=${encodeURIComponent("Press banca / máquina")}`
+  );
+  assert.doesNotMatch(canonical.url,/bench-press/);
+  const fallback=api.googleExerciseReferenceModel({
+    exercise:{id:"technical-id",name:"Plancha & respiración"}
+  });
+  assert.equal(fallback.canonical,false);
+  assert.equal(
+    fallback.url,
+    `https://www.google.com/search?q=${encodeURIComponent("Plancha & respiración")}`
+  );
+});
+
+test("tipo de registro reconoce duración canónica y variantes normalizadas",()=>{
+  const api=loadApi();
+  assert.equal(api.exerciseRecordType({recordType:"duration"}),"duration");
+  assert.equal(api.exerciseRecordType({recordTypes:["duration"]}),"duration");
+  assert.equal(api.exerciseRecordType({target:{type:"duración"}}),"duration");
+  assert.equal(api.exerciseRecordType({prescription:{target:{type:"tiempo"}}}),"duration");
+  assert.equal(api.exerciseRecordType({recordType:"weight_reps"}),"weight_reps");
 });
 
 test("resolución integrada prioriza ID directo nombre oficial y alias exacto",()=>{
@@ -747,7 +780,7 @@ test("accesibilidad: usa landmarks, labels, controles reales, Escape, foco y ari
   for(const token of [
     '<main class="screen active-workout-screen"','aria-labelledby="activeWorkoutTitle"',
     'aria-controls="workoutSessionOverviewDialog"','aria-controls="workoutChangeDialog"',
-    'aria-controls="workoutCompletionDialog"','aria-controls="workoutReferenceDialog"',
+    'aria-controls="workoutCompletionDialog"','target="_blank"','rel="noopener noreferrer"',
     'role="dialog"','aria-modal="true"','aria-expanded="${expanded}"',
     'inputmode="decimal"','inputmode="numeric"','aria-pressed="${row.done}"'
   ]) assert.ok(workoutUiSource.includes(token),token);
@@ -775,14 +808,59 @@ test("hoja de sesión: renderiza todos los ejercicios y elimina el carrusel obli
   assert.doesNotMatch(renderSource,/data-workout-previous|data-workout-next(?!-pending)/);
 });
 
-test("referencia: solo se renderiza bajo demanda en un diálogo no bloqueante",()=>{
+test("referencia: abre Google fuera de GymOS sin escribir estado de entrenamiento",()=>{
   assert.match(workoutUiSource,/data-workout-reference/);
-  assert.match(workoutUiSource,/id="workoutReferenceDialog"/);
-  assert.match(workoutUiSource,/renderActiveWorkoutGuide\(reference\.guide,reference\.exercise,\{dialog:true\}\)/);
-  assert.doesNotMatch(renderSource,/\$\{renderActiveWorkoutGuide\(guide,exercise\)\}/);
-  assert.match(workoutUiSource,/Consejos de ejecución/);
-  assert.match(workoutUiSource,/Errores frecuentes/);
-  assert.match(workoutUiSource,/Señales de molestia y advertencias/);
+  assert.match(workoutUiSource,/googleExerciseReferenceModel/);
+  assert.match(workoutUiSource,/href="\$\{esc\(googleReference\.url\)\}"/);
+  assert.match(workoutUiSource,/target="_blank" rel="noopener noreferrer"/);
+  assert.match(workoutUiSource,/Ver referencia en Google/);
+  const referenceModel=between(
+    moduleSource,"function googleExerciseReferenceModel(","function exerciseRecordType("
+  );
+  assert.match(referenceModel,/encodeURIComponent\(searchName\)/);
+  assert.doesNotMatch(referenceModel,/localStorage|saveDraft|saveHistory|stageWorkoutDraft/);
+});
+
+test("duración renderiza segundos sin kg/reps y conserva el writer canónico",()=>{
+  assert.match(appSource,/const recordType=activeWorkoutApi\(\)\.exerciseRecordType\(exercise\)/);
+  assert.match(workoutUiSource,/row\.timed[\s\S]*?data-set-field="seconds"[\s\S]*?:`<label><span>Peso/);
+  assert.match(workoutUiSource,/mobile-workout-set-fields \$\{timed\?"duration-fields":"conventional-fields"\}/);
+  const inputBranch=between(
+    bindingSource,'main.addEventListener("input",event=>{','main.addEventListener("change",event=>{'
+  );
+  assert.match(inputBranch,/set\[target\.dataset\.setField\]=target\.value/);
+  assert.match(inputBranch,/target\.dataset\.setField==="seconds"\)\{set\.weight="";set\.reps="";\}/);
+  assert.doesNotMatch(inputBranch,/Number\(target\.value\)\|\|/);
+  const emptyDraftSource=between(
+    appSource,"function emptyDraft(","function getDraft("
+  );
+  assert.match(emptyDraftSource,/const durationExercise=isTimedExercise\(item\)/);
+  assert.match(emptyDraftSource,/weight:durationExercise\?"":/);
+  assert.match(emptyDraftSource,/seconds:""/);
+  assert.match(stylesSource,/\.active-set-fields\.duration-fields/);
+  assert.match(stylesSource,/mobile-workout-set-fields\.duration-fields/);
+});
+
+test("overlay de descanso separa visibilidad y deadline, cierra por backdrop o Escape",()=>{
+  const overlaySource=between(
+    appSource,"function renderActiveRestOverlay(","function hasInputValue("
+  );
+  const timerSource=between(
+    appSource,"function restTimerContextForDraft(","function formatTimer("
+  );
+  assert.match(overlaySource,/role="dialog" aria-modal="true"/);
+  assert.match(overlaySource,/state\.restOverlayOpen=false/);
+  assert.doesNotMatch(overlaySource,/clearActiveRestTimer|deadlineEpochMs\s*=|restTimerPayload\s*=/);
+  assert.match(timerSource,/state\.restOverlayOpen=true/);
+  const restoreSource=between(
+    timerSource,"function restoreActiveRestTimer(","function startTimer("
+  );
+  assert.doesNotMatch(restoreSource,/restOverlayOpen=true/);
+  assert.match(bindingSource,/event\.target===restOverlay/);
+  assert.match(bindingSource,/event\.key==="Escape"&&restDialog/);
+  assert.match(bindingSource,/extendActiveRestTimer\(30\)/);
+  assert.match(stylesSource,/\.workout-rest-overlay\{[\s\S]*?position:fixed[\s\S]*?overflow-x:hidden/);
+  assert.match(stylesSource,/@media\(max-width:430px\)\{[\s\S]*?\.workout-rest-dialog\{width:100%/);
 });
 
 test("expandir o colapsar una tarjeta no reconstruye la sesión",()=>{

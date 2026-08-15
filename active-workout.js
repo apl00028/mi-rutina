@@ -245,6 +245,37 @@
       ?Math.floor(number)
       :null;
   }
+  function googleExerciseReferenceModel({exercise=null,libraryExercise=null}={}){
+    const canonicalName=text(libraryExercise?.name);
+    const visibleName=text(exercise?.name);
+    const searchName=canonicalName||visibleName;
+    return {
+      name:searchName,
+      canonical:Boolean(canonicalName),
+      url:searchName
+        ?`https://www.google.com/search?q=${encodeURIComponent(searchName)}`
+        :"https://www.google.com/search"
+    };
+  }
+  function exerciseRecordType(exercise={}){
+    const normalize=value=>text(value)
+      .normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase();
+    const candidates=[
+      exercise?.recordType,
+      ...list(exercise?.recordTypes),
+      exercise?.target?.type,
+      exercise?.prescription?.target?.type,
+      exercise?.prescription?.type
+    ].map(normalize).filter(Boolean);
+    if(candidates.some(value=>["duration","duracion","tiempo","time"].includes(value))){
+      return "duration";
+    }
+    if(candidates.length) return candidates[0];
+    const legacyType=normalize(exercise?.type);
+    return ["duration","duracion","tiempo","time"].includes(legacyType)
+      ?"duration"
+      :null;
+  }
   function effectiveRestSeconds(exercise={},preference=90){
     for(const value of [
       exercise?.prescription?.restSeconds,exercise?.restSeconds,preference,90
@@ -507,6 +538,8 @@
     sessionElapsedModel,
     activeWorkoutHeaderModel,
     exerciseLibraryResolutionModel,
+    googleExerciseReferenceModel,
+    exerciseRecordType,
     exerciseMuscleModel,
     exerciseTechniqueModel,
     exerciseGuideModel,

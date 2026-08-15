@@ -3296,6 +3296,7 @@ body.reduce-motion .home-weekly-card .weekly-progress-fill{transition:none}
 .active-set-reference{display:grid;gap:.25rem;color:var(--muted);font-size:.7rem}
 .active-set-reference strong{color:var(--text)}
 .active-set-fields{display:grid;grid-template-columns:repeat(3,minmax(4.5rem,1fr));gap:.5rem}
+.active-set-fields.duration-fields{grid-template-columns:minmax(9rem,1.4fr) minmax(7rem,1fr) minmax(5rem,.7fr)}
 .active-set-fields label>span{display:block;margin-bottom:.3rem;color:var(--muted);font-size:.63rem;font-weight:750}
 .active-set-fields small{font-size:inherit;font-weight:500}
 .active-set-fields input,.active-set-fields select{width:100%;min-width:0;padding:.65rem}
@@ -3499,7 +3500,13 @@ body.reduce-motion .home-weekly-card .weekly-progress-fill{transition:none}
 }
 @media(max-width:430px){
   .active-set-fields{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .active-set-fields.duration-fields{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .active-set-fields.duration-fields .active-set-stopwatch{grid-column:1/-1}
   .active-set-fields label:last-child{grid-column:1/-1}
+  .workout-rest-overlay{
+    padding:max(4.5rem,calc(3.5rem + env(safe-area-inset-top))) .65rem .65rem;
+  }
+  .workout-rest-dialog{width:100%;padding:.9rem}
   .active-exercise-navigation{grid-template-columns:1fr 1.35fr auto;gap:.4rem;padding-inline:.45rem}
 }
 @media(max-width:360px){
@@ -3896,6 +3903,35 @@ body.reduce-motion .active-workout-session-progress span{transition:none}
   backdrop-filter:none;
 }
 .active-rest-timer[hidden]{display:none}
+.workout-rest-overlay{
+  position:fixed;
+  inset:0;
+  z-index:140;
+  display:grid;
+  place-items:start center;
+  overflow-x:hidden;
+  padding:max(5rem,calc(3.75rem + env(safe-area-inset-top))) 1rem 1rem;
+  background:rgba(15,23,42,.58);
+  backdrop-filter:blur(3px);
+}
+.workout-rest-dialog{
+  display:grid;
+  gap:.8rem;
+  width:min(100%,32rem);
+  max-width:100%;
+  padding:1rem;
+  border:1px solid color-mix(in srgb,var(--brand) 40%,var(--border));
+  border-radius:1rem;
+  background:var(--surface);
+  box-shadow:var(--shadow);
+}
+.workout-rest-dialog>header{display:flex;align-items:flex-start;justify-content:space-between;gap:1rem}
+.workout-rest-dialog>header>div{display:grid;gap:.2rem}
+.workout-rest-dialog>header span{color:var(--muted);font-size:.78rem;font-weight:850;text-transform:uppercase;letter-spacing:.08em}
+.workout-rest-dialog>header strong{font-size:clamp(2rem,8vw,3rem);font-variant-numeric:tabular-nums;line-height:1}
+.workout-rest-dialog>p{margin:0;color:var(--muted);font-size:.82rem}
+.workout-rest-dialog-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.6rem}
+.workout-rest-dialog-actions button{min-width:0;min-height:44px}
 .active-exercise-navigation>button{min-height:2.65rem}
 .workout-reference-modal{width:min(100%,42rem)}
 .active-workout-reference-content{
@@ -4518,6 +4554,9 @@ body.reduce-motion .workout-exercise-panel{transition:none}
     grid-template-columns:repeat(2,minmax(0,1fr));
   }
   .active-workout-shell[data-workout-layout="mobile"] .mobile-workout-set-fields{
+    grid-template-columns:repeat(2,minmax(0,1fr));
+  }
+  .active-workout-shell[data-workout-layout="mobile"] .mobile-workout-set-fields.duration-fields{
     grid-template-columns:repeat(2,minmax(0,1fr));
   }
   .active-workout-shell[data-workout-layout="mobile"] .mobile-workout-set-fields>label:last-child{

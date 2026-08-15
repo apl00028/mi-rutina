@@ -1,24 +1,12 @@
-import json
-from pathlib import Path
-
 from app.models.exercise import Exercise
+from app.repositories.exercises import DATA_FILE, ExerciseRepository
 
-DATA_FILE = Path(__file__).resolve().parents[1] / "data" / "exercises.json"
+_repository = ExerciseRepository()
 
 
 def load_exercises() -> list[Exercise]:
-    with DATA_FILE.open("r", encoding="utf-8") as handle:
-        data = json.load(handle)
-
-    if not isinstance(data, list):
-        raise RuntimeError("Exercise catalog must be a list.")
-
-    return [Exercise.model_validate(item) for item in data]
+    return _repository.list_all()
 
 
 def get_exercise_by_id(exercise_id: str) -> Exercise | None:
-    for exercise in load_exercises():
-        if exercise.id == exercise_id:
-            return exercise
-
-    return None
+    return _repository.get_by_id(exercise_id)

@@ -263,6 +263,123 @@ function recoveryHarness({
   return {context,values,writes,downloads,writeCalls,localPayload};
 }
 
+function adoptionHarness({
+  remoteOverrides={},localOverrides={},applyError=null
+}={}){
+  const source=appSource.slice(
+    appSource.indexOf("const SYNC_RECOVERY_EXPECTED_REMOTE"),
+    appSource.indexOf("async function syncNow")
+  );
+  const remote={
+    revision:913,
+    checksum:"759d936c",
+    device_id:"pc-device",
+    updated_at:"2026-08-15T10:00:00.000Z",
+    payload:{
+      source:"remote-pc",
+      syncProtocolVersion:2,
+      canonicalRoutine:{routineId:"routine-02488c9c-d38e-4b59-8814-f7e0bcbd7d5e"},
+      selectedSessionId:"roadmap-2026-08-a",
+      history:["remote-history"]
+    },
+    ...remoteOverrides
+  };
+  if(remoteOverrides.payload){
+    remote.payload={...remote.payload,...remoteOverrides.payload};
+  }
+  const values=new Map([
+    ["gymos:deviceId","mobile-device"],
+    ["gymos:localRevision","914"],
+    ["gymos:lastRemoteRevision","912"],
+    ["gymos:syncBaseRevision","912"],
+    ["gymos:syncProtocolVersion","2"],
+    ["gymos:syncPending","1"],
+    ["gymos:routine:canonical",JSON.stringify({routineId:"routine-0916bea3-2e64-446b-8219-529102300960"})],
+    ["gymos:selectedSessionId","session-7846de07-5290-4758-88d0-43d54e75885e"],
+    ["gymos:history",JSON.stringify(["local-history"])],
+    ["unrelated:key","untouched"]
+  ]);
+  for(const [key,value] of Object.entries(localOverrides.storage||{})){
+    if(value===null) values.delete(key);
+    else values.set(key,String(value));
+  }
+  const writes=[];
+  const remoteWrites=[];
+  const counters={apply:0,syncNow:0,autoSync:0};
+  const currentSnapshot=()=>({
+    deviceId:values.get("gymos:deviceId")||null,
+    localRevision:Number(values.get("gymos:localRevision")||0),
+    lastRemoteRevision:Number(values.get("gymos:lastRemoteRevision")||0),
+    syncBaseRevision:Number(values.get("gymos:syncBaseRevision")||0),
+    syncPending:values.get("gymos:syncPending")==="1",
+    routineId:JSON.parse(values.get("gymos:routine:canonical")||"{}").routineId||null,
+    selectedSessionId:values.get("gymos:selectedSessionId")||null,
+    routineHash:"mobile-routine",
+    historyHash:"mobile-history",
+    ...localOverrides.snapshot
+  });
+  const query={
+    select(){return this;},
+    eq(){return this;},
+    update(){remoteWrites.push("update");return this;},
+    insert(){remoteWrites.push("insert");return this;},
+    upsert(){remoteWrites.push("upsert");return this;},
+    async maybeSingle(){return {data:remote,error:null};}
+  };
+  const client={from(){return query;}};
+  const context={
+    SYNC_PROTOCOL_VERSION:2,
+    DEVICE_ID_KEY:"gymos:deviceId",
+    state:{syncUser:{id:"user-a"},syncStatus:"conflict",syncIssue:{kind:"mobile_divergent"}},
+    localStorage:{
+      get length(){return values.size;},
+      key:index=>Array.from(values.keys())[index]||null,
+      getItem:key=>values.has(key)?values.get(key):null,
+      setItem:(key,value)=>{writes.push(["setItem",key,String(value)]);values.set(key,String(value));},
+      removeItem:key=>{writes.push(["removeItem",key]);values.delete(key);}
+    },
+    getSupabaseClient:()=>client,
+    isAppAuthenticated:()=>true,
+    localSyncDiagnosticSnapshot:currentSnapshot,
+    remoteSyncDiagnosticFromRow:row=>({
+      revision:Number(row?.revision||0),
+      checksum:row?.checksum||null,
+      routineId:row?.payload?.canonicalRoutine?.routineId||null,
+      selectedSessionId:row?.payload?.selectedSessionId||null
+    }),
+    restoreStorageValue:(key,value)=>{
+      writes.push([value===null?"removeItem":"setItem",key,value===null?undefined:String(value)]);
+      if(value===null) values.delete(key);
+      else values.set(key,String(value));
+    },
+    applySyncPayload:payload=>{
+      counters.apply+=1;
+      values.set("gymos:routine:canonical",JSON.stringify(payload.canonicalRoutine));
+      values.set("gymos:selectedSessionId",payload.selectedSessionId);
+      values.set("gymos:history",JSON.stringify(payload.history||[]));
+      values.set("gymos:deviceId",remote.device_id);
+      values.set("gymos:partialDuringApply","1");
+      if(applyError) throw applyError;
+      values.delete("gymos:partialDuringApply");
+    },
+    setLocalRevision:value=>{writes.push(["setItem","gymos:localRevision",String(value)]);values.set("gymos:localRevision",String(value));},
+    setLastRemoteRevision:value=>{writes.push(["setItem","gymos:lastRemoteRevision",String(value)]);values.set("gymos:lastRemoteRevision",String(value));},
+    setSyncBaseRevision:value=>{writes.push(["setItem","gymos:syncBaseRevision",String(value)]);values.set("gymos:syncBaseRevision",String(value));},
+    markSyncProtocolCurrent:()=>{writes.push(["setItem","gymos:syncProtocolVersion","2"]);values.set("gymos:syncProtocolVersion","2");},
+    updateSyncIndicators:()=>{},
+    syncNow:()=>{counters.syncNow+=1;},
+    autoSync:()=>{counters.autoSync+=1;},
+    Date
+  };
+  vm.createContext(context);
+  vm.runInContext(`${source}; this.adopt=adoptCanonicalRemoteSyncHeadOnThisDevice;`,context);
+  return {context,values,writes,remoteWrites,counters,snapshot:()=>new Map(values)};
+}
+
+function sortedEntries(map){
+  return [...map.entries()].sort(([left],[right])=>left.localeCompare(right));
+}
+
 test("RC2 Ajustes usa exclusivamente la API pública de Recovery Center",()=>{
   const settings=appSource.slice(
     appSource.indexOf("function renderSettings("),
@@ -675,6 +792,100 @@ test("recovery: metadata local se actualiza solo después del éxito remoto",asy
   assert.equal(harness.values.get("gymos:syncBaseRevision"),"913");
   assert.equal(harness.values.get("gymos:syncProtocolVersion"),"2");
   assert.equal(harness.values.has("gymos:syncPending"),false);
+});
+
+test("recovery adoption: no escribe nunca en Supabase",async()=>{
+  const harness=adoptionHarness();
+  const result=await harness.context.adopt();
+  assert.equal(result.direction,"recovery_download");
+  assert.deepEqual(harness.remoteWrites,[]);
+});
+
+test("recovery adoption: remoto con revision distinta aborta sin tocar local",async()=>{
+  const harness=adoptionHarness({remoteOverrides:{revision:914}});
+  const before=sortedEntries(harness.snapshot());
+  await assert.rejects(()=>harness.context.adopt(),error=>error.code==="recovery_remote_changed");
+  assert.deepEqual(sortedEntries(harness.snapshot()),before);
+  assert.deepEqual(harness.remoteWrites,[]);
+  assert.equal(harness.counters.apply,0);
+});
+
+test("recovery adoption: remoto con checksum distinto aborta",async()=>{
+  const harness=adoptionHarness({remoteOverrides:{checksum:"changed"}});
+  const before=sortedEntries(harness.snapshot());
+  await assert.rejects(()=>harness.context.adopt(),error=>error.code==="recovery_remote_changed");
+  assert.deepEqual(sortedEntries(harness.snapshot()),before);
+  assert.equal(harness.counters.apply,0);
+});
+
+test("recovery adoption: remoto con rutina sesion o protocolo distinto aborta",async()=>{
+  for(const payload of [
+    {canonicalRoutine:{routineId:"routine-other"}},
+    {selectedSessionId:"session-other"},
+    {syncProtocolVersion:1}
+  ]){
+    const harness=adoptionHarness({remoteOverrides:{payload}});
+    const before=sortedEntries(harness.snapshot());
+    await assert.rejects(()=>harness.context.adopt(),error=>error.code==="recovery_remote_changed");
+    assert.deepEqual(sortedEntries(harness.snapshot()),before);
+    assert.equal(harness.counters.apply,0);
+  }
+});
+
+test("recovery adoption: local con base distinta de 912 aborta",async()=>{
+  const harness=adoptionHarness({localOverrides:{snapshot:{syncBaseRevision:911}}});
+  const before=sortedEntries(harness.snapshot());
+  await assert.rejects(()=>harness.context.adopt(),error=>error.code==="recovery_local_changed");
+  assert.deepEqual(sortedEntries(harness.snapshot()),before);
+  assert.equal(harness.counters.apply,0);
+});
+
+test("recovery adoption: local sin pending aborta",async()=>{
+  const harness=adoptionHarness({
+    localOverrides:{
+      snapshot:{syncPending:false},
+      storage:{"gymos:syncPending":null}
+    }
+  });
+  const before=sortedEntries(harness.snapshot());
+  await assert.rejects(()=>harness.context.adopt(),error=>error.code==="recovery_local_changed");
+  assert.deepEqual(sortedEntries(harness.snapshot()),before);
+  assert.equal(harness.counters.apply,0);
+});
+
+test("recovery adoption: fallo de applySyncPayload restaura integramente el estado local",async()=>{
+  const harness=adoptionHarness({applyError:Object.assign(new Error("partial apply"),{code:"apply_failed"})});
+  const before=sortedEntries(harness.snapshot());
+  await assert.rejects(()=>harness.context.adopt(),error=>error.code==="recovery_local_apply_failed");
+  assert.deepEqual(sortedEntries(harness.snapshot()),before);
+  assert.equal(harness.values.get("gymos:deviceId"),"mobile-device");
+  assert.deepEqual(harness.remoteWrites,[]);
+});
+
+test("recovery adoption: éxito aplica payload remoto y conserva deviceId móvil",async()=>{
+  const harness=adoptionHarness();
+  const result=await harness.context.adopt();
+  assert.equal(result.revision,913);
+  assert.equal(harness.counters.apply,1);
+  assert.equal(harness.values.get("gymos:deviceId"),"mobile-device");
+  assert.equal(
+    JSON.parse(harness.values.get("gymos:routine:canonical")).routineId,
+    "routine-02488c9c-d38e-4b59-8814-f7e0bcbd7d5e"
+  );
+  assert.equal(harness.values.get("gymos:selectedSessionId"),"roadmap-2026-08-a");
+});
+
+test("recovery adoption: éxito fija revisiones 913, limpia pending y no ejecuta sync",async()=>{
+  const harness=adoptionHarness();
+  await harness.context.adopt();
+  assert.equal(harness.values.get("gymos:localRevision"),"913");
+  assert.equal(harness.values.get("gymos:lastRemoteRevision"),"913");
+  assert.equal(harness.values.get("gymos:syncBaseRevision"),"913");
+  assert.equal(harness.values.get("gymos:syncProtocolVersion"),"2");
+  assert.equal(harness.values.get("gymos:lastSyncHash"),"759d936c");
+  assert.equal(harness.values.has("gymos:syncPending"),false);
+  assert.equal(harness.counters.syncNow,0);
+  assert.equal(harness.counters.autoSync,0);
 });
 
 test("sync v2 móvil legacy base 912 pending contra remoto v2 913 queda en conflicto sin upload",async()=>{

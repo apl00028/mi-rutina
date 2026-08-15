@@ -5299,6 +5299,17 @@ const SYNC_RECOVERY_EXPECTED_REMOTE=Object.freeze({
   revision:912,
   checksum:"a455414f"
 });
+const SYNC_ADOPTION_EXPECTED_REMOTE=Object.freeze({
+  revision:913,
+  checksum:"759d936c",
+  routineId:"routine-02488c9c-d38e-4b59-8814-f7e0bcbd7d5e",
+  selectedSessionId:"roadmap-2026-08-a",
+  syncProtocolVersion:2
+});
+const SYNC_ADOPTION_EXPECTED_LOCAL=Object.freeze({
+  syncBaseRevision:912,
+  syncPending:true
+});
 const SYNC_RECOVERY_EXPECTED_LOCAL=Object.freeze({
   routineId:"routine-02488c9c-d38e-4b59-8814-f7e0bcbd7d5e",
   selectedSessionId:"roadmap-2026-08-a",
@@ -5308,6 +5319,7 @@ const SYNC_RECOVERY_EXPECTED_LOCAL=Object.freeze({
 });
 const SYNC_RECOVERY_CANDIDATE_REVISION=913;
 const SYNC_RECOVERY_CONFIRMATION_TEXT="PROMOVER ESTE PC";
+const SYNC_ADOPTION_CONFIRMATION_TEXT="ADOPTAR ESTADO DE LA NUBE";
 
 function recoveryError(code,details={}){
   const error=new Error(code);
@@ -5326,6 +5338,25 @@ function downloadJsonFile(payload,filePrefix){
   link.click();
   link.remove();
   URL.revokeObjectURL(url);
+}
+function captureGymOSLocalStorageSnapshot(){
+  const snapshot={};
+  for(let index=0;index<localStorage.length;index+=1){
+    const key=localStorage.key(index);
+    if(key?.startsWith("gymos:")) snapshot[key]=localStorage.getItem(key);
+  }
+  return snapshot;
+}
+function restoreGymOSLocalStorageSnapshot(snapshot){
+  const current=[];
+  for(let index=0;index<localStorage.length;index+=1){
+    const key=localStorage.key(index);
+    if(key?.startsWith("gymos:")) current.push(key);
+  }
+  current.forEach(key=>{
+    if(!Object.prototype.hasOwnProperty.call(snapshot,key)) localStorage.removeItem(key);
+  });
+  Object.entries(snapshot).forEach(([key,value])=>restoreStorageValue(key,value));
 }
 async function readCurrentRemoteSyncRow(){
   const client=getSupabaseClient();
@@ -5372,6 +5403,47 @@ function assertRecoveryRemoteExpected(row){
       actualChecksum:checksum
     });
   }
+}
+function assertAdoptionRemoteExpected(row){
+  const summary=remoteSyncDiagnosticFromRow(row);
+  const protocolVersion=Number(row?.payload?.syncProtocolVersion||0);
+  for(const [field,expected] of Object.entries({
+    revision:SYNC_ADOPTION_EXPECTED_REMOTE.revision,
+    checksum:SYNC_ADOPTION_EXPECTED_REMOTE.checksum,
+    routineId:SYNC_ADOPTION_EXPECTED_REMOTE.routineId,
+    selectedSessionId:SYNC_ADOPTION_EXPECTED_REMOTE.selectedSessionId
+  })){
+    if(summary[field]!==expected){
+      throw recoveryError("recovery_remote_changed",{
+        field,expected,actual:summary[field]
+      });
+    }
+  }
+  if(protocolVersion!==SYNC_ADOPTION_EXPECTED_REMOTE.syncProtocolVersion){
+    throw recoveryError("recovery_remote_changed",{
+      field:"syncProtocolVersion",
+      expected:SYNC_ADOPTION_EXPECTED_REMOTE.syncProtocolVersion,
+      actual:protocolVersion
+    });
+  }
+  return summary;
+}
+function assertAdoptionLocalExpected(snapshot=localSyncDiagnosticSnapshot()){
+  if(snapshot.syncBaseRevision!==SYNC_ADOPTION_EXPECTED_LOCAL.syncBaseRevision){
+    throw recoveryError("recovery_local_changed",{
+      field:"syncBaseRevision",
+      expected:SYNC_ADOPTION_EXPECTED_LOCAL.syncBaseRevision,
+      actual:snapshot.syncBaseRevision
+    });
+  }
+  if(snapshot.syncPending!==SYNC_ADOPTION_EXPECTED_LOCAL.syncPending){
+    throw recoveryError("recovery_local_changed",{
+      field:"syncPending",
+      expected:SYNC_ADOPTION_EXPECTED_LOCAL.syncPending,
+      actual:snapshot.syncPending
+    });
+  }
+  return snapshot;
 }
 function assertRecoveryLocalExpected(snapshot=localSyncDiagnosticSnapshot()){
   for(const key of ["routineId","selectedSessionId","routineHash","historyHash"]){
@@ -5432,6 +5504,35 @@ async function promoteLocalDeviceAsCanonicalSyncHead(){
     revision:SYNC_RECOVERY_CANDIDATE_REVISION,
     checksum:envelope.checksum
   };
+}
+async function adoptCanonicalRemoteSyncHeadOnThisDevice(){
+  if(!getSupabaseClient()||!isAppAuthenticated()) throw recoveryError("recovery_not_authenticated");
+  assertAdoptionLocalExpected();
+  const row=await readCurrentRemoteSyncRow();
+  assertAdoptionRemoteExpected(row);
+  assertAdoptionLocalExpected();
+  const snapshot=captureGymOSLocalStorageSnapshot();
+  const localDeviceId=localStorage.getItem(DEVICE_ID_KEY);
+  try{
+    applySyncPayload(row.payload||{});
+  }catch(error){
+    restoreGymOSLocalStorageSnapshot(snapshot);
+    throw recoveryError("recovery_local_apply_failed",{
+      cause:error?.code||error?.message||String(error)
+    });
+  }
+  restoreStorageValue(DEVICE_ID_KEY,localDeviceId);
+  setLocalRevision(SYNC_ADOPTION_EXPECTED_REMOTE.revision);
+  setLastRemoteRevision(SYNC_ADOPTION_EXPECTED_REMOTE.revision);
+  setSyncBaseRevision(SYNC_ADOPTION_EXPECTED_REMOTE.revision);
+  markSyncProtocolCurrent();
+  localStorage.removeItem("gymos:syncPending");
+  localStorage.setItem("gymos:lastSyncHash",SYNC_ADOPTION_EXPECTED_REMOTE.checksum);
+  localStorage.setItem("gymos:lastSyncAt",new Date().toISOString());
+  state.syncStatus="synced";
+  state.syncIssue=null;
+  updateSyncIndicators();
+  return {direction:"recovery_download",revision:SYNC_ADOPTION_EXPECTED_REMOTE.revision};
 }
 async function syncNow(options={}){
   if(isSyncDebugRequested()) return {direction:"diagnostic_mode"};
@@ -8899,6 +9000,7 @@ function syncDebugActionsHtml(){
     <button id="downloadLocalStorageDiagnosticBackup" type="button" class="secondary">Descargar copia local de seguridad</button>
     <button id="downloadRemoteSyncRecoveryBackup" type="button" class="secondary">Descargar copia del estado remoto actual</button>
     <button id="promoteLocalCanonicalRecovery" type="button" class="danger">Promover este dispositivo como estado canónico</button>
+    <button id="adoptCanonicalRemoteRecovery" type="button" class="danger">Adoptar estado canónico de Supabase en este dispositivo</button>
   </div>
   <p id="syncRecoveryStatus" class="sync-debug-footnote" aria-live="polite"></p>`;
 }
@@ -8935,6 +9037,26 @@ function bindSyncDebugActions(){
         setStatus("Validando y promoviendo estado local…");
         await promoteLocalDeviceAsCanonicalSyncHead();
         setStatus("RECUPERACIÓN COMPLETADA — ESTE DISPOSITIVO ES LA NUEVA CABEZA CANÓNICA");
+      }catch(error){
+        setStatus(renderSyncDebugError(sanitizeSyncError(error)),true);
+      }
+    }
+  );
+  document.getElementById("adoptCanonicalRemoteRecovery")?.addEventListener(
+    "click",async()=>{
+      const confirmation=prompt(`Escribe ${SYNC_ADOPTION_CONFIRMATION_TEXT} para adoptar el estado canónico remoto en este dispositivo.`);
+      if(confirmation!==SYNC_ADOPTION_CONFIRMATION_TEXT){
+        setStatus("Adopción cancelada.");
+        return;
+      }
+      try{
+        setStatus("Validando y adoptando estado canónico remoto…");
+        await adoptCanonicalRemoteSyncHeadOnThisDevice();
+        await renderSyncDebugScreen();
+        const nextStatus=document.getElementById("syncRecoveryStatus");
+        if(nextStatus){
+          nextStatus.textContent="ESTADO CANÓNICO ADOPTADO — ESTE DISPOSITIVO YA ESTÁ ALINEADO CON SUPABASE";
+        }
       }catch(error){
         setStatus(renderSyncDebugError(sanitizeSyncError(error)),true);
       }

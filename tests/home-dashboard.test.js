@@ -353,10 +353,14 @@ test("sync: pantalla temporal de diagnostico es solo lectura y no dispara sincro
   assert.match(debugSource,/Descargar copia local de seguridad/);
   assert.match(debugSource,/Descargar copia del estado remoto actual/);
   assert.match(debugSource,/Promover este dispositivo como estado canónico/);
+  assert.match(debugSource,/Adoptar estado canónico de Supabase en este dispositivo/);
   assert.match(debugSource,/SYNC_RECOVERY_CONFIRMATION_TEXT/);
+  assert.match(debugSource,/SYNC_ADOPTION_CONFIRMATION_TEXT/);
   assert.match(debugSource,/downloadLocalStorageDiagnosticBackup/);
   assert.match(debugSource,/downloadRemoteSyncRecoveryBackup/);
   assert.match(debugSource,/promoteLocalDeviceAsCanonicalSyncHead/);
+  assert.match(debugSource,/adoptCanonicalRemoteSyncHeadOnThisDevice/);
+  assert.match(debugSource,/ESTADO CANÓNICO ADOPTADO — ESTE DISPOSITIVO YA ESTÁ ALINEADO CON SUPABASE/);
   assert.doesNotMatch(debugSource,/syncNow\(/);
   assert.doesNotMatch(debugSource,/localStorage\.setItem|localStorage\.removeItem|localStorage\.clear/);
   assert.doesNotMatch(debugSource,/access_token|refresh_token|supabaseAnonKey|payload/);

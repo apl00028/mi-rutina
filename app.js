@@ -1,4 +1,4 @@
-const GYMOS_VERSION="4.2.0-rc.9-adoption916";
+const GYMOS_VERSION="4.2.0-rc.10-adoption916-fix";
 const GYMOS_NAV_EXPANDED_KEY="gymos:deviceNavigationExpanded";
 const GYMOS_FONT_SCALES=["font-scale-sm","font-scale-md","font-scale-lg","font-scale-xl"];
 
@@ -4397,7 +4397,7 @@ function buildSyncPayload(){
     updatedAt:getLocalUpdatedAt()
   };
 }
-function applySyncPayload(payload){
+function applySyncPayload(payload,{recoveryCanonicalReplacement=false}={}){
   if(!payload||typeof payload!=="object") throw new Error("Copia remota no válida.");
   const ownerAtStart=currentRoutineOwnerOrNull();
   if(!ownerAtStart) throw new Error("owner_not_active");
@@ -4447,11 +4447,13 @@ function applySyncPayload(payload){
       const localShadowMatches=!localCanonical||routineSessionMigrationApi().legacyRoutineEquivalent(
         readStoredJson("gymos:routine")||{},routineSessionRuntimeApi().legacyShadow(localCanonical)
       );
-      const syncDecision=localShadowMatches
-        ?routineSessionMigrationApi().canonicalSyncDecision(
-          localCanonical,payload.canonicalRoutine
-        )
-        :{accept:false,code:"local_legacy_shadow_conflict"};
+      const syncDecision=recoveryCanonicalReplacement
+        ?{accept:true,idempotent:false,code:"recovery_canonical_replacement"}
+        :localShadowMatches
+          ?routineSessionMigrationApi().canonicalSyncDecision(
+            localCanonical,payload.canonicalRoutine
+          )
+          :{accept:false,code:"local_legacy_shadow_conflict"};
       if(!syncDecision.accept){
         const error=new Error(syncDecision.code||"canonical_sync_conflict");
         error.code=syncDecision.code||"canonical_sync_conflict";
@@ -4703,7 +4705,10 @@ function sanitizeSyncError(error){
   return {
     code:error?.code||error?.name||"sync_error",
     status:error?.status||null,
-    message:String(error?.message||error||"sync_error").slice(0,240)
+    message:String(error?.message||error||"sync_error").slice(0,240),
+    details:error?.details&&typeof error.details==="object"
+      ?{cause:error.details.cause?String(error.details.cause).slice(0,120):null}
+      :null
   };
 }
 function syncDiagnosticLog(step,details={}){
@@ -5503,7 +5508,9 @@ async function adoptCanonicalRemoteSyncHeadOnThisDevice(){
   const snapshot=captureGymOSLocalStorageSnapshot();
   const localDeviceId=localStorage.getItem(DEVICE_ID_KEY);
   try{
-    applySyncPayload(row.payload||{});
+    applySyncPayload(row.payload||{},{
+      recoveryCanonicalReplacement:true
+    });
   }catch(error){
     restoreGymOSLocalStorageSnapshot(snapshot);
     throw recoveryError("recovery_local_apply_failed",{
@@ -8979,6 +8986,7 @@ function renderSyncDebugError(error){
   if(!error) return "—";
   return [
     error.code?`code=${error.code}`:null,
+    error.details?.cause?`cause=${error.details.cause}`:null,
     error.status?`status=${error.status}`:null,
     error.message?`message=${error.message}`:null,
     error.at?`at=${error.at}`:null

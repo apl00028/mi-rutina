@@ -599,10 +599,36 @@ test("sync rechaza canónico inválido y detecta conflicto de identidades",()=>{
     appSource.indexOf("function applySyncPayload"),
     appSource.indexOf("const SYNC_AUDIT_KEY")
   );
+  assert.match(source,/function applySyncPayload\(payload,\{recoveryCanonicalReplacement=false\}=\{\}\)/);
   assert.match(source,/invalid_remote_canonical/);
   assert.match(source,/canonicalSyncDecision/);
   assert.match(source,/local_legacy_shadow_conflict/);
   assert.match(source,/remoteMetadata\?\.ownerId===ownerId/);
+});
+
+test("sync normal conserva conflicto por routineId y recuperación usa bypass cerrado",()=>{
+  const source=appSource.slice(
+    appSource.indexOf("function applySyncPayload"),
+    appSource.indexOf("const SYNC_AUDIT_KEY")
+  );
+  const validationGate=source.indexOf(
+    "validation.valid&&draftValidation.valid&&ownerMatches&&metadataMatches&&remoteShadowMatches"
+  );
+  const recoveryDecision=source.indexOf("recoveryCanonicalReplacement",validationGate);
+  const normalDecision=source.indexOf("canonicalSyncDecision",recoveryDecision);
+  assert.ok(validationGate>=0&&recoveryDecision>validationGate);
+  assert.ok(normalDecision>recoveryDecision);
+  assert.match(source,/recoveryCanonicalReplacement[\s\S]*accept:true/);
+  assert.match(source,/:\s*localShadowMatches[\s\S]*canonicalSyncDecision/);
+
+  const {migration,plan}=migrationPlan();
+  const local=plan.canonicalRoutine;
+  const remote=plain(local);
+  remote.routineId="routine-remote";
+  const decision=migration.canonicalSyncDecision(local,remote);
+  assert.equal(decision.accept,false);
+  assert.equal(decision.idempotent,false);
+  assert.equal(decision.code,"canonical_routine_id_conflict");
 });
 
 test("sincronización repetida no genera IDs ni ejecuta migración desde buildSyncPayload",()=>{
@@ -687,7 +713,7 @@ test("script H2 aparece una vez y respeta el orden de dependencias",()=>{
 test("service worker incluye H2 y H3 una vez con estrategia segura rc.2",()=>{
   assert.equal((workerSource.match(/routine-session-migration\.js/g)||[]).length,1);
   assert.equal((workerSource.match(/routine-session-runtime\.js/g)||[]).length,1);
-  assert.match(workerSource,/const GYMOS_BUILD_VERSION="4\.2\.0-rc\.9-adoption916"/);
+  assert.match(workerSource,/const GYMOS_BUILD_VERSION="4\.2\.0-rc\.10-adoption916-fix"/);
   assert.equal((workerSource.match(/addEventListener\("fetch"/g)||[]).length,1);
   assert.match(workerSource,/fetch\(e\.request\)/);
 });

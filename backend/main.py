@@ -15,6 +15,7 @@ from ai_service import (
 )
 from auth import AuthenticatedUser, require_user
 from rate_limit import ai_daily_rate_limiter, coach_rate_limiter
+from app.api.v1.router import router as api_v1_router
 
 load_dotenv()
 
@@ -34,6 +35,8 @@ app.add_middleware(
     allow_methods=["GET", "POST", "OPTIONS"],
     allow_headers=["*"],
 )
+
+app.include_router(api_v1_router)
 
 
 class ChatMessage(BaseModel):

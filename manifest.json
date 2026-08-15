@@ -1,7 +1,7 @@
 {
-  "name": "GymOS 4.2.0-rc.10-adoption916-fix",
+  "name": "GymOS 4.2.0-rc.11-sync-payload-compat",
   "short_name": "GymOS",
-  "start_url": "./?v=420rc10-adoption916-fix",
+  "start_url": "./?v=420rc11-sync-payload-compat",
   "display": "standalone",
   "background_color": "#f4f6fa",
   "theme_color": "#6d28d9",

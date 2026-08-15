@@ -1,4 +1,4 @@
-const GYMOS_VERSION="4.2.0-rc.10-adoption916-fix";
+const GYMOS_VERSION="4.2.0-rc.11-sync-payload-compat";
 const GYMOS_NAV_EXPANDED_KEY="gymos:deviceNavigationExpanded";
 const GYMOS_FONT_SCALES=["font-scale-sm","font-scale-md","font-scale-lg","font-scale-xl"];
 
@@ -4397,6 +4397,41 @@ function buildSyncPayload(){
     updatedAt:getLocalUpdatedAt()
   };
 }
+function routinePayloadCompatibilityWithCanonical(routinePayload,canonicalRoutine,canonicalValidation){
+  if(!routinePayload) return {matches:true,format:"absent",code:null};
+  if(!canonicalValidation?.valid) return {matches:false,format:"unknown",code:"invalid_remote_canonical"};
+  const model=window.GymOSRoutineSessionModel;
+  const looksCanonical=Boolean(
+    routinePayload&&typeof routinePayload==="object"&&
+    (Array.isArray(routinePayload.sessions)||
+      Object.prototype.hasOwnProperty.call(routinePayload,"routineId")||
+      Object.prototype.hasOwnProperty.call(routinePayload,"schemaVersion"))
+  );
+  if(looksCanonical){
+    const mirrorValidation=model.validateCanonicalRoutine(routinePayload);
+    if(!mirrorValidation.valid){
+      return {matches:false,format:"canonical",code:"remote_canonical_mirror_conflict"};
+    }
+    const remoteCanonical=model.normalizeCanonicalRoutine(canonicalRoutine);
+    const routineMirror=model.normalizeCanonicalRoutine(routinePayload);
+    const matches=window.GymOSRoutineProposals.stableStringify(remoteCanonical)===
+      window.GymOSRoutineProposals.stableStringify(routineMirror);
+    return {
+      matches,
+      format:"canonical",
+      code:matches?null:"remote_canonical_mirror_conflict"
+    };
+  }
+  const remoteShadow=routineSessionRuntimeApi().legacyShadow(canonicalRoutine);
+  const matches=remoteShadow&&routineSessionMigrationApi().legacyRoutineEquivalent(
+    routinePayload,remoteShadow
+  );
+  return {
+    matches:Boolean(matches),
+    format:"legacy",
+    code:matches?null:"remote_legacy_shadow_conflict"
+  };
+}
 function applySyncPayload(payload,{recoveryCanonicalReplacement=false}={}){
   if(!payload||typeof payload!=="object") throw new Error("Copia remota no válida.");
   const ownerAtStart=currentRoutineOwnerOrNull();
@@ -4432,16 +4467,12 @@ function applySyncPayload(payload,{recoveryCanonicalReplacement=false}={}){
         window.GymOSRoutineProposals.stableStringify(
           routineSessionMigrationApi().sessionMap(payload.canonicalRoutine)
         );
-    const remoteShadow=validation.valid
-      ?routineSessionRuntimeApi().legacyShadow(payload.canonicalRoutine)
-      :null;
-    const remoteShadowMatches=!payload.routine||(
-      remoteShadow&&routineSessionMigrationApi().legacyRoutineEquivalent(
-        payload.routine,remoteShadow
-      )
+    const routineCompatibility=routinePayloadCompatibilityWithCanonical(
+      payload.routine,payload.canonicalRoutine,validation
     );
     if(
-      validation.valid&&draftValidation.valid&&ownerMatches&&metadataMatches&&remoteShadowMatches
+      validation.valid&&draftValidation.valid&&ownerMatches&&metadataMatches&&
+      routineCompatibility.matches
     ){
       const localCanonical=getCanonicalRoutine();
       const localShadowMatches=!localCanonical||routineSessionMigrationApi().legacyRoutineEquivalent(
@@ -4493,9 +4524,11 @@ function applySyncPayload(payload,{recoveryCanonicalReplacement=false}={}){
         canonicalAccepted=true;
       }
     }else{
-      const code=validation.valid&&remoteShadowMatches
-        ?"invalid_remote_session_state"
-        :validation.valid?"remote_legacy_shadow_conflict":"invalid_remote_canonical";
+      const code=!validation.valid
+        ?"invalid_remote_canonical"
+        :!routineCompatibility.matches
+          ?(routineCompatibility.code||"remote_legacy_shadow_conflict")
+          :"invalid_remote_session_state";
       const error=new Error(code);
       error.code=code;
       throw error;

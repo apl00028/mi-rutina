@@ -9,6 +9,7 @@ const test=require("node:test");
 const root=path.resolve(__dirname,"..");
 const modelSource=fs.readFileSync(path.join(root,"routine-session-model.js"),"utf8");
 const migrationSource=fs.readFileSync(path.join(root,"routine-session-migration.js"),"utf8");
+const runtimeSource=fs.readFileSync(path.join(root,"routine-session-runtime.js"),"utf8");
 const proposalsSource=fs.readFileSync(path.join(root,"routine-proposals.js"),"utf8");
 const activationSource=fs.readFileSync(path.join(root,"routine-activation.js"),"utf8");
 const appSource=fs.readFileSync(path.join(root,"app.js"),"utf8");
@@ -50,6 +51,35 @@ function loadActivation(){
     proposals:context.GymOSRoutineProposals,
     activation:context.GymOSRoutineActivation
   };
+}
+function loadSyncPayloadContext(){
+  const context={console};
+  context.globalThis=context;
+  context.window=context;
+  vm.createContext(context);
+  vm.runInContext(modelSource,context,{filename:"routine-session-model.js"});
+  vm.runInContext(migrationSource,context,{filename:"routine-session-migration.js"});
+  vm.runInContext(runtimeSource,context,{filename:"routine-session-runtime.js"});
+  vm.runInContext(proposalsSource,context,{filename:"routine-proposals.js"});
+  context.routineSessionMigrationApi=()=>context.GymOSRoutineSessionMigration;
+  context.routineSessionRuntimeApi=()=>context.GymOSRoutineSessionRuntime;
+  return context;
+}
+function syncPayloadPlan(){
+  const context=loadSyncPayloadContext();
+  const result=context.GymOSRoutineSessionMigration.createMigrationPlan({
+    ownerId:OWNER_A,
+    legacyRoutine:legacy(),
+    legacyDraftsRaw:{A:rawDraft("A"),B:rawDraft("B"),C:null},
+    legacySelection:"B",
+    routineId:"routine-sync-payload",
+    sessionIds:{A:"session-sync-a",B:"session-sync-b",C:"session-sync-c"},
+    draftIds:{A:"draft-sync-a",B:"draft-sync-b",C:"draft-sync-c"},
+    migrationVersion:context.GymOSRoutineSessionMigration.MIGRATION_VERSION,
+    timestamp:T1
+  });
+  assert.equal(result.ok,true);
+  return {context,plan:plain(result)};
 }
 function exercise(id,overrides={}){
   return {
@@ -149,6 +179,97 @@ function activationPlan(days){
     confirmed:true,timestamp:T1
   });
   return {api,result:plain(result),current};
+}
+function applySyncPayloadHarness({localCanonical=null}={}){
+  const {context}=syncPayloadPlan();
+  const store=new Map();
+  let canonical=localCanonical?plain(localCanonical):null;
+  if(canonical){
+    store.set("gymos:routine",JSON.stringify(
+      context.GymOSRoutineSessionRuntime.legacyShadow(canonical)
+    ));
+  }else{
+    store.set("gymos:routine",JSON.stringify({A:[],B:[],C:[]}));
+  }
+  const readJson=key=>{
+    if(!store.has(key)) return null;
+    return JSON.parse(store.get(key));
+  };
+  Object.assign(context,{
+    state:{applyingRemote:false},
+    sessions:null,
+    CANONICAL_DRAFTS_KEY:"gymos:routineDrafts",
+    SESSION_MODEL_MIGRATION_KEY:"gymos:sessionModelMigration",
+    SELECTED_SESSION_ID_KEY:"gymos:selectedSessionId",
+    localStorage:{
+      getItem:key=>store.has(key)?store.get(key):null,
+      setItem:(key,value)=>store.set(key,String(value)),
+      removeItem:key=>store.delete(key)
+    },
+    currentRoutineOwnerOrNull:()=>OWNER_A,
+    assertActiveLocalOwner:()=>{},
+    captureRoutineSessionStartupStorage:()=>new Map(store),
+    restoreRoutineSessionStartupStorage:snapshot=>{
+      store.clear();
+      for(const [key,value] of snapshot) store.set(key,value);
+    },
+    getHistory:()=>[],
+    mergeWorkoutHistory:(_local,remote)=>remote,
+    saveHistory:value=>store.set("gymos:history",JSON.stringify(value)),
+    getCanonicalRoutine:()=>canonical?plain(canonical):null,
+    getRoutine:()=>canonical
+      ?context.GymOSRoutineSessionRuntime.legacyShadow(canonical)
+      :readJson("gymos:routine"),
+    readStoredJson:readJson,
+    saveCanonicalRoutine:routine=>{
+      canonical=context.GymOSRoutineSessionModel.normalizeCanonicalRoutine(routine);
+      store.set("gymos:routine:canonical",JSON.stringify(canonical));
+      store.set("gymos:routine",JSON.stringify(
+        context.GymOSRoutineSessionRuntime.legacyShadow(canonical)
+      ));
+    },
+    saveRoutine:value=>store.set("gymos:routine",JSON.stringify(value)),
+    mergeIncomingWorkoutProgress:()=>{},
+    activeWorkoutProgressRecord:()=>null,
+    writeLegacyDraftShadows:()=>{},
+    persistSelectedRoutineSession:value=>store.set("gymos:selectedSessionId",String(value)),
+    saveBodyHistory:()=>{},
+    saveBodySummaryMetrics:()=>{},
+    saveExerciseLibrary:()=>{},
+    importRoutineProposalSyncData:()=>{},
+    importRoutineActivationSyncData:()=>{},
+    saveNutritionSettings:()=>{},
+    saveNutritionEntries:()=>{},
+    saveHealthSettings:()=>{},
+    saveHealthEntries:()=>{},
+    saveHealthImports:()=>{},
+    saveAppPreferences:()=>{},
+    saveCoachSettings:()=>{},
+    getCoachSettings:()=>({}),
+    saveQuickActionPreferences:()=>{},
+    getRestSeconds:()=>90,
+    saveRestSeconds:()=>{},
+    saveWeeklyGoal:()=>{},
+    saveTrainingBlocks:()=>{},
+    ensureRoutineSessionMigration:()=>{},
+    ensureWorkoutProgressMigration:()=>{},
+    ensureProfileDataMigration:()=>{},
+    ensureExerciseDomainMigration:()=>{}
+  });
+  context.window.GymOSProfessionalNutrition={mergePlans(){}};
+  context.window.GymOSRecovery={mergeRecoveryEntries(){},mergeCheckins(){}};
+  context.window.GymOSWorkoutAnalysis={mergeAnalyses(){}};
+  const source=appSource.slice(
+    appSource.indexOf("function routinePayloadCompatibilityWithCanonical"),
+    appSource.indexOf("const SYNC_AUDIT_KEY")
+  );
+  vm.runInContext(source,context,{filename:"app.js"});
+  return {
+    context,
+    store,
+    get canonical(){return canonical?plain(canonical):null;},
+    apply:payload=>context.applySyncPayload(payload)
+  };
 }
 
 test("migra A/B/C y conserva asociación e identidad explícita",()=>{
@@ -583,15 +704,132 @@ test("vault y backup funcional incluyen claves canónicas y excluyen backup inte
 test("sync exporta canónico, drafts, selección y asociaciones",()=>{
   const source=appSource.slice(
     appSource.indexOf("function buildSyncPayload()"),
-    appSource.indexOf("function applySyncPayload")
+    appSource.indexOf("function routinePayloadCompatibilityWithCanonical")
   );
   assert.match(source,/canonicalRoutine:getCanonicalRoutine\(\)/);
   assert.match(
     source,
     /canonicalDrafts:sanitizeWorkoutDraftContainer\(getCanonicalDrafts\(\)/
   );
+  assert.match(source,/routine:activeRoutineForComparison\(\)/);
   assert.match(source,/selectedSessionId/);
   assert.match(source,/sessionModelMigration/);
+});
+
+test("payload.routine soporta espejo canónico equivalente y rechaza espejo divergente",()=>{
+  const {context,plan}=syncPayloadPlan();
+  const source=appSource.slice(
+    appSource.indexOf("function routinePayloadCompatibilityWithCanonical"),
+    appSource.indexOf("function applySyncPayload")
+  );
+  vm.runInContext(source,context,{filename:"app.js"});
+  const validation=context.GymOSRoutineSessionModel.validateCanonicalRoutine(plan.canonicalRoutine);
+  const same=context.routinePayloadCompatibilityWithCanonical(
+    plain(plan.canonicalRoutine),plan.canonicalRoutine,validation
+  );
+  assert.equal(same.matches,true);
+  assert.equal(same.format,"canonical");
+
+  const divergent=plain(plan.canonicalRoutine);
+  divergent.revision+=1;
+  const different=context.routinePayloadCompatibilityWithCanonical(
+    divergent,plan.canonicalRoutine,validation
+  );
+  assert.equal(different.matches,false);
+  assert.equal(different.code,"remote_canonical_mirror_conflict");
+});
+
+test("payload.routine legacy equivalente sigue válido y legacy divergente sigue rechazado",()=>{
+  const {context,plan}=syncPayloadPlan();
+  const source=appSource.slice(
+    appSource.indexOf("function routinePayloadCompatibilityWithCanonical"),
+    appSource.indexOf("function applySyncPayload")
+  );
+  vm.runInContext(source,context,{filename:"app.js"});
+  const validation=context.GymOSRoutineSessionModel.validateCanonicalRoutine(plan.canonicalRoutine);
+  const shadow=context.GymOSRoutineSessionRuntime.legacyShadow(plan.canonicalRoutine);
+  const same=context.routinePayloadCompatibilityWithCanonical(
+    shadow,plan.canonicalRoutine,validation
+  );
+  assert.equal(same.matches,true);
+  assert.equal(same.format,"legacy");
+
+  const divergent=plain(shadow);
+  divergent.A=[{name:"Divergente",sets:1,target:"1 rep"}];
+  const different=context.routinePayloadCompatibilityWithCanonical(
+    divergent,plan.canonicalRoutine,validation
+  );
+  assert.equal(different.matches,false);
+  assert.equal(different.code,"remote_legacy_shadow_conflict");
+});
+
+test("buildSyncPayload produce routine canónica y applySyncPayload la consume sin conflicto de shadow",()=>{
+  const {context,plan}=syncPayloadPlan();
+  const source=appSource.slice(
+    appSource.indexOf("function buildSyncPayload()"),
+    appSource.indexOf("const SYNC_AUDIT_KEY")
+  );
+  const store=new Map([
+    ["gymos:selectedSessionId",plan.selectedSessionId],
+    ["gymos:selectedSession",plan.legacySelectedSession],
+    ["gymos:updatedAt",T1]
+  ]);
+  Object.assign(context,{
+    state:{applyingRemote:false},
+    sessions:null,
+    CANONICAL_DRAFTS_KEY:"gymos:routineDrafts",
+    SESSION_MODEL_MIGRATION_KEY:"gymos:sessionModelMigration",
+    SELECTED_SESSION_ID_KEY:"gymos:selectedSessionId",
+    localStorage:{
+      getItem:key=>store.has(key)?store.get(key):null,
+      setItem:(key,value)=>store.set(key,String(value)),
+      removeItem:key=>store.delete(key)
+    },
+    currentRoutineOwnerOrNull:()=>OWNER_A,
+    getLocalUpdatedAt:()=>T1,
+    getDeviceId:()=>"device-a",
+    getDeviceName:()=>"Device A",
+    getHistory:()=>[],
+    activeRoutineForComparison:()=>plain(plan.canonicalRoutine),
+    getCanonicalRoutine:()=>plain(plan.canonicalRoutine),
+    getCanonicalDrafts:()=>plain(plan.canonicalDrafts),
+    sanitizeWorkoutDraftContainer:value=>plain(value),
+    storedWorkoutProgressRecords:()=>[],
+    readStoredJson:key=>key==="gymos:sessionModelMigration"?plain(plan.migrationMetadata):null,
+    getBodyHistory:()=>[],
+    getBodySummaryMetrics:()=>[],
+    getRestSeconds:()=>90,
+    getWeeklyGoal:()=>3,
+    getTrainingBlocks:()=>[],
+    getRoutineProposalRecords:()=>[],
+    getRoutineActivationRecords:()=>[],
+    getExerciseLibrary:()=>[],
+    getExerciseSubstitutions:()=>[],
+    getNutritionSettings:()=>null,
+    getNutritionEntries:()=>[],
+    getHealthSettings:()=>null,
+    getHealthEntries:()=>[],
+    getHealthImports:()=>[],
+    getAppPreferences:()=>({}),
+    getCoachSettings:()=>({aiEnabled:false}),
+    getQuickActionPreferences:()=>({quickActions:[],hidden:false}),
+    getFavoriteSubstitutions:()=>[],
+    ACTIVE_ROUTINE_PROPOSAL_ID_KEY:"gymos:activeRoutineProposalId",
+    ACTIVE_ROUTINE_ACTIVATION_ID_KEY:"gymos:activeRoutineActivationId",
+    EXERCISE_DOMAIN_SCHEMA_KEY:"gymos:exerciseDomainSchemaVersion"
+  });
+  context.window.GymOSProfessionalNutrition={getPlans(){return [];},mergePlans(){}};
+  context.window.GymOSRecovery={getEntries(){return [];},getCheckins(){return [];},mergeRecoveryEntries(){},mergeCheckins(){}};
+  context.window.GymOSWorkoutAnalysis={getAnalyses(){return [];},mergeAnalyses(){}};
+  context.window.GymOSProfileData={exportSyncData(){return {};},importSyncData(){return true;}};
+  vm.runInContext(source,context,{filename:"app.js"});
+  const payload=context.buildSyncPayload();
+  assert.deepEqual(payload.routine,payload.canonicalRoutine);
+
+  const consumer=applySyncPayloadHarness();
+  assert.doesNotThrow(()=>consumer.apply(payload));
+  assert.equal(consumer.canonical.routineId,plan.canonicalRoutine.routineId);
+  assert.equal(consumer.store.get("gymos:selectedSessionId"),plan.selectedSessionId);
 });
 
 test("sync rechaza canónico inválido y detecta conflicto de identidades",()=>{
@@ -612,7 +850,7 @@ test("sync normal conserva conflicto por routineId y recuperación usa bypass ce
     appSource.indexOf("const SYNC_AUDIT_KEY")
   );
   const validationGate=source.indexOf(
-    "validation.valid&&draftValidation.valid&&ownerMatches&&metadataMatches&&remoteShadowMatches"
+    "validation.valid&&draftValidation.valid&&ownerMatches&&metadataMatches&&"
   );
   const recoveryDecision=source.indexOf("recoveryCanonicalReplacement",validationGate);
   const normalDecision=source.indexOf("canonicalSyncDecision",recoveryDecision);
@@ -713,7 +951,7 @@ test("script H2 aparece una vez y respeta el orden de dependencias",()=>{
 test("service worker incluye H2 y H3 una vez con estrategia segura rc.2",()=>{
   assert.equal((workerSource.match(/routine-session-migration\.js/g)||[]).length,1);
   assert.equal((workerSource.match(/routine-session-runtime\.js/g)||[]).length,1);
-  assert.match(workerSource,/const GYMOS_BUILD_VERSION="4\.2\.0-rc\.10-adoption916-fix"/);
+  assert.match(workerSource,/const GYMOS_BUILD_VERSION="4\.2\.0-rc\.11-sync-payload-compat"/);
   assert.equal((workerSource.match(/addEventListener\("fetch"/g)||[]).length,1);
   assert.match(workerSource,/fetch\(e\.request\)/);
 });

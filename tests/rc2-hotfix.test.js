@@ -266,10 +266,26 @@ function adoptionHarness({
     appSource.indexOf("const SYNC_RECOVERY_EXPECTED_REMOTE"),
     appSource.indexOf("async function syncNow")
   );
+  const defaultCanonicalRoutine={
+    schemaVersion:"4.2",
+    routineId:"routine-02488c9c-d38e-4b59-8814-f7e0bcbd7d5e",
+    revision:12,
+    sessions:[{
+      sessionId:"roadmap-2026-08-a",
+      legacySessionKey:"A",
+      order:1,
+      label:"A",
+      name:"Sesión A",
+      focus:"full_body",
+      estimatedDurationMinutes:45,
+      exercises:[]
+    }]
+  };
   const defaultRemotePayload={
     source:"remote-pc",
     syncProtocolVersion:2,
-    canonicalRoutine:{routineId:"routine-02488c9c-d38e-4b59-8814-f7e0bcbd7d5e"},
+    routine:defaultCanonicalRoutine,
+    canonicalRoutine:defaultCanonicalRoutine,
     selectedSessionId:"roadmap-2026-08-a",
     history:["remote-history"]
   };
@@ -1340,7 +1356,7 @@ test("RC2 respeta foco visible y movimiento reducido",()=>{
 });
 
 test("RC2 actualiza el caché y mantiene Supabase fuera de Cache Storage",()=>{
-  assert.match(workerSource,/const GYMOS_BUILD_VERSION="4\.2\.0-rc\.10-adoption916-fix"/);
+  assert.match(workerSource,/const GYMOS_BUILD_VERSION="4\.2\.0-rc\.11-sync-payload-compat"/);
   assert.match(workerSource,/const CACHE=`gymos-cache-\$\{GYMOS_BUILD_VERSION\}`/);
   assert.match(workerSource,/e\.request\.method!=="GET"\|\|url\.origin!==self\.location\.origin/);
   assert.match(workerSource,/keys\.filter\(key=>key\.startsWith\("gymos-cache-"\)&&key!==CACHE\)/);

@@ -4570,6 +4570,9 @@ const SYNC_AUDIT_KEY="gymos:syncAudit";
 const DEVICE_ID_KEY="gymos:deviceId";
 const LOCAL_REVISION_KEY="gymos:localRevision";
 const LAST_REMOTE_REVISION_KEY="gymos:lastRemoteRevision";
+const SYNC_BASE_REVISION_KEY="gymos:syncBaseRevision";
+const SYNC_PROTOCOL_VERSION_KEY="gymos:syncProtocolVersion";
+const SYNC_PROTOCOL_VERSION=2;
 
 function getDeviceId(){
   let id=localStorage.getItem(DEVICE_ID_KEY);
@@ -4583,6 +4586,19 @@ function getLocalRevision(){return Number(localStorage.getItem(LOCAL_REVISION_KE
 function setLocalRevision(value){localStorage.setItem(LOCAL_REVISION_KEY,String(Number(value)||0));}
 function getLastRemoteRevision(){return Number(localStorage.getItem(LAST_REMOTE_REVISION_KEY)||0);}
 function setLastRemoteRevision(value){localStorage.setItem(LAST_REMOTE_REVISION_KEY,String(Number(value)||0));}
+function getSyncBaseRevision(){
+  const stored=localStorage.getItem(SYNC_BASE_REVISION_KEY);
+  if(stored!==null) return Number(stored)||0;
+  return getLastRemoteRevision();
+}
+function setSyncBaseRevision(value){localStorage.setItem(SYNC_BASE_REVISION_KEY,String(Number(value)||0));}
+function markSyncProtocolCurrent(){localStorage.setItem(SYNC_PROTOCOL_VERSION_KEY,String(SYNC_PROTOCOL_VERSION));}
+function isLocalSyncProtocolCurrent(){
+  return Number(localStorage.getItem(SYNC_PROTOCOL_VERSION_KEY)||0)>=SYNC_PROTOCOL_VERSION;
+}
+function isRemoteSyncProtocolCurrent(remote){
+  return Number(remote?.payload?.syncProtocolVersion||0)>=SYNC_PROTOCOL_VERSION;
+}
 function getSyncConflictPreference(){return localStorage.getItem("gymos:syncConflictMode")||"ask";}
 function setSyncConflictPreference(value){localStorage.setItem("gymos:syncConflictMode",value);}
 function getSyncAudit(){
@@ -4633,6 +4649,7 @@ function localSyncDiagnosticSnapshot(){
     deviceId:localStorage.getItem(DEVICE_ID_KEY)||null,
     localRevision:getLocalRevision(),
     lastRemoteRevision:getLastRemoteRevision(),
+    syncBaseRevision:getSyncBaseRevision(),
     syncPending:localStorage.getItem("gymos:syncPending")==="1",
     lastSyncAt:getLastSyncAt()||null,
     routineId,
@@ -4670,7 +4687,7 @@ function syncDiagnosticRows(snapshot){
       Estado:"PC/móvil local",revision:local.localRevision,remoteRevision:local.lastRemoteRevision,
       routineId:local.routineId,selectedSessionId:local.selectedSessionId,
       routineHash:local.routineHash,historyHash:local.historyHash,
-      syncPending:local.syncPending,lastSyncAt:local.lastSyncAt,
+      syncBaseRevision:local.syncBaseRevision,syncPending:local.syncPending,lastSyncAt:local.lastSyncAt,
       ownerId:local.ownerId,deviceId:local.deviceId,checksum:null
     },
     {
@@ -4730,14 +4747,25 @@ window.GymOSSyncDiagnostics=Object.freeze({
   print:printSyncDiagnosticSnapshot,
   local:localSyncDiagnosticSnapshot
 });
-function buildSyncEnvelope(){
-  const payload=buildSyncPayload();
-  const revision=Math.max(getLocalRevision(),getLastRemoteRevision())+1;
-  setLocalRevision(revision);
-  return {schemaVersion:2,revision,deviceId:getDeviceId(),updatedAt:new Date().toISOString(),checksum:simpleChecksum(payload),payload};
+function buildSyncEnvelope(baseRevision,candidateRevision){
+  const syncData=buildSyncPayload();
+  const revision=Number(candidateRevision);
+  return {
+    schemaVersion:SYNC_PROTOCOL_VERSION,
+    revision,
+    parentRevision:Number(baseRevision)||0,
+    deviceId:getDeviceId(),
+    updatedAt:new Date().toISOString(),
+    checksum:simpleChecksum(syncData),
+    payload:{
+      ...syncData,
+      syncProtocolVersion:SYNC_PROTOCOL_VERSION,
+      syncParentRevision:Number(baseRevision)||0
+    }
+  };
 }
 function syncSecurityState(){
-  return {authenticated:isAppAuthenticated(),deviceConfigured:Boolean(getDeviceId()),localRevision:getLocalRevision(),lastRemoteRevision:getLastRemoteRevision(),conflictMode:getSyncConflictPreference(),audit:getSyncAudit().slice(-10)};
+  return {authenticated:isAppAuthenticated(),deviceConfigured:Boolean(getDeviceId()),localRevision:getLocalRevision(),lastRemoteRevision:getLastRemoteRevision(),syncBaseRevision:getSyncBaseRevision(),conflictMode:getSyncConflictPreference(),audit:getSyncAudit().slice(-10)};
 }
 async function chooseConflictResolution(remote){
   const mode=getSyncConflictPreference();
@@ -5220,6 +5248,55 @@ async function deleteBodyMeasurementRemote(id){
     toast("El registro se eliminó localmente; la nube se actualizará después.");
   }
 }
+function syncConflictError(kind="sync_conflict"){
+  const error=new Error(kind);
+  error.code=kind;
+  return error;
+}
+function setSyncConflictState(kind,details={}){
+  state.syncStatus="conflict";
+  state.syncIssue={kind,retryable:false,details};
+  if(state.workoutDraftMemory){
+    state.workoutDraftSaveStatus="conflict";
+    updateWorkoutSaveIndicator();
+  }
+  updateSyncIndicators();
+  addSyncAudit("conflict",kind,details);
+  return {direction:"conflict",kind,details};
+}
+async function writeSyncEnvelopeWithCas(client,userId,envelope,baseRevision,remoteExists){
+  const record={
+    user_id:userId,
+    payload:envelope.payload,
+    revision:envelope.revision,
+    device_id:envelope.deviceId,
+    checksum:envelope.checksum,
+    updated_at:envelope.updatedAt
+  };
+  if(remoteExists){
+    const query=client.from("gymos_sync").update(record)
+      .eq("user_id",userId)
+      .eq("revision",baseRevision)
+      .select("revision");
+    const {data,error}=typeof query.maybeSingle==="function"
+      ?await query.maybeSingle()
+      :await query;
+    if(error) throw error;
+    if(!data) throw syncConflictError("sync_conflict");
+    return data;
+  }
+  if(Number(baseRevision)!==0) throw syncConflictError("sync_conflict");
+  const query=client.from("gymos_sync").insert(record).select("revision");
+  const {data,error}=typeof query.maybeSingle==="function"
+    ?await query.maybeSingle()
+    :await query;
+  if(error){
+    if(error.code==="23505"||error.status===409) throw syncConflictError("sync_conflict");
+    throw error;
+  }
+  if(!data) throw syncConflictError("sync_conflict");
+  return data;
+}
 async function syncNow(options={}){
   if(isSyncDebugRequested()) return {direction:"diagnostic_mode"};
   const client=getSupabaseClient();
@@ -5265,57 +5342,48 @@ async function syncNow(options={}){
       remoteChecksum:remote?.checksum||null,
       syncPending:localStorage.getItem("gymos:syncPending")==="1"
     });
-    if(Array.isArray(remote?.payload?.workoutProgress)){
-      mergeIncomingWorkoutProgress(remote.payload.workoutProgress,{writeCanonical:true});
-      assertOwner();
-    }
     const remoteRevision=Number(remote?.revision||0);
     const localRevision=getLocalRevision();
     const lastRemote=getLastRemoteRevision();
+    const syncBaseRevision=getSyncBaseRevision();
     const localChecksum=simpleChecksum(buildSyncPayload());
     const hasPendingChanges=localStorage.getItem("gymos:syncPending")==="1";
+    const remoteIsCurrent=isRemoteSyncProtocolCurrent(remote);
+    const localIsCurrent=isLocalSyncProtocolCurrent();
     const sameRevisionDiverged=Boolean(
       remote&&!hasPendingChanges&&remoteRevision===localRevision&&
       remote.checksum&&remote.checksum!==localChecksum
     );
-    const conflict=Boolean(
-      remote&&remoteRevision>lastRemote&&
-      (hasPendingChanges||localRevision>lastRemote)&&!options.forceUpload
+    const pendingBaseDiverged=Boolean(
+      remote&&hasPendingChanges&&remoteRevision!==syncBaseRevision&&!options.forceUpload
     );
-    if(conflict||sameRevisionDiverged){
+    const legacyDiverged=Boolean(
+      remote&&!remoteIsCurrent&&remoteRevision!==lastRemote&&
+      (hasPendingChanges||remoteRevision!==localRevision||remote.checksum!==localChecksum)&&
+      !options.forceUpload
+    );
+    const unsafeDownload=Boolean(
+      remote&&!hasPendingChanges&&remoteRevision>localRevision&&
+      (!remoteIsCurrent||!localIsCurrent)&&!options.forceUpload
+    );
+    const localAheadWithoutPending=Boolean(
+      remote&&!hasPendingChanges&&localRevision>remoteRevision&&!options.forceUpload
+    );
+    if(sameRevisionDiverged||pendingBaseDiverged||legacyDiverged||unsafeDownload||localAheadWithoutPending){
       diagnosticLog("decisión",{
-        decision:"conflict",remoteRevision,localRevision,lastRemote,
-        hasPendingChanges,sameRevisionDiverged
+        decision:"conflict",remoteRevision,localRevision,lastRemote,syncBaseRevision,
+        hasPendingChanges,sameRevisionDiverged,pendingBaseDiverged,legacyDiverged,
+        unsafeDownload,localAheadWithoutPending
       });
-      state.syncStatus="conflict";
-      state.syncIssue={kind:"conflict",retryable:false};
-      if(state.workoutDraftMemory){
-        state.workoutDraftSaveStatus="conflict";
-        updateWorkoutSaveIndicator();
-      }
-      updateSyncIndicators();
-      const resolution=await chooseConflictResolution(remote);
-      assertOwner();
-      addSyncAudit("conflict",resolution,{remoteRevision,localRevision});
-      if(resolution==="remote"){
-        diagnosticLog("decisión",{decision:"download",reason:"conflict_remote_selected",remoteRevision,localRevision});
-        applySyncPayload(remote.payload||{});
-        diagnosticLog("payload remoto aplicado",{result:"ok",remoteRevision});
-        setLocalRevision(remoteRevision);setLastRemoteRevision(remoteRevision);
-        localStorage.removeItem("gymos:syncPending");
-        localStorage.setItem("gymos:lastSyncHash",remote.checksum||simpleChecksum(buildSyncPayload()));
-        localStorage.setItem("gymos:lastSyncAt",new Date().toISOString());state.syncStatus="synced";state.syncIssue=null;updateSyncIndicators();
-        if(typeof markWorkoutProgressSynced==="function") markWorkoutProgressSynced();
-        if(typeof invalidateRecoveryDerivedState==="function"){
-          invalidateRecoveryDerivedState({reason:"sync_completed",renderCurrent:true});
-        }
-        return {direction:"download",revision:remoteRevision};
-      }
-    }else if(remote && remoteRevision>localRevision && !options.forceUpload){
+      const kind=legacyDiverged||unsafeDownload?"legacy_sync_conflict":"sync_conflict";
+      return setSyncConflictState(kind,{
+        remoteRevision,localRevision,lastRemote,syncBaseRevision
+      });
+    }else if(remote && remoteRevision>localRevision && !hasPendingChanges && remoteIsCurrent && localIsCurrent && !options.forceUpload){
       diagnosticLog("decisión",{decision:"download",reason:"remote_newer",remoteRevision,localRevision});
       applySyncPayload(remote.payload||{});
       diagnosticLog("payload remoto aplicado",{result:"ok",remoteRevision});
-      setLocalRevision(remoteRevision);setLastRemoteRevision(remoteRevision);
+      setLocalRevision(remoteRevision);setLastRemoteRevision(remoteRevision);setSyncBaseRevision(remoteRevision);markSyncProtocolCurrent();
       localStorage.removeItem("gymos:syncPending");
       localStorage.setItem("gymos:lastSyncHash",remote.checksum||simpleChecksum(buildSyncPayload()));
       localStorage.setItem("gymos:lastSyncAt",new Date().toISOString());state.syncStatus="synced";state.syncIssue=null;addSyncAudit("sync","downloaded",{revision:remoteRevision});updateSyncIndicators();
@@ -5327,6 +5395,8 @@ async function syncNow(options={}){
     }else if(remote&&!hasPendingChanges&&!options.forceUpload&&remoteRevision===localRevision&&remote.checksum===localChecksum){
       diagnosticLog("decisión",{decision:"no-op",remoteRevision,localRevision});
       setLastRemoteRevision(remoteRevision);
+      setSyncBaseRevision(remoteRevision);
+      if(remoteIsCurrent) markSyncProtocolCurrent();
       localStorage.setItem("gymos:lastSyncAt",new Date().toISOString());
       localStorage.setItem("gymos:lastSyncHash",localChecksum);
       state.syncStatus="synced";
@@ -5339,16 +5409,24 @@ async function syncNow(options={}){
       return {direction:"none",revision:remoteRevision};
     }
     assertOwner();
-    const envelope=buildSyncEnvelope();
+    const baseRevision=remote?syncBaseRevision:0;
+    if(remote&&baseRevision!==remoteRevision&&!options.forceUpload){
+      diagnosticLog("decisión",{decision:"conflict",reason:"cas_base_mismatch",remoteRevision,baseRevision});
+      return setSyncConflictState("sync_conflict",{remoteRevision,baseRevision});
+    }
+    const candidateRevision=baseRevision+1;
+    const envelope=buildSyncEnvelope(baseRevision,candidateRevision);
     diagnosticLog("decisión",{
       decision:"upload",remoteRevision,localRevision,
       nextRevision:envelope.revision,hasPendingChanges,forceUpload:Boolean(options.forceUpload)
     });
-    const {error:writeError}=await client.from("gymos_sync").upsert({user_id:userId,payload:envelope.payload,revision:envelope.revision,device_id:envelope.deviceId,checksum:envelope.checksum,updated_at:envelope.updatedAt},{onConflict:"user_id"});
+    await writeSyncEnvelopeWithCas(client,userId,envelope,baseRevision,Boolean(remote));
     assertOwner();
-    if(writeError) throw writeError;
     diagnosticLog("payload subido",{result:"ok",revision:envelope.revision,checksum:envelope.checksum});
+    setLocalRevision(envelope.revision);
     setLastRemoteRevision(envelope.revision);
+    setSyncBaseRevision(envelope.revision);
+    markSyncProtocolCurrent();
     localStorage.removeItem("gymos:syncPending");
     localStorage.setItem("gymos:lastSyncHash",envelope.checksum);
     localStorage.setItem("gymos:lastSyncAt",new Date().toISOString());
@@ -8735,6 +8813,7 @@ async function renderSyncDebugScreen(){
           ["deviceId",local.deviceId,{mask:true}],
           ["revision",local.localRevision],
           ["lastRemoteRevision",local.lastRemoteRevision],
+          ["syncBaseRevision",local.syncBaseRevision],
           ["syncPending",local.syncPending],
           ["lastSyncAt",local.lastSyncAt],
           ["routineId",local.routineId],

@@ -22,26 +22,37 @@ function functionSource(name,nextName){
   return appSource.slice(start,end);
 }
 
-function syncHarness({remote=null,readError=null,pending=false,online=true,recoverySync=null,checksum="same"}={}){
+function syncHarness({
+  remote=null,readError=null,pending=false,online=true,recoverySync=null,
+  checksum="same",localRevision=2,lastRemoteRevision=2,baseRevision=lastRemoteRevision,
+  currentProtocol=true,writeError=null,writeConflict=false,sharedRemote=null
+}={}){
   const source=appSource.slice(
     appSource.indexOf("async function syncNow"),
     appSource.indexOf("async function autoSync")
   );
   const values=new Map([
-    ["gymos:localRevision","2"],
-    ["gymos:lastRemoteRevision","2"],
+    ["gymos:localRevision",String(localRevision)],
+    ["gymos:lastRemoteRevision",String(lastRemoteRevision)],
+    ["gymos:syncBaseRevision",String(baseRevision)],
+    ...(currentProtocol?[["gymos:syncProtocolVersion","2"]]:[]),
     ...(pending?[["gymos:syncPending","1"]]:[])
   ]);
-  const counters={reads:0,writes:0,applies:0};
+  const counters={reads:0,writes:0,writeAttempts:0,applies:0};
+  let remoteState=sharedRemote?sharedRemote.state:(remote?JSON.parse(JSON.stringify(remote)):null);
+  const currentRemoteState=()=>sharedRemote?sharedRemote.state:remoteState;
+  const setRemoteState=value=>{
+    if(sharedRemote) sharedRemote.state=value;
+    remoteState=value;
+  };
   const query={
     select(){return this;},
     eq(){return this;},
-    async maybeSingle(){counters.reads+=1;return {data:remote,error:readError};}
+    async maybeSingle(){counters.reads+=1;return {data:currentRemoteState(),error:readError};}
   };
   const client={
     from(){return query;},
   };
-  query.upsert=async()=>{counters.writes+=1;return {error:null};};
   const context={
     navigator:{onLine:online},
     window:{
@@ -74,15 +85,46 @@ function syncHarness({remote=null,readError=null,pending=false,online=true,recov
     setLocalRevision:value=>values.set("gymos:localRevision",String(value)),
     getLastRemoteRevision:()=>Number(values.get("gymos:lastRemoteRevision")||0),
     setLastRemoteRevision:value=>values.set("gymos:lastRemoteRevision",String(value)),
+    getSyncBaseRevision:()=>Number(values.get("gymos:syncBaseRevision")||0),
+    setSyncBaseRevision:value=>values.set("gymos:syncBaseRevision",String(value)),
+    markSyncProtocolCurrent:()=>values.set("gymos:syncProtocolVersion","2"),
+    isLocalSyncProtocolCurrent:()=>Number(values.get("gymos:syncProtocolVersion")||0)>=2,
+    isRemoteSyncProtocolCurrent:row=>Number(row?.payload?.syncProtocolVersion||0)>=2,
     chooseConflictResolution:async()=>"remote",
     applySyncPayload:()=>{counters.applies+=1;},
-    buildSyncEnvelope:()=>{
-      const revision=Number(values.get("gymos:localRevision")||0)+1;
-      values.set("gymos:localRevision",String(revision));
+    buildSyncEnvelope:(base,candidate)=>{
       return {
-        payload:{stable:true},revision,deviceId:"device",
+        payload:{stable:true,syncProtocolVersion:2,syncParentRevision:base},
+        revision:candidate,parentRevision:base,deviceId:"device",
         checksum:"same",updatedAt:"2026-07-29T10:00:00.000Z"
       };
+    },
+    writeSyncEnvelopeWithCas:async(_client,_userId,envelope,base,exists)=>{
+      counters.writeAttempts+=1;
+      if(writeError) throw writeError;
+      if(writeConflict) throw Object.assign(new Error("sync_conflict"),{code:"sync_conflict"});
+      if(exists){
+        const current=currentRemoteState();
+        if(!current||Number(current.revision)!==Number(base)){
+          throw Object.assign(new Error("sync_conflict"),{code:"sync_conflict"});
+        }
+      }else if(Number(base)!==0){
+        throw Object.assign(new Error("sync_conflict"),{code:"sync_conflict"});
+      }
+      counters.writes+=1;
+      setRemoteState({
+        revision:envelope.revision,
+        checksum:envelope.checksum,
+        device_id:envelope.deviceId,
+        updated_at:envelope.updatedAt,
+        payload:envelope.payload
+      });
+      return {revision:envelope.revision};
+    },
+    setSyncConflictState:(kind,details={})=>{
+      context.state.syncStatus="conflict";
+      context.state.syncIssue={kind,retryable:false,details};
+      return {direction:"conflict",kind,details};
     },
     classifySyncError:error=>{
       if(!online) return {status:"offline",kind:"offline",retryable:true};
@@ -96,7 +138,7 @@ function syncHarness({remote=null,readError=null,pending=false,online=true,recov
   };
   vm.createContext(context);
   vm.runInContext(`${source}; runSync=syncNow;`,context);
-  return {context,values,counters};
+  return {context,values,counters,get remote(){return sharedRemote?sharedRemote.state:remoteState;}};
 }
 
 test("RC2 Ajustes usa exclusivamente la API pública de Recovery Center",()=>{
@@ -144,8 +186,10 @@ test("RC2 sincroniza, resuelve no-op y limpia pendientes solo tras éxito",()=>{
   assert.match(sync,/if\(state\.syncInProgress\) return \{direction:"busy"\}/);
   assert.match(sync,/remote&&!hasPendingChanges&&!options\.forceUpload&&remoteRevision===localRevision&&remote\.checksum===localChecksum/);
   assert.match(sync,/return \{direction:"none",revision:remoteRevision\}/);
-  assert.ok((sync.match(/localStorage\.removeItem\("gymos:syncPending"\)/g)||[]).length>=3);
+  assert.ok((sync.match(/localStorage\.removeItem\("gymos:syncPending"\)/g)||[]).length>=2);
   assert.match(sync,/localStorage\.setItem\("gymos:lastSyncHash",envelope\.checksum\)/);
+  assert.match(sync,/writeSyncEnvelopeWithCas\(client,userId,envelope,baseRevision,Boolean\(remote\)\)/);
+  assert.doesNotMatch(sync,/\.upsert\(/);
   assert.match(sync,/const ownerId=currentRoutineOwnerOrNull\(\)/);
   assert.match(sync,/const operationId=\+\+state\.syncOperationId/);
   assert.ok((sync.match(/assertOwner\(\)/g)||[]).length>=7);
@@ -194,10 +238,10 @@ test("RC2 una revisión remota nueva con cambios locales se resuelve como confli
     checksum:"local-new"
   });
   const result=await harness.context.runSync();
-  assert.equal(result.direction,"download");
-  assert.equal(harness.counters.applies,1);
+  assert.equal(result.direction,"conflict");
+  assert.equal(harness.counters.applies,0);
   assert.equal(harness.counters.writes,0);
-  assert.equal(harness.values.has("gymos:syncPending"),false);
+  assert.equal(harness.values.get("gymos:syncPending"),"1");
 });
 
 test("RC2 errores de red, sesión y permisos conservan cambios pendientes",async()=>{
@@ -242,6 +286,125 @@ test("RC2 descarta un resultado si cambia el propietario durante la petición",a
   await assert.rejects(running,/owner_changed/);
   assert.equal(harness.counters.reads,0);
   assert.notEqual(harness.context.state.syncStatus,"synced");
+});
+
+test("sync v2 A: base local igual a remoto permite upload CAS y avanza remoto a 913",async()=>{
+  const harness=syncHarness({
+    remote:{revision:912,checksum:"old",payload:{stable:false,syncProtocolVersion:2}},
+    localRevision:912,lastRemoteRevision:912,baseRevision:912,pending:true
+  });
+  const result=await harness.context.runSync();
+  assert.equal(result.direction,"upload");
+  assert.equal(harness.remote.revision,913);
+  assert.equal(harness.values.get("gymos:localRevision"),"913");
+});
+
+test("sync v2 B: pending con remoto cambiado desde la base queda en conflicto y no sube",async()=>{
+  const harness=syncHarness({
+    remote:{revision:913,checksum:"remote-new",payload:{stable:false,syncProtocolVersion:2}},
+    localRevision:913,lastRemoteRevision:912,baseRevision:912,pending:true
+  });
+  const result=await harness.context.runSync();
+  assert.equal(result.direction,"conflict");
+  assert.equal(harness.counters.writeAttempts,0);
+  assert.equal(harness.values.get("gymos:syncPending"),"1");
+});
+
+test("sync v2 C: dos dispositivos desde la misma base solo escriben una revision 913",async()=>{
+  const sharedRemote={state:{revision:912,checksum:"old",payload:{stable:false,syncProtocolVersion:2}}};
+  const first=syncHarness({
+    sharedRemote,localRevision:912,lastRemoteRevision:912,baseRevision:912,pending:true
+  });
+  const second=syncHarness({
+    sharedRemote,localRevision:912,lastRemoteRevision:912,baseRevision:912,pending:true
+  });
+  assert.equal((await first.context.runSync()).direction,"upload");
+  assert.equal((await second.context.runSync()).direction,"conflict");
+  assert.equal(first.counters.writes,1);
+  assert.equal(second.counters.writes,0);
+  assert.equal(sharedRemote.state.revision,913);
+});
+
+test("sync v2 D: un upload fallido no incrementa localRevision",async()=>{
+  const harness=syncHarness({
+    remote:{revision:912,checksum:"old",payload:{stable:false,syncProtocolVersion:2}},
+    localRevision:912,lastRemoteRevision:912,baseRevision:912,pending:true,
+    writeError:{status:500,code:"network_error"}
+  });
+  await assert.rejects(()=>harness.context.runSync());
+  assert.equal(harness.values.get("gymos:localRevision"),"912");
+});
+
+test("sync v2 E: diez uploads fallidos no incrementan localRevision",async()=>{
+  const harness=syncHarness({
+    remote:{revision:912,checksum:"old",payload:{stable:false,syncProtocolVersion:2}},
+    localRevision:912,lastRemoteRevision:912,baseRevision:912,pending:true,
+    writeError:{status:500,code:"network_error"}
+  });
+  for(let index=0;index<10;index+=1){
+    await assert.rejects(()=>harness.context.runSync());
+  }
+  assert.equal(harness.values.get("gymos:localRevision"),"912");
+});
+
+test("sync v2 F: misma revision con checksum distinto es conflicto",async()=>{
+  const harness=syncHarness({
+    remote:{revision:912,checksum:"remote-different",payload:{stable:false,syncProtocolVersion:2}},
+    localRevision:912,lastRemoteRevision:912,baseRevision:912,pending:false,
+    checksum:"local-different"
+  });
+  const result=await harness.context.runSync();
+  assert.equal(result.direction,"conflict");
+  assert.equal(harness.counters.writes,0);
+});
+
+test("sync v2 G: mismo deviceId no evita conflicto si la base diverge",async()=>{
+  const harness=syncHarness({
+    remote:{revision:913,checksum:"remote-new",device_id:"device",payload:{stable:false,syncProtocolVersion:2}},
+    localRevision:913,lastRemoteRevision:912,baseRevision:912,pending:true
+  });
+  const result=await harness.context.runSync();
+  assert.equal(result.direction,"conflict");
+  assert.equal(harness.counters.writes,0);
+});
+
+test("sync v2 H: estado legacy divergente no descarga ni sube automaticamente",async()=>{
+  const harness=syncHarness({
+    remote:{revision:912,checksum:"remote-legacy",payload:{stable:false}},
+    localRevision:419,lastRemoteRevision:419,baseRevision:419,pending:false,
+    currentProtocol:false,checksum:"local-correct"
+  });
+  const result=await harness.context.runSync();
+  assert.equal(result.direction,"conflict");
+  assert.equal(result.kind,"legacy_sync_conflict");
+  assert.equal(harness.counters.applies,0);
+  assert.equal(harness.counters.writes,0);
+});
+
+test("sync v2 I: download confirmado actualiza las tres revisiones",async()=>{
+  const harness=syncHarness({
+    remote:{revision:913,checksum:"same",payload:{stable:true,syncProtocolVersion:2}},
+    localRevision:912,lastRemoteRevision:912,baseRevision:912,pending:false
+  });
+  const result=await harness.context.runSync();
+  assert.equal(result.direction,"download");
+  assert.equal(harness.counters.applies,1);
+  assert.equal(harness.values.get("gymos:localRevision"),"913");
+  assert.equal(harness.values.get("gymos:lastRemoteRevision"),"913");
+  assert.equal(harness.values.get("gymos:syncBaseRevision"),"913");
+});
+
+test("sync v2 J: upload confirmado actualiza las tres revisiones y limpia pending",async()=>{
+  const harness=syncHarness({
+    remote:{revision:912,checksum:"old",payload:{stable:false,syncProtocolVersion:2}},
+    localRevision:912,lastRemoteRevision:912,baseRevision:912,pending:true
+  });
+  const result=await harness.context.runSync();
+  assert.equal(result.direction,"upload");
+  assert.equal(harness.values.get("gymos:localRevision"),"913");
+  assert.equal(harness.values.get("gymos:lastRemoteRevision"),"913");
+  assert.equal(harness.values.get("gymos:syncBaseRevision"),"913");
+  assert.equal(harness.values.has("gymos:syncPending"),false);
 });
 
 test("RC2 diferencia los ocho estados y ofrece reintento solo para errores recuperables",()=>{

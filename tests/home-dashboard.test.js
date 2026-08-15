@@ -312,3 +312,48 @@ test("home: responsive, accesibilidad y listeners permanecen explícitos",()=>{
   assert.match(renderSource,/addEventListener\("click"[\s\S]*\{once:true\}/);
   assert.doesNotMatch(renderSource,/<[^>]+\sonclick=/);
 });
+
+
+test("home: Recuperacion usa el estado real de autenticacion",()=>{
+  const source=sourceBetween("function buildHomeDashboardModel(","function renderHomeNextSession(");
+  assert.match(source,/authenticated:isAppAuthenticated\(\)/);
+  assert.doesNotMatch(source,/authenticated:Boolean\(state\.session\)/);
+});
+
+test("sync: diagnostico temporal expone solo metadatos y decisiones",()=>{
+  const diagnostics=sourceBetween("function storedValueHash(","function buildSyncEnvelope(");
+  for(const token of [
+    "ownerId","deviceId","localRevision","lastRemoteRevision","syncPending",
+    "lastSyncAt","routineId","selectedSessionId","routineHash","historyHash",
+    "revision","checksum","GymOSSyncDiagnostics","[GymOS sync]"
+  ]) assert.ok(diagnostics.includes(token),token);
+  assert.match(diagnostics,/\.select\("payload,revision,device_id,updated_at,checksum"\)/);
+  assert.doesNotMatch(diagnostics,/supabaseAnonKey|supabaseUrl|access_token|refresh_token/);
+  assert.doesNotMatch(diagnostics,/console\.(log|info|table)\([^)]*payload/);
+
+  const syncSource=sourceBetween("async function syncNow(","async function autoSync(");
+  for(const token of [
+    "inicio","revisión remota","decision:\"download\"",
+    "decision:\"upload\"","decision:\"conflict\"","decision:\"no-op\"",
+    "payload remoto aplicado","payload subido","diagnosticError(error)"
+  ]) assert.ok(syncSource.includes(token),token);
+  assert.doesNotMatch(syncSource,/console\.(log|info|table)\([^)]*payload/);
+});
+
+test("sync: pantalla temporal de diagnostico es solo lectura y no dispara sincronizacion",()=>{
+  const debugSource=sourceBetween("function isSyncDebugRequested(","function render(){");
+  assert.match(debugSource,/new URLSearchParams\(location\.search\)\.get\("debug"\)==="sync"/);
+  assert.match(debugSource,/window\.GymOSSyncDiagnostics\.snapshot\(\)/);
+  assert.match(debugSource,/renderSyncDebugPanel\("LOCAL"/);
+  assert.match(debugSource,/renderSyncDebugPanel\("SUPABASE"/);
+  assert.match(debugSource,/maskDiagnosticId/);
+  assert.match(debugSource,/lastDecision/);
+  assert.match(debugSource,/lastError/);
+  assert.doesNotMatch(debugSource,/syncNow\(/);
+  assert.doesNotMatch(debugSource,/localStorage\.setItem|localStorage\.removeItem|localStorage\.clear/);
+  assert.doesNotMatch(debugSource,/<button\b/);
+  assert.doesNotMatch(debugSource,/access_token|refresh_token|supabaseAnonKey|payload/);
+
+  const renderRoot=sourceBetween("function render(){","function homeGreeting(");
+  assert.match(renderRoot,/if\(isSyncDebugRequested\(\)\)\{\s*renderSyncDebugScreen\(\);\s*return;\s*\}/);
+});

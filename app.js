@@ -3946,6 +3946,8 @@ let state = {
   syncTimer: null,
   syncInProgress: false,
   syncOperationId: 0,
+  syncDiagnosticLastDecision: null,
+  syncDiagnosticLastError: null,
   applyingRemote: false,
   editingSession: "A",
   editingBlockId: null,
@@ -4606,6 +4608,128 @@ function simpleChecksum(value){
   for(let i=0;i<text.length;i++){hash^=text.charCodeAt(i);hash=Math.imul(hash,16777619);}
   return (hash>>>0).toString(16);
 }
+function storedValueHash(key){
+  const raw=localStorage.getItem(key);
+  return raw===null?null:simpleChecksum(raw);
+}
+function remotePayloadDiagnostic(payload){
+  const data=payload&&typeof payload==="object"?payload:{};
+  return {
+    routineId:data.canonicalRoutine?.routineId||data.routine?.routineId||null,
+    selectedSessionId:data.selectedSessionId||null,
+    routineHash:data.canonicalRoutine||data.routine
+      ?simpleChecksum(data.canonicalRoutine||data.routine)
+      :null,
+    historyHash:Array.isArray(data.history)?simpleChecksum(data.history):null,
+    syncPending:null
+  };
+}
+function localSyncDiagnosticSnapshot(){
+  let routineId=null;
+  try{routineId=getCanonicalRoutine()?.routineId||null;}
+  catch(error){routineId=`invalid:${error?.message||"routine"}`;}
+  return {
+    ownerId:currentRoutineOwnerOrNull(),
+    deviceId:getDeviceId(),
+    localRevision:getLocalRevision(),
+    lastRemoteRevision:getLastRemoteRevision(),
+    syncPending:localStorage.getItem("gymos:syncPending")==="1",
+    lastSyncAt:getLastSyncAt()||null,
+    routineId,
+    selectedSessionId:localStorage.getItem(SELECTED_SESSION_ID_KEY)||null,
+    routineHash:storedValueHash(CANONICAL_ROUTINE_KEY),
+    historyHash:storedValueHash("gymos:history")
+  };
+}
+function remoteSyncDiagnosticFromRow(row){
+  const payloadSummary=remotePayloadDiagnostic(row?.payload);
+  return {
+    exists:Boolean(row),
+    revision:row?Number(row.revision||0):null,
+    deviceId:row?.device_id||null,
+    checksum:row?.checksum||null,
+    updatedAt:row?.updated_at||null,
+    ...payloadSummary
+  };
+}
+async function remoteSyncDiagnosticSnapshot(){
+  const client=getSupabaseClient();
+  if(!client||!isAppAuthenticated()) return {available:false,reason:"not_authenticated"};
+  const {data,error}=await client.from("gymos_sync")
+    .select("payload,revision,device_id,updated_at,checksum")
+    .eq("user_id",state.syncUser.id)
+    .maybeSingle();
+  if(error) return {available:false,reason:"remote_error",error:sanitizeSyncError(error)};
+  return {available:true,...remoteSyncDiagnosticFromRow(data)};
+}
+function syncDiagnosticRows(snapshot){
+  const local=snapshot?.local||{};
+  const remote=snapshot?.remote||{};
+  return [
+    {
+      Estado:"PC/móvil local",revision:local.localRevision,remoteRevision:local.lastRemoteRevision,
+      routineId:local.routineId,selectedSessionId:local.selectedSessionId,
+      routineHash:local.routineHash,historyHash:local.historyHash,
+      syncPending:local.syncPending,lastSyncAt:local.lastSyncAt,
+      ownerId:local.ownerId,deviceId:local.deviceId,checksum:null
+    },
+    {
+      Estado:"Supabase",revision:remote.revision,remoteRevision:null,
+      routineId:remote.routineId,selectedSessionId:remote.selectedSessionId,
+      routineHash:remote.routineHash,historyHash:remote.historyHash,
+      syncPending:remote.syncPending,lastSyncAt:remote.updatedAt,
+      ownerId:state.syncUser?.id||null,deviceId:remote.deviceId,checksum:remote.checksum
+    }
+  ];
+}
+function sanitizeSyncError(error){
+  return {
+    code:error?.code||error?.name||"sync_error",
+    status:error?.status||null,
+    message:String(error?.message||error||"sync_error").slice(0,240)
+  };
+}
+function syncDiagnosticLog(step,details={}){
+  if(typeof state!=="undefined"){
+    if(step==="decisión"&&details?.decision){
+      state.syncDiagnosticLastDecision={
+        decision:details.decision,
+        reason:details.reason||null,
+        at:new Date().toISOString()
+      };
+    }
+    if(step==="error"){
+      state.syncDiagnosticLastError={
+        ...details,
+        at:new Date().toISOString()
+      };
+    }
+  }
+  console.info(`[GymOS sync] ${step}`,details);
+}
+async function buildSyncDiagnosticSnapshot(){
+  const local=localSyncDiagnosticSnapshot();
+  const remote=await remoteSyncDiagnosticSnapshot();
+  return {
+    generatedAt:new Date().toISOString(),
+    authenticated:isAppAuthenticated(),
+    syncStatus:state.syncStatus,
+    lastDecision:state.syncDiagnosticLastDecision||null,
+    lastError:state.syncDiagnosticLastError||null,
+    local,remote,rows:syncDiagnosticRows({local,remote})
+  };
+}
+async function printSyncDiagnosticSnapshot(){
+  const snapshot=await buildSyncDiagnosticSnapshot();
+  console.info("[GymOS sync] diagnóstico",{generatedAt:snapshot.generatedAt});
+  console.table(snapshot.rows);
+  return snapshot;
+}
+window.GymOSSyncDiagnostics=Object.freeze({
+  snapshot:buildSyncDiagnosticSnapshot,
+  print:printSyncDiagnosticSnapshot,
+  local:localSyncDiagnosticSnapshot
+});
 function buildSyncEnvelope(){
   const payload=buildSyncPayload();
   const revision=Math.max(getLocalRevision(),getLastRemoteRevision())+1;
@@ -5100,8 +5224,20 @@ async function syncNow(options={}){
   const client=getSupabaseClient();
   if(!client||!isAppAuthenticated()) throw new Error("Confirma tu correo antes de sincronizar.");
   if(state.syncInProgress) return {direction:"busy"};
+  const diagnosticLog=typeof syncDiagnosticLog==="function"
+    ?syncDiagnosticLog
+    :()=>{};
+  const diagnosticError=typeof sanitizeSyncError==="function"
+    ?sanitizeSyncError
+    :error=>({code:error?.code||null,status:error?.status||null,message:error?.message||String(error)});
+  const diagnosticDeviceId=typeof getDeviceId==="function"?getDeviceId():null;
   const ownerId=currentRoutineOwnerOrNull();
   const userId=state.syncUser.id;
+  diagnosticLog("inicio",{
+    ownerId,deviceId:diagnosticDeviceId,localRevision:getLocalRevision(),
+    lastRemoteRevision:getLastRemoteRevision(),
+    syncPending:localStorage.getItem("gymos:syncPending")==="1"
+  });
   const assertOwner=()=>{
     assertActiveLocalOwner(ownerId);
     if(state.syncUser?.id!==userId) throw new Error("owner_changed");
@@ -5122,6 +5258,12 @@ async function syncNow(options={}){
     const {data:remote,error:readError}=await client.from("gymos_sync").select("payload,revision,device_id,updated_at,checksum").eq("user_id",userId).maybeSingle();
     assertOwner();
     if(readError) throw readError;
+    diagnosticLog("revisión remota",{
+      localRevision:getLocalRevision(),lastRemoteRevision:getLastRemoteRevision(),
+      remoteRevision:Number(remote?.revision||0),remoteDeviceId:remote?.device_id||null,
+      remoteChecksum:remote?.checksum||null,
+      syncPending:localStorage.getItem("gymos:syncPending")==="1"
+    });
     if(Array.isArray(remote?.payload?.workoutProgress)){
       mergeIncomingWorkoutProgress(remote.payload.workoutProgress,{writeCanonical:true});
       assertOwner();
@@ -5140,6 +5282,10 @@ async function syncNow(options={}){
       (hasPendingChanges||localRevision>lastRemote)&&!options.forceUpload
     );
     if(conflict||sameRevisionDiverged){
+      diagnosticLog("decisión",{
+        decision:"conflict",remoteRevision,localRevision,lastRemote,
+        hasPendingChanges,sameRevisionDiverged
+      });
       state.syncStatus="conflict";
       state.syncIssue={kind:"conflict",retryable:false};
       if(state.workoutDraftMemory){
@@ -5151,7 +5297,10 @@ async function syncNow(options={}){
       assertOwner();
       addSyncAudit("conflict",resolution,{remoteRevision,localRevision});
       if(resolution==="remote"){
-        applySyncPayload(remote.payload||{});setLocalRevision(remoteRevision);setLastRemoteRevision(remoteRevision);
+        diagnosticLog("decisión",{decision:"download",reason:"conflict_remote_selected",remoteRevision,localRevision});
+        applySyncPayload(remote.payload||{});
+        diagnosticLog("payload remoto aplicado",{result:"ok",remoteRevision});
+        setLocalRevision(remoteRevision);setLastRemoteRevision(remoteRevision);
         localStorage.removeItem("gymos:syncPending");
         localStorage.setItem("gymos:lastSyncHash",remote.checksum||simpleChecksum(buildSyncPayload()));
         localStorage.setItem("gymos:lastSyncAt",new Date().toISOString());state.syncStatus="synced";state.syncIssue=null;updateSyncIndicators();
@@ -5162,7 +5311,10 @@ async function syncNow(options={}){
         return {direction:"download",revision:remoteRevision};
       }
     }else if(remote && remoteRevision>localRevision && !options.forceUpload){
-      applySyncPayload(remote.payload||{});setLocalRevision(remoteRevision);setLastRemoteRevision(remoteRevision);
+      diagnosticLog("decisión",{decision:"download",reason:"remote_newer",remoteRevision,localRevision});
+      applySyncPayload(remote.payload||{});
+      diagnosticLog("payload remoto aplicado",{result:"ok",remoteRevision});
+      setLocalRevision(remoteRevision);setLastRemoteRevision(remoteRevision);
       localStorage.removeItem("gymos:syncPending");
       localStorage.setItem("gymos:lastSyncHash",remote.checksum||simpleChecksum(buildSyncPayload()));
       localStorage.setItem("gymos:lastSyncAt",new Date().toISOString());state.syncStatus="synced";state.syncIssue=null;addSyncAudit("sync","downloaded",{revision:remoteRevision});updateSyncIndicators();
@@ -5172,6 +5324,7 @@ async function syncNow(options={}){
       }
       return {direction:"download",revision:remoteRevision};
     }else if(remote&&!hasPendingChanges&&!options.forceUpload&&remoteRevision===localRevision&&remote.checksum===localChecksum){
+      diagnosticLog("decisión",{decision:"no-op",remoteRevision,localRevision});
       setLastRemoteRevision(remoteRevision);
       localStorage.setItem("gymos:lastSyncAt",new Date().toISOString());
       localStorage.setItem("gymos:lastSyncHash",localChecksum);
@@ -5186,9 +5339,14 @@ async function syncNow(options={}){
     }
     assertOwner();
     const envelope=buildSyncEnvelope();
+    diagnosticLog("decisión",{
+      decision:"upload",remoteRevision,localRevision,
+      nextRevision:envelope.revision,hasPendingChanges,forceUpload:Boolean(options.forceUpload)
+    });
     const {error:writeError}=await client.from("gymos_sync").upsert({user_id:userId,payload:envelope.payload,revision:envelope.revision,device_id:envelope.deviceId,checksum:envelope.checksum,updated_at:envelope.updatedAt},{onConflict:"user_id"});
     assertOwner();
     if(writeError) throw writeError;
+    diagnosticLog("payload subido",{result:"ok",revision:envelope.revision,checksum:envelope.checksum});
     setLastRemoteRevision(envelope.revision);
     localStorage.removeItem("gymos:syncPending");
     localStorage.setItem("gymos:lastSyncHash",envelope.checksum);
@@ -5201,6 +5359,7 @@ async function syncNow(options={}){
     }
     return {direction:"upload",revision:envelope.revision};
   }catch(error){
+    diagnosticLog("error",diagnosticError(error));
     if(currentRoutineOwnerOrNull()===ownerId&&state.syncUser?.id===userId){
       const issue=classifySyncError(error);
       state.syncStatus=issue.status;
@@ -8441,6 +8600,135 @@ function renderOnboarding(){
   };
 }
 
+function isSyncDebugRequested(){
+  try{return new URLSearchParams(location.search).get("debug")==="sync";}
+  catch(_){return false;}
+}
+function maskDiagnosticId(value){
+  if(value===null||value===undefined||value==="") return "—";
+  const text=String(value);
+  if(text.includes("@")) return "[oculto]";
+  if(text.length<=8) return `${text.slice(0,2)}…`;
+  return `${text.slice(0,6)}…${text.slice(-4)}`;
+}
+function diagnosticValue(value,{mask=false}={}){
+  if(value===null||value===undefined||value==="") return "—";
+  if(mask) return maskDiagnosticId(value);
+  if(typeof value==="boolean") return value?"sí":"no";
+  return String(value);
+}
+function renderDiagnosticRows(rows){
+  return rows.map(([label,value,options])=>`<div class="sync-debug-row">
+    <dt>${esc(label)}</dt>
+    <dd>${esc(diagnosticValue(value,options))}</dd>
+  </div>`).join("");
+}
+function renderSyncDebugPanel(title,rows){
+  return `<section class="sync-debug-panel">
+    <h2>${esc(title)}</h2>
+    <dl>${renderDiagnosticRows(rows)}</dl>
+  </section>`;
+}
+function syncDebugStyles(){
+  return `<style>
+    .sync-debug-screen{padding:20px;max-width:1080px;margin:0 auto;color:var(--text,#111827)}
+    .sync-debug-screen .section-header{margin-bottom:16px}
+    .sync-debug-screen h1{margin:.1rem 0 .35rem;font-size:clamp(1.7rem,6vw,2.4rem)}
+    .sync-debug-screen h2{font-size:1rem;margin:0 0 12px;letter-spacing:.08em}
+    .sync-debug-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+    .sync-debug-panel,.sync-debug-status{border:1px solid rgba(120,120,120,.35);border-radius:8px;padding:14px;background:rgba(255,255,255,.78);overflow:hidden}
+    .sync-debug-row{display:grid;grid-template-columns:minmax(118px,.8fr) minmax(0,1.2fr);gap:10px;padding:8px 0;border-top:1px solid rgba(120,120,120,.2)}
+    .sync-debug-row:first-child{border-top:0}
+    .sync-debug-row dt{font-weight:700;color:var(--muted,#4b5563)}
+    .sync-debug-row dd{margin:0;overflow-wrap:anywhere;font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+    .sync-debug-status{margin-bottom:14px}
+    .sync-debug-footnote{margin-top:14px;font-size:.9rem;color:var(--muted,#4b5563)}
+    @media(max-width:760px){.sync-debug-screen{padding:14px}.sync-debug-grid{grid-template-columns:1fr}.sync-debug-row{grid-template-columns:1fr;gap:4px}}
+  </style>`;
+}
+function renderSyncDebugError(error){
+  if(!error) return "—";
+  return [
+    error.code?`code=${error.code}`:null,
+    error.status?`status=${error.status}`:null,
+    error.message?`message=${error.message}`:null,
+    error.at?`at=${error.at}`:null
+  ].filter(Boolean).join(" · ")||"—";
+}
+async function renderSyncDebugScreen(){
+  app.innerHTML=`<main class="screen sync-debug-screen" aria-labelledby="syncDebugTitle">
+    ${syncDebugStyles()}
+    <header class="section-header">
+      <span class="section-kicker">DIAGNÓSTICO TEMPORAL</span>
+      <h1 id="syncDebugTitle">Sincronización</h1>
+      <p>Lectura local y Supabase sin ejecutar sincronización ni modificar datos.</p>
+    </header>
+    <section class="sync-debug-panel"><p>Cargando snapshot…</p></section>
+  </main>`;
+  try{
+    const snapshot=await window.GymOSSyncDiagnostics.snapshot();
+    const local=snapshot.local||{};
+    const remote=snapshot.remote||{};
+    app.innerHTML=`<main class="screen sync-debug-screen" aria-labelledby="syncDebugTitle">
+      ${syncDebugStyles()}
+      <header class="section-header">
+        <span class="section-kicker">DIAGNÓSTICO TEMPORAL</span>
+        <h1 id="syncDebugTitle">Sincronización</h1>
+        <p>Lectura local y Supabase sin ejecutar sincronización ni modificar datos.</p>
+      </header>
+      <section class="sync-debug-status" aria-label="Estado de diagnóstico">
+        <dl>
+          ${renderDiagnosticRows([
+            ["autenticación",snapshot.authenticated],
+            ["estado sync",snapshot.syncStatus],
+            ["última decisión",snapshot.lastDecision?.decision||null],
+            ["motivo decisión",snapshot.lastDecision?.reason||null],
+            ["último error",renderSyncDebugError(snapshot.lastError)]
+          ])}
+        </dl>
+      </section>
+      <div class="sync-debug-grid">
+        ${renderSyncDebugPanel("LOCAL",[
+          ["ownerId",local.ownerId,{mask:true}],
+          ["deviceId",local.deviceId,{mask:true}],
+          ["revision",local.localRevision],
+          ["lastRemoteRevision",local.lastRemoteRevision],
+          ["syncPending",local.syncPending],
+          ["lastSyncAt",local.lastSyncAt],
+          ["routineId",local.routineId],
+          ["selectedSessionId",local.selectedSessionId],
+          ["routineHash",local.routineHash],
+          ["historyHash",local.historyHash]
+        ])}
+        ${renderSyncDebugPanel("SUPABASE",[
+          ["revision",remote.revision],
+          ["deviceId",remote.deviceId,{mask:true}],
+          ["checksum",remote.checksum],
+          ["routineId",remote.routineId],
+          ["selectedSessionId",remote.selectedSessionId],
+          ["routineHash",remote.routineHash],
+          ["historyHash",remote.historyHash]
+        ])}
+      </div>
+      <footer class="sync-debug-footnote">
+        Snapshot: ${esc(snapshot.generatedAt||"—")}
+      </footer>
+    </main>`;
+  }catch(error){
+    app.innerHTML=`<main class="screen sync-debug-screen" aria-labelledby="syncDebugTitle">
+      ${syncDebugStyles()}
+      <header class="section-header">
+        <span class="section-kicker">DIAGNÓSTICO TEMPORAL</span>
+        <h1 id="syncDebugTitle">Sincronización</h1>
+      </header>
+      <section class="sync-debug-panel">
+        <h2>No se pudo leer el diagnóstico</h2>
+        <p>${esc(renderSyncDebugError(sanitizeSyncError(error)))}</p>
+      </section>
+    </main>`;
+  }
+}
+
 function render(){
   applyAppPreferences();
   if(state.screen!=="exerciseLibrary") cancelExerciseLibrarySearchDebounce();
@@ -8457,6 +8745,11 @@ function render(){
 
   if(state.authRedirectInProgress||!state.authResolved){
     renderAuthLoading();
+    return;
+  }
+
+  if(isSyncDebugRequested()){
+    renderSyncDebugScreen();
     return;
   }
 
@@ -8978,7 +9271,7 @@ function buildHomeDashboardModel(now=new Date()){
       checkins:window.GymOSRecovery?.getCheckins?.()||[],
       referenceDate:dateKey(now),
       online:navigator.onLine!==false,
-      authenticated:Boolean(state.session)
+      authenticated:isAppAuthenticated()
     };
   }catch(error){recoveryInput={available:true,error:true};}
   return {

@@ -1,4 +1,4 @@
-const GYMOS_VERSION="4.2.0-rc.7-sync-rpc";
+const GYMOS_VERSION="4.2.0-rc.8-recovery916";
 const GYMOS_NAV_EXPANDED_KEY="gymos:deviceNavigationExpanded";
 const GYMOS_FONT_SCALES=["font-scale-sm","font-scale-md","font-scale-lg","font-scale-xl"];
 
@@ -5287,8 +5287,8 @@ async function writeSyncEnvelopeWithCas(client,userId,envelope,baseRevision,remo
 }
 
 const SYNC_RECOVERY_EXPECTED_REMOTE=Object.freeze({
-  revision:912,
-  checksum:"a455414f"
+  revision:915,
+  checksum:"a585090d"
 });
 const SYNC_ADOPTION_EXPECTED_REMOTE=Object.freeze({
   revision:913,
@@ -5308,7 +5308,7 @@ const SYNC_RECOVERY_EXPECTED_LOCAL=Object.freeze({
   historyHash:"c2248975",
   syncPending:false
 });
-const SYNC_RECOVERY_CANDIDATE_REVISION=913;
+const SYNC_RECOVERY_CANDIDATE_REVISION=916;
 const SYNC_RECOVERY_CONFIRMATION_TEXT="PROMOVER ESTE PC";
 const SYNC_ADOPTION_CONFIRMATION_TEXT="ADOPTAR ESTADO DE LA NUBE";
 

@@ -506,7 +506,7 @@ test("25. orden final de scripts correcto",()=>{
 test("26. generador y workflow están incluidos en el service worker",()=>{
   assert.match(workerSource,/routine-generator\.js/);
   assert.match(workerSource,/routine-workflow-ui\.js/);
-  assert.match(workerSource,/const GYMOS_BUILD_VERSION="4\.2\.0-rc\.7-sync-rpc"/);
+  assert.match(workerSource,/const GYMOS_BUILD_VERSION="4\.2\.0-rc\.8-recovery916"/);
 });
 
 test("27. el módulo puro no accede a DOM, almacenamiento, red ni navegación",()=>{

@@ -1001,7 +1001,7 @@ test("integración offline: los módulos activos cargan antes de app.js y están
   assert.ok(moduleIndex>=0&&progressIndex>moduleIndex&&appIndex>progressIndex);
   assert.match(workerSource,/"active-workout\.js"/);
   assert.match(workerSource,/"workout-progress\.js"/);
-  assert.match(workerSource,/const GYMOS_BUILD_VERSION="4\.2\.0-rc\.7-sync-rpc"/);
+  assert.match(workerSource,/const GYMOS_BUILD_VERSION="4\.2\.0-rc\.8-recovery916"/);
   assert.match(workerSource,/const CACHE=`gymos-cache-\$\{GYMOS_BUILD_VERSION\}`/);
   assert.match(workerSource,/url\.origin!==self\.location\.origin/);
 });

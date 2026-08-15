@@ -5274,28 +5274,24 @@ async function writeSyncEnvelopeWithCas(client,userId,envelope,baseRevision,remo
     updated_at:envelope.updatedAt
   };
   if(remoteExists){
-    const query=client.from("gymos_sync").update(record)
+    const {data,error,count}=await client.from("gymos_sync").update(record,{count:"exact"})
       .eq("user_id",userId)
       .eq("revision",baseRevision)
       .select("revision");
-    const {data,error}=typeof query.maybeSingle==="function"
-      ?await query.maybeSingle()
-      :await query;
     if(error) throw error;
-    if(!data) throw syncConflictError("sync_conflict");
-    return data;
+    if(count!==1||!Array.isArray(data)||data.length!==1) throw syncConflictError("sync_conflict");
+    return data[0];
   }
   if(Number(baseRevision)!==0) throw syncConflictError("sync_conflict");
-  const query=client.from("gymos_sync").insert(record).select("revision");
-  const {data,error}=typeof query.maybeSingle==="function"
-    ?await query.maybeSingle()
-    :await query;
+  const {data,error,count}=await client.from("gymos_sync")
+    .insert(record,{count:"exact"})
+    .select("revision");
   if(error){
     if(error.code==="23505"||error.status===409) throw syncConflictError("sync_conflict");
     throw error;
   }
-  if(!data) throw syncConflictError("sync_conflict");
-  return data;
+  if(count!==1||!Array.isArray(data)||data.length!==1) throw syncConflictError("sync_conflict");
+  return data[0];
 }
 async function syncNow(options={}){
   if(isSyncDebugRequested()) return {direction:"diagnostic_mode"};

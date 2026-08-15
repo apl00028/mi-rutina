@@ -141,6 +141,37 @@ function syncHarness({
   return {context,values,counters,get remote(){return sharedRemote?sharedRemote.state:remoteState;}};
 }
 
+function casHarness({updateResponse=null,insertResponse=null}={}){
+  const source=appSource.slice(
+    appSource.indexOf("function syncConflictError"),
+    appSource.indexOf("async function syncNow")
+  );
+  const calls=[];
+  const makeQuery=response=>({
+    eq(column,value){calls.push(["eq",column,value]);return this;},
+    async select(columns){calls.push(["select",columns]);return response;}
+  });
+  const client={
+    from(table){
+      calls.push(["from",table]);
+      return {
+        update(record,options){
+          calls.push(["update",record,options]);
+          return makeQuery(updateResponse||{data:[{revision:913}],count:1,error:null});
+        },
+        insert(record,options){
+          calls.push(["insert",record,options]);
+          return makeQuery(insertResponse||{data:[{revision:1}],count:1,error:null});
+        }
+      };
+    }
+  };
+  const context={client,calls};
+  vm.createContext(context);
+  vm.runInContext(`${source}; this.write=writeSyncEnvelopeWithCas;`,context);
+  return context;
+}
+
 test("RC2 Ajustes usa exclusivamente la API pública de Recovery Center",()=>{
   const settings=appSource.slice(
     appSource.indexOf("function renderSettings("),
@@ -299,6 +330,57 @@ test("sync v2 A: base local igual a remoto permite upload CAS y avanza remoto a 
   assert.equal(harness.values.get("gymos:localRevision"),"913");
 });
 
+test("sync v2 CAS usa count exact y valida exactamente una fila actualizada",async()=>{
+  const harness=casHarness();
+  const result=await harness.write(
+    harness.client,"user-a",
+    {payload:{},revision:913,deviceId:"device",checksum:"same",updatedAt:"2026-08-15T10:00:00.000Z"},
+    912,true
+  );
+  assert.equal(result.revision,913);
+  assert.deepEqual(JSON.parse(JSON.stringify(harness.calls.find(call=>call[0]==="update")[2])),{count:"exact"});
+  assert.deepEqual(harness.calls.filter(call=>call[0]==="eq").map(call=>call.slice(1)),[
+    ["user_id","user-a"],["revision",912]
+  ]);
+});
+
+test("sync v2 CAS convierte update count 0 en sync_conflict",async()=>{
+  const harness=casHarness({updateResponse:{data:[],count:0,error:null}});
+  await assert.rejects(
+    ()=>harness.write(
+      harness.client,"user-a",
+      {payload:{},revision:913,deviceId:"device",checksum:"same",updatedAt:"2026-08-15T10:00:00.000Z"},
+      912,true
+    ),
+    error=>error.code==="sync_conflict"
+  );
+});
+
+test("sync v2 CAS no interpreta data vacía como éxito aunque no venga count fiable",async()=>{
+  const harness=casHarness({updateResponse:{data:[],count:null,error:null}});
+  await assert.rejects(
+    ()=>harness.write(
+      harness.client,"user-a",
+      {payload:{},revision:913,deviceId:"device",checksum:"same",updatedAt:"2026-08-15T10:00:00.000Z"},
+      912,true
+    ),
+    error=>error.code==="sync_conflict"
+  );
+});
+
+test("sync v2 CAS clasifica colisión de insert inicial como conflicto",async()=>{
+  const harness=casHarness({insertResponse:{data:null,count:null,error:{code:"23505",status:409}}});
+  await assert.rejects(
+    ()=>harness.write(
+      harness.client,"user-a",
+      {payload:{},revision:1,deviceId:"device",checksum:"same",updatedAt:"2026-08-15T10:00:00.000Z"},
+      0,false
+    ),
+    error=>error.code==="sync_conflict"
+  );
+  assert.deepEqual(JSON.parse(JSON.stringify(harness.calls.find(call=>call[0]==="insert")[2])),{count:"exact"});
+});
+
 test("sync v2 B: pending con remoto cambiado desde la base queda en conflicto y no sube",async()=>{
   const harness=syncHarness({
     remote:{revision:913,checksum:"remote-new",payload:{stable:false,syncProtocolVersion:2}},
@@ -405,6 +487,13 @@ test("sync v2 J: upload confirmado actualiza las tres revisiones y limpia pendin
   assert.equal(harness.values.get("gymos:lastRemoteRevision"),"913");
   assert.equal(harness.values.get("gymos:syncBaseRevision"),"913");
   assert.equal(harness.values.has("gymos:syncPending"),false);
+});
+
+test("sync v2 no queda ningun upsert ciego sobre gymos_sync",()=>{
+  const gymosSyncCalls=[...appSource.matchAll(/from\("gymos_sync"\)[\s\S]{0,180}/g)]
+    .map(match=>match[0]);
+  assert.ok(gymosSyncCalls.length>=4);
+  for(const call of gymosSyncCalls) assert.doesNotMatch(call,/\.upsert\(/);
 });
 
 test("RC2 diferencia los ocho estados y ofrece reintento solo para errores recuperables",()=>{

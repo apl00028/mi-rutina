@@ -524,7 +524,7 @@ test("integración de script, input y service worker",()=>{
   assert.ok(indexSource.indexOf("routine-io.js")<indexSource.indexOf("routine-excel.js"));
   assert.ok(indexSource.indexOf("routine-excel.js")<indexSource.indexOf("routine-hub.js"));
   assert.match(indexSource,/id="routineFile" type="file" accept="\.xlsx"/);
-  assert.match(workerSource,/gymos-cache-4\.2\.0-rc\.6-excel-catalog/);
+  assert.match(workerSource,/const GYMOS_BUILD_VERSION="4\.2\.0-rc\.7-sync-rpc"/);
   assert.match(workerSource,/routine-io\.js/);
   assert.match(workerSource,/routine-excel\.js/);
   assert.match(workerSource,/routine-hub\.js/);
@@ -533,7 +533,7 @@ test("integración de script, input y service worker",()=>{
   assert.equal((workerSource.match(/routine-io\.js/g)||[]).length,1);
   const assets=JSON.parse(workerSource.match(/const ASSETS=(\[[^\n]+\]);/)?.[1]||"[]");
   assets.filter(asset=>asset!=="./").forEach(asset=>{
-    assert.equal(fs.existsSync(path.join(root,asset)),true,asset);
+    assert.equal(fs.existsSync(path.join(root,asset.split("?")[0])),true,asset);
   });
   for(const forbidden of ["README","SECURITY.md","THIRD_PARTY_NOTICES.md",".sql","docs/","tests/","scripts/"]){
     assert.equal(assets.some(asset=>asset.includes(forbidden)),false,forbidden);

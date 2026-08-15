@@ -97,8 +97,8 @@ test("sidebar navega a Rutinas y Ajustes no duplica el acceso principal",()=>{
 });
 
 test("hub y Excel se cargan antes de app desde recursos locales",()=>{
-  assert.ok(indexSource.indexOf('src="routine-excel.js"')<indexSource.indexOf('src="app.js"'));
-  assert.ok(indexSource.indexOf('src="routine-hub.js"')<indexSource.indexOf('src="app.js"'));
+  assert.ok(indexSource.indexOf('src="routine-excel.js"')<indexSource.indexOf('src="app.js?v='));
+  assert.ok(indexSource.indexOf('src="routine-hub.js"')<indexSource.indexOf('src="app.js?v='));
   assert.match(indexSource,/src="vendor\/xlsx\.full\.min\.js"/);
   assert.doesNotMatch(indexSource,/cdn\.jsdelivr\.net\/npm\/xlsx/);
 });

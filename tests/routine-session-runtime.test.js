@@ -191,9 +191,9 @@ test("la integración carga runtime antes de app y lo precachea con versión rc.
   assert.ok(indexSource.indexOf('src="routine-session-runtime.js"')>
     indexSource.indexOf('src="routine-session-migration.js"'));
   assert.ok(indexSource.indexOf('src="routine-session-runtime.js"')<
-    indexSource.indexOf('src="app.js"'));
+    indexSource.indexOf('src="app.js?v='));
   assert.match(workerSource,/routine-session-runtime\.js/);
-  assert.match(workerSource,/gymos-cache-4\.2\.0-rc\.6-excel-catalog/);
+  assert.match(workerSource,/const GYMOS_BUILD_VERSION="4\.2\.0-rc\.7-sync-rpc"/);
 });
 
 test("Inicio, entrenamiento y finalización consumen sessionId",()=>{

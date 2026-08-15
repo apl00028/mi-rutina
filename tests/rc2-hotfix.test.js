@@ -13,6 +13,9 @@ const stylesSource=read("styles.css");
 const recoverySource=read("recovery-center.js");
 const workerSource=read("service-worker.js");
 const indexSource=read("index.html");
+const schemaSource=read("database/supabase/schema.sql");
+const syncRpcFunctionsSource=read("database/supabase/sync-rpc-v2-functions.sql");
+const syncRpcLockdownSource=read("database/supabase/sync-rpc-v2-lockdown.sql");
 
 function functionSource(name,nextName){
   const start=appSource.indexOf(`function ${name}(`);
@@ -141,29 +144,16 @@ function syncHarness({
   return {context,values,counters,get remote(){return sharedRemote?sharedRemote.state:remoteState;}};
 }
 
-function casHarness({updateResponse=null,insertResponse=null}={}){
+function casHarness({rpcResponse=null,rpcError=null}={}){
   const source=appSource.slice(
     appSource.indexOf("function syncConflictError"),
     appSource.indexOf("async function syncNow")
   );
   const calls=[];
-  const makeQuery=response=>({
-    eq(column,value){calls.push(["eq",column,value]);return this;},
-    async select(columns){calls.push(["select",columns]);return response;}
-  });
   const client={
-    from(table){
-      calls.push(["from",table]);
-      return {
-        update(record,options){
-          calls.push(["update",record,options]);
-          return makeQuery(updateResponse||{data:[{revision:913}],count:1,error:null});
-        },
-        insert(record,options){
-          calls.push(["insert",record,options]);
-          return makeQuery(insertResponse||{data:[{revision:1}],count:1,error:null});
-        }
-      };
+    async rpc(name,args){
+      calls.push(["rpc",name,args]);
+      return rpcResponse||{data:[{success:true,conflict:false,revision:913,checksum:"same"}],error:rpcError};
     }
   };
   const context={client,calls};
@@ -427,7 +417,7 @@ test("RC2 sincroniza, resuelve no-op y limpia pendientes solo tras éxito",()=>{
   assert.match(sync,/return \{direction:"none",revision:remoteRevision\}/);
   assert.ok((sync.match(/localStorage\.removeItem\("gymos:syncPending"\)/g)||[]).length>=2);
   assert.match(sync,/localStorage\.setItem\("gymos:lastSyncHash",envelope\.checksum\)/);
-  assert.match(sync,/writeSyncEnvelopeWithCas\(client,userId,envelope,baseRevision,Boolean\(remote\)\)/);
+  assert.match(sync,/writeSyncEnvelopeWithCas\(client,userId,envelope,baseRevision,Boolean\(remote\),remote\?\.checksum\|\|null\)/);
   assert.doesNotMatch(sync,/\.upsert\(/);
   assert.match(sync,/const ownerId=currentRoutineOwnerOrNull\(\)/);
   assert.match(sync,/const operationId=\+\+state\.syncOperationId/);
@@ -538,22 +528,41 @@ test("sync v2 A: base local igual a remoto permite upload CAS y avanza remoto a 
   assert.equal(harness.values.get("gymos:localRevision"),"913");
 });
 
-test("sync v2 CAS usa count exact y valida exactamente una fila actualizada",async()=>{
+test("sync v2 CAS cliente usa RPC server-side sin aceptar user_id como autoridad",async()=>{
   const harness=casHarness();
   const result=await harness.write(
     harness.client,"user-a",
     {payload:{},revision:913,deviceId:"device",checksum:"same",updatedAt:"2026-08-15T10:00:00.000Z"},
-    912,true
+    912,true,"old"
   );
   assert.equal(result.revision,913);
-  assert.deepEqual(JSON.parse(JSON.stringify(harness.calls.find(call=>call[0]==="update")[2])),{count:"exact"});
-  assert.deepEqual(harness.calls.filter(call=>call[0]==="eq").map(call=>call.slice(1)),[
-    ["user_id","user-a"],["revision",912]
-  ]);
+  const rpcCall=harness.calls.find(call=>call[0]==="rpc");
+  assert.equal(rpcCall[1],"gymos_sync_compare_and_swap");
+  assert.deepEqual(JSON.parse(JSON.stringify(rpcCall[2])),{
+    expected_revision:912,
+    expected_checksum:"old",
+    new_revision:913,
+    new_device_id:"device",
+    new_checksum:"same",
+    new_payload:{}
+  });
+  assert.equal(JSON.stringify(rpcCall[2]).includes("user-a"),false);
 });
 
-test("sync v2 CAS convierte update count 0 en sync_conflict",async()=>{
-  const harness=casHarness({updateResponse:{data:[],count:0,error:null}});
+test("sync v2 CAS convierte success false de RPC en sync_conflict",async()=>{
+  const harness=casHarness({rpcResponse:{data:[{success:false,conflict:true,revision:912,checksum:"old"}],error:null}});
+  await assert.rejects(
+    ()=>harness.write(
+      harness.client,"user-a",
+      {payload:{},revision:913,deviceId:"device",checksum:"same",updatedAt:"2026-08-15T10:00:00.000Z"},
+      912,true,"old"
+    ),
+    error=>error.code==="sync_conflict"
+  );
+});
+
+test("sync v2 CAS requiere checksum esperado para actualizar una fila existente",async()=>{
+  const harness=casHarness();
   await assert.rejects(
     ()=>harness.write(
       harness.client,"user-a",
@@ -564,20 +573,8 @@ test("sync v2 CAS convierte update count 0 en sync_conflict",async()=>{
   );
 });
 
-test("sync v2 CAS no interpreta data vacía como éxito aunque no venga count fiable",async()=>{
-  const harness=casHarness({updateResponse:{data:[],count:null,error:null}});
-  await assert.rejects(
-    ()=>harness.write(
-      harness.client,"user-a",
-      {payload:{},revision:913,deviceId:"device",checksum:"same",updatedAt:"2026-08-15T10:00:00.000Z"},
-      912,true
-    ),
-    error=>error.code==="sync_conflict"
-  );
-});
-
-test("sync v2 CAS clasifica colisión de insert inicial como conflicto",async()=>{
-  const harness=casHarness({insertResponse:{data:null,count:null,error:{code:"23505",status:409}}});
+test("sync v2 CAS clasifica colisión de creación inicial RPC como conflicto",async()=>{
+  const harness=casHarness({rpcError:{code:"23505",status:409}});
   await assert.rejects(
     ()=>harness.write(
       harness.client,"user-a",
@@ -586,7 +583,68 @@ test("sync v2 CAS clasifica colisión de insert inicial como conflicto",async()=
     ),
     error=>error.code==="sync_conflict"
   );
-  assert.deepEqual(JSON.parse(JSON.stringify(harness.calls.find(call=>call[0]==="insert")[2])),{count:"exact"});
+});
+
+test("sync server-side fase A contiene solo funciones y grants de ejecución",()=>{
+  assert.match(syncRpcFunctionsSource,/create or replace function public\.gymos_sync_compare_and_swap/);
+  assert.match(syncRpcFunctionsSource,/create or replace function public\.gymos_sync_delete_own/);
+  assert.match(syncRpcFunctionsSource,/revoke all on function public\.gymos_sync_compare_and_swap\(bigint,text,bigint,text,text,jsonb\) from public/);
+  assert.match(syncRpcFunctionsSource,/revoke all on function public\.gymos_sync_compare_and_swap\(bigint,text,bigint,text,text,jsonb\) from anon/);
+  assert.match(syncRpcFunctionsSource,/grant execute on function public\.gymos_sync_compare_and_swap\(bigint,text,bigint,text,text,jsonb\) to authenticated/);
+  assert.doesNotMatch(syncRpcFunctionsSource,/drop policy if exists "Users can (?:insert|update|delete) their own GymOS data"/i);
+  assert.doesNotMatch(syncRpcFunctionsSource,/revoke insert, update, delete on table public\.gymos_sync/i);
+});
+
+test("sync server-side fase B bloquea legacy directo y mantiene SELECT",()=>{
+  assert.match(syncRpcLockdownSource,/drop policy if exists "Users can insert their own GymOS data" on public\.gymos_sync/);
+  assert.match(syncRpcLockdownSource,/drop policy if exists "Users can update their own GymOS data" on public\.gymos_sync/);
+  assert.match(syncRpcLockdownSource,/drop policy if exists "Users can delete their own GymOS data" on public\.gymos_sync/);
+  assert.doesNotMatch(syncRpcLockdownSource,/create policy "Users can insert their own GymOS data"[\s\S]*?on public\.gymos_sync for insert/);
+  assert.doesNotMatch(syncRpcLockdownSource,/create policy "Users can update their own GymOS data"[\s\S]*?on public\.gymos_sync for update/);
+  assert.match(syncRpcLockdownSource,/revoke insert, update, delete on table public\.gymos_sync from anon, authenticated/);
+  assert.match(syncRpcLockdownSource,/create policy "Users can read their own GymOS data"[\s\S]*?on public\.gymos_sync for select/);
+  assert.match(syncRpcLockdownSource,/grant select on table public\.gymos_sync to authenticated/);
+  assert.doesNotMatch(syncRpcLockdownSource,/create or replace function public\.gymos_sync_/);
+});
+
+test("sync server-side RPC CAS usa SECURITY DEFINER endurecido",()=>{
+  assert.match(syncRpcFunctionsSource,/security definer\s+set search_path = pg_catalog/);
+  assert.match(syncRpcFunctionsSource,/current_user_id uuid := auth\.uid\(\)/);
+  assert.match(syncRpcFunctionsSource,/if current_user_id is null then\s+raise exception 'not_authenticated'/);
+  assert.match(syncRpcFunctionsSource,/where sync_row\.user_id = current_user_id\s+and sync_row\.revision = expected_revision\s+and sync_row\.checksum = expected_checksum/);
+  assert.match(syncRpcFunctionsSource,/return query select true, false, written_revision, written_checksum/);
+  assert.match(syncRpcFunctionsSource,/return query select false, true, written_revision, written_checksum/);
+  assert.match(syncRpcFunctionsSource,/from public\.gymos_sync as sync_row/);
+  assert.match(syncRpcFunctionsSource,/update public\.gymos_sync as sync_row/);
+  assert.match(syncRpcFunctionsSource,/insert into public\.gymos_sync as sync_row/);
+  assert.match(syncRpcFunctionsSource,/pg_catalog\.now\(\)/);
+  const signature=syncRpcFunctionsSource.slice(
+    syncRpcFunctionsSource.indexOf("create or replace function public.gymos_sync_compare_and_swap"),
+    syncRpcFunctionsSource.indexOf(")",syncRpcFunctionsSource.indexOf("create or replace function public.gymos_sync_compare_and_swap"))+1
+  );
+  assert.doesNotMatch(signature,/\buser_id\b/);
+});
+
+test("sync server-side RPC rechaza revisiones no consecutivas",()=>{
+  const accepts=(expected,newRevision)=>newRevision===expected+1;
+  assert.equal(accepts(915,916),true);
+  assert.equal(accepts(915,917),false);
+  assert.equal(accepts(0,1),true);
+  assert.equal(accepts(0,10),false);
+  assert.match(syncRpcFunctionsSource,/new_revision is null or new_revision <> expected_revision \+ 1/);
+  assert.match(syncRpcFunctionsSource,/if expected_revision = 0 then[\s\S]*?new_revision <> 1 or expected_checksum is not null[\s\S]*?sync_protocol_error/);
+});
+
+test("sync server-side: auth.uid distinto no puede tocar fila ajena y RPC sigue tras lockdown",()=>{
+  assert.match(syncRpcFunctionsSource,/where sync_row\.user_id = current_user_id/);
+  assert.match(syncRpcFunctionsSource,/delete from public\.gymos_sync as sync_row\s+where sync_row\.user_id = current_user_id/);
+  assert.match(syncRpcLockdownSource,/revoke insert, update, delete on table public\.gymos_sync from anon, authenticated/);
+  assert.match(syncRpcFunctionsSource,/grant execute on function public\.gymos_sync_compare_and_swap\(bigint,text,bigint,text,text,jsonb\) to authenticated/);
+});
+
+test("sync server-side: dos RPC concurrentes desde la misma base solo pueden tener un ganador",()=>{
+  assert.match(syncRpcFunctionsSource,/update public\.gymos_sync[\s\S]*?where sync_row\.user_id = current_user_id\s+and sync_row\.revision = expected_revision\s+and sync_row\.checksum = expected_checksum[\s\S]*?returning sync_row\.revision/);
+  assert.match(syncRpcFunctionsSource,/insert into public\.gymos_sync[\s\S]*?on conflict \(user_id\) do nothing[\s\S]*?returning sync_row\.revision/);
 });
 
 test("sync v2 B: pending con remoto cambiado desde la base queda en conflicto y no sube",async()=>{
@@ -901,11 +959,13 @@ test("sync v2 móvil legacy base 912 pending contra remoto v2 913 queda en confl
   assert.equal(harness.values.get("gymos:syncPending"),"1");
 });
 
-test("sync v2 no queda ningun upsert ciego sobre gymos_sync",()=>{
+test("sync v2 no quedan escrituras directas sobre gymos_sync en app.js",()=>{
   const gymosSyncCalls=[...appSource.matchAll(/from\("gymos_sync"\)[\s\S]{0,180}/g)]
     .map(match=>match[0]);
   assert.ok(gymosSyncCalls.length>=4);
-  for(const call of gymosSyncCalls) assert.doesNotMatch(call,/\.upsert\(/);
+  for(const call of gymosSyncCalls) assert.doesNotMatch(call,/\.(?:insert|update|upsert|delete)\(/);
+  assert.match(appSource,/rpc\("gymos_sync_compare_and_swap"/);
+  assert.match(appSource,/rpc\("gymos_sync_delete_own"/);
 });
 
 test("RC2 diferencia los ocho estados y ofrece reintento solo para errores recuperables",()=>{
@@ -1096,7 +1156,8 @@ test("RC2 respeta foco visible y movimiento reducido",()=>{
 });
 
 test("RC2 actualiza el caché y mantiene Supabase fuera de Cache Storage",()=>{
-  assert.match(workerSource,/const CACHE="gymos-cache-4\.2\.0-rc\.6-excel-catalog"/);
+  assert.match(workerSource,/const GYMOS_BUILD_VERSION="4\.2\.0-rc\.7-sync-rpc"/);
+  assert.match(workerSource,/const CACHE=`gymos-cache-\$\{GYMOS_BUILD_VERSION\}`/);
   assert.match(workerSource,/e\.request\.method!=="GET"\|\|url\.origin!==self\.location\.origin/);
   assert.match(workerSource,/keys\.filter\(key=>key\.startsWith\("gymos-cache-"\)&&key!==CACHE\)/);
   const fetchHandler=workerSource.slice(workerSource.indexOf('self.addEventListener("fetch"'));

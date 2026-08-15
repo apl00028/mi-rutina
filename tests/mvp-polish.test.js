@@ -148,12 +148,17 @@ test("I4 las descargas históricas bloquean esquemas y tipos no admitidos",()=>{
 });
 
 test("I5 la caché rc.2 contiene todos los módulos locales en orden de carga",()=>{
-  assert.match(workerSource,/const CACHE="gymos-cache-4\.2\.0-rc\.6-excel-catalog"/);
+  assert.match(workerSource,/const GYMOS_BUILD_VERSION="4\.2\.0-rc\.7-sync-rpc"/);
+  assert.match(workerSource,/const CACHE=`gymos-cache-\$\{GYMOS_BUILD_VERSION\}`/);
   const localScripts=Array.from(
     indexSource.matchAll(/<script src="(?!https?:)([^"]+)"/g),
     match=>match[1]
   );
   for(const script of localScripts){
+    if(script.startsWith("app.js?v=")){
+      assert.equal((workerSource.match(/"app\.js\?v=4\.2\.0-rc\.7-sync-rpc"/g)||[]).length,1);
+      continue;
+    }
     assert.equal((workerSource.match(new RegExp(
       script.replace(/[.*+?^${}()|[\]\\]/g,"\\$&"),"g"
     ))||[]).length,1,script);
@@ -169,10 +174,10 @@ test("I5 el worker no cachea Supabase ni peticiones mutables",()=>{
 });
 
 test("I7 prepara la versión rc sin alterar versiones históricas de migración",()=>{
-  assert.match(appSource,/const GYMOS_VERSION="4\.2\.0-rc\.2"/);
+  assert.match(appSource,/const GYMOS_VERSION="4\.2\.0-rc\.7-sync-rpc"/);
   assert.match(appSource,/const GYMOS_BACKUP_VERSION=GYMOS_VERSION/);
   const manifest=JSON.parse(read("manifest.json"));
-  assert.equal(manifest.name,"GymOS 4.2.0-rc.2");
-  assert.equal(manifest.start_url,"./?v=420rc2");
+  assert.equal(manifest.name,"GymOS 4.2.0-rc.7-sync-rpc");
+  assert.equal(manifest.start_url,"./?v=420rc7-sync-rpc");
   assert.match(read("routine-session-migration.js"),/MIGRATION_VERSION/);
 });

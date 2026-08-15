@@ -498,7 +498,7 @@ test("25. orden final de scripts correcto",()=>{
     "exercise-domain.js","profile-data.js","routine-generator.js",
     "routine-proposals.js","routine-activation.js","routine-workflow-ui.js","app.js"
   ];
-  const positions=files.map(file=>indexSource.indexOf(`src="${file}"`));
+  const positions=files.map(file=>indexSource.indexOf(file==="app.js"?`src="${file}?v=`:`src="${file}"`));
   assert.ok(positions.every(position=>position>=0));
   assert.deepEqual([...positions].sort((a,b)=>a-b),positions);
 });
@@ -506,7 +506,7 @@ test("25. orden final de scripts correcto",()=>{
 test("26. generador y workflow están incluidos en el service worker",()=>{
   assert.match(workerSource,/routine-generator\.js/);
   assert.match(workerSource,/routine-workflow-ui\.js/);
-  assert.match(workerSource,/gymos-cache-4\.2\.0-rc\.6-excel-catalog/);
+  assert.match(workerSource,/const GYMOS_BUILD_VERSION="4\.2\.0-rc\.7-sync-rpc"/);
 });
 
 test("27. el módulo puro no accede a DOM, almacenamiento, red ni navegación",()=>{

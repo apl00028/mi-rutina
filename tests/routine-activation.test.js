@@ -389,7 +389,7 @@ test("31. lifecycle de propuesta permite activated y rolled_back explícitos",()
 });
 
 test("32. integración carga el módulo antes de app y el worker solo lo cachea",()=>{
-  assert.ok(indexSource.indexOf('src="routine-activation.js"')<indexSource.indexOf('src="app.js"'));
+  assert.ok(indexSource.indexOf('src="routine-activation.js"')<indexSource.indexOf('src="app.js?v='));
   assert.match(workerSource,/routine-activation\.js/);
   assert.doesNotMatch(activationSource,/document\.|querySelector|render\(|navigate|location\./);
   assert.ok((appSource.match(/activateStoredRoutineProposal\(/g)||[]).length>=2);

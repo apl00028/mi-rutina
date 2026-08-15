@@ -1,4 +1,4 @@
-const GYMOS_VERSION="4.2.0-rc.2";
+const GYMOS_VERSION="4.2.0-rc.7-sync-rpc";
 const GYMOS_NAV_EXPANDED_KEY="gymos:deviceNavigationExpanded";
 const GYMOS_FONT_SCALES=["font-scale-sm","font-scale-md","font-scale-lg","font-scale-xl"];
 
@@ -5004,9 +5004,9 @@ async function migrateLocalDataToAccount(){
 async function deleteCloudData(){
   const client=getSupabaseClient();
   if(!client||!isAppAuthenticated()) throw new Error("No hay una cuenta confirmada.");
-  const userId=state.syncUser.id;
-  const {error}=await client.from("gymos_sync").delete().eq("user_id",userId);
+  const {error}=await client.rpc("gymos_sync_delete_own");
   if(error) throw error;
+  const userId=state.syncUser.id;
   await client.from("profiles").delete().eq("id",userId);
   return true;
 }
@@ -5265,34 +5265,25 @@ function setSyncConflictState(kind,details={}){
   return {direction:"conflict",kind,details};
 }
 async function writeSyncEnvelopeWithCas(client,userId,envelope,baseRevision,remoteExists,expectedRemoteChecksum=null){
-  const record={
-    user_id:userId,
-    payload:envelope.payload,
-    revision:envelope.revision,
-    device_id:envelope.deviceId,
-    checksum:envelope.checksum,
-    updated_at:envelope.updatedAt
-  };
-  if(remoteExists){
-    let query=client.from("gymos_sync").update(record,{count:"exact"})
-      .eq("user_id",userId)
-      .eq("revision",baseRevision);
-    if(expectedRemoteChecksum) query=query.eq("checksum",expectedRemoteChecksum);
-    const {data,error,count}=await query.select("revision");
-    if(error) throw error;
-    if(count!==1||!Array.isArray(data)||data.length!==1) throw syncConflictError("sync_conflict");
-    return data[0];
-  }
-  if(Number(baseRevision)!==0) throw syncConflictError("sync_conflict");
-  const {data,error,count}=await client.from("gymos_sync")
-    .insert(record,{count:"exact"})
-    .select("revision");
+  void userId;
+  const expectedChecksum=remoteExists?expectedRemoteChecksum:null;
+  if(remoteExists&&!expectedChecksum) throw syncConflictError("sync_conflict");
+  if(!remoteExists&&Number(baseRevision)!==0) throw syncConflictError("sync_conflict");
+  const {data,error}=await client.rpc("gymos_sync_compare_and_swap",{
+    expected_revision:Number(baseRevision)||0,
+    expected_checksum:expectedChecksum,
+    new_revision:Number(envelope.revision)||0,
+    new_device_id:envelope.deviceId,
+    new_checksum:envelope.checksum,
+    new_payload:envelope.payload
+  });
   if(error){
-    if(error.code==="23505"||error.status===409) throw syncConflictError("sync_conflict");
+    if(error.code==="23505"||error.status===409||error.code==="sync_conflict") throw syncConflictError("sync_conflict");
     throw error;
   }
-  if(count!==1||!Array.isArray(data)||data.length!==1) throw syncConflictError("sync_conflict");
-  return data[0];
+  const row=Array.isArray(data)?data[0]:data;
+  if(!row?.success) throw syncConflictError("sync_conflict");
+  return {revision:Number(row.revision||envelope.revision),checksum:row.checksum||envelope.checksum};
 }
 
 const SYNC_RECOVERY_EXPECTED_REMOTE=Object.freeze({
@@ -5657,7 +5648,7 @@ async function syncNow(options={}){
       decision:"upload",remoteRevision,localRevision,
       nextRevision:envelope.revision,hasPendingChanges,forceUpload:Boolean(options.forceUpload)
     });
-    await writeSyncEnvelopeWithCas(client,userId,envelope,baseRevision,Boolean(remote));
+    await writeSyncEnvelopeWithCas(client,userId,envelope,baseRevision,Boolean(remote),remote?.checksum||null);
     assertOwner();
     diagnosticLog("payload subido",{result:"ok",revision:envelope.revision,checksum:envelope.checksum});
     setLocalRevision(envelope.revision);
@@ -18909,7 +18900,7 @@ importFile.onchange=async()=>{
   importFile.value="";
 };
 
-if("serviceWorker" in navigator){navigator.serviceWorker.register("service-worker.js");}
+if("serviceWorker" in navigator){navigator.serviceWorker.register(`service-worker.js?v=${encodeURIComponent(GYMOS_VERSION)}`);}
 
 window.addEventListener("online",()=>{
   state.syncStatus=isAppAuthenticated()?"pending":"local";

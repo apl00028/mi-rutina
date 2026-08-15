@@ -997,11 +997,12 @@ test("operaciones de solo lectura: los modelos no cambian rutina ni historial",(
 test("integración offline: los módulos activos cargan antes de app.js y están en el precache RC.3",()=>{
   const moduleIndex=indexSource.indexOf('<script src="active-workout.js"></script>');
   const progressIndex=indexSource.indexOf('<script src="workout-progress.js"></script>');
-  const appIndex=indexSource.indexOf('<script src="app.js"></script>');
+  const appIndex=indexSource.indexOf('src="app.js?v=');
   assert.ok(moduleIndex>=0&&progressIndex>moduleIndex&&appIndex>progressIndex);
   assert.match(workerSource,/"active-workout\.js"/);
   assert.match(workerSource,/"workout-progress\.js"/);
-  assert.match(workerSource,/gymos-cache-4\.2\.0-rc\.6-excel-catalog/);
+  assert.match(workerSource,/const GYMOS_BUILD_VERSION="4\.2\.0-rc\.7-sync-rpc"/);
+  assert.match(workerSource,/const CACHE=`gymos-cache-\$\{GYMOS_BUILD_VERSION\}`/);
   assert.match(workerSource,/url\.origin!==self\.location\.origin/);
 });
 

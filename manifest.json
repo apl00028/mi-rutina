@@ -1,7 +1,7 @@
 {
-  "name": "GymOS 4.2.0-rc.2",
+  "name": "GymOS 4.2.0-rc.7-sync-rpc",
   "short_name": "GymOS",
-  "start_url": "./?v=420rc2",
+  "start_url": "./?v=420rc7-sync-rpc",
   "display": "standalone",
   "background_color": "#f4f6fa",
   "theme_color": "#6d28d9",

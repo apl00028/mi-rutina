@@ -21,7 +21,7 @@ test("módulo puro carga antes de app y queda disponible offline",()=>{
   assert.ok(index.indexOf('<script src="progress-analytics.js"></script>')>
     index.indexOf('<script src="workout-progress.js"></script>'));
   assert.ok(index.indexOf('<script src="progress-analytics.js"></script>')<
-    index.indexOf('<script src="app.js"></script>'));
+    index.indexOf('src="app.js?v='));
   assert.equal((worker.match(/"progress-analytics\.js"/g)||[]).length,1);
   assert.doesNotMatch(source,/localStorage|sessionStorage|indexedDB|supabase|document\.|fetch\(/);
 });

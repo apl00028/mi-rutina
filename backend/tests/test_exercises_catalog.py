@@ -1,4 +1,4 @@
-from app.api.v1.exercises import DATA_FILE, load_exercises
+from app.services.exercises import DATA_FILE, get_exercise_by_id, load_exercises
 
 
 def test_exercise_catalog_has_100_unique_ids():
@@ -11,3 +11,15 @@ def test_exercise_catalog_has_100_unique_ids():
 
     assert len(set(ids)) == 100
     assert all(exercise.name for exercise in data)
+
+
+def test_get_exercise_by_id():
+    exercise = get_exercise_by_id("bench-press")
+
+    assert exercise is not None
+    assert exercise.id == "bench-press"
+    assert exercise.name == "Press de banca"
+
+
+def test_unknown_exercise_id_returns_none():
+    assert get_exercise_by_id("does-not-exist") is None

@@ -4340,7 +4340,7 @@ function markLocalUpdated({schedule=true}={}){
 }
 function scheduleAutoSync(delay=2500){
   clearTimeout(state.syncTimer);
-  if(!isAppAuthenticated()||state.syncInProgress) return;
+  if(isSyncDebugRequested()||!isAppAuthenticated()||state.syncInProgress) return;
   state.syncTimer=setTimeout(()=>autoSync("cambio local"),delay);
 }
 function formatSyncDate(value){
@@ -4630,7 +4630,7 @@ function localSyncDiagnosticSnapshot(){
   catch(error){routineId=`invalid:${error?.message||"routine"}`;}
   return {
     ownerId:currentRoutineOwnerOrNull(),
-    deviceId:getDeviceId(),
+    deviceId:localStorage.getItem(DEVICE_ID_KEY)||null,
     localRevision:getLocalRevision(),
     lastRemoteRevision:getLastRemoteRevision(),
     syncPending:localStorage.getItem("gymos:syncPending")==="1",
@@ -5221,6 +5221,7 @@ async function deleteBodyMeasurementRemote(id){
   }
 }
 async function syncNow(options={}){
+  if(isSyncDebugRequested()) return {direction:"diagnostic_mode"};
   const client=getSupabaseClient();
   if(!client||!isAppAuthenticated()) throw new Error("Confirma tu correo antes de sincronizar.");
   if(state.syncInProgress) return {direction:"busy"};
@@ -5384,6 +5385,7 @@ async function syncNow(options={}){
 }
 
 async function autoSync(reason="automática"){
+  if(isSyncDebugRequested()) return;
   if(!isAppAuthenticated()||!navigator.onLine||state.syncInProgress) return;
   const recoveryBefore=window.GymOSRecovery?.dueCheckin?.()?.id||"";
   try{
@@ -8604,6 +8606,33 @@ function isSyncDebugRequested(){
   try{return new URLSearchParams(location.search).get("debug")==="sync";}
   catch(_){return false;}
 }
+function buildLocalStorageDiagnosticBackup(){
+  const storage={};
+  for(let index=0;index<localStorage.length;index+=1){
+    const key=localStorage.key(index);
+    if(!key?.startsWith("gymos:")) continue;
+    storage[key]=localStorage.getItem(key);
+  }
+  return {
+    app:"GymOS",
+    type:"localStorageDiagnosticBackup",
+    exportedAt:new Date().toISOString(),
+    storage
+  };
+}
+function downloadLocalStorageDiagnosticBackup(){
+  const backup=buildLocalStorageDiagnosticBackup();
+  const blob=new Blob([JSON.stringify(backup,null,2)],{type:"application/json"});
+  const url=URL.createObjectURL(blob);
+  const link=document.createElement("a");
+  const stamp=new Date().toISOString().replace(/[:.]/g,"-");
+  link.href=url;
+  link.download=`gymos-local-storage-backup-${stamp}.json`;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
 function maskDiagnosticId(value){
   if(value===null||value===undefined||value==="") return "—";
   const text=String(value);
@@ -8637,6 +8666,8 @@ function syncDebugStyles(){
     .sync-debug-screen h2{font-size:1rem;margin:0 0 12px;letter-spacing:.08em}
     .sync-debug-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
     .sync-debug-panel,.sync-debug-status{border:1px solid rgba(120,120,120,.35);border-radius:8px;padding:14px;background:rgba(255,255,255,.78);overflow:hidden}
+    .sync-debug-banner{border:1px solid rgba(185,28,28,.35);border-radius:8px;padding:12px 14px;margin-bottom:14px;background:rgba(254,226,226,.72);font-weight:800;color:#991b1b}
+    .sync-debug-actions{display:flex;gap:10px;flex-wrap:wrap;margin:0 0 14px}
     .sync-debug-row{display:grid;grid-template-columns:minmax(118px,.8fr) minmax(0,1.2fr);gap:10px;padding:8px 0;border-top:1px solid rgba(120,120,120,.2)}
     .sync-debug-row:first-child{border-top:0}
     .sync-debug-row dt{font-weight:700;color:var(--muted,#4b5563)}
@@ -8663,8 +8694,15 @@ async function renderSyncDebugScreen(){
       <h1 id="syncDebugTitle">Sincronización</h1>
       <p>Lectura local y Supabase sin ejecutar sincronización ni modificar datos.</p>
     </header>
+    <div class="sync-debug-banner">MODO DIAGNÓSTICO — SIN SINCRONIZACIÓN AUTOMÁTICA</div>
+    <div class="sync-debug-actions">
+      <button id="downloadLocalStorageDiagnosticBackup" type="button" class="secondary">Descargar copia local de seguridad</button>
+    </div>
     <section class="sync-debug-panel"><p>Cargando snapshot…</p></section>
   </main>`;
+  document.getElementById("downloadLocalStorageDiagnosticBackup")?.addEventListener(
+    "click",downloadLocalStorageDiagnosticBackup
+  );
   try{
     const snapshot=await window.GymOSSyncDiagnostics.snapshot();
     const local=snapshot.local||{};
@@ -8676,6 +8714,10 @@ async function renderSyncDebugScreen(){
         <h1 id="syncDebugTitle">Sincronización</h1>
         <p>Lectura local y Supabase sin ejecutar sincronización ni modificar datos.</p>
       </header>
+      <div class="sync-debug-banner">MODO DIAGNÓSTICO — SIN SINCRONIZACIÓN AUTOMÁTICA</div>
+      <div class="sync-debug-actions">
+        <button id="downloadLocalStorageDiagnosticBackup" type="button" class="secondary">Descargar copia local de seguridad</button>
+      </div>
       <section class="sync-debug-status" aria-label="Estado de diagnóstico">
         <dl>
           ${renderDiagnosticRows([
@@ -8714,6 +8756,9 @@ async function renderSyncDebugScreen(){
         Snapshot: ${esc(snapshot.generatedAt||"—")}
       </footer>
     </main>`;
+    document.getElementById("downloadLocalStorageDiagnosticBackup")?.addEventListener(
+      "click",downloadLocalStorageDiagnosticBackup
+    );
   }catch(error){
     app.innerHTML=`<main class="screen sync-debug-screen" aria-labelledby="syncDebugTitle">
       ${syncDebugStyles()}
@@ -8721,11 +8766,18 @@ async function renderSyncDebugScreen(){
         <span class="section-kicker">DIAGNÓSTICO TEMPORAL</span>
         <h1 id="syncDebugTitle">Sincronización</h1>
       </header>
+      <div class="sync-debug-banner">MODO DIAGNÓSTICO — SIN SINCRONIZACIÓN AUTOMÁTICA</div>
+      <div class="sync-debug-actions">
+        <button id="downloadLocalStorageDiagnosticBackup" type="button" class="secondary">Descargar copia local de seguridad</button>
+      </div>
       <section class="sync-debug-panel">
         <h2>No se pudo leer el diagnóstico</h2>
         <p>${esc(renderSyncDebugError(sanitizeSyncError(error)))}</p>
       </section>
     </main>`;
+    document.getElementById("downloadLocalStorageDiagnosticBackup")?.addEventListener(
+      "click",downloadLocalStorageDiagnosticBackup
+    );
   }
 }
 
@@ -18498,6 +18550,7 @@ window.addEventListener("online",()=>{
   state.syncIssue=null;
   updateSyncIndicators();
   requestSafeActiveWorkoutRender();
+  if(isSyncDebugRequested()) return;
   autoSync("conexión recuperada");
 });
 window.addEventListener("offline",()=>{
@@ -18516,6 +18569,7 @@ document.addEventListener("visibilitychange",()=>{
       });
       requestSafeActiveWorkoutRender();
     }
+    if(isSyncDebugRequested()) return;
     autoSync("app reabierta");
   }
 });
@@ -18552,12 +18606,15 @@ window.addEventListener("storage",event=>{
     console.warn("Workout progress storage event ignored",{code:error?.message||"invalid_progress"});
   }
 });
-setInterval(()=>autoSync("sincronización periódica"),5*60*1000);
+setInterval(()=>{
+  if(isSyncDebugRequested()) return;
+  autoSync("sincronización periódica");
+},5*60*1000);
 
 render();
 refreshSyncSession().then(user=>{
   render();
-  if(isAppAuthenticated()) setTimeout(()=>autoSync("inicio"),500);
+  if(isAppAuthenticated()&&!isSyncDebugRequested()) setTimeout(()=>autoSync("inicio"),500);
 }).catch(error=>{
   console.error("GymOS startup auth",{
     code:error?.code||"startup_auth_failed",

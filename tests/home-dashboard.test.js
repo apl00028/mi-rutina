@@ -349,11 +349,123 @@ test("sync: pantalla temporal de diagnostico es solo lectura y no dispara sincro
   assert.match(debugSource,/maskDiagnosticId/);
   assert.match(debugSource,/lastDecision/);
   assert.match(debugSource,/lastError/);
+  assert.match(debugSource,/MODO DIAGNÓSTICO — SIN SINCRONIZACIÓN AUTOMÁTICA/);
+  assert.match(debugSource,/Descargar copia local de seguridad/);
+  assert.match(debugSource,/downloadLocalStorageDiagnosticBackup/);
   assert.doesNotMatch(debugSource,/syncNow\(/);
   assert.doesNotMatch(debugSource,/localStorage\.setItem|localStorage\.removeItem|localStorage\.clear/);
-  assert.doesNotMatch(debugSource,/<button\b/);
   assert.doesNotMatch(debugSource,/access_token|refresh_token|supabaseAnonKey|payload/);
 
   const renderRoot=sourceBetween("function render(){","function homeGreeting(");
   assert.match(renderRoot,/if\(isSyncDebugRequested\(\)\)\{\s*renderSyncDebugScreen\(\);\s*return;\s*\}/);
+});
+
+test("sync: modo diagnostico bloquea todos los disparadores automaticos globales",()=>{
+  const autosync=sourceBetween("async function autoSync(","function updateSyncIndicators(");
+  assert.match(autosync,/if\(isSyncDebugRequested\(\)\) return;/);
+
+  const scheduler=sourceBetween("function scheduleAutoSync(","function formatSyncDate(");
+  assert.match(scheduler,/if\(isSyncDebugRequested\(\)\|\|!isAppAuthenticated\(\)\|\|state\.syncInProgress\) return;/);
+
+  const startup=sourceBetween('if("serviceWorker" in navigator)',"applyAppPreferences();");
+  assert.match(startup,/window\.addEventListener\("online"[\s\S]*?if\(isSyncDebugRequested\(\)\) return;[\s\S]*?autoSync\("conexión recuperada"\)/);
+  assert.match(startup,/document\.addEventListener\("visibilitychange"[\s\S]*?if\(isSyncDebugRequested\(\)\) return;[\s\S]*?autoSync\("app reabierta"\)/);
+  assert.match(startup,/setInterval\(\(\)=>\{\s*if\(isSyncDebugRequested\(\)\) return;\s*autoSync\("sincronización periódica"\);/);
+  assert.match(startup,/if\(isAppAuthenticated\(\)&&!isSyncDebugRequested\(\)\) setTimeout\(\(\)=>autoSync\("inicio"\),500\)/);
+});
+
+test("sync: copia local de diagnostico exporta solo gymos y no modifica almacenamiento",()=>{
+  const debugSource=sourceBetween("function isSyncDebugRequested(","function render(){");
+  const values=new Map([
+    ["gymos:routine","{}"],
+    ["gymos:history","[]"],
+    ["otra:clave","secreta"]
+  ]);
+  const writes=[];
+  const context={
+    localStorage:{
+      get length(){return values.size;},
+      key:index=>[...values.keys()][index]||null,
+      getItem:key=>values.has(key)?values.get(key):null,
+      setItem:(key,value)=>writes.push(["setItem",key,value]),
+      removeItem:key=>writes.push(["removeItem",key])
+    },
+    Date,
+    Blob,
+    URL:{
+      createObjectURL(){return "blob:gymos";},
+      revokeObjectURL(){}
+    },
+    document:{
+      body:{appendChild(){}},
+      createElement:()=>({click(){},remove(){}})
+    },
+    window:{GymOSSyncDiagnostics:{snapshot:async()=>({})}},
+    app:{innerHTML:""},
+    esc:value=>String(value),
+    sanitizeSyncError:error=>error
+  };
+  vm.createContext(context);
+  vm.runInContext(`${debugSource}; this.backup=buildLocalStorageDiagnosticBackup(); downloadLocalStorageDiagnosticBackup();`,context);
+  assert.deepEqual(JSON.parse(JSON.stringify(context.backup.storage)),{
+    "gymos:routine":"{}",
+    "gymos:history":"[]"
+  });
+  assert.equal(Object.hasOwn(context.backup.storage,"otra:clave"),false);
+  assert.deepEqual(writes,[]);
+});
+
+test("sync: snapshot diagnostico remoto sigue siendo legible en modo solo lectura",async()=>{
+  const diagnostics=sourceBetween("const SYNC_AUDIT_KEY=","function buildSyncEnvelope(");
+  const values=new Map([
+    ["gymos:localRevision","419"],
+    ["gymos:lastRemoteRevision","419"],
+    ["gymos:routine:canonical",'{"routineId":"routine-local"}'],
+    ["gymos:history","[]"],
+    ["gymos:selectedSessionId","roadmap-2026-08-a"]
+  ]);
+  const writes=[];
+  const remoteRow={
+    revision:912,
+    device_id:"remote-device",
+    updated_at:"2026-08-15T10:00:00.000Z",
+    checksum:"remote-checksum",
+    payload:{
+      canonicalRoutine:{routineId:"routine-remote"},
+      selectedSessionId:"session-remote",
+      history:[]
+    }
+  };
+  const context={
+    window:{},
+    state:{syncUser:{id:"user-a"},syncStatus:"connected"},
+    localStorage:{
+      getItem:key=>values.has(key)?values.get(key):null,
+      setItem:(key,value)=>writes.push(["setItem",key,value]),
+      removeItem:key=>writes.push(["removeItem",key])
+    },
+    SELECTED_SESSION_ID_KEY:"gymos:selectedSessionId",
+    CANONICAL_ROUTINE_KEY:"gymos:routine:canonical",
+    getCanonicalRoutine:()=>JSON.parse(values.get("gymos:routine:canonical")),
+    currentRoutineOwnerOrNull:()=>"user-a",
+    getLastSyncAt:()=>null,
+    getSupabaseClient:()=>({
+      from:()=>({
+        select(){return this;},
+        eq(){return this;},
+        async maybeSingle(){return {data:remoteRow,error:null};}
+      })
+    }),
+    isAppAuthenticated:()=>true,
+    console:{info(){},table(){}},
+    Date
+  };
+  vm.createContext(context);
+  vm.runInContext(`${diagnostics}; this.snapshot=buildSyncDiagnosticSnapshot;`,context);
+  const snapshot=await context.snapshot();
+  assert.equal(snapshot.local.localRevision,419);
+  assert.equal(snapshot.remote.available,true);
+  assert.equal(snapshot.remote.revision,912);
+  assert.equal(snapshot.remote.routineId,"routine-remote");
+  assert.deepEqual(writes,[]);
 });

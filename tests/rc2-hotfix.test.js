@@ -60,6 +60,7 @@ function syncHarness({remote=null,readError=null,pending=false,online=true,recov
     },
     getSupabaseClient:()=>client,
     isAppAuthenticated:()=>true,
+    isSyncDebugRequested:()=>false,
     currentRoutineOwnerOrNull:()=>context.owner,
     assertActiveLocalOwner:owner=>{
       if(owner!==context.owner) throw new Error("owner_changed");

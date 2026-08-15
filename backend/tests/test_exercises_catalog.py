@@ -7,7 +7,7 @@ def test_exercise_catalog_has_100_unique_ids():
     assert DATA_FILE.exists()
     assert len(data) == 100
 
-    ids = [exercise["id"] for exercise in data]
+    ids = [exercise.id for exercise in data]
 
     assert len(set(ids)) == 100
-    assert all(exercise.get("name") for exercise in data)
+    assert all(exercise.name for exercise in data)

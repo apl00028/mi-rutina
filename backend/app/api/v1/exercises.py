@@ -1,6 +1,11 @@
 from fastapi import APIRouter, HTTPException
 
 from app.models.exercise import Exercise
+from app.models.exercise_resolution import (
+    ExerciseResolveRequest,
+    ExerciseResolveResponse,
+)
+from app.services.exercise_resolution import resolve_exercise
 from app.services.exercises import get_exercise_by_id, load_exercises
 
 router = APIRouter()
@@ -13,6 +18,20 @@ router = APIRouter()
 )
 def list_exercises() -> list[Exercise]:
     return load_exercises()
+
+
+@router.post(
+    "/exercises/resolve",
+    response_model=ExerciseResolveResponse,
+    response_model_exclude_none=True,
+)
+def resolve_exercise_reference(
+    request: ExerciseResolveRequest,
+) -> ExerciseResolveResponse:
+    return resolve_exercise(
+        exercise_id=request.exerciseId,
+        exercise_name=request.exerciseName,
+    )
 
 
 @router.get(

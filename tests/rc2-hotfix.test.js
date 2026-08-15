@@ -267,7 +267,7 @@ function adoptionHarness({
     appSource.indexOf("async function syncNow")
   );
   const remote={
-    revision:913,
+    revision:916,
     checksum:"759d936c",
     device_id:"pc-device",
     updated_at:"2026-08-15T10:00:00.000Z",
@@ -284,10 +284,10 @@ function adoptionHarness({
     remote.payload={...remote.payload,...remoteOverrides.payload};
   }
   const values=new Map([
-    ["gymos:deviceId","mobile-device"],
-    ["gymos:localRevision","914"],
-    ["gymos:lastRemoteRevision","912"],
-    ["gymos:syncBaseRevision","912"],
+    ["gymos:deviceId","134d82b5-0770-4779-a0d6-a79f99804c44"],
+    ["gymos:localRevision","915"],
+    ["gymos:lastRemoteRevision","915"],
+    ["gymos:syncBaseRevision","915"],
     ["gymos:syncProtocolVersion","2"],
     ["gymos:syncPending","1"],
     ["gymos:routine:canonical",JSON.stringify({routineId:"routine-0916bea3-2e64-446b-8219-529102300960"})],
@@ -301,7 +301,7 @@ function adoptionHarness({
   }
   const writes=[];
   const remoteWrites=[];
-  const counters={apply:0,syncNow:0,autoSync:0};
+  const counters={apply:0,syncNow:0,autoSync:0,cas:0,rpc:0};
   const currentSnapshot=()=>({
     deviceId:values.get("gymos:deviceId")||null,
     localRevision:Number(values.get("gymos:localRevision")||0),
@@ -322,7 +322,10 @@ function adoptionHarness({
     upsert(){remoteWrites.push("upsert");return this;},
     async maybeSingle(){return {data:remote,error:null};}
   };
-  const client={from(){return query;}};
+  const client={
+    from(){return query;},
+    rpc(){counters.rpc+=1;return Promise.resolve({data:null,error:null});}
+  };
   const context={
     SYNC_PROTOCOL_VERSION:2,
     DEVICE_ID_KEY:"gymos:deviceId",
@@ -358,6 +361,7 @@ function adoptionHarness({
       if(applyError) throw applyError;
       values.delete("gymos:partialDuringApply");
     },
+    writeSyncEnvelopeWithCas:()=>{counters.cas+=1;throw new Error("unexpected CAS");},
     setLocalRevision:value=>{writes.push(["setItem","gymos:localRevision",String(value)]);values.set("gymos:localRevision",String(value));},
     setLastRemoteRevision:value=>{writes.push(["setItem","gymos:lastRemoteRevision",String(value)]);values.set("gymos:lastRemoteRevision",String(value));},
     setSyncBaseRevision:value=>{writes.push(["setItem","gymos:syncBaseRevision",String(value)]);values.set("gymos:syncBaseRevision",String(value));},
@@ -886,8 +890,16 @@ test("recovery adoption: no escribe nunca en Supabase",async()=>{
   assert.deepEqual(harness.remoteWrites,[]);
 });
 
+test("recovery adoption: remoto exacto 916 / 759d936c permite adopción",async()=>{
+  const harness=adoptionHarness();
+  const result=await harness.context.adopt();
+  assert.equal(result.revision,916);
+  assert.equal(harness.counters.apply,1);
+  assert.equal(harness.values.get("gymos:lastSyncHash"),"759d936c");
+});
+
 test("recovery adoption: remoto con revision distinta aborta sin tocar local",async()=>{
-  const harness=adoptionHarness({remoteOverrides:{revision:914}});
+  const harness=adoptionHarness({remoteOverrides:{revision:915}});
   const before=sortedEntries(harness.snapshot());
   await assert.rejects(()=>harness.context.adopt(),error=>error.code==="recovery_remote_changed");
   assert.deepEqual(sortedEntries(harness.snapshot()),before);
@@ -903,22 +915,56 @@ test("recovery adoption: remoto con checksum distinto aborta",async()=>{
   assert.equal(harness.counters.apply,0);
 });
 
-test("recovery adoption: remoto con rutina sesion o protocolo distinto aborta",async()=>{
-  for(const payload of [
-    {canonicalRoutine:{routineId:"routine-other"}},
-    {selectedSessionId:"session-other"},
-    {syncProtocolVersion:1}
-  ]){
-    const harness=adoptionHarness({remoteOverrides:{payload}});
-    const before=sortedEntries(harness.snapshot());
-    await assert.rejects(()=>harness.context.adopt(),error=>error.code==="recovery_remote_changed");
-    assert.deepEqual(sortedEntries(harness.snapshot()),before);
-    assert.equal(harness.counters.apply,0);
-  }
+test("recovery adoption: routineId remoto distinto aborta",async()=>{
+  const harness=adoptionHarness({remoteOverrides:{payload:{canonicalRoutine:{routineId:"routine-other"}}}});
+  const before=sortedEntries(harness.snapshot());
+  await assert.rejects(()=>harness.context.adopt(),error=>error.code==="recovery_remote_changed");
+  assert.deepEqual(sortedEntries(harness.snapshot()),before);
+  assert.equal(harness.counters.apply,0);
 });
 
-test("recovery adoption: local con base distinta de 912 aborta",async()=>{
-  const harness=adoptionHarness({localOverrides:{snapshot:{syncBaseRevision:911}}});
+test("recovery adoption: selectedSessionId remoto distinto aborta",async()=>{
+  const harness=adoptionHarness({remoteOverrides:{payload:{selectedSessionId:"session-other"}}});
+  const before=sortedEntries(harness.snapshot());
+  await assert.rejects(()=>harness.context.adopt(),error=>error.code==="recovery_remote_changed");
+  assert.deepEqual(sortedEntries(harness.snapshot()),before);
+  assert.equal(harness.counters.apply,0);
+});
+
+test("recovery adoption: protocolVersion remoto distinto de 2 aborta",async()=>{
+  const harness=adoptionHarness({remoteOverrides:{payload:{syncProtocolVersion:1}}});
+  const before=sortedEntries(harness.snapshot());
+  await assert.rejects(()=>harness.context.adopt(),error=>error.code==="recovery_remote_changed");
+  assert.deepEqual(sortedEntries(harness.snapshot()),before);
+  assert.equal(harness.counters.apply,0);
+});
+
+test("recovery adoption: deviceId local distinto aborta",async()=>{
+  const harness=adoptionHarness({localOverrides:{snapshot:{deviceId:"other-device"}}});
+  const before=sortedEntries(harness.snapshot());
+  await assert.rejects(()=>harness.context.adopt(),error=>error.code==="recovery_local_changed");
+  assert.deepEqual(sortedEntries(harness.snapshot()),before);
+  assert.equal(harness.counters.apply,0);
+});
+
+test("recovery adoption: revision local distinta de 915 aborta",async()=>{
+  const harness=adoptionHarness({localOverrides:{snapshot:{localRevision:914}}});
+  const before=sortedEntries(harness.snapshot());
+  await assert.rejects(()=>harness.context.adopt(),error=>error.code==="recovery_local_changed");
+  assert.deepEqual(sortedEntries(harness.snapshot()),before);
+  assert.equal(harness.counters.apply,0);
+});
+
+test("recovery adoption: lastRemoteRevision local distinta de 915 aborta",async()=>{
+  const harness=adoptionHarness({localOverrides:{snapshot:{lastRemoteRevision:914}}});
+  const before=sortedEntries(harness.snapshot());
+  await assert.rejects(()=>harness.context.adopt(),error=>error.code==="recovery_local_changed");
+  assert.deepEqual(sortedEntries(harness.snapshot()),before);
+  assert.equal(harness.counters.apply,0);
+});
+
+test("recovery adoption: syncBaseRevision local distinta de 915 aborta",async()=>{
+  const harness=adoptionHarness({localOverrides:{snapshot:{syncBaseRevision:914}}});
   const before=sortedEntries(harness.snapshot());
   await assert.rejects(()=>harness.context.adopt(),error=>error.code==="recovery_local_changed");
   assert.deepEqual(sortedEntries(harness.snapshot()),before);
@@ -938,21 +984,37 @@ test("recovery adoption: local sin pending aborta",async()=>{
   assert.equal(harness.counters.apply,0);
 });
 
+test("recovery adoption: routineId local distinto aborta",async()=>{
+  const harness=adoptionHarness({localOverrides:{snapshot:{routineId:"routine-other"}}});
+  const before=sortedEntries(harness.snapshot());
+  await assert.rejects(()=>harness.context.adopt(),error=>error.code==="recovery_local_changed");
+  assert.deepEqual(sortedEntries(harness.snapshot()),before);
+  assert.equal(harness.counters.apply,0);
+});
+
+test("recovery adoption: selectedSessionId local distinto aborta",async()=>{
+  const harness=adoptionHarness({localOverrides:{snapshot:{selectedSessionId:"session-other"}}});
+  const before=sortedEntries(harness.snapshot());
+  await assert.rejects(()=>harness.context.adopt(),error=>error.code==="recovery_local_changed");
+  assert.deepEqual(sortedEntries(harness.snapshot()),before);
+  assert.equal(harness.counters.apply,0);
+});
+
 test("recovery adoption: fallo de applySyncPayload restaura integramente el estado local",async()=>{
   const harness=adoptionHarness({applyError:Object.assign(new Error("partial apply"),{code:"apply_failed"})});
   const before=sortedEntries(harness.snapshot());
   await assert.rejects(()=>harness.context.adopt(),error=>error.code==="recovery_local_apply_failed");
   assert.deepEqual(sortedEntries(harness.snapshot()),before);
-  assert.equal(harness.values.get("gymos:deviceId"),"mobile-device");
+  assert.equal(harness.values.get("gymos:deviceId"),"134d82b5-0770-4779-a0d6-a79f99804c44");
   assert.deepEqual(harness.remoteWrites,[]);
 });
 
 test("recovery adoption: éxito aplica payload remoto y conserva deviceId móvil",async()=>{
   const harness=adoptionHarness();
   const result=await harness.context.adopt();
-  assert.equal(result.revision,913);
+  assert.equal(result.revision,916);
   assert.equal(harness.counters.apply,1);
-  assert.equal(harness.values.get("gymos:deviceId"),"mobile-device");
+  assert.equal(harness.values.get("gymos:deviceId"),"134d82b5-0770-4779-a0d6-a79f99804c44");
   assert.equal(
     JSON.parse(harness.values.get("gymos:routine:canonical")).routineId,
     "routine-02488c9c-d38e-4b59-8814-f7e0bcbd7d5e"
@@ -960,17 +1022,31 @@ test("recovery adoption: éxito aplica payload remoto y conserva deviceId móvil
   assert.equal(harness.values.get("gymos:selectedSessionId"),"roadmap-2026-08-a");
 });
 
-test("recovery adoption: éxito fija revisiones 913, limpia pending y no ejecuta sync",async()=>{
+test("recovery adoption: éxito fija revisiones 916, limpia pending y no ejecuta sync",async()=>{
   const harness=adoptionHarness();
   await harness.context.adopt();
-  assert.equal(harness.values.get("gymos:localRevision"),"913");
-  assert.equal(harness.values.get("gymos:lastRemoteRevision"),"913");
-  assert.equal(harness.values.get("gymos:syncBaseRevision"),"913");
+  assert.equal(harness.values.get("gymos:localRevision"),"916");
+  assert.equal(harness.values.get("gymos:lastRemoteRevision"),"916");
+  assert.equal(harness.values.get("gymos:syncBaseRevision"),"916");
   assert.equal(harness.values.get("gymos:syncProtocolVersion"),"2");
   assert.equal(harness.values.get("gymos:lastSyncHash"),"759d936c");
   assert.equal(harness.values.has("gymos:syncPending"),false);
   assert.equal(harness.counters.syncNow,0);
   assert.equal(harness.counters.autoSync,0);
+  assert.equal(harness.counters.cas,0);
+  assert.equal(harness.counters.rpc,0);
+});
+
+test("recovery adoption: no llama CAS RPC ni escritura directa a gymos_sync",()=>{
+  const source=appSource.slice(
+    appSource.indexOf("async function adoptCanonicalRemoteSyncHeadOnThisDevice"),
+    appSource.indexOf("async function syncNow")
+  );
+  assert.doesNotMatch(source,/writeSyncEnvelopeWithCas\(/);
+  assert.doesNotMatch(source,/gymos_sync_compare_and_swap/);
+  assert.doesNotMatch(source,/\.rpc\(/);
+  assert.doesNotMatch(source,/from\("gymos_sync"\)\.(?:insert|update|upsert|delete)\(/);
+  assert.doesNotMatch(source,/\.upsert\(/);
 });
 
 test("sync v2 móvil legacy base 912 pending contra remoto v2 913 queda en conflicto sin upload",async()=>{
@@ -1183,7 +1259,7 @@ test("RC2 respeta foco visible y movimiento reducido",()=>{
 });
 
 test("RC2 actualiza el caché y mantiene Supabase fuera de Cache Storage",()=>{
-  assert.match(workerSource,/const GYMOS_BUILD_VERSION="4\.2\.0-rc\.8-recovery916"/);
+  assert.match(workerSource,/const GYMOS_BUILD_VERSION="4\.2\.0-rc\.9-adoption916"/);
   assert.match(workerSource,/const CACHE=`gymos-cache-\$\{GYMOS_BUILD_VERSION\}`/);
   assert.match(workerSource,/e\.request\.method!=="GET"\|\|url\.origin!==self\.location\.origin/);
   assert.match(workerSource,/keys\.filter\(key=>key\.startsWith\("gymos-cache-"\)&&key!==CACHE\)/);

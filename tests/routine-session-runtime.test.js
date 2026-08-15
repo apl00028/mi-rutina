@@ -193,7 +193,7 @@ test("la integración carga runtime antes de app y lo precachea con versión rc.
   assert.ok(indexSource.indexOf('src="routine-session-runtime.js"')<
     indexSource.indexOf('src="app.js?v='));
   assert.match(workerSource,/routine-session-runtime\.js/);
-  assert.match(workerSource,/const GYMOS_BUILD_VERSION="4\.2\.0-rc\.8-recovery916"/);
+  assert.match(workerSource,/const GYMOS_BUILD_VERSION="4\.2\.0-rc\.9-adoption916"/);
 });
 
 test("Inicio, entrenamiento y finalización consumen sessionId",()=>{

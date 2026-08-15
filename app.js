@@ -1,4 +1,4 @@
-const GYMOS_VERSION="4.2.0-rc.8-recovery916";
+const GYMOS_VERSION="4.2.0-rc.9-adoption916";
 const GYMOS_NAV_EXPANDED_KEY="gymos:deviceNavigationExpanded";
 const GYMOS_FONT_SCALES=["font-scale-sm","font-scale-md","font-scale-lg","font-scale-xl"];
 
@@ -5291,15 +5291,20 @@ const SYNC_RECOVERY_EXPECTED_REMOTE=Object.freeze({
   checksum:"a585090d"
 });
 const SYNC_ADOPTION_EXPECTED_REMOTE=Object.freeze({
-  revision:913,
+  revision:916,
   checksum:"759d936c",
   routineId:"routine-02488c9c-d38e-4b59-8814-f7e0bcbd7d5e",
   selectedSessionId:"roadmap-2026-08-a",
   syncProtocolVersion:2
 });
 const SYNC_ADOPTION_EXPECTED_LOCAL=Object.freeze({
-  syncBaseRevision:912,
-  syncPending:true
+  deviceId:"134d82b5-0770-4779-a0d6-a79f99804c44",
+  localRevision:915,
+  lastRemoteRevision:915,
+  syncBaseRevision:915,
+  syncPending:true,
+  routineId:"routine-0916bea3-2e64-446b-8219-529102300960",
+  selectedSessionId:"session-7846de07-5290-4758-88d0-43d54e75885e"
 });
 const SYNC_RECOVERY_EXPECTED_LOCAL=Object.freeze({
   routineId:"routine-02488c9c-d38e-4b59-8814-f7e0bcbd7d5e",
@@ -5420,19 +5425,12 @@ function assertAdoptionRemoteExpected(row){
   return summary;
 }
 function assertAdoptionLocalExpected(snapshot=localSyncDiagnosticSnapshot()){
-  if(snapshot.syncBaseRevision!==SYNC_ADOPTION_EXPECTED_LOCAL.syncBaseRevision){
-    throw recoveryError("recovery_local_changed",{
-      field:"syncBaseRevision",
-      expected:SYNC_ADOPTION_EXPECTED_LOCAL.syncBaseRevision,
-      actual:snapshot.syncBaseRevision
-    });
-  }
-  if(snapshot.syncPending!==SYNC_ADOPTION_EXPECTED_LOCAL.syncPending){
-    throw recoveryError("recovery_local_changed",{
-      field:"syncPending",
-      expected:SYNC_ADOPTION_EXPECTED_LOCAL.syncPending,
-      actual:snapshot.syncPending
-    });
+  for(const [field,expected] of Object.entries(SYNC_ADOPTION_EXPECTED_LOCAL)){
+    if(snapshot[field]!==expected){
+      throw recoveryError("recovery_local_changed",{
+        field,expected,actual:snapshot[field]
+      });
+    }
   }
   return snapshot;
 }

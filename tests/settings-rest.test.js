@@ -301,14 +301,19 @@ function createFakeElement(id){
 function loadAccountDomHarness(){
   const start=appSource.indexOf("function renderAccount(");
   const end=appSource.indexOf("function renderAiSettings(",start);
+  const updateStart=appSource.indexOf("function updateSyncIndicators(");
+  const updateEnd=appSource.indexOf("function syncStatusLabel(",updateStart);
   assert.ok(start>=0&&end>start);
+  assert.ok(updateStart>=0&&updateEnd>updateStart);
   const elements=new Map();
+  let lastSyncElements=[];
   const values=new Map([
     ["gymos:lastSyncAt","2026-08-16T08:12:00.000Z"]
   ]);
   const downloads=[];
   const toasts=[];
   const messages=[];
+  const audits=[];
   const app={
     html:"",
     set innerHTML(html){
@@ -317,6 +322,11 @@ function loadAccountDomHarness(){
       for(const match of html.matchAll(/id="([^"]+)"/g)){
         elements.set(match[1],createFakeElement(match[1]));
       }
+      lastSyncElements=Array.from(html.matchAll(/<[^>]+data-last-sync[^>]*>(.*?)<\/[^>]+>/g),match=>{
+        const element=createFakeElement("data-last-sync");
+        element.textContent=match[1];
+        return element;
+      });
     },
     get innerHTML(){
       return this.html;
@@ -341,11 +351,15 @@ function loadAccountDomHarness(){
       accountPasswordEditorOpen:false,
       accountPasswordMessage:null,
       accountPasswordReauthRequired:false,
-      accountProfileStatus:"ready"
+      accountProfileStatus:"ready",
+      syncStatus:"synced"
     },
     document:{
       getElementById:getElement,
-      querySelectorAll:()=>[],
+      querySelectorAll:selector=>{
+        if(selector==="[data-last-sync]") return lastSyncElements;
+        return [];
+      },
       querySelector:()=>null
     },
     localStorage:{
@@ -372,9 +386,16 @@ function loadAccountDomHarness(){
     getSyncConflictPreference:()=>"ask",
     setSyncConflictPreference(){},
     syncSecurityState:()=>({configured:true}),
-    getSyncAudit:()=>[{type:"sync_trace",status:"none_synced"}],
+    getSyncAudit:()=>audits,
+    addSyncAudit:(action,status,details={})=>audits.push({action,status,details}),
+    lastSyncTraceBranch:()=>{
+      const trace=[...audits].reverse().find(entry=>entry.action==="sync_trace");
+      return trace?.details?.branch||trace?.details?.condition||trace?.status||"Sin trazas";
+    },
     getLastSyncAt:()=>values.get("gymos:lastSyncAt")||"",
     formatSyncDate:value=>`FMT:${value}`,
+    syncStatusLabel:()=>"Sincronizado",
+    syncStatusDescription:()=>"Al día",
     downloadBrowserFile:async(content,fileName,mimeType)=>{
       downloads.push({content,fileName,mimeType,payload:JSON.parse(content)});
       return {method:"anchor"};
@@ -387,6 +408,7 @@ function loadAccountDomHarness(){
       );
     },
     syncNow:async()=>{
+      context.addSyncAudit("sync_trace","none_synced",{branch:"same_revision_equivalent"});
       values.set("gymos:lastSyncAt","2026-08-16T10:30:00.000Z");
       return {direction:"none",revision:964};
     },
@@ -416,9 +438,12 @@ function loadAccountDomHarness(){
     Date
   };
   vm.createContext(context);
-  vm.runInContext(`${appSource.slice(start,end)}; this.renderAccount=renderAccount;`,context);
+  vm.runInContext(`${appSource.slice(start,end)}; ${appSource.slice(updateStart,updateEnd)}; this.renderAccount=renderAccount; this.updateSyncIndicators=updateSyncIndicators;`,context);
   context.renderAccount();
-  return {context,elements,downloads,toasts,messages,values,app};
+  return {
+    context,elements,downloads,toasts,messages,values,app,audits,
+    lastSyncElements:()=>lastSyncElements
+  };
 }
 
 test("Cuenta enlaza los botones reales de audit, backup y sync sin cruzar exportaciones",async()=>{
@@ -442,6 +467,29 @@ test("Cuenta enlaza los botones reales de audit, backup y sync sin cruzar export
   await harness.elements.get("accountSyncNow").onclick();
   assert.equal(harness.values.get("gymos:lastSyncAt"),"2026-08-16T10:30:00.000Z");
   assert.match(harness.app.innerHTML,/Última sincronización: <span data-last-sync>FMT:2026-08-16T10:30:00\.000Z<\/span>/);
+  assert.match(harness.app.innerHTML,/Diagnóstico lastSyncAt: <span data-sync-diagnostic-last-sync>2026-08-16T10:30:00\.000Z<\/span>/);
+  assert.match(harness.app.innerHTML,/Última rama sync: <span data-sync-diagnostic-branch>account_button_result<\/span>/);
   assert.equal(harness.toasts.at(-1),"Sincronización completada");
+  assert.deepEqual(
+    harness.audits.filter(entry=>entry.action==="sync_trace").map(entry=>entry.status),
+    ["none_synced","account_button_result"]
+  );
+  assert.equal(harness.audits.at(-1).details.branch,"account_button_result");
+  assert.equal(harness.audits.at(-1).details.lastSyncAtBefore,"2026-08-16T08:12:00.000Z");
+  assert.equal(harness.audits.at(-1).details.lastSyncAtAfter,"2026-08-16T10:30:00.000Z");
+  assert.equal(harness.audits.at(-1).details.result.direction,"none");
   assert.deepEqual(harness.messages,[]);
+});
+
+test("Cuenta actualiza Última sincronización con updateSyncIndicators sin rerender",()=>{
+  const harness=loadAccountDomHarness();
+  const visibleLastSync=harness.lastSyncElements();
+  assert.equal(visibleLastSync.length,1);
+  assert.equal(visibleLastSync[0].textContent,"FMT:2026-08-16T08:12:00.000Z");
+
+  harness.context.renderAccount=()=>{throw new Error("unexpected_rerender");};
+  harness.values.set("gymos:lastSyncAt","2026-08-16T12:24:00Z");
+  harness.context.updateSyncIndicators();
+
+  assert.equal(visibleLastSync[0].textContent,"FMT:2026-08-16T12:24:00Z");
 });

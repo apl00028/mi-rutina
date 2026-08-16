@@ -4694,6 +4694,10 @@ function addSyncAudit(action,status,details={}){
   items.push({id:`audit-${Date.now().toString(36)}`,createdAt:new Date().toISOString(),action,status,details});
   localStorage.setItem(SYNC_AUDIT_KEY,JSON.stringify(items.slice(-100)));
 }
+function lastSyncTraceBranch(){
+  const trace=[...getSyncAudit()].reverse().find(entry=>entry.action==="sync_trace");
+  return trace?.details?.branch||trace?.details?.condition||trace?.status||"Sin trazas";
+}
 function syncAuditFingerprintSummary({
   remote=null,remoteRevision=null,localRevision=null,lastRemoteRevision=null,
   syncBaseRevision=null,hasPendingChanges=null,checksumComparison=null,
@@ -6019,6 +6023,8 @@ function updateSyncIndicators(){
   document.querySelectorAll("[data-sync-dot]").forEach(el=>el.className=`sync-dot ${state.syncStatus}`);
   document.querySelectorAll("[data-sync-description]").forEach(el=>el.textContent=syncStatusDescription());
   document.querySelectorAll("[data-last-sync]").forEach(el=>el.textContent=formatSyncDate(getLastSyncAt()));
+  document.querySelectorAll("[data-sync-diagnostic-last-sync]").forEach(el=>el.textContent=localStorage.getItem("gymos:lastSyncAt")||"");
+  document.querySelectorAll("[data-sync-diagnostic-branch]").forEach(el=>el.textContent=lastSyncTraceBranch());
   document.querySelectorAll(".shell-sync-trigger").forEach(el=>{
     el.classList.remove(
       "local","synced","connected","configured","pending","syncing","offline",
@@ -16255,6 +16261,8 @@ function renderAccount(){
             <article class="ok"><span>✓</span><div><strong>Última revisión remota</strong><small>${getLastRemoteRevision()}</small></div></article>
           </div>
           <label><span>Cuando haya conflicto</span><select id="syncConflictPreference"><option value="ask" ${getSyncConflictPreference()==="ask"?"selected":""}>Preguntarme</option><option value="local" ${getSyncConflictPreference()==="local"?"selected":""}>Mantener este dispositivo</option><option value="remote" ${getSyncConflictPreference()==="remote"?"selected":""}>Usar la nube</option></select></label>
+          <p class="subtle">Diagnóstico lastSyncAt: <span data-sync-diagnostic-last-sync>${esc(localStorage.getItem("gymos:lastSyncAt")||"")}</span></p>
+          <p class="subtle">Última rama sync: <span data-sync-diagnostic-branch>${esc(lastSyncTraceBranch())}</span></p>
           <button id="exportSyncAudit" class="secondary full">Exportar registro de sincronización</button>
         </section>
 
@@ -16570,7 +16578,20 @@ function renderAccount(){
       }
     };
     document.getElementById("accountSyncNow").onclick=async()=>{
-      try{await syncNow();toast("Sincronización completada");renderAccount();}
+      try{
+        const lastSyncAtBefore=localStorage.getItem("gymos:lastSyncAt")||"";
+        const result=await syncNow();
+        const lastSyncAtAfter=localStorage.getItem("gymos:lastSyncAt")||"";
+        addSyncAudit("sync_trace","account_button_result",{
+          branch:"account_button_result",
+          lastSyncAtBefore,
+          lastSyncAtAfter,
+          result:{direction:result?.direction||null}
+        });
+        updateSyncIndicators();
+        toast("Sincronización completada");
+        renderAccount();
+      }
       catch(error){showAccountManagementMessage("error",error?.message||"No se pudo sincronizar.");}
     };
     document.getElementById("accountExport").onclick=async()=>{

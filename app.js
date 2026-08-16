@@ -12500,6 +12500,9 @@ function bindActiveWorkoutEvents(context){
             beforeExercise,getRestSeconds()
           );
           const beforeSet=beforeExercise.series.find(item=>item.setInstanceId===setInstanceId);
+          const shouldStartRest=activeWorkoutApi().shouldStartRestTimerAfterSetCompletion({
+            exercises:before.exercises,exerciseInstanceId,setInstanceId
+          });
           if(
             beforeSet&&!beforeSet.done&&
             isTimedExercise(beforeExercise)&&!hasInputValue(beforeSet.seconds)
@@ -12512,7 +12515,10 @@ function bindActiveWorkoutEvents(context){
             const wasDone=Boolean(set.done);
             set.done=!wasDone;
             if(wasDone) exercise.completedAt=null;
-            startRest=!wasDone&&!set.warmup;
+            else if(exercise.series.length&&exercise.series.every(item=>item.done)){
+              exercise.completedAt=new Date().toISOString();
+            }
+            startRest=shouldStartRest;
           },{immediate:true,scheduleSync:true,exerciseInstanceId});
           if(startRest) startTimer(restDuration);
         }finally{state.workoutSetBusyKey=null;}

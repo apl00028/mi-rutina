@@ -409,7 +409,8 @@ test("completar serie usa duración efectiva y warm-up conserva el contrato actu
     appSource.indexOf("function renderLegacyWorkout(")
   );
   assert.match(binding,/effectiveRestSeconds\([\s\S]*?beforeExercise,getRestSeconds\(\)/);
-  assert.match(binding,/startRest=!wasDone&&!set\.warmup/);
+  assert.match(binding,/shouldStartRestTimerAfterSetCompletion\(\{[\s\S]*?exercises:before\.exercises,exerciseInstanceId,setInstanceId/);
+  assert.match(binding,/startRest=shouldStartRest/);
   assert.match(binding,/if\(startRest\) startTimer\(restDuration\)/);
   assert.match(appSource,/workout-exercise-prescription[\s\S]*?\$\{restDuration\} s descanso/);
 });

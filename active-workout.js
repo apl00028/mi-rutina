@@ -342,6 +342,29 @@
       finished:Boolean((hasDeadline||running)&&remaining===0)
     };
   }
+  function shouldStartRestTimerAfterSetCompletion({
+    exercises=[],exerciseInstanceId=null,setInstanceId=null
+  }={}){
+    const rows=list(exercises);
+    const currentId=text(exerciseInstanceId);
+    const targetSetId=text(setInstanceId);
+    if(!currentId||!targetSetId) return false;
+    const exerciseIndex=rows.findIndex(
+      exercise=>text(exercise?.exerciseInstanceId)===currentId
+    );
+    if(exerciseIndex<0) return false;
+    const exercise=rows[exerciseIndex];
+    const set=list(exercise?.series).find(
+      item=>text(item?.setInstanceId)===targetSetId
+    );
+    if(!set||set.done||set.warmup) return false;
+    return rows.some((item,index)=>list(item?.series).some(candidate=>{
+      if(index===exerciseIndex&&text(candidate?.setInstanceId)===targetSetId){
+        return false;
+      }
+      return !candidate?.done;
+    }));
+  }
   function workoutCompletionReviewModel({exercises=[],elapsedMs=0}={}){
     const rows=list(exercises).map((exercise,index)=>{
       const sets=list(exercise?.series).map(normalizeSeriesSummarySet);
@@ -550,6 +573,7 @@
     sessionTimerControlModel,
     validRestSeconds,effectiveRestSeconds,restTimerRemaining,
     buildRestTimerPayload,normalizeRestTimerPayload,restTimerBelongsTo,restTimerModel,
+    shouldStartRestTimerAfterSetCompletion,
     workoutCompletionReviewModel,
     mobileWorkoutViewModel,
     reduceMobileWorkoutUi

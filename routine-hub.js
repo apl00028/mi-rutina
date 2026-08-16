@@ -94,12 +94,20 @@
     const rir=rangeParts(exercise?.prescription?.targetRir??exercise?.targetRir??exercise?.rir);
     const sets=Number(exercise?.prescription?.sets??exercise?.sets)||0;
     const rest=Number(exercise?.prescription?.restSeconds??exercise?.restSeconds);
+    const status=text(exercise?.status).toLowerCase();
+    const specialState=exercise?.disabled||exercise?.skipped||exercise?.omitted||
+      ["disabled","skipped","omitted"].includes(status)
+        ?status||(
+          exercise?.disabled?"disabled":exercise?.skipped?"skipped":"omitted"
+        )
+        :"";
     return {
       order:index+1,name:text(exercise?.name)||"Ejercicio",
       sets,target:`${target.min}${target.max!==target.min?`–${target.max}`:""} ${target.type==="duracion"?"s":"reps"}`,
       rir:rir.min===""?"Sin indicar":`${rir.min}${rir.max!==rir.min?`–${rir.max}`:""}`,
       rest:Number.isFinite(rest)?`${rest} s`:"Sin indicar",
-      notes:text(exercise?.notes)||text(exercise?.prescription?.notes)
+      notes:text(exercise?.notes)||text(exercise?.prescription?.notes),
+      specialState
     };
   }
   function routineSummary(routine){
@@ -123,7 +131,7 @@
         <p>${esc(presentableFocus(session.focus)||"Enfoque general")}${duration?` · ${duration} min`:""}</p>
       </header>
       ${exercises.length?`<div class="routine-hub-exercises">${exercises.map(item=>`
-        <article class="routine-hub-exercise">
+        <article class="routine-hub-exercise${item.specialState?` is-${esc(item.specialState)}`:""}">
           <span class="routine-hub-order">${item.order}</span>
           <div><strong>${esc(item.name)}</strong>
           <dl><div><dt>Series</dt><dd>${item.sets}</dd></div><div><dt>Objetivo</dt><dd>${esc(item.target)}</dd></div>

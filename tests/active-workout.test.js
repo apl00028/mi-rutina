@@ -84,6 +84,7 @@ test("entrenamiento activo: el módulo expone modelos puros sin dependencias de 
     "exerciseMuscleModel","exerciseTechniqueModel","exerciseLibraryResolutionModel",
     "googleExerciseReferenceModel","exerciseRecordType",
     "setEntryModel","sessionTimerControlModel","restTimerModel",
+    "shouldStartRestTimerAfterSetCompletion",
     "workoutCompletionReviewModel","exerciseDetailDisclosureModel",
     "mobileWorkoutViewModel","reduceMobileWorkoutUi"
   ]) assert.equal(typeof api[name],"function",name);
@@ -721,7 +722,10 @@ test("registro: ofrece campos etiquetados, calentamiento completo y acciones ine
 test("registro: completar usa busy, inicia descanso solo en serie de trabajo y permite confirmación interna",()=>{
   const completeBranch=between(bindingSource,'}else if(button.matches("[data-complete-active-set]"))','}else if(button.matches("[data-add-extra-set]"))');
   assert.match(completeBranch,/workoutSetBusyKey===busyKey/);
-  assert.match(completeBranch,/startRest=!wasDone&&!set\.warmup/);
+  assert.match(completeBranch,/shouldStartRestTimerAfterSetCompletion\(\{[\s\S]*?exercises:before\.exercises,exerciseInstanceId,setInstanceId/);
+  assert.match(completeBranch,/startRest=shouldStartRest/);
+  assert.match(completeBranch,/exercise\.series\.length&&exercise\.series\.every\(item=>item\.done\)/);
+  assert.match(completeBranch,/exercise\.completedAt=new Date\(\)\.toISOString\(\)/);
   assert.match(completeBranch,/effectiveRestSeconds\(\s*beforeExercise,getRestSeconds\(\)\s*\)/);
   assert.match(completeBranch,/startTimer\(restDuration\)/);
   assert.match(bindingSource,/workoutSeriesDeleteCandidate/);
@@ -945,6 +949,72 @@ test("corregir una serie completada devuelve el ejercicio a En progreso",()=>{
   assert.match(setBranch,/if\(wasDone\) exercise\.completedAt=null/);
 });
 
+test("última serie: el último ejercicio queda completado y se renderiza verde tras rerender",()=>{
+  const setBranch=between(
+    bindingSource,
+    '}else if(button.matches("[data-complete-active-set]"))',
+    '}else if(button.matches("[data-add-extra-set]"))'
+  );
+  assert.match(setBranch,/exercise\.completedAt=new Date\(\)\.toISOString\(\)/);
+  assert.match(setBranch,/updateActiveWorkoutExerciseUi\(exerciseInstanceId,updated\)/);
+  assert.match(workoutUiSource,/class="workout-exercise-card status-\$\{status\}/);
+  assert.match(workoutUiSource,/workout-exercise-state" data-status="\$\{status\}"/);
+  assert.match(stylesSource,/\.workout-exercise-state\[data-status="completed"\]\{color:var\(--success\)\}/);
+  assert.match(stylesSource,/\.workout-exercise-card\.status-completed/);
+});
+
+test("descanso tras serie: se mantiene entre series y ejercicios pendientes",()=>{
+  const api=loadApi();
+  const exercises=[
+    {
+      exerciseInstanceId:"press",
+      series:[
+        {setInstanceId:"press-1",done:false},
+        {setInstanceId:"press-2",done:false}
+      ]
+    },
+    {
+      exerciseInstanceId:"row",
+      series:[{setInstanceId:"row-1",done:false}]
+    }
+  ];
+  assert.equal(api.shouldStartRestTimerAfterSetCompletion({
+    exercises,exerciseInstanceId:"press",setInstanceId:"press-1"
+  }),true);
+  exercises[0].series[0].done=true;
+  assert.equal(api.shouldStartRestTimerAfterSetCompletion({
+    exercises,exerciseInstanceId:"press",setInstanceId:"press-2"
+  }),true);
+});
+
+test("descanso tras serie: no arranca al completar la última serie del último ejercicio",()=>{
+  const api=loadApi();
+  const exercises=[
+    {
+      exerciseInstanceId:"press",
+      completedAt:"2026-07-30T10:00:00.000Z",
+      series:[
+        {setInstanceId:"press-1",done:true},
+        {setInstanceId:"press-2",done:true}
+      ]
+    },
+    {
+      exerciseInstanceId:"row",
+      series:[
+        {setInstanceId:"row-1",done:true},
+        {setInstanceId:"row-2",done:false}
+      ]
+    }
+  ];
+  assert.equal(api.shouldStartRestTimerAfterSetCompletion({
+    exercises,exerciseInstanceId:"row",setInstanceId:"row-2"
+  }),false);
+  const completed=plain(exercises);
+  completed[1].series[1].done=true;
+  completed[1].completedAt="2026-07-30T10:01:00.000Z";
+  assert.equal(api.workoutCompletionReviewModel({exercises:completed}).complete,true);
+});
+
 test("serie extra: ofrece una única acción visible por breakpoint y etiqueta la fila",()=>{
   assert.match(workoutUiSource,/data-add-extra-set/);
   assert.match(workoutUiSource,/add-extra-set-header/);
@@ -1001,7 +1071,7 @@ test("integración offline: los módulos activos cargan antes de app.js y están
   assert.ok(moduleIndex>=0&&progressIndex>moduleIndex&&appIndex>progressIndex);
   assert.match(workerSource,/"active-workout\.js"/);
   assert.match(workerSource,/"workout-progress\.js"/);
-  assert.match(workerSource,/const GYMOS_BUILD_VERSION="4\.2\.0-rc\.9-adoption916"/);
+  assert.match(workerSource,/const GYMOS_BUILD_VERSION="4\.2\.0-rc\.12-functional-sync-checksum"/);
   assert.match(workerSource,/const CACHE=`gymos-cache-\$\{GYMOS_BUILD_VERSION\}`/);
   assert.match(workerSource,/url\.origin!==self\.location\.origin/);
 });

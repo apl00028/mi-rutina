@@ -122,6 +122,21 @@ test("Centro de gestión explica el flujo completo con texto accesible",()=>{
   }
 });
 
+test("la vista de sesión muestra ejercicios normales sin opacidad indebida",()=>{
+  const sessionDetail=source.slice(
+    source.indexOf("function renderSessionDetail("),
+    source.indexOf("function renderOverview(")
+  );
+  assert.match(sessionDetail,/class="routine-hub-exercise\$\{item\.specialState/);
+  assert.match(stylesSource,/\.routine-hub-exercise\{[^}]*opacity:1[^}]*color:var\(--text\)/);
+  assert.doesNotMatch(stylesSource,/\.routine-hub-exercise\{[^}]*opacity:\.(?:[0-9]+)/);
+});
+
+test("la vista de sesión conserva atenuación solo para estados especiales",()=>{
+  assert.match(source,/disabled","skipped","omitted"/);
+  assert.match(stylesSource,/\.routine-hub-exercise\.is-skipped,\.routine-hub-exercise\.is-disabled,\.routine-hub-exercise\.is-omitted\{opacity:\.55\}/);
+});
+
 test("las cinco acciones permanecen en filas accesibles de ancho completo",()=>{
   const overview=source.slice(
     source.indexOf("function renderOverview("),source.indexOf("function renderActive(")

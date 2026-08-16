@@ -5292,7 +5292,8 @@ body.reduce-motion .active-workout-shell[data-workout-layout="mobile"] *{
 .routine-hub-session>header p{margin:0;color:var(--muted)}
 .routine-hub-session-label,.routine-hub-order{display:grid;place-items:center;min-width:32px;height:32px;border:1px solid var(--border);border-radius:6px;font-weight:800}
 .routine-hub-exercises{border-top:1px solid var(--border)}
-.routine-hub-exercise{display:grid;grid-template-columns:38px minmax(0,1fr);gap:12px;padding:14px 0;border-bottom:1px solid var(--border)}
+.routine-hub-exercise{display:grid;grid-template-columns:38px minmax(0,1fr);gap:12px;padding:14px 0;border-bottom:1px solid var(--border);opacity:1;color:var(--text)}
+.routine-hub-exercise.is-skipped,.routine-hub-exercise.is-disabled,.routine-hub-exercise.is-omitted{opacity:.55}
 .routine-hub-exercise dl{display:flex;flex-wrap:wrap;gap:8px 18px;margin:7px 0 0}
 .routine-hub-exercise dl div{display:flex;gap:5px}
 .routine-hub-exercise dt{color:var(--muted)}

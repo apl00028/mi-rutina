@@ -276,3 +276,172 @@ test("Cuenta exporta copia y registro con contenido, nombre, flujo de descarga y
   assert.match(exportDataSource,/await downloadBrowserFile\(\s*JSON\.stringify\(payload,null,2\),\s*`gymos-backup-\$\{new Date\(\)\.toISOString\(\)\.slice\(0,10\)\}\.json`,\s*"application\/json"/);
   assert.match(exportDataSource,/toast\("Copia exportada"\)/);
 });
+
+function createFakeElement(id){
+  return {
+    id,
+    value:"",
+    textContent:"",
+    hidden:false,
+    disabled:false,
+    dataset:{},
+    classList:{
+      add(){},
+      remove(){},
+      toggle(){},
+      contains(){return false;}
+    },
+    setAttribute(){},
+    focus(){},
+    addEventListener(){},
+    removeEventListener(){}
+  };
+}
+
+function loadAccountDomHarness(){
+  const start=appSource.indexOf("function renderAccount(");
+  const end=appSource.indexOf("function renderAiSettings(",start);
+  assert.ok(start>=0&&end>start);
+  const elements=new Map();
+  const values=new Map([
+    ["gymos:lastSyncAt","2026-08-16T08:12:00.000Z"]
+  ]);
+  const downloads=[];
+  const toasts=[];
+  const messages=[];
+  const app={
+    html:"",
+    set innerHTML(html){
+      this.html=html;
+      elements.clear();
+      for(const match of html.matchAll(/id="([^"]+)"/g)){
+        elements.set(match[1],createFakeElement(match[1]));
+      }
+    },
+    get innerHTML(){
+      return this.html;
+    }
+  };
+  const getElement=id=>{
+    if(!elements.has(id)) elements.set(id,createFakeElement(id));
+    return elements.get(id);
+  };
+  const context={
+    app,
+    state:{
+      syncUser:{
+        id:"user-12345678",
+        email:"mobile@example.com",
+        created_at:"2026-08-01T10:00:00.000Z",
+        email_confirmed_at:"2026-08-01T10:01:00.000Z"
+      },
+      accountProfile:{avatarKey:"initials",alias:"Adrian"},
+      accountMode:"login",
+      accountManagementMessage:null,
+      accountPasswordEditorOpen:false,
+      accountPasswordMessage:null,
+      accountPasswordReauthRequired:false,
+      accountProfileStatus:"ready"
+    },
+    document:{
+      getElementById:getElement,
+      querySelectorAll:()=>[],
+      querySelector:()=>null
+    },
+    localStorage:{
+      getItem:key=>values.has(key)?values.get(key):null,
+      setItem:(key,value)=>values.set(key,String(value)),
+      removeItem:key=>values.delete(key)
+    },
+    ACCOUNT_AVATAR_OPTIONS:[{key:"initials",label:"Iniciales",icon:"AP"}],
+    accountSecuritySummary:()=>({publicKeyConfigured:true}),
+    hasLocalUserData:()=>false,
+    localMigrationStatus:()=>"completed",
+    accountAlias:()=>"Adrian",
+    validAccountAvatarKey:key=>key||"initials",
+    accountAvatarContent:()=>"AP",
+    accountDisplayName:()=>"Adrian",
+    accountInitials:()=>"AP",
+    normalizeAccountAlias:value=>String(value||"").trim(),
+    esc:value=>String(value??"").replace(/[&<>"']/g,char=>({
+      "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"
+    }[char])),
+    isEmailConfirmed:()=>true,
+    getLocalRevision:()=>964,
+    getLastRemoteRevision:()=>964,
+    getSyncConflictPreference:()=>"ask",
+    setSyncConflictPreference(){},
+    syncSecurityState:()=>({configured:true}),
+    getSyncAudit:()=>[{type:"sync_trace",status:"none_synced"}],
+    getLastSyncAt:()=>values.get("gymos:lastSyncAt")||"",
+    formatSyncDate:value=>`FMT:${value}`,
+    downloadBrowserFile:async(content,fileName,mimeType)=>{
+      downloads.push({content,fileName,mimeType,payload:JSON.parse(content)});
+      return {method:"anchor"};
+    },
+    exportData:async()=>{
+      await context.downloadBrowserFile(
+        JSON.stringify({version:1,exportedAt:"2026-08-16T10:30:00.000Z",history:[]},null,2),
+        "gymos-backup-2026-08-16.json",
+        "application/json"
+      );
+    },
+    syncNow:async()=>{
+      values.set("gymos:lastSyncAt","2026-08-16T10:30:00.000Z");
+      return {direction:"none",revision:964};
+    },
+    toast:message=>toasts.push(message),
+    showAccountManagementMessage:(type,text)=>messages.push({type,text}),
+    migrateLocalDataToAccount:async()=>{},
+    saveAccountIdentityProfile:async()=>{},
+    getSupabaseClient:()=>null,
+    isAppAuthenticated:()=>true,
+    currentRoutineOwnerOrNull:()=>"user-12345678",
+    assertActiveLocalOwner(){},
+    renderSettings(){},
+    render(){},
+    confirm:()=>false,
+    deleteCloudData:async()=>{},
+    requestAccountDeletion:async()=>{},
+    signOutSync:async()=>{},
+    deactivateLocalUser(){},
+    saveCurrentUserVault(){},
+    deleteOwnerLocalData(){},
+    getSyncConfig:()=>({email:"mobile@example.com"}),
+    signUpWithPassword:async()=>{},
+    signInWithPassword:async()=>{},
+    friendlyAuthError:error=>error?.message||"error",
+    sendPasswordResetEmail:async()=>{},
+    console,
+    Date
+  };
+  vm.createContext(context);
+  vm.runInContext(`${appSource.slice(start,end)}; this.renderAccount=renderAccount;`,context);
+  context.renderAccount();
+  return {context,elements,downloads,toasts,messages,values,app};
+}
+
+test("Cuenta enlaza los botones reales de audit, backup y sync sin cruzar exportaciones",async()=>{
+  const harness=loadAccountDomHarness();
+  assert.match(harness.app.innerHTML,/Última sincronización: <span data-last-sync>FMT:2026-08-16T08:12:00\.000Z<\/span>/);
+
+  await harness.elements.get("exportSyncAudit").onclick();
+  assert.equal(harness.downloads.length,1);
+  assert.match(harness.downloads[0].fileName,/^gymos-sync-audit-log-\d{4}-\d{2}-\d{2}\.json$/);
+  assert.equal(harness.downloads[0].payload.type,"syncAuditLog");
+  assert.equal(harness.downloads[0].payload.filePurpose,"diagnostic_sync_audit_not_backup");
+  assert.equal(harness.downloads[0].payload.version,undefined);
+  assert.equal(harness.toasts.at(-1),"Registro de sincronización exportado");
+
+  await harness.elements.get("accountExport").onclick();
+  assert.equal(harness.downloads.length,2);
+  assert.equal(harness.downloads[1].fileName,"gymos-backup-2026-08-16.json");
+  assert.equal(harness.downloads[1].payload.version,1);
+  assert.equal(harness.downloads[1].payload.type,undefined);
+
+  await harness.elements.get("accountSyncNow").onclick();
+  assert.equal(harness.values.get("gymos:lastSyncAt"),"2026-08-16T10:30:00.000Z");
+  assert.match(harness.app.innerHTML,/Última sincronización: <span data-last-sync>FMT:2026-08-16T10:30:00\.000Z<\/span>/);
+  assert.equal(harness.toasts.at(-1),"Sincronización completada");
+  assert.deepEqual(harness.messages,[]);
+});

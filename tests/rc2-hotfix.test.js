@@ -2098,7 +2098,7 @@ test("RC2 respeta foco visible y movimiento reducido",()=>{
 });
 
 test("RC2 actualiza el caché y mantiene Supabase fuera de Cache Storage",()=>{
-  assert.match(workerSource,/const GYMOS_BUILD_VERSION="4\.2\.0-rc\.12-functional-sync-checksum"/);
+  assert.match(workerSource,/const GYMOS_BUILD_VERSION="4\.2\.0-rc\.13-sync-audit-last-sync"/);
   assert.match(workerSource,/const CACHE=`gymos-cache-\$\{GYMOS_BUILD_VERSION\}`/);
   assert.match(workerSource,/e\.request\.method!=="GET"\|\|url\.origin!==self\.location\.origin/);
   assert.match(workerSource,/keys\.filter\(key=>key\.startsWith\("gymos-cache-"\)&&key!==CACHE\)/);

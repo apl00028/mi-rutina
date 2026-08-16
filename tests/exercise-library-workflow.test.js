@@ -461,7 +461,7 @@ test("integración declara script una vez, orden correcto y caché rc.2",()=>{
   assert.ok(io>=0&&libraryIndex>io&&workflow>libraryIndex);
   assert.equal((indexSource.match(/exercise-library-workflow\.js/g)||[]).length,1);
   assert.equal((workerSource.match(/exercise-library-workflow\.js/g)||[]).length,1);
-  assert.match(workerSource,/const GYMOS_BUILD_VERSION="4\.2\.0-rc\.9-adoption916"/);
+  assert.match(workerSource,/const GYMOS_BUILD_VERSION="4\.2\.0-rc\.13-sync-audit-last-sync"/);
 });
 test("interfaz no usa onclick inline ni muestra JSON técnico en biblioteca",()=>{
   const start=appSource.lastIndexOf("function renderExerciseLibrary()");

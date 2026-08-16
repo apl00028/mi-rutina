@@ -951,7 +951,7 @@ test("script H2 aparece una vez y respeta el orden de dependencias",()=>{
 test("service worker incluye H2 y H3 una vez con estrategia segura rc.2",()=>{
   assert.equal((workerSource.match(/routine-session-migration\.js/g)||[]).length,1);
   assert.equal((workerSource.match(/routine-session-runtime\.js/g)||[]).length,1);
-  assert.match(workerSource,/const GYMOS_BUILD_VERSION="4\.2\.0-rc\.11-sync-payload-compat"/);
+  assert.match(workerSource,/const GYMOS_BUILD_VERSION="4\.2\.0-rc\.13-sync-audit-last-sync"/);
   assert.equal((workerSource.match(/addEventListener\("fetch"/g)||[]).length,1);
   assert.match(workerSource,/fetch\(e\.request\)/);
 });

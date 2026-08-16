@@ -1,4 +1,4 @@
-const GYMOS_VERSION="4.2.0-rc.12-functional-sync-checksum";
+const GYMOS_VERSION="4.2.0-rc.13-sync-audit-last-sync";
 const GYMOS_NAV_EXPANDED_KEY="gymos:deviceNavigationExpanded";
 const GYMOS_FONT_SCALES=["font-scale-sm","font-scale-md","font-scale-lg","font-scale-xl"];
 
@@ -16264,7 +16264,7 @@ function renderAccount(){
             <button id="accountSyncNow" class="primary">Sincronizar ahora</button>
             <button id="accountExport" class="secondary">Exportar copia</button>
           </div>
-          <p class="subtle">Última sincronización: ${formatSyncDate(getLastSyncAt())}</p>
+          <p class="subtle">Última sincronización: <span data-last-sync>${formatSyncDate(getLastSyncAt())}</span></p>
         </section>
 
         <section class="card danger-zone">

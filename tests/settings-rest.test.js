@@ -265,8 +265,10 @@ test("Cuenta exporta copia y registro con contenido, nombre, flujo de descarga y
     appSource.indexOf("routineFile.onchange",appSource.indexOf("async function exportData("))
   );
   assert.match(account,/id="exportSyncAudit"/);
-  assert.match(account,/downloadBrowserFile\(\s*JSON\.stringify\(\{\s*generatedAt:new Date\(\)\.toISOString\(\),\s*security:syncSecurityState\(\),\s*audit:getSyncAudit\(\)/);
-  assert.match(account,/`gymos-sync-audit-\$\{new Date\(\)\.toISOString\(\)\.slice\(0,10\)\}\.json`/);
+  assert.match(account,/type:"syncAuditLog"/);
+  assert.match(account,/filePurpose:"diagnostic_sync_audit_not_backup"/);
+  assert.match(account,/downloadBrowserFile\(\s*JSON\.stringify\(\{[\s\S]*generatedAt:new Date\(\)\.toISOString\(\),[\s\S]*security:syncSecurityState\(\),\s*audit:getSyncAudit\(\)/);
+  assert.match(account,/`gymos-sync-audit-log-\$\{new Date\(\)\.toISOString\(\)\.slice\(0,10\)\}\.json`/);
   assert.match(account,/toast\("Registro de sincronización exportado"\)/);
   assert.match(account,/showAccountManagementMessage\("error","No se pudo iniciar la descarga del registro/);
   assert.match(account,/document\.getElementById\("accountExport"\)\.onclick=async\(\)=>\{\s*try\{await exportData\(\);\}/);

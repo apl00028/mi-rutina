@@ -44,6 +44,7 @@ function syncHarness({
     ...(pending?[["gymos:syncPending","1"]]:[])
   ]);
   const counters={reads:0,writes:0,writeAttempts:0,applies:0};
+  const audits=[];
   let remoteState=sharedRemote?sharedRemote.state:(remote?JSON.parse(JSON.stringify(remote)):null);
   const currentRemoteState=()=>sharedRemote?sharedRemote.state:remoteState;
   const setRemoteState=value=>{
@@ -84,7 +85,7 @@ function syncHarness({
     },
     syncBodyMeasurementsWithSupabase:()=>Promise.resolve(),
     updateSyncIndicators:()=>{},
-    addSyncAudit:()=>{},
+    addSyncAudit:(action,status,details={})=>audits.push({action,status,details}),
     buildSyncPayload:()=>({stable:true}),
     simpleChecksum:()=>checksum,
     functionalSyncChecksum:payload=>payload?.functionalVariant||"functional-same",
@@ -112,6 +113,21 @@ function syncHarness({
         equivalent:legacyAck||remote?.checksum===localChecksum
       };
     },
+    syncAuditFingerprintSummary:details=>({
+      appVersion:"test",
+      branch:details?.condition||null,
+      remoteRevision:details?.remoteRevision??null,
+      localRevision:details?.localRevision??null,
+      lastRemoteRevision:details?.lastRemoteRevision??null,
+      syncBaseRevision:details?.syncBaseRevision??null,
+      hasPendingChanges:details?.hasPendingChanges??null,
+      checksumMode:details?.checksumComparison?.mode||null,
+      functionalChecksum:{
+        local:details?.checksumComparison?.localFunctionalChecksum||details?.localFunctionalChecksum||null,
+        remote:details?.checksumComparison?.remoteFunctionalChecksum||details?.remote?.payload?.functionalChecksum||null,
+        base:details?.baseFunctionalChecksum||values.get("gymos:lastSyncHash")||null
+      }
+    }),
     getLocalRevision:()=>Number(values.get("gymos:localRevision")||0),
     setLocalRevision:value=>values.set("gymos:localRevision",String(value)),
     getLastRemoteRevision:()=>Number(values.get("gymos:lastRemoteRevision")||0),
@@ -172,7 +188,7 @@ function syncHarness({
   };
   vm.createContext(context);
   vm.runInContext(`${source}; runSync=syncNow;`,context);
-  return {context,values,counters,get remote(){return sharedRemote?sharedRemote.state:remoteState;}};
+  return {context,values,counters,audits,get remote(){return sharedRemote?sharedRemote.state:remoteState;}};
 }
 
 function casHarness({rpcResponse=null,rpcError=null}={}){
@@ -1651,6 +1667,68 @@ test("sync visual: una sync sana limpia rojo previo del indicador y error histó
   assert.equal(visual.nodes.trigger.classes.has("conflict"),false);
   assert.equal(visual.nodes.trigger.classes.has("synced"),true);
   assert.equal(visual.nodes.trigger.attrs["aria-label"],"Sincronización: Sincronizado");
+});
+
+test("sync audit: registra ramas y fingerprints seguros para diagnosticar móvil rojo",async()=>{
+  const healthy=syncHarness({
+    remote:{
+      revision:964,
+      checksum:"full-964",
+      payload:{
+        stable:true,
+        syncProtocolVersion:2,
+        syncFunctionalChecksumVersion:1,
+        functionalChecksum:"functional-same"
+      }
+    },
+    checksum:"full-964",
+    localRevision:964,
+    lastRemoteRevision:964,
+    baseRevision:964,
+    pending:false
+  });
+  await healthy.context.runSync();
+  assert.deepEqual(
+    healthy.audits.filter(item=>item.action==="sync_trace").map(item=>item.status),
+    ["started","remote_fetch","checksum_comparison","none_synced"]
+  );
+  const checksumTrace=healthy.audits.find(item=>item.status==="checksum_comparison");
+  assert.equal(checksumTrace.details.appVersion,"test");
+  assert.equal(checksumTrace.details.functionalChecksum.local,"functional-same");
+  assert.equal(checksumTrace.details.functionalChecksum.remote,"functional-same");
+  assert.equal(checksumTrace.details.remoteRevision,964);
+  assert.equal(checksumTrace.details.localRevision,964);
+  assert.equal(checksumTrace.details.lastRemoteRevision,964);
+  assert.equal(checksumTrace.details.syncBaseRevision,964);
+  assert.equal(checksumTrace.details.hasPendingChanges,false);
+  assert.equal(JSON.stringify(checksumTrace.details).includes("owner-a"),false);
+
+  const conflict=syncHarness({
+    remote:{
+      revision:964,
+      checksum:"full-964",
+      payload:{
+        stable:true,
+        syncProtocolVersion:2,
+        syncFunctionalChecksumVersion:1,
+        functionalChecksum:"remote-functional"
+      }
+    },
+    checksum:"local-full",
+    localRevision:964,
+    lastRemoteRevision:964,
+    baseRevision:964,
+    pending:false
+  });
+  await conflict.context.runSync();
+  const conflictTrace=conflict.audits.find(item=>item.status==="conflict"&&item.action==="sync_trace");
+  assert.equal(conflictTrace.details.branch,"sameRevisionDiverged");
+
+  const error=syncHarness({readError:{status:0,code:"network_failed"},pending:true});
+  await assert.rejects(()=>error.context.runSync());
+  const errorTrace=error.audits.find(item=>item.status==="recoverable_error"&&item.action==="sync_trace");
+  assert.equal(errorTrace.details.branch,"recoverable_error");
+  assert.equal(errorTrace.details.hasPendingChanges,true);
 });
 
 test("sync visual: conflicto real y error recuperable no se limpian sin sync sana",async()=>{

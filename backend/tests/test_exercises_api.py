@@ -164,3 +164,88 @@ def test_resolve_unknown_exercise_name():
         "errorCode": "unknown_exercise",
         "error": "No se reconoce el ejercicio. Utiliza un ID de la biblioteca o corrige el nombre.",
     }
+
+
+def test_create_custom_exercise_requires_authentication():
+    response = client.post(
+        "/api/v1/exercises",
+        json={
+            "name": "Mi ejercicio",
+            "muscle": "Pecho",
+            "equipment": "Mancuernas",
+            "type": "Fuerza",
+            "notes": "",
+            "category": "strength",
+            "recordTypes": ["weight", "reps"],
+        },
+    )
+
+    assert response.status_code == 401
+    assert response.json() == {"detail": "Missing bearer token"}
+
+
+def test_create_custom_exercise_returns_created_exercise(monkeypatch):
+    from auth import AuthenticatedUser, require_user
+    from app.api.v1 import exercises as exercises_api
+
+    async def fake_user():
+        return AuthenticatedUser(
+            id="user-123",
+            email="test@example.com",
+            access_token="token-123",
+        )
+
+    async def fake_register_custom_exercise(user, payload):
+        assert user.id == "user-123"
+        assert payload.name == "Press personalizado"
+        assert payload.recordTypes == ["weight", "reps"]
+
+        return {
+            "id": "custom-42",
+            "name": "Press personalizado",
+            "muscle": "Pecho",
+            "equipment": "Mancuernas",
+            "type": "Fuerza",
+            "favorite": False,
+            "custom": True,
+            "notes": "Controlar la bajada.",
+            "category": "strength",
+            "recordTypes": ["weight", "reps"],
+        }
+
+    app.dependency_overrides[require_user] = fake_user
+    monkeypatch.setattr(
+        exercises_api,
+        "register_custom_exercise",
+        fake_register_custom_exercise,
+    )
+
+    try:
+        response = client.post(
+            "/api/v1/exercises",
+            json={
+                "name": "Press personalizado",
+                "muscle": "Pecho",
+                "equipment": "Mancuernas",
+                "type": "Fuerza",
+                "notes": "Controlar la bajada.",
+                "category": "strength",
+                "recordTypes": ["weight", "reps"],
+            },
+        )
+    finally:
+        app.dependency_overrides.pop(require_user, None)
+
+    assert response.status_code == 201
+    assert response.json() == {
+        "id": "custom-42",
+        "name": "Press personalizado",
+        "muscle": "Pecho",
+        "equipment": "Mancuernas",
+        "type": "Fuerza",
+        "favorite": False,
+        "custom": True,
+        "notes": "Controlar la bajada.",
+        "category": "strength",
+        "recordTypes": ["weight", "reps"],
+    }

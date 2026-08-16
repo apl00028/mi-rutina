@@ -167,3 +167,110 @@ test("la reorganización conserva el destino Ajustes de la navegación principal
   assert.match(navigation,/NAVIGATION_FOOTER_ITEMS\.map\(\(\[screen,icon,label\]\)=>navigationItem\(screen,icon,label,active\)\)/);
   assert.match(appSource,/else renderSettings\(\)/);
 });
+
+function loadDownloadHelpers({clickThrows=false,shareAvailable=false}={}){
+  const start=appSource.indexOf("async function shareBlobFile(");
+  const end=appSource.indexOf("function captureGymOSLocalStorageSnapshot(",start);
+  assert.ok(start>=0&&end>start);
+  const calls={created:[],appended:[],clicked:0,removed:0,revoked:[],shared:0};
+  class FakeBlob{
+    constructor(parts,options={}){
+      this.parts=parts;
+      this.type=options.type||"";
+    }
+  }
+  class FakeFile extends FakeBlob{
+    constructor(parts,name,options={}){
+      super(parts,options);
+      this.name=name;
+    }
+  }
+  const context={
+    Blob:FakeBlob,
+    File:FakeFile,
+    URL:{
+      createObjectURL:blob=>{
+        calls.created.push(blob);
+        return `blob:gymos-${calls.created.length}`;
+      },
+      revokeObjectURL:url=>calls.revoked.push(url)
+    },
+    document:{
+      body:{appendChild:link=>calls.appended.push(link)},
+      createElement:tag=>{
+        assert.equal(tag,"a");
+        const link={
+          style:{},
+          remove:()=>{calls.removed+=1;},
+          click:()=>{
+            calls.clicked+=1;
+            if(clickThrows) throw new Error("blocked_download");
+          }
+        };
+        return link;
+      }
+    },
+    navigator:shareAvailable?{
+      canShare:payload=>Array.isArray(payload.files)&&payload.files.length===1,
+      share:async payload=>{
+        calls.shared+=1;
+        calls.sharePayload=payload;
+      }
+    }:undefined,
+    setTimeout:callback=>callback()
+  };
+  vm.createContext(context);
+  vm.runInContext(`${appSource.slice(start,end)}; helpers={downloadBrowserFile,downloadJsonFile};`,context);
+  return {helpers:context.helpers,calls};
+}
+
+test("el helper compartido genera contenido, nombre y descarga con enlace insertado",async()=>{
+  const {helpers,calls}=loadDownloadHelpers();
+  const result=await helpers.downloadJsonFile({ok:true},"gymos-export");
+  assert.equal(result.method,"anchor");
+  assert.match(result.fileName,/^gymos-export-\d{4}-\d{2}-\d{2}T.*\.json$/);
+  assert.equal(calls.created.length,1);
+  assert.match(calls.created[0].parts[0],/"ok": true/);
+  assert.equal(calls.created[0].type,"application/json");
+  assert.equal(calls.appended.length,1);
+  assert.equal(calls.appended[0].download,result.fileName);
+  assert.equal(calls.appended[0].href,"blob:gymos-1");
+  assert.equal(calls.clicked,1);
+  assert.equal(calls.removed,1);
+  assert.deepEqual(calls.revoked,["blob:gymos-1"]);
+});
+
+test("el helper compartido usa Web Share como fallback y falla de forma detectable",async()=>{
+  const shared=loadDownloadHelpers({clickThrows:true,shareAvailable:true});
+  const sharedResult=await shared.helpers.downloadBrowserFile("{}", "gymos-share.json","application/json");
+  assert.equal(sharedResult.method,"share");
+  assert.equal(shared.calls.clicked,1);
+  assert.equal(shared.calls.shared,1);
+  assert.equal(shared.calls.sharePayload.files[0].name,"gymos-share.json");
+
+  const blocked=loadDownloadHelpers({clickThrows:true});
+  await assert.rejects(
+    blocked.helpers.downloadBrowserFile("{}", "gymos-blocked.json","application/json"),
+    /download_start_failed/
+  );
+});
+
+test("Cuenta exporta copia y registro con contenido, nombre, flujo de descarga y error visible",()=>{
+  const account=appSource.slice(
+    appSource.indexOf("function renderAccount("),
+    appSource.indexOf("function renderAiSettings(",appSource.indexOf("function renderAccount("))
+  );
+  const exportDataSource=appSource.slice(
+    appSource.indexOf("async function exportData("),
+    appSource.indexOf("routineFile.onchange",appSource.indexOf("async function exportData("))
+  );
+  assert.match(account,/id="exportSyncAudit"/);
+  assert.match(account,/downloadBrowserFile\(\s*JSON\.stringify\(\{\s*generatedAt:new Date\(\)\.toISOString\(\),\s*security:syncSecurityState\(\),\s*audit:getSyncAudit\(\)/);
+  assert.match(account,/`gymos-sync-audit-\$\{new Date\(\)\.toISOString\(\)\.slice\(0,10\)\}\.json`/);
+  assert.match(account,/toast\("Registro de sincronización exportado"\)/);
+  assert.match(account,/showAccountManagementMessage\("error","No se pudo iniciar la descarga del registro/);
+  assert.match(account,/document\.getElementById\("accountExport"\)\.onclick=async\(\)=>\{\s*try\{await exportData\(\);\}/);
+  assert.doesNotMatch(account,/exportBackup\(/);
+  assert.match(exportDataSource,/await downloadBrowserFile\(\s*JSON\.stringify\(payload,null,2\),\s*`gymos-backup-\$\{new Date\(\)\.toISOString\(\)\.slice\(0,10\)\}\.json`,\s*"application\/json"/);
+  assert.match(exportDataSource,/toast\("Copia exportada"\)/);
+});

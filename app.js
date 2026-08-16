@@ -1,4 +1,4 @@
-const GYMOS_VERSION="4.2.0-rc.12-functional-sync-checksum";
+const GYMOS_VERSION="4.2.0-rc.13-sync-audit-last-sync";
 const GYMOS_NAV_EXPANDED_KEY="gymos:deviceNavigationExpanded";
 const GYMOS_FONT_SCALES=["font-scale-sm","font-scale-md","font-scale-lg","font-scale-xl"];
 
@@ -4694,6 +4694,35 @@ function addSyncAudit(action,status,details={}){
   items.push({id:`audit-${Date.now().toString(36)}`,createdAt:new Date().toISOString(),action,status,details});
   localStorage.setItem(SYNC_AUDIT_KEY,JSON.stringify(items.slice(-100)));
 }
+function syncAuditFingerprintSummary({
+  remote=null,remoteRevision=null,localRevision=null,lastRemoteRevision=null,
+  syncBaseRevision=null,hasPendingChanges=null,checksumComparison=null,
+  localFunctionalChecksum=null,baseFunctionalChecksum=null,condition=null
+}={}){
+  const remoteFunctional=checksumComparison?.remoteFunctionalChecksum||
+    remoteFunctionalChecksum(remote)||null;
+  const inferredBaseFunctional=baseFunctionalChecksum||(
+    remoteRevision!==null&&syncBaseRevision!==null&&
+    Number(remoteRevision)===Number(syncBaseRevision)
+      ?remoteFunctional
+      :null
+  );
+  return {
+    appVersion:typeof GYMOS_VERSION==="string"?GYMOS_VERSION:null,
+    branch:condition||null,
+    remoteRevision,
+    localRevision,
+    lastRemoteRevision,
+    syncBaseRevision,
+    hasPendingChanges,
+    checksumMode:checksumComparison?.mode||null,
+    functionalChecksum:{
+      local:checksumComparison?.localFunctionalChecksum||localFunctionalChecksum||null,
+      remote:remoteFunctional,
+      base:inferredBaseFunctional
+    }
+  };
+}
 function simpleChecksum(value){
   const text=JSON.stringify(value);let hash=2166136261;
   for(let i=0;i<text.length;i++){hash^=text.charCodeAt(i);hash=Math.imul(hash,16777619);}
@@ -5758,6 +5787,14 @@ async function syncNow(options={}){
   const diagnosticDeviceId=typeof getDeviceId==="function"?getDeviceId():null;
   const ownerId=currentRoutineOwnerOrNull();
   const userId=state.syncUser.id;
+  const startedAudit=syncAuditFingerprintSummary({
+    localRevision:getLocalRevision(),
+    lastRemoteRevision:getLastRemoteRevision(),
+    syncBaseRevision:getSyncBaseRevision(),
+    hasPendingChanges:localStorage.getItem("gymos:syncPending")==="1",
+    condition:"started"
+  });
+  addSyncAudit("sync_trace","started",startedAudit);
   diagnosticLog("inicio",{
     ownerId,deviceId:diagnosticDeviceId,localRevision:getLocalRevision(),
     lastRemoteRevision:getLastRemoteRevision(),
@@ -5770,7 +5807,7 @@ async function syncNow(options={}){
   state.syncInProgress=true;
   const operationId=++state.syncOperationId;
   state.syncIssue=null;
-  state.syncStatus="syncing";updateSyncIndicators();addSyncAudit("sync","started");
+  state.syncStatus="syncing";updateSyncIndicators();addSyncAudit("sync","started",startedAudit);
   try{
     await window.GymOSRecovery?.syncWithSupabase?.();
     assertOwner();
@@ -5789,6 +5826,15 @@ async function syncNow(options={}){
       remoteChecksum:remote?.checksum||null,
       syncPending:localStorage.getItem("gymos:syncPending")==="1"
     });
+    addSyncAudit("sync_trace","remote_fetch",syncAuditFingerprintSummary({
+      remote,
+      remoteRevision:Number(remote?.revision||0),
+      localRevision:getLocalRevision(),
+      lastRemoteRevision:getLastRemoteRevision(),
+      syncBaseRevision:getSyncBaseRevision(),
+      hasPendingChanges:localStorage.getItem("gymos:syncPending")==="1",
+      condition:"remote_fetch"
+    }));
     const remoteRevision=Number(remote?.revision||0);
     const localRevision=getLocalRevision();
     const lastRemote=getLastRemoteRevision();
@@ -5803,6 +5849,15 @@ async function syncNow(options={}){
       remote,remoteRevision,localRevision,syncBaseRevision,hasPendingChanges,
       localChecksum,localFunctionalChecksum
     });
+    const checksumAudit=extra=>syncAuditFingerprintSummary({
+      remote,remoteRevision,localRevision,lastRemoteRevision:lastRemote,
+      syncBaseRevision,hasPendingChanges,checksumComparison,localFunctionalChecksum,
+      condition:extra?.condition||null,
+      baseFunctionalChecksum:extra?.baseFunctionalChecksum||null
+    });
+    addSyncAudit("sync_trace","checksum_comparison",checksumAudit({
+      condition:"checksum_comparison"
+    }));
     const sameRevisionDiverged=Boolean(
       remote&&!hasPendingChanges&&remoteRevision===localRevision&&
       !checksumComparison.equivalent
@@ -5831,10 +5886,19 @@ async function syncNow(options={}){
         remoteFunctionalChecksum:checksumComparison.remoteFunctionalChecksum
       });
       const kind=legacyDiverged||unsafeDownload?"legacy_sync_conflict":"sync_conflict";
+      addSyncAudit("sync_trace","conflict",checksumAudit({
+        condition:sameRevisionDiverged?"sameRevisionDiverged"
+          :pendingBaseDiverged?"pendingBaseDiverged"
+            :legacyDiverged?"legacyDiverged"
+              :unsafeDownload?"unsafeDownload"
+                :localAheadWithoutPending?"localAheadWithoutPending"
+                  :"conflict"
+      }));
       return setSyncConflictState(kind,{
         remoteRevision,localRevision,lastRemote,syncBaseRevision
       });
     }else if(remote && remoteRevision>localRevision && !hasPendingChanges && remoteIsCurrent && localIsCurrent && !options.forceUpload){
+      addSyncAudit("sync_trace","download",checksumAudit({condition:"remote_newer_download"}));
       diagnosticLog("decisión",{decision:"download",reason:"remote_newer",remoteRevision,localRevision});
       applySyncPayload(remote.payload||{});
       diagnosticLog("payload remoto aplicado",{result:"ok",remoteRevision});
@@ -5848,6 +5912,7 @@ async function syncNow(options={}){
       }
       return {direction:"download",revision:remoteRevision};
     }else if(remote&&!hasPendingChanges&&!options.forceUpload&&remoteRevision===localRevision&&checksumComparison.equivalent){
+      addSyncAudit("sync_trace","none_synced",checksumAudit({condition:"same_revision_equivalent"}));
       diagnosticLog("decisión",{
         decision:"no-op",remoteRevision,localRevision,checksumMode:checksumComparison.mode,
         localFunctionalChecksum:checksumComparison.localFunctionalChecksum,
@@ -5872,6 +5937,7 @@ async function syncNow(options={}){
     const baseRevision=remote?syncBaseRevision:0;
     if(remote&&baseRevision!==remoteRevision&&!options.forceUpload){
       diagnosticLog("decisión",{decision:"conflict",reason:"cas_base_mismatch",remoteRevision,baseRevision});
+      addSyncAudit("sync_trace","conflict",checksumAudit({condition:"cas_base_mismatch"}));
       return setSyncConflictState("sync_conflict",{remoteRevision,baseRevision});
     }
     const candidateRevision=baseRevision+1;
@@ -5880,6 +5946,7 @@ async function syncNow(options={}){
       decision:"upload",remoteRevision,localRevision,
       nextRevision:envelope.revision,hasPendingChanges,forceUpload:Boolean(options.forceUpload)
     });
+    addSyncAudit("sync_trace","upload",checksumAudit({condition:"upload"}));
     await writeSyncEnvelopeWithCas(client,userId,envelope,baseRevision,Boolean(remote),remote?.checksum||null);
     assertOwner();
     diagnosticLog("payload subido",{result:"ok",revision:envelope.revision,checksum:envelope.checksum});
@@ -5912,6 +5979,19 @@ async function syncNow(options={}){
         if(state.screen==="workout") handleWorkoutPersistenceFailure(workoutFailure);
         else logWorkoutPersistenceError(workoutFailure);
       }
+      const errorAudit=syncAuditFingerprintSummary({
+        remoteRevision:null,
+        localRevision:getLocalRevision(),
+        lastRemoteRevision:getLastRemoteRevision(),
+        syncBaseRevision:getSyncBaseRevision(),
+        hasPendingChanges:localStorage.getItem("gymos:syncPending")==="1",
+        condition:issue.status
+      });
+      addSyncAudit("sync_trace",issue.status,{
+        ...errorAudit,
+        code:error?.code||"sync_failed",
+        status:error?.status||null
+      });
       addSyncAudit("sync",issue.status,{
         code:error?.code||"sync_failed",status:error?.status||null
       });updateSyncIndicators();
@@ -16184,7 +16264,7 @@ function renderAccount(){
             <button id="accountSyncNow" class="primary">Sincronizar ahora</button>
             <button id="accountExport" class="secondary">Exportar copia</button>
           </div>
-          <p class="subtle">Última sincronización: ${formatSyncDate(getLastSyncAt())}</p>
+          <p class="subtle">Última sincronización: <span data-last-sync>${formatSyncDate(getLastSyncAt())}</span></p>
         </section>
 
         <section class="card danger-zone">
@@ -16273,11 +16353,14 @@ function renderAccount(){
       try{
         await downloadBrowserFile(
           JSON.stringify({
+            type:"syncAuditLog",
+            filePurpose:"diagnostic_sync_audit_not_backup",
+            app:"GymOS",
             generatedAt:new Date().toISOString(),
             security:syncSecurityState(),
             audit:getSyncAudit()
           },null,2),
-          `gymos-sync-audit-${new Date().toISOString().slice(0,10)}.json`,
+          `gymos-sync-audit-log-${new Date().toISOString().slice(0,10)}.json`,
           "application/json"
         );
         toast("Registro de sincronización exportado");

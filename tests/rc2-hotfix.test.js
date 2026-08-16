@@ -29,7 +29,8 @@ function functionSource(name,nextName){
 function syncHarness({
   remote=null,readError=null,pending=false,online=true,recoverySync=null,
   checksum="same",localRevision=2,lastRemoteRevision=2,baseRevision=lastRemoteRevision,
-  currentProtocol=true,writeError=null,writeConflict=false,sharedRemote=null
+  currentProtocol=true,writeError=null,writeConflict=false,sharedRemote=null,
+  initialStatus="connected",initialIssue=null,initialLastError=null
 }={}){
   const source=appSource.slice(
     appSource.indexOf("async function syncNow"),
@@ -66,7 +67,8 @@ function syncHarness({
     },
     state:{
       syncUser:{id:"owner-a"},syncInProgress:false,syncOperationId:0,
-      syncIssue:null,syncStatus:"connected"
+      syncIssue:initialIssue,syncStatus:initialStatus,
+      syncDiagnosticLastError:initialLastError
     },
     localStorage:{
       getItem:key=>values.has(key)?values.get(key):null,
@@ -1322,7 +1324,8 @@ function buildPayloadChecksumHarness({
   deviceName="Device",
   updatedAt="2026-08-15T10:00:00.000Z",
   canonicalRoutine=null,
-  history=[]
+  history=[],
+  extraPayload={}
 }={}){
   const source=[
     functionSource("buildSyncPayload","routinePayloadCompatibilityWithCanonical"),
@@ -1393,7 +1396,7 @@ function buildPayloadChecksumHarness({
   };
   vm.createContext(context);
   vm.runInContext(source,context);
-  const payload=context.buildSyncPayload();
+  const payload={...context.buildSyncPayload(),...extraPayload};
   return {
     payload,
     checksum:context.simpleChecksum(payload),
@@ -1513,6 +1516,196 @@ test("sync checksum: round-trip semántico de payload mantiene checksum funciona
   assert.equal(
     rebuilt.context.functionalSyncChecksum(rebuilt.payload),
     storedRemotePayload.functionalChecksum
+  );
+});
+
+test("sync v2: upload 964 seguido de sync sin cambios no crea falso conflicto",async()=>{
+  const sharedRemote={
+    state:{
+      revision:963,
+      checksum:"remote-963",
+      payload:{stable:false,syncProtocolVersion:2}
+    }
+  };
+  const first=syncHarness({
+    sharedRemote,
+    localRevision:963,
+    lastRemoteRevision:963,
+    baseRevision:963,
+    pending:true
+  });
+  first.context.buildSyncEnvelope=(base,candidate)=>{
+    const payload={
+      stable:true,
+      syncProtocolVersion:2,
+      syncParentRevision:base,
+      syncFunctionalChecksumVersion:1,
+      functionalChecksum:"functional-964"
+    };
+    return {
+      payload,
+      revision:candidate,
+      parentRevision:base,
+      deviceId:"mobile",
+      checksum:"full-964",
+      functionalChecksum:"functional-964",
+      updatedAt:"2026-08-16T10:00:00.000Z"
+    };
+  };
+  const upload=await first.context.runSync();
+  assert.equal(upload.direction,"upload");
+  assert.equal(upload.revision,964);
+  assert.equal(first.values.get("gymos:localRevision"),"964");
+  assert.equal(first.values.get("gymos:lastRemoteRevision"),"964");
+  assert.equal(first.values.get("gymos:syncBaseRevision"),"964");
+  assert.equal(first.values.has("gymos:syncPending"),false);
+
+  const second=syncHarness({
+    sharedRemote,
+    checksum:"full-964",
+    localRevision:964,
+    lastRemoteRevision:964,
+    baseRevision:964,
+    pending:false
+  });
+  second.context.functionalSyncChecksum=()=>"functional-964";
+  const result=await second.context.runSync();
+  assert.equal(result.direction,"none");
+  assert.equal(second.context.state.syncStatus,"synced");
+  assert.equal(second.counters.writeAttempts,0);
+  assert.equal(second.counters.applies,0);
+});
+
+function syncIndicatorHarness(status="conflict"){
+  const source=appSource.slice(
+    appSource.indexOf("function updateSyncIndicators("),
+    appSource.indexOf("async function retrySyncFromNavigation(")
+  );
+  const nodes={
+    label:{textContent:""},
+    dot:{className:`sync-dot ${status}`},
+    description:{textContent:""},
+    lastSync:{textContent:""},
+    trigger:{
+      classes:new Set(["shell-sync-trigger",status]),
+      attrs:{},
+      classList:{
+        remove(...items){items.forEach(item=>nodes.trigger.classes.delete(item));},
+        add(item){nodes.trigger.classes.add(item);}
+      },
+      setAttribute(name,value){this.attrs[name]=value;}
+    }
+  };
+  const context={
+    state:{syncStatus:status},
+    document:{
+      querySelectorAll(selector){
+        return {
+          "[data-sync-label]":[nodes.label],
+          "[data-sync-dot]":[nodes.dot],
+          "[data-sync-description]":[nodes.description],
+          "[data-last-sync]":[nodes.lastSync],
+          ".shell-sync-trigger":[nodes.trigger]
+        }[selector]||[];
+      }
+    },
+    formatSyncDate:()=>"ahora",
+    getLastSyncAt:()=>"2026-08-16T10:00:00.000Z"
+  };
+  vm.createContext(context);
+  vm.runInContext(`${source}; this.update=updateSyncIndicators; this.label=syncStatusLabel;`,context);
+  return {context,nodes};
+}
+
+test("sync visual: una sync sana limpia rojo previo del indicador y error histórico",async()=>{
+  const harness=syncHarness({
+    remote:{
+      revision:964,
+      checksum:"full-964",
+      payload:{
+        stable:true,
+        syncProtocolVersion:2,
+        syncFunctionalChecksumVersion:1,
+        functionalChecksum:"functional-same"
+      }
+    },
+    checksum:"full-964",
+    localRevision:964,
+    lastRemoteRevision:964,
+    baseRevision:964,
+    pending:false,
+    initialStatus:"conflict",
+    initialIssue:{kind:"sync_conflict",retryable:false},
+    initialLastError:{code:"sync_conflict",message:"falso conflicto 964"}
+  });
+  const result=await harness.context.runSync();
+  assert.equal(result.direction,"none");
+  assert.equal(harness.context.state.syncStatus,"synced");
+  assert.equal(harness.context.state.syncIssue,null);
+  assert.equal(harness.context.state.syncDiagnosticLastError,null);
+
+  const visual=syncIndicatorHarness("conflict");
+  visual.context.state.syncStatus="synced";
+  visual.context.update();
+  assert.equal(visual.nodes.dot.className,"sync-dot synced");
+  assert.equal(visual.nodes.trigger.classes.has("conflict"),false);
+  assert.equal(visual.nodes.trigger.classes.has("synced"),true);
+  assert.equal(visual.nodes.trigger.attrs["aria-label"],"Sincronización: Sincronizado");
+});
+
+test("sync visual: conflicto real y error recuperable no se limpian sin sync sana",async()=>{
+  const conflict=syncHarness({
+    remote:{
+      revision:964,
+      checksum:"full-964",
+      payload:{
+        stable:true,
+        syncProtocolVersion:2,
+        syncFunctionalChecksumVersion:1,
+        functionalChecksum:"remote-functional"
+      }
+    },
+    checksum:"local-full",
+    localRevision:964,
+    lastRemoteRevision:964,
+    baseRevision:964,
+    pending:false,
+    initialStatus:"conflict",
+    initialIssue:{kind:"sync_conflict",retryable:false}
+  });
+  const conflictResult=await conflict.context.runSync();
+  assert.equal(conflictResult.direction,"conflict");
+  assert.equal(conflict.context.state.syncStatus,"conflict");
+  assert.equal(conflict.context.state.syncIssue.kind,"sync_conflict");
+
+  const error=syncHarness({
+    readError:{status:0,code:"network_failed"},
+    pending:true,
+    initialStatus:"conflict",
+    initialIssue:{kind:"sync_conflict",retryable:false}
+  });
+  await assert.rejects(()=>error.context.runSync());
+  assert.equal(error.context.state.syncStatus,"recoverable_error");
+  assert.equal(error.context.state.syncIssue.kind,"network");
+  assert.equal(error.context.state.syncIssue.retryable,true);
+});
+
+test("sync checksum: los metadatos de envelope no cambian el checksum funcional",()=>{
+  const uploaded=buildPayloadChecksumHarness();
+  const remotePayload={
+    ...uploaded.payload,
+    schemaVersion:2,
+    revision:964,
+    parentRevision:963,
+    checksum:"full-964",
+    syncProtocolVersion:2,
+    syncParentRevision:963,
+    syncFunctionalChecksumVersion:1,
+    functionalChecksum:uploaded.functionalChecksum
+  };
+  assert.equal(
+    uploaded.context.functionalSyncChecksum(remotePayload),
+    uploaded.functionalChecksum
   );
 });
 

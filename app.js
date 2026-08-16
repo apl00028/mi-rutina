@@ -4740,9 +4740,13 @@ function functionalSyncProjection(payload){
   const source=payload&&typeof payload==="object"?payload:{};
   const {
     version:_version,
+    schemaVersion:_schemaVersion,
+    revision:_revision,
+    parentRevision:_parentRevision,
     deviceId:_deviceId,
     deviceName:_deviceName,
     updatedAt:_updatedAt,
+    checksum:_checksum,
     syncProtocolVersion:_syncProtocolVersion,
     syncParentRevision:_syncParentRevision,
     syncFunctionalChecksumVersion:_syncFunctionalChecksumVersion,
@@ -5700,6 +5704,7 @@ async function promoteLocalDeviceAsCanonicalSyncHead(){
   localStorage.setItem("gymos:lastSyncAt",new Date().toISOString());
   state.syncStatus="synced";
   state.syncIssue=null;
+  state.syncDiagnosticLastError=null;
   updateSyncIndicators();
   return {
     direction:"recovery_upload",
@@ -5735,6 +5740,7 @@ async function adoptCanonicalRemoteSyncHeadOnThisDevice(){
   localStorage.setItem("gymos:lastSyncAt",new Date().toISOString());
   state.syncStatus="synced";
   state.syncIssue=null;
+  state.syncDiagnosticLastError=null;
   updateSyncIndicators();
   return {direction:"recovery_download",revision:SYNC_ADOPTION_EXPECTED_REMOTE.revision};
 }
@@ -5835,7 +5841,7 @@ async function syncNow(options={}){
       setLocalRevision(remoteRevision);setLastRemoteRevision(remoteRevision);setSyncBaseRevision(remoteRevision);markSyncProtocolCurrent();
       localStorage.removeItem("gymos:syncPending");
       localStorage.setItem("gymos:lastSyncHash",remote.checksum||simpleChecksum(buildSyncPayload()));
-      localStorage.setItem("gymos:lastSyncAt",new Date().toISOString());state.syncStatus="synced";state.syncIssue=null;addSyncAudit("sync","downloaded",{revision:remoteRevision});updateSyncIndicators();
+      localStorage.setItem("gymos:lastSyncAt",new Date().toISOString());state.syncStatus="synced";state.syncIssue=null;state.syncDiagnosticLastError=null;addSyncAudit("sync","downloaded",{revision:remoteRevision});updateSyncIndicators();
       if(typeof markWorkoutProgressSynced==="function") markWorkoutProgressSynced();
       if(typeof invalidateRecoveryDerivedState==="function"){
         invalidateRecoveryDerivedState({reason:"sync_completed",renderCurrent:true});
@@ -5854,6 +5860,7 @@ async function syncNow(options={}){
       localStorage.setItem("gymos:lastSyncHash",remote.checksum||localChecksum);
       state.syncStatus="synced";
       state.syncIssue=null;
+      state.syncDiagnosticLastError=null;
       updateSyncIndicators();
       if(typeof markWorkoutProgressSynced==="function") markWorkoutProgressSynced();
       if(typeof invalidateRecoveryDerivedState==="function"){
@@ -5883,7 +5890,7 @@ async function syncNow(options={}){
     localStorage.removeItem("gymos:syncPending");
     localStorage.setItem("gymos:lastSyncHash",envelope.checksum);
     localStorage.setItem("gymos:lastSyncAt",new Date().toISOString());
-    state.syncStatus="synced";state.syncIssue=null;
+    state.syncStatus="synced";state.syncIssue=null;state.syncDiagnosticLastError=null;
     addSyncAudit("sync","uploaded",{revision:envelope.revision});updateSyncIndicators();
     if(typeof markWorkoutProgressSynced==="function") markWorkoutProgressSynced();
     if(typeof invalidateRecoveryDerivedState==="function"){
@@ -5932,6 +5939,14 @@ function updateSyncIndicators(){
   document.querySelectorAll("[data-sync-dot]").forEach(el=>el.className=`sync-dot ${state.syncStatus}`);
   document.querySelectorAll("[data-sync-description]").forEach(el=>el.textContent=syncStatusDescription());
   document.querySelectorAll("[data-last-sync]").forEach(el=>el.textContent=formatSyncDate(getLastSyncAt()));
+  document.querySelectorAll(".shell-sync-trigger").forEach(el=>{
+    el.classList.remove(
+      "local","synced","connected","configured","pending","syncing","offline",
+      "conflict","session_expired","permission_denied","recoverable_error","error"
+    );
+    el.classList.add(state.syncStatus);
+    el.setAttribute("aria-label",`Sincronización: ${syncStatusLabel()}`);
+  });
 }
 function syncStatusLabel(){
   if(state.syncStatus==="syncing") return "Sincronizando…";

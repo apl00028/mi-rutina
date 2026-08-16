@@ -4740,9 +4740,13 @@ function functionalSyncProjection(payload){
   const source=payload&&typeof payload==="object"?payload:{};
   const {
     version:_version,
+    schemaVersion:_schemaVersion,
+    revision:_revision,
+    parentRevision:_parentRevision,
     deviceId:_deviceId,
     deviceName:_deviceName,
     updatedAt:_updatedAt,
+    checksum:_checksum,
     syncProtocolVersion:_syncProtocolVersion,
     syncParentRevision:_syncParentRevision,
     syncFunctionalChecksumVersion:_syncFunctionalChecksumVersion,

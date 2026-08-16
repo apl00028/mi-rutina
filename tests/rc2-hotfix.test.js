@@ -1322,7 +1322,8 @@ function buildPayloadChecksumHarness({
   deviceName="Device",
   updatedAt="2026-08-15T10:00:00.000Z",
   canonicalRoutine=null,
-  history=[]
+  history=[],
+  extraPayload={}
 }={}){
   const source=[
     functionSource("buildSyncPayload","routinePayloadCompatibilityWithCanonical"),
@@ -1393,7 +1394,7 @@ function buildPayloadChecksumHarness({
   };
   vm.createContext(context);
   vm.runInContext(source,context);
-  const payload=context.buildSyncPayload();
+  const payload={...context.buildSyncPayload(),...extraPayload};
   return {
     payload,
     checksum:context.simpleChecksum(payload),
@@ -1513,6 +1514,82 @@ test("sync checksum: round-trip semántico de payload mantiene checksum funciona
   assert.equal(
     rebuilt.context.functionalSyncChecksum(rebuilt.payload),
     storedRemotePayload.functionalChecksum
+  );
+});
+
+test("sync v2: upload 964 seguido de sync sin cambios no crea falso conflicto",async()=>{
+  const sharedRemote={
+    state:{
+      revision:963,
+      checksum:"remote-963",
+      payload:{stable:false,syncProtocolVersion:2}
+    }
+  };
+  const first=syncHarness({
+    sharedRemote,
+    localRevision:963,
+    lastRemoteRevision:963,
+    baseRevision:963,
+    pending:true
+  });
+  first.context.buildSyncEnvelope=(base,candidate)=>{
+    const payload={
+      stable:true,
+      syncProtocolVersion:2,
+      syncParentRevision:base,
+      syncFunctionalChecksumVersion:1,
+      functionalChecksum:"functional-964"
+    };
+    return {
+      payload,
+      revision:candidate,
+      parentRevision:base,
+      deviceId:"mobile",
+      checksum:"full-964",
+      functionalChecksum:"functional-964",
+      updatedAt:"2026-08-16T10:00:00.000Z"
+    };
+  };
+  const upload=await first.context.runSync();
+  assert.equal(upload.direction,"upload");
+  assert.equal(upload.revision,964);
+  assert.equal(first.values.get("gymos:localRevision"),"964");
+  assert.equal(first.values.get("gymos:lastRemoteRevision"),"964");
+  assert.equal(first.values.get("gymos:syncBaseRevision"),"964");
+  assert.equal(first.values.has("gymos:syncPending"),false);
+
+  const second=syncHarness({
+    sharedRemote,
+    checksum:"full-964",
+    localRevision:964,
+    lastRemoteRevision:964,
+    baseRevision:964,
+    pending:false
+  });
+  second.context.functionalSyncChecksum=()=>"functional-964";
+  const result=await second.context.runSync();
+  assert.equal(result.direction,"none");
+  assert.equal(second.context.state.syncStatus,"synced");
+  assert.equal(second.counters.writeAttempts,0);
+  assert.equal(second.counters.applies,0);
+});
+
+test("sync checksum: los metadatos de envelope no cambian el checksum funcional",()=>{
+  const uploaded=buildPayloadChecksumHarness();
+  const remotePayload={
+    ...uploaded.payload,
+    schemaVersion:2,
+    revision:964,
+    parentRevision:963,
+    checksum:"full-964",
+    syncProtocolVersion:2,
+    syncParentRevision:963,
+    syncFunctionalChecksumVersion:1,
+    functionalChecksum:uploaded.functionalChecksum
+  };
+  assert.equal(
+    uploaded.context.functionalSyncChecksum(remotePayload),
+    uploaded.functionalChecksum
   );
 });
 

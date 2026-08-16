@@ -278,11 +278,12 @@ function recoveryHarness({
     document:{
       body:{appendChild(){}},
       createElement:()=>({
-        href:"",download:"",
+        href:"",download:"",style:{},
         click(){downloads.push({payload:JSON.parse(lastDownloadPayloadText),fileName:this.download});},
         remove(){}
       })
     },
+    setTimeout:callback=>callback(),
     Date
   };
   vm.createContext(context);

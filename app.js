@@ -5500,17 +5500,49 @@ function recoveryError(code,details={}){
   error.details=details;
   return error;
 }
-function downloadJsonFile(payload,filePrefix){
-  const blob=new Blob([JSON.stringify(payload,null,2)],{type:"application/json"});
+async function shareBlobFile(blob,fileName){
+  if(
+    typeof File!=="function"||typeof navigator==="undefined"||
+    typeof navigator.share!=="function"||typeof navigator.canShare!=="function"
+  ) return false;
+  const file=new File([blob],fileName,{type:blob.type||"application/octet-stream"});
+  if(!navigator.canShare({files:[file]})) return false;
+  await navigator.share({files:[file],title:fileName});
+  return true;
+}
+function triggerAnchorDownload(blob,fileName){
   const url=URL.createObjectURL(blob);
   const link=document.createElement("a");
-  const stamp=new Date().toISOString().replace(/[:.]/g,"-");
   link.href=url;
-  link.download=`${filePrefix}-${stamp}.json`;
+  link.download=fileName;
+  link.rel="noopener";
+  link.style.display="none";
   document.body.appendChild(link);
-  link.click();
-  link.remove();
-  URL.revokeObjectURL(url);
+  try{
+    link.click();
+    return {method:"anchor",fileName};
+  }finally{
+    link.remove();
+    setTimeout(()=>URL.revokeObjectURL(url),0);
+  }
+}
+async function downloadBrowserFile(content,fileName,type="application/octet-stream"){
+  if(!fileName) throw new Error("download_filename_required");
+  const blob=content instanceof Blob?content:new Blob([content],{type});
+  try{
+    return triggerAnchorDownload(blob,fileName);
+  }catch(error){
+    if(await shareBlobFile(blob,fileName)) return {method:"share",fileName};
+    throw new Error("download_start_failed");
+  }
+}
+function downloadJsonFile(payload,filePrefix){
+  const stamp=new Date().toISOString().replace(/[:.]/g,"-");
+  return downloadBrowserFile(
+    JSON.stringify(payload,null,2),
+    `${filePrefix}-${stamp}.json`,
+    "application/json"
+  );
 }
 function captureGymOSLocalStorageSnapshot(){
   const snapshot={};
@@ -5558,7 +5590,7 @@ function buildRemoteSyncRecoveryBackup(row,userId=state.syncUser?.id||null){
 }
 async function downloadRemoteSyncRecoveryBackup(){
   const row=await readCurrentRemoteSyncRow();
-  downloadJsonFile(buildRemoteSyncRecoveryBackup(row),"gymos-remote-sync-backup");
+  await downloadJsonFile(buildRemoteSyncRecoveryBackup(row),"gymos-remote-sync-backup");
   return row;
 }
 function assertRecoveryRemoteExpected(row){
@@ -16222,9 +16254,21 @@ function renderAccount(){
       }
     };
     document.getElementById("syncConflictPreference").onchange=e=>{setSyncConflictPreference(e.target.value);toast("Preferencia guardada");};
-    document.getElementById("exportSyncAudit").onclick=()=>{
-      const blob=new Blob([JSON.stringify({generatedAt:new Date().toISOString(),security:syncSecurityState(),audit:getSyncAudit()},null,2)],{type:"application/json"});
-      const url=URL.createObjectURL(blob);const link=document.createElement("a");link.href=url;link.download=`gymos-sync-audit-${new Date().toISOString().slice(0,10)}.json`;link.click();URL.revokeObjectURL(url);
+    document.getElementById("exportSyncAudit").onclick=async()=>{
+      try{
+        await downloadBrowserFile(
+          JSON.stringify({
+            generatedAt:new Date().toISOString(),
+            security:syncSecurityState(),
+            audit:getSyncAudit()
+          },null,2),
+          `gymos-sync-audit-${new Date().toISOString().slice(0,10)}.json`,
+          "application/json"
+        );
+        toast("Registro de sincronización exportado");
+      }catch(error){
+        showAccountManagementMessage("error","No se pudo iniciar la descarga del registro. Prueba a compartirlo desde otro navegador o desde escritorio.");
+      }
     };
     document.getElementById("saveAccountProfile").onclick=async()=>{
       const button=document.getElementById("saveAccountProfile");
@@ -16431,7 +16475,12 @@ function renderAccount(){
       try{await syncNow();toast("Sincronización completada");renderAccount();}
       catch(error){showAccountManagementMessage("error",error?.message||"No se pudo sincronizar.");}
     };
-    document.getElementById("accountExport").onclick=()=>exportBackup();
+    document.getElementById("accountExport").onclick=async()=>{
+      try{await exportData();}
+      catch(error){
+        showAccountManagementMessage("error","No se pudo iniciar la descarga de la copia. Prueba a compartirla desde otro navegador o desde escritorio.");
+      }
+    };
     document.getElementById("deleteCloudData").onclick=async()=>{
       if(!confirm("¿Borrar la copia de tus datos alojada en la nube? Los datos del dispositivo no se borrarán.")) return;
       try{await deleteCloudData();toast("Datos de la nube eliminados");}
@@ -19045,7 +19094,7 @@ function renderSettings(){
   bindNav();
 }
 
-function exportData(){
+async function exportData(){
   const exportOwnerId=currentRoutineOwnerOrNull();
   const exportCanonicalRoutine=getCanonicalRoutine();
   const payload={
@@ -19083,10 +19132,12 @@ function exportData(){
     ...(window.GymOSProfileData?.exportSyncData?.()||{}),
     updatedAt:getLocalUpdatedAt()
   };
-  const blob=new Blob([JSON.stringify(payload,null,2)],{type:"application/json"});
-  const a=document.createElement("a");a.href=URL.createObjectURL(blob);
-  a.download=`gymos-backup-${new Date().toISOString().slice(0,10)}.json`;a.click();
-  URL.revokeObjectURL(a.href);toast("Copia exportada");
+  await downloadBrowserFile(
+    JSON.stringify(payload,null,2),
+    `gymos-backup-${new Date().toISOString().slice(0,10)}.json`,
+    "application/json"
+  );
+  toast("Copia exportada");
 }
 
 routineFile.onchange=async()=>{

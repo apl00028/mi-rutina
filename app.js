@@ -4694,9 +4694,34 @@ function addSyncAudit(action,status,details={}){
   items.push({id:`audit-${Date.now().toString(36)}`,createdAt:new Date().toISOString(),action,status,details});
   localStorage.setItem(SYNC_AUDIT_KEY,JSON.stringify(items.slice(-100)));
 }
+function lastSyncTraceEntry({includeButtonResult=true}={}){
+  return [...getSyncAudit()].reverse().find(entry=>
+    entry.action==="sync_trace"&&(includeButtonResult||entry.status!=="account_button_result")
+  )||null;
+}
+function syncTraceBranchLabel(entry){
+  return entry?.details?.branch||entry?.details?.condition||entry?.status||"Sin trazas";
+}
 function lastSyncTraceBranch(){
-  const trace=[...getSyncAudit()].reverse().find(entry=>entry.action==="sync_trace");
-  return trace?.details?.branch||trace?.details?.condition||trace?.status||"Sin trazas";
+  return syncTraceBranchLabel(lastSyncTraceEntry());
+}
+function lastInternalSyncTraceBranch(){
+  return syncTraceBranchLabel(lastSyncTraceEntry({includeButtonResult:false}));
+}
+function lastAccountSyncButtonTrace(){
+  return [...getSyncAudit()].reverse().find(entry=>
+    entry.action==="sync_trace"&&entry.status==="account_button_result"
+  )||null;
+}
+function accountSyncButtonDiagnosticValue(key){
+  const details=lastAccountSyncButtonTrace()?.details||{};
+  if(key==="direction") return details.result?.direction||"Sin resultado";
+  if(key==="before") return details.lastSyncAtBefore||"";
+  if(key==="after") return details.lastSyncAtAfter||"";
+  return "";
+}
+function isHealthyManualSyncResult(result){
+  return ["none","download","upload"].includes(result?.direction);
 }
 function syncAuditFingerprintSummary({
   remote=null,remoteRevision=null,localRevision=null,lastRemoteRevision=null,
@@ -5778,10 +5803,16 @@ async function adoptCanonicalRemoteSyncHeadOnThisDevice(){
   return {direction:"recovery_download",revision:SYNC_ADOPTION_EXPECTED_REMOTE.revision};
 }
 async function syncNow(options={}){
-  if(isSyncDebugRequested()) return {direction:"diagnostic_mode"};
+  if(isSyncDebugRequested()){
+    addSyncAudit("sync_trace","diagnostic_mode",{branch:"diagnostic_mode"});
+    return {direction:"diagnostic_mode"};
+  }
   const client=getSupabaseClient();
   if(!client||!isAppAuthenticated()) throw new Error("Confirma tu correo antes de sincronizar.");
-  if(state.syncInProgress) return {direction:"busy"};
+  if(state.syncInProgress){
+    addSyncAudit("sync_trace","busy",{branch:"busy"});
+    return {direction:"busy"};
+  }
   const diagnosticLog=typeof syncDiagnosticLog==="function"
     ?syncDiagnosticLog
     :()=>{};
@@ -6024,7 +6055,10 @@ function updateSyncIndicators(){
   document.querySelectorAll("[data-sync-description]").forEach(el=>el.textContent=syncStatusDescription());
   document.querySelectorAll("[data-last-sync]").forEach(el=>el.textContent=formatSyncDate(getLastSyncAt()));
   document.querySelectorAll("[data-sync-diagnostic-last-sync]").forEach(el=>el.textContent=localStorage.getItem("gymos:lastSyncAt")||"");
-  document.querySelectorAll("[data-sync-diagnostic-branch]").forEach(el=>el.textContent=lastSyncTraceBranch());
+  document.querySelectorAll("[data-sync-diagnostic-internal-branch]").forEach(el=>el.textContent=lastInternalSyncTraceBranch());
+  document.querySelectorAll("[data-sync-diagnostic-button-result]").forEach(el=>el.textContent=accountSyncButtonDiagnosticValue("direction"));
+  document.querySelectorAll("[data-sync-diagnostic-before]").forEach(el=>el.textContent=accountSyncButtonDiagnosticValue("before"));
+  document.querySelectorAll("[data-sync-diagnostic-after]").forEach(el=>el.textContent=accountSyncButtonDiagnosticValue("after"));
   document.querySelectorAll(".shell-sync-trigger").forEach(el=>{
     el.classList.remove(
       "local","synced","connected","configured","pending","syncing","offline",
@@ -16262,7 +16296,10 @@ function renderAccount(){
           </div>
           <label><span>Cuando haya conflicto</span><select id="syncConflictPreference"><option value="ask" ${getSyncConflictPreference()==="ask"?"selected":""}>Preguntarme</option><option value="local" ${getSyncConflictPreference()==="local"?"selected":""}>Mantener este dispositivo</option><option value="remote" ${getSyncConflictPreference()==="remote"?"selected":""}>Usar la nube</option></select></label>
           <p class="subtle">Diagnóstico lastSyncAt: <span data-sync-diagnostic-last-sync>${esc(localStorage.getItem("gymos:lastSyncAt")||"")}</span></p>
-          <p class="subtle">Última rama sync: <span data-sync-diagnostic-branch>${esc(lastSyncTraceBranch())}</span></p>
+          <p class="subtle">Última rama interna sync: <span data-sync-diagnostic-internal-branch>${esc(lastInternalSyncTraceBranch())}</span></p>
+          <p class="subtle">Resultado botón: <span data-sync-diagnostic-button-result>${esc(accountSyncButtonDiagnosticValue("direction"))}</span></p>
+          <p class="subtle">lastSyncAt before: <span data-sync-diagnostic-before>${esc(accountSyncButtonDiagnosticValue("before"))}</span></p>
+          <p class="subtle">lastSyncAt after: <span data-sync-diagnostic-after>${esc(accountSyncButtonDiagnosticValue("after"))}</span></p>
           <button id="exportSyncAudit" class="secondary full">Exportar registro de sincronización</button>
         </section>
 
@@ -16589,6 +16626,19 @@ function renderAccount(){
           result:{direction:result?.direction||null}
         });
         updateSyncIndicators();
+        if(!isHealthyManualSyncResult(result)){
+          renderAccount();
+          if(result?.direction==="conflict"){
+            showAccountManagementMessage("error","Hay un conflicto de sincronización pendiente.");
+          }else if(result?.direction==="busy"){
+            showAccountManagementMessage("error","Ya hay una sincronización en curso.");
+          }else if(result?.direction==="diagnostic_mode"){
+            showAccountManagementMessage("error","La sincronización está en modo diagnóstico.");
+          }else{
+            showAccountManagementMessage("error","La sincronización no se completó.");
+          }
+          return;
+        }
         toast("Sincronización completada");
         renderAccount();
       }

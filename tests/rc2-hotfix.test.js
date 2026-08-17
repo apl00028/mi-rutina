@@ -506,7 +506,7 @@ test("RC2 sincroniza, resuelve no-op y limpia pendientes solo tras éxito",()=>{
     appSource.indexOf("async function syncNow"),
     appSource.indexOf("async function autoSync")
   );
-  assert.match(sync,/if\(state\.syncInProgress\) return \{direction:"busy"\}/);
+  assert.match(sync,/if\(state\.syncInProgress\)\{[\s\S]*addSyncAudit\("sync_trace","busy",\{branch:"busy"\}\);[\s\S]*return \{direction:"busy"\}/);
   assert.match(sync,/remote&&!hasPendingChanges&&!options\.forceUpload&&remoteRevision===localRevision&&checksumComparison\.equivalent/);
   assert.match(sync,/return \{direction:"none",revision:remoteRevision\}/);
   assert.ok((sync.match(/localStorage\.removeItem\("gymos:syncPending"\)/g)||[]).length>=2);
@@ -1667,6 +1667,55 @@ test("sync visual: una sync sana limpia rojo previo del indicador y error histó
   assert.equal(visual.nodes.trigger.classes.has("conflict"),false);
   assert.equal(visual.nodes.trigger.classes.has("synced"),true);
   assert.equal(visual.nodes.trigger.attrs["aria-label"],"Sincronización: Sincronizado");
+});
+
+test("syncNow: todos los retornos sanos actualizan lastSyncAt",async()=>{
+  const cases=[
+    {
+      direction:"none",
+      harness:()=>syncHarness({
+        remote:{revision:2,checksum:"same",payload:{syncProtocolVersion:2,functionalChecksum:"functional-same"}},
+        localRevision:2,lastRemoteRevision:2,baseRevision:2
+      })
+    },
+    {
+      direction:"download",
+      harness:()=>syncHarness({
+        remote:{revision:3,checksum:"same",payload:{syncProtocolVersion:2,functionalChecksum:"functional-same"}},
+        localRevision:2,lastRemoteRevision:2,baseRevision:2
+      })
+    },
+    {
+      direction:"upload",
+      harness:()=>syncHarness({remote:null,localRevision:0,lastRemoteRevision:0,baseRevision:0,pending:true})
+    }
+  ];
+  for(const item of cases){
+    const harness=item.harness();
+    harness.values.set("gymos:lastSyncAt","2026-08-16T08:12:38.433Z");
+    const result=await harness.context.runSync();
+    assert.equal(result.direction,item.direction);
+    assert.notEqual(harness.values.get("gymos:lastSyncAt"),"2026-08-16T08:12:38.433Z");
+    assert.ok(Date.parse(harness.values.get("gymos:lastSyncAt"))>0);
+  }
+});
+
+test("syncNow: retornos tempranos no sanos no actualizan lastSyncAt",async()=>{
+  const debug=syncHarness();
+  debug.context.isSyncDebugRequested=()=>true;
+  debug.values.set("gymos:lastSyncAt","2026-08-16T08:12:38.433Z");
+  const debugResult=await debug.context.runSync();
+  assert.equal(debugResult.direction,"diagnostic_mode");
+  assert.equal(debug.values.get("gymos:lastSyncAt"),"2026-08-16T08:12:38.433Z");
+  assert.equal(debug.audits.at(-1).status,"diagnostic_mode");
+
+  const busy=syncHarness();
+  busy.context.state.syncInProgress=true;
+  busy.values.set("gymos:lastSyncAt","2026-08-16T08:12:38.433Z");
+  const busyResult=await busy.context.runSync();
+  assert.equal(busyResult.direction,"busy");
+  assert.equal(busy.values.get("gymos:lastSyncAt"),"2026-08-16T08:12:38.433Z");
+  assert.equal(busy.audits.at(-1).status,"busy");
 });
 
 test("sync audit: registra ramas y fingerprints seguros para diagnosticar móvil rojo",async()=>{

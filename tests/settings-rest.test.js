@@ -298,7 +298,7 @@ function createFakeElement(id){
   };
 }
 
-function loadAccountDomHarness(){
+function loadAccountDomHarness({syncDirection="none",syncUpdatesLastSyncAt=true}={}){
   const start=appSource.indexOf("function renderAccount(");
   const end=appSource.indexOf("function renderAiSettings(",start);
   const updateStart=appSource.indexOf("function updateSyncIndicators(");
@@ -388,10 +388,23 @@ function loadAccountDomHarness(){
     syncSecurityState:()=>({configured:true}),
     getSyncAudit:()=>audits,
     addSyncAudit:(action,status,details={})=>audits.push({action,status,details}),
-    lastSyncTraceBranch:()=>{
-      const trace=[...audits].reverse().find(entry=>entry.action==="sync_trace");
-      return trace?.details?.branch||trace?.details?.condition||trace?.status||"Sin trazas";
+    lastSyncTraceEntry:({includeButtonResult=true}={})=>[...audits].reverse().find(entry=>
+      entry.action==="sync_trace"&&(includeButtonResult||entry.status!=="account_button_result")
+    )||null,
+    syncTraceBranchLabel:entry=>entry?.details?.branch||entry?.details?.condition||entry?.status||"Sin trazas",
+    lastSyncTraceBranch:()=>context.syncTraceBranchLabel(context.lastSyncTraceEntry()),
+    lastInternalSyncTraceBranch:()=>context.syncTraceBranchLabel(context.lastSyncTraceEntry({includeButtonResult:false})),
+    lastAccountSyncButtonTrace:()=>[...audits].reverse().find(entry=>
+      entry.action==="sync_trace"&&entry.status==="account_button_result"
+    )||null,
+    accountSyncButtonDiagnosticValue:key=>{
+      const details=context.lastAccountSyncButtonTrace()?.details||{};
+      if(key==="direction") return details.result?.direction||"Sin resultado";
+      if(key==="before") return details.lastSyncAtBefore||"";
+      if(key==="after") return details.lastSyncAtAfter||"";
+      return "";
     },
+    isHealthyManualSyncResult:result=>["none","download","upload"].includes(result?.direction),
     getLastSyncAt:()=>values.get("gymos:lastSyncAt")||"",
     formatSyncDate:value=>`FMT:${value}`,
     syncStatusLabel:()=>"Sincronizado",
@@ -408,9 +421,9 @@ function loadAccountDomHarness(){
       );
     },
     syncNow:async()=>{
-      context.addSyncAudit("sync_trace","none_synced",{branch:"same_revision_equivalent"});
-      values.set("gymos:lastSyncAt","2026-08-16T10:30:00.000Z");
-      return {direction:"none",revision:964};
+      context.addSyncAudit("sync_trace",syncDirection==="none"?"none_synced":syncDirection,{branch:syncDirection==="none"?"same_revision_equivalent":syncDirection});
+      if(syncUpdatesLastSyncAt) values.set("gymos:lastSyncAt","2026-08-16T10:30:00.000Z");
+      return {direction:syncDirection,revision:964};
     },
     toast:message=>toasts.push(message),
     showAccountManagementMessage:(type,text)=>messages.push({type,text}),
@@ -468,7 +481,10 @@ test("Cuenta enlaza los botones reales de audit, backup y sync sin cruzar export
   assert.equal(harness.values.get("gymos:lastSyncAt"),"2026-08-16T10:30:00.000Z");
   assert.match(harness.app.innerHTML,/Última sincronización: <span data-last-sync>FMT:2026-08-16T10:30:00\.000Z<\/span>/);
   assert.match(harness.app.innerHTML,/Diagnóstico lastSyncAt: <span data-sync-diagnostic-last-sync>2026-08-16T10:30:00\.000Z<\/span>/);
-  assert.match(harness.app.innerHTML,/Última rama sync: <span data-sync-diagnostic-branch>account_button_result<\/span>/);
+  assert.match(harness.app.innerHTML,/Última rama interna sync: <span data-sync-diagnostic-internal-branch>same_revision_equivalent<\/span>/);
+  assert.match(harness.app.innerHTML,/Resultado botón: <span data-sync-diagnostic-button-result>none<\/span>/);
+  assert.match(harness.app.innerHTML,/lastSyncAt before: <span data-sync-diagnostic-before>2026-08-16T08:12:00\.000Z<\/span>/);
+  assert.match(harness.app.innerHTML,/lastSyncAt after: <span data-sync-diagnostic-after>2026-08-16T10:30:00\.000Z<\/span>/);
   assert.equal(harness.toasts.at(-1),"Sincronización completada");
   assert.deepEqual(
     harness.audits.filter(entry=>entry.action==="sync_trace").map(entry=>entry.status),
@@ -479,6 +495,19 @@ test("Cuenta enlaza los botones reales de audit, backup y sync sin cruzar export
   assert.equal(harness.audits.at(-1).details.lastSyncAtAfter,"2026-08-16T10:30:00.000Z");
   assert.equal(harness.audits.at(-1).details.result.direction,"none");
   assert.deepEqual(harness.messages,[]);
+});
+
+
+
+test("Cuenta no muestra completada si el botón recibe un resultado no sano",async()=>{
+  for(const direction of ["busy","diagnostic_mode","conflict"]){
+    const harness=loadAccountDomHarness({syncDirection:direction,syncUpdatesLastSyncAt:false});
+    await harness.elements.get("accountSyncNow").onclick();
+    assert.equal(harness.values.get("gymos:lastSyncAt"),"2026-08-16T08:12:00.000Z");
+    assert.notEqual(harness.toasts.at(-1),"Sincronización completada");
+    assert.equal(harness.messages.at(-1).type,"error");
+    assert.equal(harness.audits.at(-1).details.result.direction,direction);
+  }
 });
 
 test("Cuenta actualiza Última sincronización con updateSyncIndicators sin rerender",()=>{

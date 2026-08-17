@@ -245,3 +245,155 @@ def test_get_custom_exercise_by_invalid_uuid_returns_none_without_http(monkeypat
     )
 
     assert row is None
+
+
+def test_update_custom_exercise_patches_expected_payload_and_filters(monkeypatch):
+    monkeypatch.setenv("SUPABASE_URL", "https://example.supabase.co")
+    monkeypatch.setenv("SUPABASE_PUBLISHABLE_KEY", "publishable-key")
+
+    captured = {}
+    custom_uuid = "11111111-2222-3333-4444-555555555555"
+
+    class FakeResponse:
+        def raise_for_status(self):
+            pass
+
+        def json(self):
+            return [
+                {
+                    "id": custom_uuid,
+                    "user_id": "user-123",
+                    "name": "Press editado",
+                    "muscle": "Pecho",
+                    "equipment": "Mancuernas",
+                    "type": "Fuerza",
+                    "notes": "Nota existente.",
+                    "category": "strength",
+                    "record_types": ["weight", "reps"],
+                }
+            ]
+
+    class FakeClient:
+        def __init__(self, timeout):
+            captured["timeout"] = timeout
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):
+            pass
+
+        async def patch(self, url, headers, params, json):
+            captured["url"] = url
+            captured["headers"] = headers
+            captured["params"] = params
+            captured["json"] = json
+            return FakeResponse()
+
+    monkeypatch.setattr(repository.httpx, "AsyncClient", FakeClient)
+
+    user = AuthenticatedUser(
+        id="user-123",
+        email="test@example.com",
+        access_token="access-token",
+    )
+
+    row = asyncio.run(
+        repository.update_custom_exercise(
+            user,
+            f"custom-{custom_uuid}",
+            {
+                "name": "  Press editado  ",
+                "recordTypes": ["weight", "reps"],
+            },
+        )
+    )
+
+    assert captured["url"] == (
+        "https://example.supabase.co/rest/v1/custom_exercises"
+    )
+    assert captured["headers"] == {
+        "Authorization": "Bearer access-token",
+        "apikey": "publishable-key",
+        "Content-Type": "application/json",
+        "Prefer": "return=representation",
+    }
+    assert captured["params"] == {
+        "id": f"eq.{custom_uuid}",
+        "user_id": "eq.user-123",
+    }
+    assert captured["json"] == {
+        "name": "Press editado",
+        "record_types": ["weight", "reps"],
+    }
+    assert row["id"] == custom_uuid
+
+
+def test_update_custom_exercise_empty_result_returns_none(monkeypatch):
+    monkeypatch.setenv("SUPABASE_URL", "https://example.supabase.co")
+    monkeypatch.setenv("SUPABASE_PUBLISHABLE_KEY", "publishable-key")
+
+    class FakeResponse:
+        def raise_for_status(self):
+            pass
+
+        def json(self):
+            return []
+
+    class FakeClient:
+        def __init__(self, timeout):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):
+            pass
+
+        async def patch(self, url, headers, params, json):
+            return FakeResponse()
+
+    monkeypatch.setattr(repository.httpx, "AsyncClient", FakeClient)
+
+    user = AuthenticatedUser(
+        id="user-123",
+        email="test@example.com",
+        access_token="access-token",
+    )
+
+    row = asyncio.run(
+        repository.update_custom_exercise(
+            user,
+            "custom-11111111-2222-3333-4444-555555555555",
+            {"name": "Press editado"},
+        )
+    )
+
+    assert row is None
+
+
+def test_update_custom_exercise_invalid_uuid_returns_none_without_http(monkeypatch):
+    monkeypatch.setenv("SUPABASE_URL", "https://example.supabase.co")
+    monkeypatch.setenv("SUPABASE_PUBLISHABLE_KEY", "publishable-key")
+
+    class FakeClient:
+        def __init__(self, timeout):
+            raise AssertionError("Supabase should not be queried")
+
+    monkeypatch.setattr(repository.httpx, "AsyncClient", FakeClient)
+
+    user = AuthenticatedUser(
+        id="user-123",
+        email="test@example.com",
+        access_token="access-token",
+    )
+
+    row = asyncio.run(
+        repository.update_custom_exercise(
+            user,
+            "custom-not-a-uuid",
+            {"name": "Press editado"},
+        )
+    )
+
+    assert row is None

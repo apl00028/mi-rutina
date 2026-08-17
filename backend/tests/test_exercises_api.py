@@ -349,6 +349,271 @@ def test_unknown_exercise_returns_404():
     assert response.json() == {"detail": "Exercise not found"}
 
 
+def test_patch_custom_exercise_updates_own_custom(monkeypatch):
+    from app.api.v1 import exercises as exercises_api
+    from app.models.exercise import Exercise
+
+    captured = {}
+    custom_uuid = "11111111-2222-3333-4444-555555555555"
+
+    async def fake_update_custom_exercise_model(user, exercise_id, payload):
+        captured["user_id"] = user.id
+        captured["exercise_id"] = exercise_id
+        captured["changes"] = payload.update_payload()
+
+        return Exercise(
+            id=f"custom-{custom_uuid}",
+            name="Press editado",
+            muscle="Pecho",
+            equipment="Mancuernas",
+            type="Fuerza",
+            favorite=False,
+            custom=True,
+            notes="Controlar la bajada.",
+            category="strength",
+            recordTypes=["weight", "reps"],
+        )
+
+    app.dependency_overrides[require_user] = authenticated_user
+    monkeypatch.setattr(
+        exercises_api,
+        "update_custom_exercise_model",
+        fake_update_custom_exercise_model,
+    )
+
+    try:
+        response = client.patch(
+            f"/api/v1/exercises/custom-{custom_uuid}",
+            headers={"Authorization": "Bearer token-123"},
+            json={
+                "name": "Press editado",
+                "recordTypes": ["weight", "reps"],
+            },
+        )
+    finally:
+        app.dependency_overrides.pop(require_user, None)
+
+    assert response.status_code == 200
+    assert captured == {
+        "user_id": "user-123",
+        "exercise_id": f"custom-{custom_uuid}",
+        "changes": {
+            "name": "Press editado",
+            "recordTypes": ["weight", "reps"],
+        },
+    }
+    assert response.json() == {
+        "id": f"custom-{custom_uuid}",
+        "name": "Press editado",
+        "muscle": "Pecho",
+        "equipment": "Mancuernas",
+        "type": "Fuerza",
+        "favorite": False,
+        "custom": True,
+        "notes": "Controlar la bajada.",
+        "category": "strength",
+        "recordTypes": ["weight", "reps"],
+    }
+
+
+def test_patch_builtin_exercise_returns_404(monkeypatch):
+    from app.api.v1 import exercises as exercises_api
+
+    async def fake_update_custom_exercise_model(user, exercise_id, payload):
+        raise AssertionError("Built-ins must not be patched through Supabase")
+
+    app.dependency_overrides[require_user] = authenticated_user
+    monkeypatch.setattr(
+        exercises_api,
+        "update_custom_exercise_model",
+        fake_update_custom_exercise_model,
+    )
+
+    try:
+        response = client.patch(
+            "/api/v1/exercises/bench-press",
+            headers={"Authorization": "Bearer token-123"},
+            json={"name": "No tocar"},
+        )
+    finally:
+        app.dependency_overrides.pop(require_user, None)
+
+    assert response.status_code == 404
+    assert response.json() == {"detail": "Exercise not found"}
+
+
+def test_patch_missing_custom_exercise_returns_404(monkeypatch):
+    from app.api.v1 import exercises as exercises_api
+
+    async def fake_update_custom_exercise_model(user, exercise_id, payload):
+        return None
+
+    app.dependency_overrides[require_user] = authenticated_user
+    monkeypatch.setattr(
+        exercises_api,
+        "update_custom_exercise_model",
+        fake_update_custom_exercise_model,
+    )
+
+    try:
+        response = client.patch(
+            "/api/v1/exercises/custom-11111111-2222-3333-4444-555555555555",
+            headers={"Authorization": "Bearer token-123"},
+            json={"name": "Press editado"},
+        )
+    finally:
+        app.dependency_overrides.pop(require_user, None)
+
+    assert response.status_code == 404
+    assert response.json() == {"detail": "Exercise not found"}
+
+
+def test_patch_other_user_custom_exercise_returns_same_404(monkeypatch):
+    from app.api.v1 import exercises as exercises_api
+
+    async def fake_update_custom_exercise_model(user, exercise_id, payload):
+        return None
+
+    app.dependency_overrides[require_user] = authenticated_user
+    monkeypatch.setattr(
+        exercises_api,
+        "update_custom_exercise_model",
+        fake_update_custom_exercise_model,
+    )
+
+    try:
+        response = client.patch(
+            "/api/v1/exercises/custom-22222222-3333-4444-5555-666666666666",
+            headers={"Authorization": "Bearer token-123"},
+            json={"name": "Press editado"},
+        )
+    finally:
+        app.dependency_overrides.pop(require_user, None)
+
+    assert response.status_code == 404
+    assert response.json() == {"detail": "Exercise not found"}
+
+
+def test_patch_invalid_custom_uuid_returns_404_without_supabase(monkeypatch):
+    from app.repositories import custom_exercises as custom_exercises_repository
+
+    class FakeClient:
+        def __init__(self, timeout):
+            raise AssertionError("Supabase should not be queried")
+
+    monkeypatch.setattr(
+        custom_exercises_repository.httpx,
+        "AsyncClient",
+        FakeClient,
+    )
+
+    app.dependency_overrides[require_user] = authenticated_user
+
+    try:
+        response = client.patch(
+            "/api/v1/exercises/custom-not-a-uuid",
+            headers={"Authorization": "Bearer token-123"},
+            json={"name": "Press editado"},
+        )
+    finally:
+        app.dependency_overrides.pop(require_user, None)
+
+    assert response.status_code == 404
+    assert response.json() == {"detail": "Exercise not found"}
+
+
+def test_patch_exercise_requires_authentication():
+    response = client.patch(
+        "/api/v1/exercises/custom-11111111-2222-3333-4444-555555555555",
+        json={"name": "Press editado"},
+    )
+
+    assert response.status_code == 401
+    assert response.json() == {"detail": "Missing bearer token"}
+
+
+def test_patch_custom_exercise_supabase_failure_returns_controlled_error(monkeypatch):
+    from app.api.v1 import exercises as exercises_api
+
+    async def fake_update_custom_exercise_model(user, exercise_id, payload):
+        raise httpx.HTTPStatusError(
+            "server error",
+            request=httpx.Request("PATCH", "https://example.supabase.co"),
+            response=httpx.Response(500),
+        )
+
+    app.dependency_overrides[require_user] = authenticated_user
+    monkeypatch.setattr(
+        exercises_api,
+        "update_custom_exercise_model",
+        fake_update_custom_exercise_model,
+    )
+
+    try:
+        response = client.patch(
+            "/api/v1/exercises/custom-11111111-2222-3333-4444-555555555555",
+            headers={"Authorization": "Bearer token-123"},
+            json={"name": "Press editado"},
+        )
+    finally:
+        app.dependency_overrides.pop(require_user, None)
+
+    assert response.status_code == 502
+    assert response.json() == {
+        "detail": "Custom exercises service is unavailable"
+    }
+
+
+def test_patch_custom_exercise_rejects_protected_fields():
+    app.dependency_overrides[require_user] = authenticated_user
+
+    try:
+        response = client.patch(
+            "/api/v1/exercises/custom-11111111-2222-3333-4444-555555555555",
+            headers={"Authorization": "Bearer token-123"},
+            json={
+                "id": "custom-22222222-3333-4444-5555-666666666666",
+                "user_id": "other-user",
+                "custom": False,
+                "favorite": True,
+            },
+        )
+    finally:
+        app.dependency_overrides.pop(require_user, None)
+
+    assert response.status_code == 422
+
+
+def test_patch_custom_exercise_rejects_empty_patch():
+    app.dependency_overrides[require_user] = authenticated_user
+
+    try:
+        response = client.patch(
+            "/api/v1/exercises/custom-11111111-2222-3333-4444-555555555555",
+            headers={"Authorization": "Bearer token-123"},
+            json={},
+        )
+    finally:
+        app.dependency_overrides.pop(require_user, None)
+
+    assert response.status_code == 422
+
+
+def test_patch_custom_exercise_rejects_null_values():
+    app.dependency_overrides[require_user] = authenticated_user
+
+    try:
+        response = client.patch(
+            "/api/v1/exercises/custom-11111111-2222-3333-4444-555555555555",
+            headers={"Authorization": "Bearer token-123"},
+            json={"notes": None},
+        )
+    finally:
+        app.dependency_overrides.pop(require_user, None)
+
+    assert response.status_code == 422
+
+
 def test_versioned_health_route():
     response = client.get("/api/v1/health")
 

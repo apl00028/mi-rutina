@@ -22,6 +22,18 @@ def _supabase_config() -> tuple[str, str]:
     return url, key
 
 
+def _custom_uuid_from_public_id(exercise_id: str) -> str | None:
+    if not exercise_id.startswith("custom-"):
+        return None
+
+    custom_id = exercise_id.removeprefix("custom-")
+
+    try:
+        return str(UUID(custom_id))
+    except ValueError:
+        return None
+
+
 async def create_custom_exercise(
     user: AuthenticatedUser,
     exercise: CustomExerciseCreate,
@@ -99,14 +111,8 @@ async def get_custom_exercise_by_id(
     user: AuthenticatedUser,
     exercise_id: str,
 ) -> dict[str, Any] | None:
-    if not exercise_id.startswith("custom-"):
-        return None
-
-    custom_id = exercise_id.removeprefix("custom-")
-
-    try:
-        custom_id = str(UUID(custom_id))
-    except ValueError:
+    custom_id = _custom_uuid_from_public_id(exercise_id)
+    if custom_id is None:
         return None
 
     url, key = _supabase_config()
@@ -127,6 +133,52 @@ async def get_custom_exercise_by_id(
             f"{url}/rest/v1/custom_exercises",
             headers=headers,
             params=params,
+        )
+
+    response.raise_for_status()
+
+    data = response.json()
+
+    if not isinstance(data, list):
+        raise RuntimeError("Unexpected Supabase response.")
+
+    return data[0] if data else None
+
+
+async def update_custom_exercise(
+    user: AuthenticatedUser,
+    exercise_id: str,
+    changes: dict[str, Any],
+) -> dict[str, Any] | None:
+    custom_id = _custom_uuid_from_public_id(exercise_id)
+    if custom_id is None:
+        return None
+
+    url, key = _supabase_config()
+
+    payload = {}
+    for key_name, value in changes.items():
+        column = "record_types" if key_name == "recordTypes" else key_name
+        payload[column] = value.strip() if isinstance(value, str) else value
+
+    headers = {
+        "Authorization": f"Bearer {user.access_token}",
+        "apikey": key,
+        "Content-Type": "application/json",
+        "Prefer": "return=representation",
+    }
+
+    params = {
+        "id": f"eq.{custom_id}",
+        "user_id": f"eq.{user.id}",
+    }
+
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        response = await client.patch(
+            f"{url}/rest/v1/custom_exercises",
+            headers=headers,
+            params=params,
+            json=payload,
         )
 
     response.raise_for_status()

@@ -2,7 +2,7 @@ import httpx
 from fastapi import APIRouter, Depends, HTTPException, status
 
 from auth import AuthenticatedUser, require_user
-from app.models.custom_exercise import CustomExerciseCreate
+from app.models.custom_exercise import CustomExerciseCreate, CustomExerciseUpdate
 from app.models.exercise import Exercise
 from app.models.exercise_resolution import (
     ExerciseResolveRequest,
@@ -13,6 +13,7 @@ from app.services.custom_exercises import (
     get_custom_exercise_model_by_id,
     list_custom_exercise_models,
     register_custom_exercise,
+    update_custom_exercise_model,
 )
 from app.services.exercise_resolution import resolve_exercise
 from app.services.exercises import get_exercise_by_id, load_exercises
@@ -95,6 +96,35 @@ async def get_exercise(
     if exercise_id.startswith("custom-"):
         try:
             custom_exercise = await get_custom_exercise_model_by_id(user, exercise_id)
+        except (httpx.HTTPError, RuntimeError) as exc:
+            _raise_custom_exercises_http_error(exc)
+
+        if custom_exercise is not None:
+            return custom_exercise
+
+    raise HTTPException(status_code=404, detail="Exercise not found")
+
+
+@router.patch(
+    "/exercises/{exercise_id}",
+    response_model=Exercise,
+    response_model_exclude_none=True,
+)
+async def update_exercise(
+    exercise_id: str,
+    request: CustomExerciseUpdate,
+    user: AuthenticatedUser = Depends(require_user),
+) -> Exercise:
+    if get_exercise_by_id(exercise_id) is not None:
+        raise HTTPException(status_code=404, detail="Exercise not found")
+
+    if exercise_id.startswith("custom-"):
+        try:
+            custom_exercise = await update_custom_exercise_model(
+                user,
+                exercise_id,
+                request,
+            )
         except (httpx.HTTPError, RuntimeError) as exc:
             _raise_custom_exercises_http_error(exc)
 

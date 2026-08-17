@@ -1,7 +1,7 @@
 import asyncio
 
 from auth import AuthenticatedUser
-from app.models.custom_exercise import CustomExerciseCreate
+from app.models.custom_exercise import CustomExerciseCreate, CustomExerciseUpdate
 from app.services import custom_exercises as service
 
 
@@ -146,6 +146,72 @@ def test_get_custom_exercise_model_by_id_reuses_row_mapper(monkeypatch):
     assert exercise.model_dump() == {
         "id": "custom-11111111-2222-3333-4444-555555555555",
         "name": "Press personalizado",
+        "muscle": "Pecho",
+        "equipment": "Mancuernas",
+        "type": "Fuerza",
+        "favorite": False,
+        "custom": True,
+        "notes": "Controlar la bajada.",
+        "category": "strength",
+        "recordTypes": ["weight", "reps"],
+    }
+
+
+def test_update_custom_exercise_model_sends_only_patch_fields(monkeypatch):
+    captured = {}
+
+    async def fake_update_custom_exercise(user, exercise_id, changes):
+        captured["user_id"] = user.id
+        captured["exercise_id"] = exercise_id
+        captured["changes"] = changes
+
+        return {
+            "id": "11111111-2222-3333-4444-555555555555",
+            "name": "Press editado",
+            "muscle": "Pecho",
+            "equipment": "Mancuernas",
+            "type": "Fuerza",
+            "notes": "Controlar la bajada.",
+            "category": "strength",
+            "record_types": ["weight", "reps"],
+        }
+
+    monkeypatch.setattr(
+        service,
+        "update_custom_exercise",
+        fake_update_custom_exercise,
+    )
+
+    user = AuthenticatedUser(
+        id="user-123",
+        email="test@example.com",
+        access_token="token-123",
+    )
+
+    payload = CustomExerciseUpdate(
+        name="Press editado",
+        recordTypes=["weight", "reps"],
+    )
+
+    exercise = asyncio.run(
+        service.update_custom_exercise_model(
+            user,
+            "custom-11111111-2222-3333-4444-555555555555",
+            payload,
+        )
+    )
+
+    assert captured == {
+        "user_id": "user-123",
+        "exercise_id": "custom-11111111-2222-3333-4444-555555555555",
+        "changes": {
+            "name": "Press editado",
+            "recordTypes": ["weight", "reps"],
+        },
+    }
+    assert exercise.model_dump() == {
+        "id": "custom-11111111-2222-3333-4444-555555555555",
+        "name": "Press editado",
         "muscle": "Pecho",
         "equipment": "Mancuernas",
         "type": "Fuerza",

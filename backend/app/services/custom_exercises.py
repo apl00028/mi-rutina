@@ -1,11 +1,12 @@
 from typing import Any
 
-from app.models.custom_exercise import CustomExerciseCreate
+from app.models.custom_exercise import CustomExerciseCreate, CustomExerciseUpdate
 from app.models.exercise import Exercise
 from app.repositories.custom_exercises import (
     create_custom_exercise,
     get_custom_exercise_by_id,
     list_custom_exercises,
+    update_custom_exercise,
 )
 from auth import AuthenticatedUser
 
@@ -47,6 +48,23 @@ async def get_custom_exercise_model_by_id(
     exercise_id: str,
 ) -> Exercise | None:
     row = await get_custom_exercise_by_id(user, exercise_id)
+
+    if row is None:
+        return None
+
+    return custom_exercise_row_to_model(row)
+
+
+async def update_custom_exercise_model(
+    user: AuthenticatedUser,
+    exercise_id: str,
+    payload: CustomExerciseUpdate,
+) -> Exercise | None:
+    row = await update_custom_exercise(
+        user,
+        exercise_id,
+        payload.update_payload(),
+    )
 
     if row is None:
         return None

@@ -5292,6 +5292,15 @@ function getSupabaseClient(){
     return null;
   }
 }
+window.getGymOSAccessToken = async function(){
+  const client=getSupabaseClient();
+  if(!client) return null;
+
+  const {data,error}=await client.auth.getSession();
+  if(error) throw error;
+
+  return data.session?.access_token||null;
+};
 async function fetchAiConfigurationStatus(check=false){
   try{
     const data=await coachBackendFetch(`/ai/status${check?"?check=true":""}`,{method:"GET"});

@@ -101,3 +101,72 @@ def test_get_user_routine_by_id_returns_none_for_missing(monkeypatch):
     routine = asyncio.run(service.get_user_routine_by_id(user, "routine-1"))
 
     assert routine is None
+
+
+def test_routine_to_storage_payload_excludes_row_timestamps():
+    routine = service.routine_row_to_model(routine_row())
+
+    assert service.routine_to_storage_payload(routine) == {
+        "schemaVersion": "4.2",
+        "routineId": "routine-1",
+        "revision": 1,
+        "name": "Fuerza",
+        "sessions": routine_row()["data"]["sessions"],
+    }
+
+
+def test_create_user_routine_maps_created_row(monkeypatch):
+    captured = {}
+
+    async def fake_create_routine(user, routine):
+        captured["user_id"] = user.id
+        captured["routine"] = routine
+        return {
+            "id": "routine-1",
+            "user_id": "user-123",
+            "data": routine,
+        }
+
+    monkeypatch.setattr(service, "create_routine", fake_create_routine)
+
+    user = AuthenticatedUser(
+        id="user-123",
+        email="test@example.com",
+        access_token="token-123",
+    )
+    routine = service.routine_row_to_model(routine_row())
+
+    created = asyncio.run(service.create_user_routine(user, routine))
+
+    assert created.routineId == "routine-1"
+    assert captured["user_id"] == "user-123"
+    assert captured["routine"]["sessions"] == routine_row()["data"]["sessions"]
+
+
+def test_replace_user_routine_maps_replaced_row(monkeypatch):
+    captured = {}
+
+    async def fake_replace_routine(user, routine_id, routine):
+        captured["user_id"] = user.id
+        captured["routine_id"] = routine_id
+        captured["routine"] = routine
+        return {
+            "id": routine_id,
+            "user_id": "user-123",
+            "data": routine,
+        }
+
+    monkeypatch.setattr(service, "replace_routine", fake_replace_routine)
+
+    user = AuthenticatedUser(
+        id="user-123",
+        email="test@example.com",
+        access_token="token-123",
+    )
+    routine = service.routine_row_to_model(routine_row())
+
+    replaced = asyncio.run(service.replace_user_routine(user, "routine-1", routine))
+
+    assert replaced.routineId == "routine-1"
+    assert captured["user_id"] == "user-123"
+    assert captured["routine_id"] == "routine-1"

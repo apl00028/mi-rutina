@@ -44,6 +44,33 @@ def routine_model(routine_id="routine-1"):
     )
 
 
+def routine_payload(routine_id="routine-1", revision=1):
+    return {
+        "schemaVersion": "4.2",
+        "routineId": routine_id,
+        "revision": revision,
+        "name": "Fuerza",
+        "sessions": [
+            {
+                "sessionId": "session-a",
+                "order": 1,
+                "label": "A",
+                "name": "Sesión A",
+                "focus": "Empuje",
+                "estimatedDurationMinutes": 60,
+                "exercises": [
+                    {
+                        "exerciseId": "bench-press",
+                        "name": "Press de banca",
+                        "sets": 3,
+                        "target": "8-10 reps",
+                    }
+                ],
+            }
+        ],
+    }
+
+
 def test_list_routines_returns_user_routines(monkeypatch):
     from app.api.v1 import routines as routines_api
 
@@ -227,3 +254,236 @@ def test_routines_supabase_error_returns_502(monkeypatch):
 
     assert response.status_code == 502
     assert response.json() == {"detail": "Routines service is unavailable"}
+
+
+def test_create_routine_returns_201(monkeypatch):
+    from app.api.v1 import routines as routines_api
+
+    captured = {}
+
+    async def fake_create_user_routine(user, routine):
+        captured["user_id"] = user.id
+        captured["routine_id"] = routine.routineId
+        return routine
+
+    app.dependency_overrides[require_user] = authenticated_user
+    monkeypatch.setattr(
+        routines_api,
+        "create_user_routine",
+        fake_create_user_routine,
+    )
+
+    try:
+        response = client.post(
+            "/api/v1/routines",
+            headers={"Authorization": "Bearer token-123"},
+            json=routine_payload(),
+        )
+    finally:
+        app.dependency_overrides.pop(require_user, None)
+
+    assert response.status_code == 201
+    assert response.json() == routine_payload()
+    assert captured == {
+        "user_id": "user-123",
+        "routine_id": "routine-1",
+    }
+
+
+def test_create_routine_rejects_duplicate_with_409(monkeypatch):
+    from app.api.v1 import routines as routines_api
+
+    async def fake_create_user_routine(user, routine):
+        raise httpx.HTTPStatusError(
+            "conflict",
+            request=httpx.Request("POST", "https://example.supabase.co"),
+            response=httpx.Response(409),
+        )
+
+    app.dependency_overrides[require_user] = authenticated_user
+    monkeypatch.setattr(
+        routines_api,
+        "create_user_routine",
+        fake_create_user_routine,
+    )
+
+    try:
+        response = client.post(
+            "/api/v1/routines",
+            headers={"Authorization": "Bearer token-123"},
+            json=routine_payload(),
+        )
+    finally:
+        app.dependency_overrides.pop(require_user, None)
+
+    assert response.status_code == 409
+    assert response.json() == {"detail": "Routine already exists"}
+
+
+def test_create_routine_requires_authentication():
+    response = client.post("/api/v1/routines", json=routine_payload())
+
+    assert response.status_code == 401
+    assert response.json() == {"detail": "Missing bearer token"}
+
+
+def test_create_routine_supabase_error_returns_502(monkeypatch):
+    from app.api.v1 import routines as routines_api
+
+    async def fake_create_user_routine(user, routine):
+        raise httpx.ConnectError("connection failed")
+
+    app.dependency_overrides[require_user] = authenticated_user
+    monkeypatch.setattr(
+        routines_api,
+        "create_user_routine",
+        fake_create_user_routine,
+    )
+
+    try:
+        response = client.post(
+            "/api/v1/routines",
+            headers={"Authorization": "Bearer token-123"},
+            json=routine_payload(),
+        )
+    finally:
+        app.dependency_overrides.pop(require_user, None)
+
+    assert response.status_code == 502
+    assert response.json() == {"detail": "Routines service is unavailable"}
+
+
+def test_replace_routine_returns_200(monkeypatch):
+    from app.api.v1 import routines as routines_api
+
+    captured = {}
+
+    async def fake_replace_user_routine(user, routine_id, routine):
+        captured["user_id"] = user.id
+        captured["routine_id"] = routine_id
+        captured["revision"] = routine.revision
+        return routine
+
+    payload = routine_payload(revision=2)
+
+    app.dependency_overrides[require_user] = authenticated_user
+    monkeypatch.setattr(
+        routines_api,
+        "replace_user_routine",
+        fake_replace_user_routine,
+    )
+
+    try:
+        response = client.put(
+            "/api/v1/routines/routine-1",
+            headers={"Authorization": "Bearer token-123"},
+            json=payload,
+        )
+    finally:
+        app.dependency_overrides.pop(require_user, None)
+
+    assert response.status_code == 200
+    assert response.json() == payload
+    assert captured == {
+        "user_id": "user-123",
+        "routine_id": "routine-1",
+        "revision": 2,
+    }
+
+
+def test_replace_routine_rejects_url_body_mismatch(monkeypatch):
+    from app.api.v1 import routines as routines_api
+
+    async def fake_replace_user_routine(user, routine_id, routine):
+        raise AssertionError("Mismatched IDs must not reach service")
+
+    app.dependency_overrides[require_user] = authenticated_user
+    monkeypatch.setattr(
+        routines_api,
+        "replace_user_routine",
+        fake_replace_user_routine,
+    )
+
+    try:
+        response = client.put(
+            "/api/v1/routines/routine-url",
+            headers={"Authorization": "Bearer token-123"},
+            json=routine_payload("routine-body"),
+        )
+    finally:
+        app.dependency_overrides.pop(require_user, None)
+
+    assert response.status_code == 422
+    assert response.json() == {"detail": "routine_id must match routineId"}
+
+
+def test_replace_missing_routine_returns_404(monkeypatch):
+    from app.api.v1 import routines as routines_api
+
+    async def fake_replace_user_routine(user, routine_id, routine):
+        return None
+
+    app.dependency_overrides[require_user] = authenticated_user
+    monkeypatch.setattr(
+        routines_api,
+        "replace_user_routine",
+        fake_replace_user_routine,
+    )
+
+    try:
+        response = client.put(
+            "/api/v1/routines/routine-1",
+            headers={"Authorization": "Bearer token-123"},
+            json=routine_payload(),
+        )
+    finally:
+        app.dependency_overrides.pop(require_user, None)
+
+    assert response.status_code == 404
+    assert response.json() == {"detail": "Routine not found"}
+
+
+def test_replace_foreign_routine_returns_same_404(monkeypatch):
+    from app.api.v1 import routines as routines_api
+
+    async def fake_replace_user_routine(user, routine_id, routine):
+        return None
+
+    app.dependency_overrides[require_user] = authenticated_user
+    monkeypatch.setattr(
+        routines_api,
+        "replace_user_routine",
+        fake_replace_user_routine,
+    )
+
+    try:
+        response = client.put(
+            "/api/v1/routines/routine-foreign",
+            headers={"Authorization": "Bearer token-123"},
+            json=routine_payload("routine-foreign"),
+        )
+    finally:
+        app.dependency_overrides.pop(require_user, None)
+
+    assert response.status_code == 404
+    assert response.json() == {"detail": "Routine not found"}
+
+
+def test_create_routine_rejects_invalid_body():
+    app.dependency_overrides[require_user] = authenticated_user
+
+    try:
+        response = client.post(
+            "/api/v1/routines",
+            headers={"Authorization": "Bearer token-123"},
+            json={
+                "schemaVersion": "4.2",
+                "routineId": "",
+                "revision": 1,
+                "sessions": [{"exercises": {}}],
+            },
+        )
+    finally:
+        app.dependency_overrides.pop(require_user, None)
+
+    assert response.status_code == 422

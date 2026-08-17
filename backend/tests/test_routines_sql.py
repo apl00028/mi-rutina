@@ -14,4 +14,7 @@ def test_routines_sql_includes_rls_policy():
     assert "data jsonb not null" in sql
     assert "alter table public.routines enable row level security" in sql
     assert "for select" in sql
+    assert "for insert" in sql
+    assert "for update" in sql
     assert "using ((select auth.uid()) = user_id)" in sql
+    assert "with check ((select auth.uid()) = user_id)" in sql

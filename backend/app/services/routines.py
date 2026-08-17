@@ -4,6 +4,7 @@ from auth import AuthenticatedUser
 from app.models.routine import Routine
 from app.repositories.routines import (
     create_routine,
+    delete_routine,
     get_routine_by_id,
     list_routines,
     replace_routine,
@@ -75,3 +76,10 @@ async def replace_user_routine(
         return None
 
     return routine_row_to_model(row)
+
+
+async def delete_user_routine(
+    user: AuthenticatedUser,
+    routine_id: str,
+) -> bool:
+    return await delete_routine(user, routine_id)

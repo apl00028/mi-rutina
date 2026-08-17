@@ -141,10 +141,43 @@ async def replace_routine(
         )
 
     response.raise_for_status()
-
     data = response.json()
 
     if not isinstance(data, list):
         raise RuntimeError("Unexpected Supabase response.")
 
     return data[0] if data else None
+
+
+async def delete_routine(
+    user: AuthenticatedUser,
+    routine_id: str,
+) -> bool:
+    url, key = _supabase_config()
+
+    headers = {
+        "Authorization": f"Bearer {user.access_token}",
+        "apikey": key,
+        "Prefer": "return=representation",
+    }
+
+    params = {
+        "id": f"eq.{routine_id}",
+        "user_id": f"eq.{user.id}",
+    }
+
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        response = await client.delete(
+            f"{url}/rest/v1/routines",
+            headers=headers,
+            params=params,
+        )
+
+    response.raise_for_status()
+
+    data = response.json()
+
+    if not isinstance(data, list):
+        raise RuntimeError("Unexpected Supabase response.")
+
+    return len(data) > 0

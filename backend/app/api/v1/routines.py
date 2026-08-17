@@ -1,11 +1,12 @@
 import httpx
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Response, status
 
 from auth import AuthenticatedUser, require_user
 from app.models.routine import Routine
 from app.repositories.custom_exercises import SupabaseConfigError
 from app.services.routines import (
     create_user_routine,
+    delete_user_routine,
     get_user_routine_by_id,
     list_user_routines,
     replace_user_routine,
@@ -111,3 +112,21 @@ async def replace_routine(
         raise HTTPException(status_code=404, detail="Routine not found")
 
     return routine
+
+@router.delete(
+    "/routines/{routine_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def delete_routine(
+    routine_id: str,
+    user: AuthenticatedUser = Depends(require_user),
+) -> Response:
+    try:
+        deleted = await delete_user_routine(user, routine_id)
+    except (httpx.HTTPError, RuntimeError) as exc:
+        _raise_routines_http_error(exc)
+
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Routine not found")
+
+    return Response(status_code=status.HTTP_204_NO_CONTENT)

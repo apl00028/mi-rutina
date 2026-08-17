@@ -389,40 +389,6 @@ function loadAccountDomHarness({syncDirection="none",syncUpdatesLastSyncAt=true}
     syncSecurityState:()=>({configured:true}),
     getSyncAudit:()=>audits,
     addSyncAudit:(action,status,details={})=>audits.push({action,status,details}),
-    lastSyncTraceEntry:({includeButtonResult=true}={})=>[...audits].reverse().find(entry=>
-      entry.action==="sync_trace"&&(includeButtonResult||entry.status!=="account_button_result")
-    )||null,
-    syncTraceBranchLabel:entry=>entry?.details?.branch||entry?.details?.condition||entry?.status||"Sin trazas",
-    lastSyncTraceBranch:()=>context.syncTraceBranchLabel(context.lastSyncTraceEntry()),
-    lastInternalSyncTraceBranch:()=>context.syncTraceBranchLabel(context.lastSyncTraceEntry({includeButtonResult:false})),
-    lastAccountSyncButtonTrace:()=>[...audits].reverse().find(entry=>
-      entry.action==="sync_trace"&&entry.status==="account_button_result"
-    )||null,
-    accountSyncButtonDiagnosticValue:key=>{
-      const details=context.lastAccountSyncButtonTrace()?.details||{};
-      if(key==="direction") return details.result?.direction||"Sin resultado";
-      if(key==="before") return details.lastSyncAtBefore||"";
-      if(key==="after") return details.lastSyncAtAfter||"";
-      return "";
-    },
-    lastConflictResolutionTrace:()=>[...audits].reverse().find(entry=>
-      entry.action==="sync_trace"&&entry.status==="choose_conflict_resolution"
-    )||null,
-    lastConflictReturnTrace:()=>[...audits].reverse().find(entry=>
-      entry.action==="sync_trace"&&entry.status==="conflict_return"
-    )||null,
-    syncDiagnosticConflictValue:key=>{
-      if(key==="policy") return values.get("gymos:syncConflictMode")||"";
-      const resolution=context.lastConflictResolutionTrace()?.details||{};
-      const returned=context.lastConflictReturnTrace()?.details||{};
-      if(key==="called") return resolution.called===true?"sí":resolution.called===false?"no":"";
-      if(key==="result") return resolution.result||"";
-      if(key==="returnSite") return returned.returnSite||context.state.syncIssue?.details?.returnSite||"";
-      return "";
-    },
-    syncDiagnosticFunctionalChecksumValue:key=>context.lastSyncTraceEntry({includeButtonResult:false})?.details?.functionalChecksum?.[key]||"",
-    syncDiagnosticChecksumModeValue:()=>context.lastSyncTraceEntry({includeButtonResult:false})?.details?.checksumMode||"",
-    syncDiagnosticFunctionalDiffDisplay:()=>"Sin diferencias funcionales registradas",
     isHealthyManualSyncResult:result=>["none","download","upload"].includes(result?.direction),
     getLastSyncAt:()=>values.get("gymos:lastSyncAt")||"",
     formatSyncDate:value=>`FMT:${value}`,
@@ -529,11 +495,6 @@ test("Cuenta enlaza los botones reales de audit, backup y sync sin cruzar export
   await harness.elements.get("accountSyncNow").onclick();
   assert.equal(harness.values.get("gymos:lastSyncAt"),"2026-08-16T10:30:00.000Z");
   assert.match(harness.app.innerHTML,/Última sincronización: <span data-last-sync>FMT:2026-08-16T10:30:00\.000Z<\/span>/);
-  assert.match(harness.app.innerHTML,/Diagnóstico lastSyncAt: <span data-sync-diagnostic-last-sync>2026-08-16T10:30:00\.000Z<\/span>/);
-  assert.match(harness.app.innerHTML,/Última rama interna sync: <span data-sync-diagnostic-internal-branch>same_revision_equivalent<\/span>/);
-  assert.match(harness.app.innerHTML,/Resultado botón: <span data-sync-diagnostic-button-result>none<\/span>/);
-  assert.match(harness.app.innerHTML,/lastSyncAt before: <span data-sync-diagnostic-before>2026-08-16T08:12:00\.000Z<\/span>/);
-  assert.match(harness.app.innerHTML,/lastSyncAt after: <span data-sync-diagnostic-after>2026-08-16T10:30:00\.000Z<\/span>/);
   assert.equal(harness.toasts.at(-1),"Sincronización completada");
   assert.deepEqual(
     harness.audits.filter(entry=>entry.action==="sync_trace").map(entry=>entry.status),

@@ -1,5 +1,6 @@
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, status
+from starlette.responses import Response
 
 from auth import AuthenticatedUser, require_user
 from app.models.custom_exercise import CustomExerciseCreate, CustomExerciseUpdate
@@ -13,6 +14,7 @@ from app.services.custom_exercises import (
     get_custom_exercise_model_by_id,
     list_custom_exercise_models,
     register_custom_exercise,
+    remove_custom_exercise,
     update_custom_exercise_model,
 )
 from app.services.exercise_resolution import resolve_exercise
@@ -130,5 +132,28 @@ async def update_exercise(
 
         if custom_exercise is not None:
             return custom_exercise
+
+    raise HTTPException(status_code=404, detail="Exercise not found")
+
+
+@router.delete(
+    "/exercises/{exercise_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def delete_exercise(
+    exercise_id: str,
+    user: AuthenticatedUser = Depends(require_user),
+) -> Response:
+    if get_exercise_by_id(exercise_id) is not None:
+        raise HTTPException(status_code=404, detail="Exercise not found")
+
+    if exercise_id.startswith("custom-"):
+        try:
+            deleted = await remove_custom_exercise(user, exercise_id)
+        except (httpx.HTTPError, RuntimeError) as exc:
+            _raise_custom_exercises_http_error(exc)
+
+        if deleted:
+            return Response(status_code=status.HTTP_204_NO_CONTENT)
 
     raise HTTPException(status_code=404, detail="Exercise not found")

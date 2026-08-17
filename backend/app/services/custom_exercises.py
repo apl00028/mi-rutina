@@ -4,6 +4,7 @@ from app.models.custom_exercise import CustomExerciseCreate, CustomExerciseUpdat
 from app.models.exercise import Exercise
 from app.repositories.custom_exercises import (
     create_custom_exercise,
+    delete_custom_exercise,
     get_custom_exercise_by_id,
     list_custom_exercises,
     update_custom_exercise,
@@ -70,3 +71,10 @@ async def update_custom_exercise_model(
         return None
 
     return custom_exercise_row_to_model(row)
+
+
+async def remove_custom_exercise(
+    user: AuthenticatedUser,
+    exercise_id: str,
+) -> bool:
+    return await delete_custom_exercise(user, exercise_id)

@@ -221,3 +221,37 @@ def test_update_custom_exercise_model_sends_only_patch_fields(monkeypatch):
         "category": "strength",
         "recordTypes": ["weight", "reps"],
     }
+
+
+def test_remove_custom_exercise_delegates_to_repository(monkeypatch):
+    captured = {}
+
+    async def fake_delete_custom_exercise(user, exercise_id):
+        captured["user_id"] = user.id
+        captured["exercise_id"] = exercise_id
+        return True
+
+    monkeypatch.setattr(
+        service,
+        "delete_custom_exercise",
+        fake_delete_custom_exercise,
+    )
+
+    user = AuthenticatedUser(
+        id="user-123",
+        email="test@example.com",
+        access_token="token-123",
+    )
+
+    deleted = asyncio.run(
+        service.remove_custom_exercise(
+            user,
+            "custom-11111111-2222-3333-4444-555555555555",
+        )
+    )
+
+    assert deleted is True
+    assert captured == {
+        "user_id": "user-123",
+        "exercise_id": "custom-11111111-2222-3333-4444-555555555555",
+    }

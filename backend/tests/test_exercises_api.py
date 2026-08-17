@@ -614,6 +614,182 @@ def test_patch_custom_exercise_rejects_null_values():
     assert response.status_code == 422
 
 
+def test_delete_custom_exercise_removes_own_custom(monkeypatch):
+    from app.api.v1 import exercises as exercises_api
+
+    captured = {}
+    custom_uuid = "11111111-2222-3333-4444-555555555555"
+
+    async def fake_remove_custom_exercise(user, exercise_id):
+        captured["user_id"] = user.id
+        captured["exercise_id"] = exercise_id
+        return True
+
+    app.dependency_overrides[require_user] = authenticated_user
+    monkeypatch.setattr(
+        exercises_api,
+        "remove_custom_exercise",
+        fake_remove_custom_exercise,
+    )
+
+    try:
+        response = client.delete(
+            f"/api/v1/exercises/custom-{custom_uuid}",
+            headers={"Authorization": "Bearer token-123"},
+        )
+    finally:
+        app.dependency_overrides.pop(require_user, None)
+
+    assert response.status_code == 204
+    assert response.content == b""
+    assert captured == {
+        "user_id": "user-123",
+        "exercise_id": f"custom-{custom_uuid}",
+    }
+
+
+def test_delete_builtin_exercise_returns_404(monkeypatch):
+    from app.api.v1 import exercises as exercises_api
+
+    async def fake_remove_custom_exercise(user, exercise_id):
+        raise AssertionError("Built-ins must not be deleted through Supabase")
+
+    app.dependency_overrides[require_user] = authenticated_user
+    monkeypatch.setattr(
+        exercises_api,
+        "remove_custom_exercise",
+        fake_remove_custom_exercise,
+    )
+
+    try:
+        response = client.delete(
+            "/api/v1/exercises/bench-press",
+            headers={"Authorization": "Bearer token-123"},
+        )
+    finally:
+        app.dependency_overrides.pop(require_user, None)
+
+    assert response.status_code == 404
+    assert response.json() == {"detail": "Exercise not found"}
+
+
+def test_delete_missing_custom_exercise_returns_404(monkeypatch):
+    from app.api.v1 import exercises as exercises_api
+
+    async def fake_remove_custom_exercise(user, exercise_id):
+        return False
+
+    app.dependency_overrides[require_user] = authenticated_user
+    monkeypatch.setattr(
+        exercises_api,
+        "remove_custom_exercise",
+        fake_remove_custom_exercise,
+    )
+
+    try:
+        response = client.delete(
+            "/api/v1/exercises/custom-11111111-2222-3333-4444-555555555555",
+            headers={"Authorization": "Bearer token-123"},
+        )
+    finally:
+        app.dependency_overrides.pop(require_user, None)
+
+    assert response.status_code == 404
+    assert response.json() == {"detail": "Exercise not found"}
+
+
+def test_delete_other_user_custom_exercise_returns_same_404(monkeypatch):
+    from app.api.v1 import exercises as exercises_api
+
+    async def fake_remove_custom_exercise(user, exercise_id):
+        return False
+
+    app.dependency_overrides[require_user] = authenticated_user
+    monkeypatch.setattr(
+        exercises_api,
+        "remove_custom_exercise",
+        fake_remove_custom_exercise,
+    )
+
+    try:
+        response = client.delete(
+            "/api/v1/exercises/custom-22222222-3333-4444-5555-666666666666",
+            headers={"Authorization": "Bearer token-123"},
+        )
+    finally:
+        app.dependency_overrides.pop(require_user, None)
+
+    assert response.status_code == 404
+    assert response.json() == {"detail": "Exercise not found"}
+
+
+def test_delete_invalid_custom_uuid_returns_404_without_supabase(monkeypatch):
+    from app.repositories import custom_exercises as custom_exercises_repository
+
+    class FakeClient:
+        def __init__(self, timeout):
+            raise AssertionError("Supabase should not be queried")
+
+    monkeypatch.setattr(
+        custom_exercises_repository.httpx,
+        "AsyncClient",
+        FakeClient,
+    )
+
+    app.dependency_overrides[require_user] = authenticated_user
+
+    try:
+        response = client.delete(
+            "/api/v1/exercises/custom-not-a-uuid",
+            headers={"Authorization": "Bearer token-123"},
+        )
+    finally:
+        app.dependency_overrides.pop(require_user, None)
+
+    assert response.status_code == 404
+    assert response.json() == {"detail": "Exercise not found"}
+
+
+def test_delete_exercise_requires_authentication():
+    response = client.delete(
+        "/api/v1/exercises/custom-11111111-2222-3333-4444-555555555555",
+    )
+
+    assert response.status_code == 401
+    assert response.json() == {"detail": "Missing bearer token"}
+
+
+def test_delete_custom_exercise_supabase_failure_returns_controlled_error(monkeypatch):
+    from app.api.v1 import exercises as exercises_api
+
+    async def fake_remove_custom_exercise(user, exercise_id):
+        raise httpx.HTTPStatusError(
+            "server error",
+            request=httpx.Request("DELETE", "https://example.supabase.co"),
+            response=httpx.Response(500),
+        )
+
+    app.dependency_overrides[require_user] = authenticated_user
+    monkeypatch.setattr(
+        exercises_api,
+        "remove_custom_exercise",
+        fake_remove_custom_exercise,
+    )
+
+    try:
+        response = client.delete(
+            "/api/v1/exercises/custom-11111111-2222-3333-4444-555555555555",
+            headers={"Authorization": "Bearer token-123"},
+        )
+    finally:
+        app.dependency_overrides.pop(require_user, None)
+
+    assert response.status_code == 502
+    assert response.json() == {
+        "detail": "Custom exercises service is unavailable"
+    }
+
+
 def test_versioned_health_route():
     response = client.get("/api/v1/health")
 

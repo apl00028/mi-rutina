@@ -4741,6 +4741,24 @@ function syncDiagnosticFunctionalDiffDisplay(){
 function isHealthyManualSyncResult(result){
   return ["none","download","upload"].includes(result?.direction);
 }
+function finalizeSuccessfulSync({revision,checksum,auditStatus,auditDetails={}}){
+  setLocalRevision(revision);
+  setLastRemoteRevision(revision);
+  setSyncBaseRevision(revision);
+  markSyncProtocolCurrent();
+  localStorage.removeItem("gymos:syncPending");
+  if(checksum) localStorage.setItem("gymos:lastSyncHash",checksum);
+  localStorage.setItem("gymos:lastSyncAt",new Date().toISOString());
+  state.syncStatus="synced";
+  state.syncIssue=null;
+  state.syncDiagnosticLastError=null;
+  addSyncAudit("sync",auditStatus,auditDetails);
+  updateSyncIndicators();
+  if(typeof markWorkoutProgressSynced==="function") markWorkoutProgressSynced();
+  if(typeof invalidateRecoveryDerivedState==="function"){
+    invalidateRecoveryDerivedState({reason:"sync_completed",renderCurrent:true});
+  }
+}
 function syncAuditFingerprintSummary({
   remote=null,remoteRevision=null,localRevision=null,lastRemoteRevision=null,
   syncBaseRevision=null,hasPendingChanges=null,checksumComparison=null,
@@ -6037,14 +6055,53 @@ async function syncNow(options={}){
         remoteFunctionalChecksum:checksumComparison.remoteFunctionalChecksum
       });
       const kind=legacyDiverged||unsafeDownload?"legacy_sync_conflict":"sync_conflict";
+      const conflictCondition=sameRevisionDiverged?"sameRevisionDiverged"
+        :pendingBaseDiverged?"pendingBaseDiverged"
+          :legacyDiverged?"legacyDiverged"
+            :unsafeDownload?"unsafeDownload"
+              :localAheadWithoutPending?"localAheadWithoutPending"
+                :"conflict";
       addSyncAudit("sync_trace","conflict",checksumAudit({
-        condition:sameRevisionDiverged?"sameRevisionDiverged"
-          :pendingBaseDiverged?"pendingBaseDiverged"
-            :legacyDiverged?"legacyDiverged"
-              :unsafeDownload?"unsafeDownload"
-                :localAheadWithoutPending?"localAheadWithoutPending"
-                  :"conflict"
+        condition:conflictCondition
       }));
+      const resolution=await chooseConflictResolution(remote);
+      addSyncAudit("sync_trace","conflict_resolution",checksumAudit({
+        condition:`${conflictCondition}_${resolution}`
+      }));
+      if(resolution==="remote"){
+        applySyncPayload(remote.payload||{});
+        diagnosticLog("payload remoto aplicado",{result:"ok",remoteRevision,reason:"conflict_remote_resolution"});
+        const postApplyPayload=buildSyncPayload();
+        const postApplyFunctionalChecksum=functionalSyncChecksum(postApplyPayload);
+        addSyncAudit("sync_trace","conflict_remote_applied",syncAuditFingerprintSummary({
+          remote,remoteRevision,localRevision:remoteRevision,lastRemoteRevision:remoteRevision,
+          syncBaseRevision:remoteRevision,hasPendingChanges:false,
+          localFunctionalChecksum:postApplyFunctionalChecksum,
+          condition:"conflict_remote_applied",
+          baseFunctionalChecksum:remoteFunctionalChecksum(remote),
+          functionalProjectionDiff:functionalSyncProjectionDiffSummary(postApplyPayload,remote.payload)
+        }));
+        finalizeSuccessfulSync({
+          revision:remoteRevision,
+          checksum:remote.checksum||simpleChecksum(postApplyPayload),
+          auditStatus:"downloaded",
+          auditDetails:{revision:remoteRevision,resolvedConflict:true,resolution:"remote"}
+        });
+        return {direction:"download",revision:remoteRevision,resolvedConflict:true,resolution:"remote"};
+      }
+      if(resolution==="local"){
+        const candidateRevision=remoteRevision+1;
+        const envelope=buildSyncEnvelope(remoteRevision,candidateRevision);
+        await writeSyncEnvelopeWithCas(client,userId,envelope,remoteRevision,true,remote?.checksum||null);
+        assertOwner();
+        finalizeSuccessfulSync({
+          revision:envelope.revision,
+          checksum:envelope.checksum,
+          auditStatus:"uploaded",
+          auditDetails:{revision:envelope.revision,resolvedConflict:true,resolution:"local"}
+        });
+        return {direction:"upload",revision:envelope.revision,resolvedConflict:true,resolution:"local"};
+      }
       return setSyncConflictState(kind,{
         remoteRevision,localRevision,lastRemote,syncBaseRevision
       });

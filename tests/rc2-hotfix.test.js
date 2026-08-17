@@ -30,7 +30,8 @@ function syncHarness({
   remote=null,readError=null,pending=false,online=true,recoverySync=null,
   checksum="same",localRevision=2,lastRemoteRevision=2,baseRevision=lastRemoteRevision,
   currentProtocol=true,writeError=null,writeConflict=false,sharedRemote=null,
-  initialStatus="connected",initialIssue=null,initialLastError=null
+  initialStatus="connected",initialIssue=null,initialLastError=null,
+  conflictResolution="cancel",localPayload=null
 }={}){
   const source=appSource.slice(
     appSource.indexOf("async function syncNow"),
@@ -46,6 +47,7 @@ function syncHarness({
   const counters={reads:0,writes:0,writeAttempts:0,applies:0};
   const audits=[];
   let remoteState=sharedRemote?sharedRemote.state:(remote?JSON.parse(JSON.stringify(remote)):null);
+  let currentLocalPayload=localPayload?JSON.parse(JSON.stringify(localPayload)):{stable:true};
   const currentRemoteState=()=>sharedRemote?sharedRemote.state:remoteState;
   const setRemoteState=value=>{
     if(sharedRemote) sharedRemote.state=value;
@@ -86,7 +88,20 @@ function syncHarness({
     syncBodyMeasurementsWithSupabase:()=>Promise.resolve(),
     updateSyncIndicators:()=>{},
     addSyncAudit:(action,status,details={})=>audits.push({action,status,details}),
-    buildSyncPayload:()=>({stable:true}),
+    finalizeSuccessfulSync:({revision,checksum,auditStatus,auditDetails={}})=>{
+      context.setLocalRevision(revision);
+      context.setLastRemoteRevision(revision);
+      context.setSyncBaseRevision(revision);
+      context.markSyncProtocolCurrent();
+      values.delete("gymos:syncPending");
+      if(checksum) values.set("gymos:lastSyncHash",String(checksum));
+      values.set("gymos:lastSyncAt",new Date().toISOString());
+      context.state.syncStatus="synced";
+      context.state.syncIssue=null;
+      context.state.syncDiagnosticLastError=null;
+      audits.push({action:"sync",status:auditStatus,details:auditDetails});
+    },
+    buildSyncPayload:()=>JSON.parse(JSON.stringify(currentLocalPayload)),
     simpleChecksum:()=>checksum,
     functionalSyncChecksum:payload=>payload?.functionalVariant||"functional-same",
     syncChecksumComparisonMode:({
@@ -113,6 +128,7 @@ function syncHarness({
         equivalent:legacyAck||remote?.checksum===localChecksum
       };
     },
+    remoteFunctionalChecksum:row=>row?.payload?.functionalChecksum||row?.functionalChecksum||null,
     functionalSyncProjectionDiffSummary:(localPayload,remotePayload)=>{
       const localHash=context.functionalSyncChecksum(localPayload);
       const remoteHash=context.functionalSyncChecksum(remotePayload);
@@ -152,8 +168,11 @@ function syncHarness({
     markSyncProtocolCurrent:()=>values.set("gymos:syncProtocolVersion","2"),
     isLocalSyncProtocolCurrent:()=>Number(values.get("gymos:syncProtocolVersion")||0)>=2,
     isRemoteSyncProtocolCurrent:row=>Number(row?.payload?.syncProtocolVersion||0)>=2,
-    chooseConflictResolution:async()=>"remote",
-    applySyncPayload:()=>{counters.applies+=1;},
+    chooseConflictResolution:async()=>conflictResolution,
+    applySyncPayload:payload=>{
+      counters.applies+=1;
+      currentLocalPayload=JSON.parse(JSON.stringify(payload||{}));
+    },
     buildSyncEnvelope:(base,candidate)=>{
       return {
         payload:{
@@ -1439,6 +1458,65 @@ function buildPayloadChecksumHarness({
 function functionalPayloadProjection(payload){
   return payload;
 }
+
+
+
+
+
+test("sameRevisionDiverged: elegir nube adopta remoto/base y la siguiente sync devuelve none",async()=>{
+  const remotePayload={
+    stable:true,
+    syncProtocolVersion:2,
+    syncFunctionalChecksumVersion:1,
+    functionalChecksum:"remote-functional",
+    functionalVariant:"remote-functional"
+  };
+  const sharedRemote={state:{
+    revision:964,checksum:"remote-full",device_id:"pc",
+    updated_at:"2026-08-16T08:12:38.433Z",payload:remotePayload
+  }};
+  const harness=syncHarness({
+    sharedRemote,checksum:"local-full",localRevision:964,lastRemoteRevision:964,baseRevision:964,
+    pending:false,conflictResolution:"remote",
+    localPayload:{...remotePayload,functionalVariant:"contaminated-local"}
+  });
+  const first=await harness.context.runSync();
+  assert.equal(first.direction,"download");
+  assert.equal(first.resolvedConflict,true);
+  assert.equal(first.resolution,"remote");
+  assert.equal(harness.counters.applies,1);
+  assert.equal(harness.values.get("gymos:localRevision"),"964");
+  assert.equal(harness.values.get("gymos:lastRemoteRevision"),"964");
+  assert.equal(harness.values.get("gymos:syncBaseRevision"),"964");
+  assert.equal(harness.values.get("gymos:lastSyncHash"),"remote-full");
+  assert.equal(harness.values.has("gymos:syncPending"),false);
+  assert.equal(harness.context.state.syncIssue,null);
+  assert.equal(harness.context.functionalSyncChecksum(harness.context.buildSyncPayload()),"remote-functional");
+
+  const second=await harness.context.runSync();
+  assert.equal(second.direction,"none");
+  assert.equal(harness.counters.writes,0);
+  assert.equal(harness.audits.some(item=>
+    item.action==="sync_trace"&&item.status==="conflict_remote_applied"
+  ),true);
+});
+
+test("sync posterior a adopción remota canónica en revisión N termina none sin pending",async()=>{
+  const remote={
+    revision:964,checksum:"same",device_id:"pc",updated_at:"2026-08-16T08:12:38.433Z",
+    payload:{stable:true,syncProtocolVersion:2,functionalChecksum:"functional-same"}
+  };
+  const harness=syncHarness({
+    remote,checksum:"same",localRevision:964,lastRemoteRevision:964,baseRevision:964
+  });
+  const result=await harness.context.runSync();
+  assert.equal(result.direction,"none");
+  assert.equal(harness.values.get("gymos:localRevision"),"964");
+  assert.equal(harness.values.has("gymos:syncPending"),false);
+  assert.equal(harness.counters.applies,0);
+  assert.equal(harness.audits.some(item=>item.status==="conflict"),false);
+  assert.equal(harness.audits.some(item=>item.status==="none_synced"),true);
+});
 
 test("sync checksum: mismo estado funcional con distinto deviceId/deviceName/updatedAt conserva functionalChecksum",()=>{
   const canonicalRoutine={

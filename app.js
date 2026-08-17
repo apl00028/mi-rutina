@@ -965,7 +965,7 @@ function importRoutineProposalSyncData(payload,{ownerId=null,mark=false}={}){
   const result=window.GymOSRoutineProposals.mergeProposalRecords(
     getRoutineProposalRecords(normalizedOwner),
     payload.routineProposals,
-    {ownerId:normalizedOwner,activeProposalId:preferredId}
+    {ownerId:normalizedOwner,activeProposalId:preferredId,adoptRemoteRecords:mark===false}
   );
   const mergedRequestedValid=requestedId&&result.records.some(record=>
     record.proposal.proposalId===requestedId&&record.lifecycle.status==="pending_review"
@@ -4562,7 +4562,7 @@ function applySyncPayload(payload,{recoveryCanonicalReplacement=false}={}){
   if(Array.isArray(payload.healthEntries)) saveHealthEntries(payload.healthEntries);
   if(Array.isArray(payload.healthImports)) saveHealthImports(payload.healthImports);
   if(Array.isArray(payload.recoveryEntries)) window.GymOSRecovery?.mergeRecoveryEntries?.(payload.recoveryEntries,false);
-  if(Array.isArray(payload.recoveryCheckins)) window.GymOSRecovery?.mergeCheckins?.(payload.recoveryCheckins,false);
+  if(Array.isArray(payload.recoveryCheckins)) window.GymOSRecovery?.mergeCheckins?.(payload.recoveryCheckins,false,{canonicalRemote:true});
   if(Array.isArray(payload.workoutAnalyses)) window.GymOSWorkoutAnalysis?.mergeAnalyses?.(payload.workoutAnalyses,false);
   if(payload.appPreferences) saveAppPreferences(payload.appPreferences);
   if(typeof payload.ai_messages_enabled==="boolean"){

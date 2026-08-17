@@ -444,7 +444,7 @@
         .filter(checkin=>!checkin.ownerId||!ownerId||checkin.ownerId===ownerId):[];
     }catch(error){return [];}
   }
-  function saveCheckins(checkins,mark=true){
+  function saveCheckins(checkins,mark=true,{recordConflicts=true}={}){
     const ownerId=currentOwnerId();
     const byWorkout=new Map();
     checkins.map(normalizeCheckin)
@@ -469,13 +469,13 @@
                 ?incomingTime>existingTime?checkin:existing
                 :existing.id.localeCompare(checkin.id)<=0?existing:checkin;
         const conflict=preferred===existing?checkin:existing;
-        byWorkout.set(checkin.workoutId,{
+        byWorkout.set(checkin.workoutId,recordConflicts?{
           ...preferred,
           conflictVariants:[
             ...(preferred.conflictVariants||[]),
             recoveryStableValue(conflict)
           ].slice(-2)
-        });
+        }:preferred);
       });
     const normalized=[...byWorkout.values()].slice(-500);
     localStorage.setItem(CHECKINS_KEY,JSON.stringify(normalized));
@@ -521,7 +521,8 @@
       });
     return saveEntries([...merged.values()],mark);
   }
-  function mergeCheckins(incoming,mark=false){
+  function mergeCheckins(incoming,mark=false,{canonicalRemote=false,recordConflicts=true}={}){
+    if(canonicalRemote) return saveCheckins(incoming,mark,{recordConflicts:false});
     const merged=new Map(getCheckins().map(checkin=>[checkin.id,checkin]));
     const ownerId=currentOwnerId();
     (incoming||[]).map(normalizeCheckin)
@@ -537,15 +538,15 @@
           ?checkin
           :incomingTime>currentTime?checkin:current;
         const conflict=preferred===checkin?current:checkin;
-        merged.set(checkin.id,{
+        merged.set(checkin.id,recordConflicts?{
           ...preferred,
           conflictVariants:[
             ...(preferred.conflictVariants||[]),
             recoveryStableValue(conflict)
           ].slice(-2)
-        });
+        }:preferred);
       });
-    return saveCheckins([...merged.values()],mark);
+    return saveCheckins([...merged.values()],mark,{recordConflicts});
   }
   function nextLocalDate(value){
     const date=new Date(value);
@@ -772,7 +773,7 @@
       assertOwner();
       if(checkinsError) throw checkinsError;
       const remoteCheckinMap=new Map((remoteCheckins||[]).map(checkin=>[String(checkin.id),checkin]));
-      const checkins=mergeCheckins(remoteCheckins||[],false);
+      const checkins=mergeCheckins(remoteCheckins||[],false,{recordConflicts:false});
       if(checkins.length){
         const pendingWrites=checkins.filter(checkin=>{
           const remote=remoteCheckinMap.get(checkin.id);

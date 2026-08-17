@@ -308,7 +308,8 @@ function loadAccountDomHarness({syncDirection="none",syncUpdatesLastSyncAt=true}
   const elements=new Map();
   let lastSyncElements=[];
   const values=new Map([
-    ["gymos:lastSyncAt","2026-08-16T08:12:00.000Z"]
+    ["gymos:lastSyncAt","2026-08-16T08:12:00.000Z"],
+    ["gymos:syncConflictMode","ask"]
   ]);
   const downloads=[];
   const toasts=[];
@@ -383,8 +384,8 @@ function loadAccountDomHarness({syncDirection="none",syncUpdatesLastSyncAt=true}
     isEmailConfirmed:()=>true,
     getLocalRevision:()=>964,
     getLastRemoteRevision:()=>964,
-    getSyncConflictPreference:()=>"ask",
-    setSyncConflictPreference(){},
+    getSyncConflictPreference:()=>values.get("gymos:syncConflictMode")||"ask",
+    setSyncConflictPreference:value=>values.set("gymos:syncConflictMode",String(value)),
     syncSecurityState:()=>({configured:true}),
     getSyncAudit:()=>audits,
     addSyncAudit:(action,status,details={})=>audits.push({action,status,details}),
@@ -402,6 +403,21 @@ function loadAccountDomHarness({syncDirection="none",syncUpdatesLastSyncAt=true}
       if(key==="direction") return details.result?.direction||"Sin resultado";
       if(key==="before") return details.lastSyncAtBefore||"";
       if(key==="after") return details.lastSyncAtAfter||"";
+      return "";
+    },
+    lastConflictResolutionTrace:()=>[...audits].reverse().find(entry=>
+      entry.action==="sync_trace"&&entry.status==="choose_conflict_resolution"
+    )||null,
+    lastConflictReturnTrace:()=>[...audits].reverse().find(entry=>
+      entry.action==="sync_trace"&&entry.status==="conflict_return"
+    )||null,
+    syncDiagnosticConflictValue:key=>{
+      if(key==="policy") return values.get("gymos:syncConflictMode")||"";
+      const resolution=context.lastConflictResolutionTrace()?.details||{};
+      const returned=context.lastConflictReturnTrace()?.details||{};
+      if(key==="called") return resolution.called===true?"sí":resolution.called===false?"no":"";
+      if(key==="result") return resolution.result||"";
+      if(key==="returnSite") return returned.returnSite||context.state.syncIssue?.details?.returnSite||"";
       return "";
     },
     syncDiagnosticFunctionalChecksumValue:key=>context.lastSyncTraceEntry({includeButtonResult:false})?.details?.functionalChecksum?.[key]||"",
@@ -423,7 +439,36 @@ function loadAccountDomHarness({syncDirection="none",syncUpdatesLastSyncAt=true}
         "application/json"
       );
     },
+    applySyncPayload:payload=>{
+      context.applyCalls=(context.applyCalls||[]).concat([payload]);
+    },
+    chooseConflictResolution:async remote=>{
+      const mode=context.getSyncConflictPreference();
+      const result=mode==="remote"?"remote":mode==="local"?"local":"local";
+      context.addSyncAudit("sync_trace","choose_conflict_resolution",{
+        branch:"choose_conflict_resolution",called:true,
+        conflictPolicyStored:values.get("gymos:syncConflictMode")||"",mode,result,
+        remoteRevision:Number(remote?.revision||0)||null
+      });
+      return result;
+    },
     syncNow:async()=>{
+      if(syncDirection==="sameRevisionDiverged"){
+        const remote={revision:964,payload:{source:"remote-canonical"},checksum:"remote-full"};
+        context.addSyncAudit("sync_trace","conflict",{
+          branch:"sameRevisionDiverged",functionalChecksum:{local:"442683aa",remote:"82f91eba",base:"82f91eba"}
+        });
+        const resolution=await context.chooseConflictResolution(remote);
+        context.addSyncAudit("sync_trace","conflict_resolution",{branch:`sameRevisionDiverged_${resolution}`});
+        if(resolution==="remote"){
+          context.applySyncPayload(remote.payload);
+          context.addSyncAudit("sync_trace","conflict_remote_applied",{branch:"conflict_remote_applied"});
+          if(syncUpdatesLastSyncAt) values.set("gymos:lastSyncAt","2026-08-16T10:30:00.000Z");
+          return {direction:"download",revision:964,resolvedConflict:true,resolution:"remote"};
+        }
+        context.addSyncAudit("sync_trace","conflict_return",{branch:"conflict_return",returnSite:`divergence_sameRevisionDiverged_${resolution}`});
+        return {direction:"conflict",revision:964,details:{returnSite:`divergence_sameRevisionDiverged_${resolution}`}};
+      }
       context.addSyncAudit("sync_trace",syncDirection==="none"?"none_synced":syncDirection,{branch:syncDirection==="none"?"same_revision_equivalent":syncDirection});
       if(syncUpdatesLastSyncAt) values.set("gymos:lastSyncAt","2026-08-16T10:30:00.000Z");
       return {direction:syncDirection,revision:964};
@@ -458,6 +503,7 @@ function loadAccountDomHarness({syncDirection="none",syncUpdatesLastSyncAt=true}
   context.renderAccount();
   return {
     context,elements,downloads,toasts,messages,values,app,audits,
+    get applyCalls(){return context.applyCalls||[];},
     lastSyncElements:()=>lastSyncElements
   };
 }
@@ -501,6 +547,26 @@ test("Cuenta enlaza los botones reales de audit, backup y sync sin cruzar export
 });
 
 
+
+
+
+test("Cuenta selector Usar la nube + botón real resuelve sameRevisionDiverged como download",async()=>{
+  const harness=loadAccountDomHarness({syncDirection:"sameRevisionDiverged"});
+  const selector=harness.elements.get("syncConflictPreference");
+  selector.value="remote";
+  selector.onchange({target:selector});
+
+  await harness.elements.get("accountSyncNow").onclick();
+
+  assert.equal(harness.values.get("gymos:syncConflictMode"),"remote");
+  assert.equal(harness.applyCalls.length,1);
+  assert.deepEqual(harness.applyCalls[0],{source:"remote-canonical"});
+  assert.equal(harness.audits.find(entry=>entry.status==="choose_conflict_resolution").details.result,"remote");
+  assert.equal(harness.audits.at(-1).details.result.direction,"download");
+  assert.equal(harness.audits.at(-1).details.result.resolution,"remote");
+  assert.equal(harness.toasts.at(-1),"Sincronización completada");
+  assert.equal(harness.messages.length,0);
+});
 
 test("Cuenta no muestra completada si el botón recibe un resultado no sano",async()=>{
   for(const direction of ["busy","diagnostic_mode","conflict"]){

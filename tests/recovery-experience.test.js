@@ -74,6 +74,10 @@ test("crea un único check-in al finalizar un entrenamiento guardado",()=>{
   assert.equal(context.marks,1);
 });
 
+test("syncWithSupabase fusiona recoveryCheckins remotos sin añadir variantes diagnósticas",()=>{
+  assert.match(recoverySource,/mergeCheckins\(remoteCheckins\|\|\[\],false,\{recordConflicts:false\}\)/);
+});
+
 test("no crea check-in para un entrenamiento descartado o ajeno",()=>{
   const item=workout();
   const loaded=loadRecovery({history:[]});
@@ -153,6 +157,36 @@ test("el snapshot histórico conserva sesión, foco y duración",()=>{
   );
   assert.equal(checkin.routineId,"routine-1");
   assert.equal(checkin.sessionId,"session-a");
+});
+
+
+
+test("apply remoto canónico de recoveryCheckins no crea conflictVariants silenciosos",()=>{
+  const {api,context,localStorage}=loadRecovery();
+  const local={
+    id:"recovery-checkin-workout-1",workoutId:"workout-1",workoutDate:"2026-07-28",
+    availableFrom:"2026-07-29",status:"completed",session:"A",routineId:"routine-1",
+    sessionId:"session-a",sessionName:"Sesión A",durationMs:1200000,
+    completedAt:"2026-07-29T08:00:00.000Z",createdAt:"2026-07-29T07:00:00.000Z",
+    updatedAt:"2026-07-29T08:00:00.000Z",ownerId:context.currentOwner
+  };
+  const remote={
+    ...local,status:"pending",completedAt:null,updatedAt:"2026-07-29T07:30:00.000Z"
+  };
+  api.saveCheckins([local],false);
+  const adopted=api.mergeCheckins([remote],false,{canonicalRemote:true});
+  assert.equal(adopted.length,1);
+  assert.equal(adopted[0].status,"pending");
+  assert.equal(Array.isArray(adopted[0].conflictVariants),true);
+  assert.equal(adopted[0].conflictVariants.length,0);
+  assert.equal(localStorage.getItem("gymos:syncPending"),null);
+  assert.equal(context.marks||0,0);
+
+  api.saveCheckins([local],false);
+  const merged=api.mergeCheckins([remote],true);
+  assert.equal(merged[0].status,"completed");
+  assert.equal(Array.isArray(merged[0].conflictVariants),true);
+  assert.equal(context.marks,1);
 });
 
 test("guardar completa check-in y entrada una sola vez sin tocar el historial",()=>{

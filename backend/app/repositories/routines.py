@@ -181,3 +181,74 @@ async def delete_routine(
         raise RuntimeError("Unexpected Supabase response.")
 
     return len(data) > 0
+
+async def get_active_routine(
+    user: AuthenticatedUser,
+) -> dict[str, Any] | None:
+    url, key = _supabase_config()
+
+    headers = {
+        "Authorization": f"Bearer {user.access_token}",
+        "apikey": key,
+    }
+
+    params = {
+        "user_id": f"eq.{user.id}",
+        "limit": "1",
+    }
+
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        response = await client.get(
+            f"{url}/rest/v1/active_routines",
+            headers=headers,
+            params=params,
+        )
+
+    response.raise_for_status()
+
+    data = response.json()
+
+    if not isinstance(data, list):
+        raise RuntimeError("Unexpected Supabase response.")
+
+    return data[0] if data else None
+
+
+async def set_active_routine(
+    user: AuthenticatedUser,
+    routine_id: str,
+) -> dict[str, Any]:
+    url, key = _supabase_config()
+
+    headers = {
+        "Authorization": f"Bearer {user.access_token}",
+        "apikey": key,
+        "Content-Type": "application/json",
+        "Prefer": "resolution=merge-duplicates,return=representation",
+    }
+
+    payload = {
+        "user_id": user.id,
+        "routine_id": routine_id,
+    }
+
+    params = {
+        "on_conflict": "user_id",
+    }
+
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        response = await client.post(
+            f"{url}/rest/v1/active_routines",
+            headers=headers,
+            params=params,
+            json=payload,
+        )
+
+    response.raise_for_status()
+
+    data = response.json()
+
+    if not isinstance(data, list) or len(data) != 1:
+        raise RuntimeError("Unexpected Supabase response.")
+
+    return data[0]

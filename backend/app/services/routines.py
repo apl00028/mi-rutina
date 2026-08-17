@@ -5,9 +5,11 @@ from app.models.routine import Routine
 from app.repositories.routines import (
     create_routine,
     delete_routine,
+    get_active_routine,
     get_routine_by_id,
     list_routines,
     replace_routine,
+    set_active_routine,
 )
 
 
@@ -83,3 +85,36 @@ async def delete_user_routine(
     routine_id: str,
 ) -> bool:
     return await delete_routine(user, routine_id)
+
+async def get_user_active_routine(
+    user: AuthenticatedUser,
+) -> Routine | None:
+    row = await get_active_routine(user)
+
+    if row is None:
+        return None
+
+    routine_id = row.get("routine_id")
+    if not routine_id:
+        raise RuntimeError("Unexpected Supabase response.")
+
+    routine_row = await get_routine_by_id(user, str(routine_id))
+
+    if routine_row is None:
+        return None
+
+    return routine_row_to_model(routine_row)
+
+
+async def activate_user_routine(
+    user: AuthenticatedUser,
+    routine_id: str,
+) -> Routine | None:
+    routine_row = await get_routine_by_id(user, routine_id)
+
+    if routine_row is None:
+        return None
+
+    await set_active_routine(user, routine_id)
+
+    return routine_row_to_model(routine_row)

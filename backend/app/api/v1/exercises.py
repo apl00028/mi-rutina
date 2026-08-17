@@ -17,6 +17,11 @@ from app.services.custom_exercises import (
     remove_custom_exercise,
     update_custom_exercise_model,
 )
+from app.services.exercise_favorites import (
+    list_user_favorite_exercise_ids,
+    mark_exercise_favorite,
+    unmark_exercise_favorite,
+)
 from app.services.exercise_resolution import resolve_exercise
 from app.services.exercises import get_exercise_by_id, load_exercises
 
@@ -36,6 +41,48 @@ def _raise_custom_exercises_http_error(exc: Exception) -> None:
     ) from exc
 
 
+def _with_favorite(exercise: Exercise, favorite_ids: set[str]) -> Exercise:
+    return exercise.model_copy(
+        update={"favorite": exercise.id in favorite_ids},
+    )
+
+
+def _with_favorites(
+    exercises: list[Exercise],
+    favorite_ids: set[str],
+) -> list[Exercise]:
+    return [_with_favorite(exercise, favorite_ids) for exercise in exercises]
+
+
+async def _get_custom_exercise_or_none(
+    user: AuthenticatedUser,
+    exercise_id: str,
+) -> Exercise | None:
+    try:
+        return await get_custom_exercise_model_by_id(user, exercise_id)
+    except (httpx.HTTPError, RuntimeError) as exc:
+        _raise_custom_exercises_http_error(exc)
+
+
+async def _resolve_exercise_for_user(
+    user: AuthenticatedUser,
+    exercise_id: str,
+    favorite_ids: set[str],
+) -> Exercise | None:
+    exercise = get_exercise_by_id(exercise_id)
+
+    if exercise is not None:
+        return _with_favorite(exercise, favorite_ids)
+
+    if exercise_id.startswith("custom-"):
+        custom_exercise = await _get_custom_exercise_or_none(user, exercise_id)
+
+        if custom_exercise is not None:
+            return _with_favorite(custom_exercise, favorite_ids)
+
+    return None
+
+
 @router.get(
     "/exercises",
     response_model=list[Exercise],
@@ -48,10 +95,11 @@ async def list_exercises(
 
     try:
         custom_exercises = await list_custom_exercise_models(user)
+        favorite_ids = await list_user_favorite_exercise_ids(user)
     except (httpx.HTTPError, RuntimeError) as exc:
         _raise_custom_exercises_http_error(exc)
 
-    return built_in_exercises + custom_exercises
+    return _with_favorites(built_in_exercises + custom_exercises, favorite_ids)
 
 
 @router.post(
@@ -90,21 +138,17 @@ async def get_exercise(
     exercise_id: str,
     user: AuthenticatedUser = Depends(require_user),
 ) -> Exercise:
-    exercise = get_exercise_by_id(exercise_id)
+    exercise = await _resolve_exercise_for_user(user, exercise_id, set())
 
-    if exercise is not None:
-        return exercise
+    if exercise is None:
+        raise HTTPException(status_code=404, detail="Exercise not found")
 
-    if exercise_id.startswith("custom-"):
-        try:
-            custom_exercise = await get_custom_exercise_model_by_id(user, exercise_id)
-        except (httpx.HTTPError, RuntimeError) as exc:
-            _raise_custom_exercises_http_error(exc)
+    try:
+        favorite_ids = await list_user_favorite_exercise_ids(user)
+    except (httpx.HTTPError, RuntimeError) as exc:
+        _raise_custom_exercises_http_error(exc)
 
-        if custom_exercise is not None:
-            return custom_exercise
-
-    raise HTTPException(status_code=404, detail="Exercise not found")
+    return _with_favorite(exercise, favorite_ids)
 
 
 @router.patch(
@@ -157,3 +201,47 @@ async def delete_exercise(
             return Response(status_code=status.HTTP_204_NO_CONTENT)
 
     raise HTTPException(status_code=404, detail="Exercise not found")
+
+
+@router.put(
+    "/exercises/{exercise_id}/favorite",
+    response_model=Exercise,
+    response_model_exclude_none=True,
+)
+async def favorite_exercise(
+    exercise_id: str,
+    user: AuthenticatedUser = Depends(require_user),
+) -> Exercise:
+    exercise = await _resolve_exercise_for_user(user, exercise_id, set())
+
+    if exercise is None:
+        raise HTTPException(status_code=404, detail="Exercise not found")
+
+    try:
+        await mark_exercise_favorite(user, exercise.id)
+    except (httpx.HTTPError, RuntimeError) as exc:
+        _raise_custom_exercises_http_error(exc)
+
+    return exercise.model_copy(update={"favorite": True})
+
+
+@router.delete(
+    "/exercises/{exercise_id}/favorite",
+    response_model=Exercise,
+    response_model_exclude_none=True,
+)
+async def unfavorite_exercise(
+    exercise_id: str,
+    user: AuthenticatedUser = Depends(require_user),
+) -> Exercise:
+    exercise = await _resolve_exercise_for_user(user, exercise_id, {exercise_id})
+
+    if exercise is None:
+        raise HTTPException(status_code=404, detail="Exercise not found")
+
+    try:
+        await unmark_exercise_favorite(user, exercise.id)
+    except (httpx.HTTPError, RuntimeError) as exc:
+        _raise_custom_exercises_http_error(exc)
+
+    return exercise.model_copy(update={"favorite": False})

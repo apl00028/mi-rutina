@@ -18,6 +18,11 @@ async def authenticated_user():
     )
 
 
+async def no_favorites(user):
+    assert user.id == "user-123"
+    return set()
+
+
 def test_list_exercises_requires_authentication():
     response = client.get("/api/v1/exercises")
 
@@ -38,6 +43,11 @@ def test_list_exercises_authenticated_without_custom_returns_100_items(monkeypat
         "list_custom_exercise_models",
         fake_list_custom_exercise_models,
     )
+    monkeypatch.setattr(
+        exercises_api,
+        "list_user_favorite_exercise_ids",
+        no_favorites,
+    )
 
     try:
         response = client.get(
@@ -53,7 +63,53 @@ def test_list_exercises_authenticated_without_custom_returns_100_items(monkeypat
 
     assert len(data) == 100
     assert len({exercise["id"] for exercise in data}) == 100
-    assert data == jsonable_encoder(load_exercises(), exclude_none=True)
+    assert data == jsonable_encoder(
+        [
+            exercise.model_copy(update={"favorite": False})
+            for exercise in load_exercises()
+        ],
+        exclude_none=True,
+    )
+
+
+def test_list_exercises_authenticated_marks_builtin_favorite(monkeypatch):
+    from app.api.v1 import exercises as exercises_api
+
+    async def fake_list_custom_exercise_models(user):
+        return []
+
+    async def fake_list_user_favorite_exercise_ids(user):
+        assert user.id == "user-123"
+        return {"bench-press"}
+
+    app.dependency_overrides[require_user] = authenticated_user
+    monkeypatch.setattr(
+        exercises_api,
+        "list_custom_exercise_models",
+        fake_list_custom_exercise_models,
+    )
+    monkeypatch.setattr(
+        exercises_api,
+        "list_user_favorite_exercise_ids",
+        fake_list_user_favorite_exercise_ids,
+    )
+
+    try:
+        response = client.get(
+            "/api/v1/exercises",
+            headers={"Authorization": "Bearer token-123"},
+        )
+    finally:
+        app.dependency_overrides.pop(require_user, None)
+
+    assert response.status_code == 200
+
+    exercises = {
+        exercise["id"]: exercise
+        for exercise in response.json()
+    }
+    assert exercises["bench-press"]["favorite"] is True
+    assert exercises["squat"]["favorite"] is False
 
 
 def test_list_exercises_authenticated_appends_custom_exercise(monkeypatch):
@@ -85,6 +141,11 @@ def test_list_exercises_authenticated_appends_custom_exercise(monkeypatch):
         "list_custom_exercise_models",
         fake_list_custom_exercise_models,
     )
+    monkeypatch.setattr(
+        exercises_api,
+        "list_user_favorite_exercise_ids",
+        no_favorites,
+    )
 
     try:
         response = client.get(
@@ -99,7 +160,13 @@ def test_list_exercises_authenticated_appends_custom_exercise(monkeypatch):
     data = response.json()
 
     assert len(data) == 101
-    assert data[:100] == jsonable_encoder(load_exercises(), exclude_none=True)
+    assert data[:100] == jsonable_encoder(
+        [
+            exercise.model_copy(update={"favorite": False})
+            for exercise in load_exercises()
+        ],
+        exclude_none=True,
+    )
     assert data[-1] == {
         "id": f"custom-{custom_uuid}",
         "name": "Press personalizado",
@@ -112,6 +179,57 @@ def test_list_exercises_authenticated_appends_custom_exercise(monkeypatch):
         "category": "strength",
         "recordTypes": ["weight", "reps"],
     }
+
+
+def test_list_exercises_authenticated_marks_custom_favorite(monkeypatch):
+    from app.api.v1 import exercises as exercises_api
+    from app.models.exercise import Exercise
+
+    custom_uuid = "11111111-2222-3333-4444-555555555555"
+
+    async def fake_list_custom_exercise_models(user):
+        return [
+            Exercise(
+                id=f"custom-{custom_uuid}",
+                name="Press personalizado",
+                muscle="Pecho",
+                equipment="Mancuernas",
+                type="Fuerza",
+                favorite=False,
+                custom=True,
+                notes="Controlar la bajada.",
+                category="strength",
+                recordTypes=["weight", "reps"],
+            )
+        ]
+
+    async def fake_list_user_favorite_exercise_ids(user):
+        assert user.id == "user-123"
+        return {f"custom-{custom_uuid}"}
+
+    app.dependency_overrides[require_user] = authenticated_user
+    monkeypatch.setattr(
+        exercises_api,
+        "list_custom_exercise_models",
+        fake_list_custom_exercise_models,
+    )
+    monkeypatch.setattr(
+        exercises_api,
+        "list_user_favorite_exercise_ids",
+        fake_list_user_favorite_exercise_ids,
+    )
+
+    try:
+        response = client.get(
+            "/api/v1/exercises",
+            headers={"Authorization": "Bearer token-123"},
+        )
+    finally:
+        app.dependency_overrides.pop(require_user, None)
+
+    assert response.status_code == 200
+    assert response.json()[-1]["id"] == f"custom-{custom_uuid}"
+    assert response.json()[-1]["favorite"] is True
 
 
 def test_list_exercises_supabase_failure_returns_controlled_error(monkeypatch):
@@ -148,8 +266,15 @@ def test_get_exercise_by_id_requires_authentication():
     assert response.json() == {"detail": "Missing bearer token"}
 
 
-def test_get_builtin_exercise_by_id_authenticated():
+def test_get_builtin_exercise_by_id_authenticated(monkeypatch):
+    from app.api.v1 import exercises as exercises_api
+
     app.dependency_overrides[require_user] = authenticated_user
+    monkeypatch.setattr(
+        exercises_api,
+        "list_user_favorite_exercise_ids",
+        no_favorites,
+    )
 
     try:
         response = client.get(
@@ -166,7 +291,7 @@ def test_get_builtin_exercise_by_id_authenticated():
         "muscle": "Pecho",
         "equipment": "Barra",
         "type": "Fuerza",
-        "favorite": True,
+        "favorite": False,
         "custom": False,
         "notes": "Escápulas retraídas y pies firmes.",
         "category": "strength",
@@ -201,6 +326,21 @@ def test_get_custom_exercise_by_id_authenticated(monkeypatch):
         exercises_api,
         "get_custom_exercise_model_by_id",
         fake_get_custom_exercise_model_by_id,
+    )
+    monkeypatch.setattr(
+        exercises_api,
+        "list_user_favorite_exercise_ids",
+        no_favorites,
+    )
+    monkeypatch.setattr(
+        exercises_api,
+        "list_user_favorite_exercise_ids",
+        no_favorites,
+    )
+    monkeypatch.setattr(
+        exercises_api,
+        "list_user_favorite_exercise_ids",
+        no_favorites,
     )
 
     try:
@@ -238,6 +378,11 @@ def test_get_missing_custom_exercise_returns_404(monkeypatch):
         "get_custom_exercise_model_by_id",
         fake_get_custom_exercise_model_by_id,
     )
+    monkeypatch.setattr(
+        exercises_api,
+        "list_user_favorite_exercise_ids",
+        no_favorites,
+    )
 
     try:
         response = client.get(
@@ -263,6 +408,11 @@ def test_get_other_user_custom_exercise_returns_same_404(monkeypatch):
         "get_custom_exercise_model_by_id",
         fake_get_custom_exercise_model_by_id,
     )
+    monkeypatch.setattr(
+        exercises_api,
+        "list_user_favorite_exercise_ids",
+        no_favorites,
+    )
 
     try:
         response = client.get(
@@ -278,6 +428,7 @@ def test_get_other_user_custom_exercise_returns_same_404(monkeypatch):
 
 def test_get_custom_exercise_invalid_uuid_returns_404_without_supabase(monkeypatch):
     from app.repositories import custom_exercises as custom_exercises_repository
+    from app.api.v1 import exercises as exercises_api
 
     class FakeClient:
         def __init__(self, timeout):
@@ -290,6 +441,11 @@ def test_get_custom_exercise_invalid_uuid_returns_404_without_supabase(monkeypat
     )
 
     app.dependency_overrides[require_user] = authenticated_user
+    monkeypatch.setattr(
+        exercises_api,
+        "list_user_favorite_exercise_ids",
+        no_favorites,
+    )
 
     try:
         response = client.get(
@@ -334,8 +490,15 @@ def test_get_custom_exercise_supabase_failure_returns_controlled_error(monkeypat
     }
 
 
-def test_unknown_exercise_returns_404():
+def test_unknown_exercise_returns_404(monkeypatch):
+    from app.api.v1 import exercises as exercises_api
+
     app.dependency_overrides[require_user] = authenticated_user
+    monkeypatch.setattr(
+        exercises_api,
+        "list_user_favorite_exercise_ids",
+        no_favorites,
+    )
 
     try:
         response = client.get(
@@ -779,6 +942,298 @@ def test_delete_custom_exercise_supabase_failure_returns_controlled_error(monkey
     try:
         response = client.delete(
             "/api/v1/exercises/custom-11111111-2222-3333-4444-555555555555",
+            headers={"Authorization": "Bearer token-123"},
+        )
+    finally:
+        app.dependency_overrides.pop(require_user, None)
+
+    assert response.status_code == 502
+    assert response.json() == {
+        "detail": "Custom exercises service is unavailable"
+    }
+
+
+def test_put_builtin_favorite_succeeds(monkeypatch):
+    from app.api.v1 import exercises as exercises_api
+
+    captured = {}
+
+    async def fake_mark_exercise_favorite(user, exercise_id):
+        captured["user_id"] = user.id
+        captured["exercise_id"] = exercise_id
+
+    app.dependency_overrides[require_user] = authenticated_user
+    monkeypatch.setattr(
+        exercises_api,
+        "mark_exercise_favorite",
+        fake_mark_exercise_favorite,
+    )
+
+    try:
+        response = client.put(
+            "/api/v1/exercises/bench-press/favorite",
+            headers={"Authorization": "Bearer token-123"},
+        )
+    finally:
+        app.dependency_overrides.pop(require_user, None)
+
+    assert response.status_code == 200
+    assert response.json()["id"] == "bench-press"
+    assert response.json()["favorite"] is True
+    assert captured == {
+        "user_id": "user-123",
+        "exercise_id": "bench-press",
+    }
+
+
+def test_put_custom_favorite_succeeds(monkeypatch):
+    from app.api.v1 import exercises as exercises_api
+    from app.models.exercise import Exercise
+
+    custom_uuid = "11111111-2222-3333-4444-555555555555"
+    captured = {}
+
+    async def fake_get_custom_exercise_model_by_id(user, exercise_id):
+        assert user.id == "user-123"
+        assert exercise_id == f"custom-{custom_uuid}"
+        return Exercise(
+            id=f"custom-{custom_uuid}",
+            name="Press personalizado",
+            muscle="Pecho",
+            equipment="Mancuernas",
+            type="Fuerza",
+            favorite=False,
+            custom=True,
+            notes="Controlar la bajada.",
+            category="strength",
+            recordTypes=["weight", "reps"],
+        )
+
+    async def fake_mark_exercise_favorite(user, exercise_id):
+        captured["user_id"] = user.id
+        captured["exercise_id"] = exercise_id
+
+    app.dependency_overrides[require_user] = authenticated_user
+    monkeypatch.setattr(
+        exercises_api,
+        "get_custom_exercise_model_by_id",
+        fake_get_custom_exercise_model_by_id,
+    )
+    monkeypatch.setattr(
+        exercises_api,
+        "mark_exercise_favorite",
+        fake_mark_exercise_favorite,
+    )
+
+    try:
+        response = client.put(
+            f"/api/v1/exercises/custom-{custom_uuid}/favorite",
+            headers={"Authorization": "Bearer token-123"},
+        )
+    finally:
+        app.dependency_overrides.pop(require_user, None)
+
+    assert response.status_code == 200
+    assert response.json()["id"] == f"custom-{custom_uuid}"
+    assert response.json()["favorite"] is True
+    assert captured == {
+        "user_id": "user-123",
+        "exercise_id": f"custom-{custom_uuid}",
+    }
+
+
+def test_put_custom_favorite_other_user_returns_404(monkeypatch):
+    from app.api.v1 import exercises as exercises_api
+
+    async def fake_get_custom_exercise_model_by_id(user, exercise_id):
+        return None
+
+    async def fake_mark_exercise_favorite(user, exercise_id):
+        raise AssertionError("Missing custom must not be favorited")
+
+    app.dependency_overrides[require_user] = authenticated_user
+    monkeypatch.setattr(
+        exercises_api,
+        "get_custom_exercise_model_by_id",
+        fake_get_custom_exercise_model_by_id,
+    )
+    monkeypatch.setattr(
+        exercises_api,
+        "mark_exercise_favorite",
+        fake_mark_exercise_favorite,
+    )
+
+    try:
+        response = client.put(
+            "/api/v1/exercises/custom-22222222-3333-4444-5555-666666666666/favorite",
+            headers={"Authorization": "Bearer token-123"},
+        )
+    finally:
+        app.dependency_overrides.pop(require_user, None)
+
+    assert response.status_code == 404
+    assert response.json() == {"detail": "Exercise not found"}
+
+
+def test_put_favorite_unknown_exercise_returns_404(monkeypatch):
+    from app.api.v1 import exercises as exercises_api
+
+    async def fake_mark_exercise_favorite(user, exercise_id):
+        raise AssertionError("Unknown exercise must not be favorited")
+
+    app.dependency_overrides[require_user] = authenticated_user
+    monkeypatch.setattr(
+        exercises_api,
+        "mark_exercise_favorite",
+        fake_mark_exercise_favorite,
+    )
+
+    try:
+        response = client.put(
+            "/api/v1/exercises/does-not-exist/favorite",
+            headers={"Authorization": "Bearer token-123"},
+        )
+    finally:
+        app.dependency_overrides.pop(require_user, None)
+
+    assert response.status_code == 404
+    assert response.json() == {"detail": "Exercise not found"}
+
+
+def test_put_favorite_repeated_is_idempotent(monkeypatch):
+    from app.api.v1 import exercises as exercises_api
+
+    calls = []
+
+    async def fake_mark_exercise_favorite(user, exercise_id):
+        calls.append((user.id, exercise_id))
+
+    app.dependency_overrides[require_user] = authenticated_user
+    monkeypatch.setattr(
+        exercises_api,
+        "mark_exercise_favorite",
+        fake_mark_exercise_favorite,
+    )
+
+    try:
+        first = client.put(
+            "/api/v1/exercises/bench-press/favorite",
+            headers={"Authorization": "Bearer token-123"},
+        )
+        second = client.put(
+            "/api/v1/exercises/bench-press/favorite",
+            headers={"Authorization": "Bearer token-123"},
+        )
+    finally:
+        app.dependency_overrides.pop(require_user, None)
+
+    assert first.status_code == 200
+    assert second.status_code == 200
+    assert first.json()["favorite"] is True
+    assert second.json()["favorite"] is True
+    assert calls == [
+        ("user-123", "bench-press"),
+        ("user-123", "bench-press"),
+    ]
+
+
+def test_delete_favorite_succeeds(monkeypatch):
+    from app.api.v1 import exercises as exercises_api
+
+    captured = {}
+
+    async def fake_unmark_exercise_favorite(user, exercise_id):
+        captured["user_id"] = user.id
+        captured["exercise_id"] = exercise_id
+
+    app.dependency_overrides[require_user] = authenticated_user
+    monkeypatch.setattr(
+        exercises_api,
+        "unmark_exercise_favorite",
+        fake_unmark_exercise_favorite,
+    )
+
+    try:
+        response = client.delete(
+            "/api/v1/exercises/bench-press/favorite",
+            headers={"Authorization": "Bearer token-123"},
+        )
+    finally:
+        app.dependency_overrides.pop(require_user, None)
+
+    assert response.status_code == 200
+    assert response.json()["id"] == "bench-press"
+    assert response.json()["favorite"] is False
+    assert captured == {
+        "user_id": "user-123",
+        "exercise_id": "bench-press",
+    }
+
+
+def test_delete_favorite_repeated_is_idempotent(monkeypatch):
+    from app.api.v1 import exercises as exercises_api
+
+    calls = []
+
+    async def fake_unmark_exercise_favorite(user, exercise_id):
+        calls.append((user.id, exercise_id))
+
+    app.dependency_overrides[require_user] = authenticated_user
+    monkeypatch.setattr(
+        exercises_api,
+        "unmark_exercise_favorite",
+        fake_unmark_exercise_favorite,
+    )
+
+    try:
+        first = client.delete(
+            "/api/v1/exercises/bench-press/favorite",
+            headers={"Authorization": "Bearer token-123"},
+        )
+        second = client.delete(
+            "/api/v1/exercises/bench-press/favorite",
+            headers={"Authorization": "Bearer token-123"},
+        )
+    finally:
+        app.dependency_overrides.pop(require_user, None)
+
+    assert first.status_code == 200
+    assert second.status_code == 200
+    assert first.json()["favorite"] is False
+    assert second.json()["favorite"] is False
+    assert calls == [
+        ("user-123", "bench-press"),
+        ("user-123", "bench-press"),
+    ]
+
+
+def test_favorite_requires_authentication():
+    response = client.put("/api/v1/exercises/bench-press/favorite")
+
+    assert response.status_code == 401
+    assert response.json() == {"detail": "Missing bearer token"}
+
+
+def test_put_favorite_supabase_failure_returns_controlled_error(monkeypatch):
+    from app.api.v1 import exercises as exercises_api
+
+    async def fake_mark_exercise_favorite(user, exercise_id):
+        raise httpx.HTTPStatusError(
+            "server error",
+            request=httpx.Request("POST", "https://example.supabase.co"),
+            response=httpx.Response(500),
+        )
+
+    app.dependency_overrides[require_user] = authenticated_user
+    monkeypatch.setattr(
+        exercises_api,
+        "mark_exercise_favorite",
+        fake_mark_exercise_favorite,
+    )
+
+    try:
+        response = client.put(
+            "/api/v1/exercises/bench-press/favorite",
             headers={"Authorization": "Bearer token-123"},
         )
     finally:

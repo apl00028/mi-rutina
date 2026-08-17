@@ -1,3 +1,4 @@
+import httpx
 from fastapi import APIRouter, Depends, HTTPException, status
 
 from auth import AuthenticatedUser, require_user
@@ -7,11 +8,29 @@ from app.models.exercise_resolution import (
     ExerciseResolveRequest,
     ExerciseResolveResponse,
 )
-from app.services.custom_exercises import register_custom_exercise
+from app.repositories.custom_exercises import SupabaseConfigError
+from app.services.custom_exercises import (
+    get_custom_exercise_model_by_id,
+    list_custom_exercise_models,
+    register_custom_exercise,
+)
 from app.services.exercise_resolution import resolve_exercise
 from app.services.exercises import get_exercise_by_id, load_exercises
 
 router = APIRouter()
+
+
+def _raise_custom_exercises_http_error(exc: Exception) -> None:
+    if isinstance(exc, SupabaseConfigError):
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Custom exercises service is not configured",
+        ) from exc
+
+    raise HTTPException(
+        status_code=status.HTTP_502_BAD_GATEWAY,
+        detail="Custom exercises service is unavailable",
+    ) from exc
 
 
 @router.get(
@@ -19,8 +38,17 @@ router = APIRouter()
     response_model=list[Exercise],
     response_model_exclude_none=True,
 )
-def list_exercises() -> list[Exercise]:
-    return load_exercises()
+async def list_exercises(
+    user: AuthenticatedUser = Depends(require_user),
+) -> list[Exercise]:
+    built_in_exercises = load_exercises()
+
+    try:
+        custom_exercises = await list_custom_exercise_models(user)
+    except (httpx.HTTPError, RuntimeError) as exc:
+        _raise_custom_exercises_http_error(exc)
+
+    return built_in_exercises + custom_exercises
 
 
 @router.post(
@@ -55,10 +83,22 @@ def resolve_exercise_reference(
     response_model=Exercise,
     response_model_exclude_none=True,
 )
-def get_exercise(exercise_id: str) -> Exercise:
+async def get_exercise(
+    exercise_id: str,
+    user: AuthenticatedUser = Depends(require_user),
+) -> Exercise:
     exercise = get_exercise_by_id(exercise_id)
 
-    if exercise is None:
-        raise HTTPException(status_code=404, detail="Exercise not found")
+    if exercise is not None:
+        return exercise
 
-    return exercise
+    if exercise_id.startswith("custom-"):
+        try:
+            custom_exercise = await get_custom_exercise_model_by_id(user, exercise_id)
+        except (httpx.HTTPError, RuntimeError) as exc:
+            _raise_custom_exercises_http_error(exc)
+
+        if custom_exercise is not None:
+            return custom_exercise
+
+    raise HTTPException(status_code=404, detail="Exercise not found")

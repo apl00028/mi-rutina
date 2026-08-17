@@ -1,13 +1,51 @@
+import httpx
 from fastapi.testclient import TestClient
+from fastapi.encoders import jsonable_encoder
 
+from auth import AuthenticatedUser, require_user
+from app.services.exercises import load_exercises
 from main import app
 
 
 client = TestClient(app)
 
 
-def test_list_exercises_returns_100_items():
+async def authenticated_user():
+    return AuthenticatedUser(
+        id="user-123",
+        email="test@example.com",
+        access_token="token-123",
+    )
+
+
+def test_list_exercises_requires_authentication():
     response = client.get("/api/v1/exercises")
+
+    assert response.status_code == 401
+    assert response.json() == {"detail": "Missing bearer token"}
+
+
+def test_list_exercises_authenticated_without_custom_returns_100_items(monkeypatch):
+    from app.api.v1 import exercises as exercises_api
+
+    async def fake_list_custom_exercise_models(user):
+        assert user.id == "user-123"
+        return []
+
+    app.dependency_overrides[require_user] = authenticated_user
+    monkeypatch.setattr(
+        exercises_api,
+        "list_custom_exercise_models",
+        fake_list_custom_exercise_models,
+    )
+
+    try:
+        response = client.get(
+            "/api/v1/exercises",
+            headers={"Authorization": "Bearer token-123"},
+        )
+    finally:
+        app.dependency_overrides.pop(require_user, None)
 
     assert response.status_code == 200
 
@@ -15,10 +53,111 @@ def test_list_exercises_returns_100_items():
 
     assert len(data) == 100
     assert len({exercise["id"] for exercise in data}) == 100
+    assert data == jsonable_encoder(load_exercises(), exclude_none=True)
 
 
-def test_get_exercise_by_id():
+def test_list_exercises_authenticated_appends_custom_exercise(monkeypatch):
+    from app.api.v1 import exercises as exercises_api
+    from app.models.exercise import Exercise
+
+    custom_uuid = "11111111-2222-3333-4444-555555555555"
+
+    async def fake_list_custom_exercise_models(user):
+        assert user.id == "user-123"
+        return [
+            Exercise(
+                id=f"custom-{custom_uuid}",
+                name="Press personalizado",
+                muscle="Pecho",
+                equipment="Mancuernas",
+                type="Fuerza",
+                favorite=False,
+                custom=True,
+                notes="Controlar la bajada.",
+                category="strength",
+                recordTypes=["weight", "reps"],
+            )
+        ]
+
+    app.dependency_overrides[require_user] = authenticated_user
+    monkeypatch.setattr(
+        exercises_api,
+        "list_custom_exercise_models",
+        fake_list_custom_exercise_models,
+    )
+
+    try:
+        response = client.get(
+            "/api/v1/exercises",
+            headers={"Authorization": "Bearer token-123"},
+        )
+    finally:
+        app.dependency_overrides.pop(require_user, None)
+
+    assert response.status_code == 200
+
+    data = response.json()
+
+    assert len(data) == 101
+    assert data[:100] == jsonable_encoder(load_exercises(), exclude_none=True)
+    assert data[-1] == {
+        "id": f"custom-{custom_uuid}",
+        "name": "Press personalizado",
+        "muscle": "Pecho",
+        "equipment": "Mancuernas",
+        "type": "Fuerza",
+        "favorite": False,
+        "custom": True,
+        "notes": "Controlar la bajada.",
+        "category": "strength",
+        "recordTypes": ["weight", "reps"],
+    }
+
+
+def test_list_exercises_supabase_failure_returns_controlled_error(monkeypatch):
+    from app.api.v1 import exercises as exercises_api
+
+    async def fake_list_custom_exercise_models(user):
+        raise httpx.ConnectError("connection failed")
+
+    app.dependency_overrides[require_user] = authenticated_user
+    monkeypatch.setattr(
+        exercises_api,
+        "list_custom_exercise_models",
+        fake_list_custom_exercise_models,
+    )
+
+    try:
+        response = client.get(
+            "/api/v1/exercises",
+            headers={"Authorization": "Bearer token-123"},
+        )
+    finally:
+        app.dependency_overrides.pop(require_user, None)
+
+    assert response.status_code == 502
+    assert response.json() == {
+        "detail": "Custom exercises service is unavailable"
+    }
+
+
+def test_get_exercise_by_id_requires_authentication():
     response = client.get("/api/v1/exercises/bench-press")
+
+    assert response.status_code == 401
+    assert response.json() == {"detail": "Missing bearer token"}
+
+
+def test_get_builtin_exercise_by_id_authenticated():
+    app.dependency_overrides[require_user] = authenticated_user
+
+    try:
+        response = client.get(
+            "/api/v1/exercises/bench-press",
+            headers={"Authorization": "Bearer token-123"},
+        )
+    finally:
+        app.dependency_overrides.pop(require_user, None)
 
     assert response.status_code == 200
     assert response.json() == {
@@ -34,8 +173,177 @@ def test_get_exercise_by_id():
     }
 
 
+def test_get_custom_exercise_by_id_authenticated(monkeypatch):
+    from app.api.v1 import exercises as exercises_api
+    from app.models.exercise import Exercise
+
+    custom_uuid = "11111111-2222-3333-4444-555555555555"
+
+    async def fake_get_custom_exercise_model_by_id(user, exercise_id):
+        assert user.id == "user-123"
+        assert exercise_id == f"custom-{custom_uuid}"
+
+        return Exercise(
+            id=f"custom-{custom_uuid}",
+            name="Press personalizado",
+            muscle="Pecho",
+            equipment="Mancuernas",
+            type="Fuerza",
+            favorite=False,
+            custom=True,
+            notes="Controlar la bajada.",
+            category="strength",
+            recordTypes=["weight", "reps"],
+        )
+
+    app.dependency_overrides[require_user] = authenticated_user
+    monkeypatch.setattr(
+        exercises_api,
+        "get_custom_exercise_model_by_id",
+        fake_get_custom_exercise_model_by_id,
+    )
+
+    try:
+        response = client.get(
+            f"/api/v1/exercises/custom-{custom_uuid}",
+            headers={"Authorization": "Bearer token-123"},
+        )
+    finally:
+        app.dependency_overrides.pop(require_user, None)
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "id": f"custom-{custom_uuid}",
+        "name": "Press personalizado",
+        "muscle": "Pecho",
+        "equipment": "Mancuernas",
+        "type": "Fuerza",
+        "favorite": False,
+        "custom": True,
+        "notes": "Controlar la bajada.",
+        "category": "strength",
+        "recordTypes": ["weight", "reps"],
+    }
+
+
+def test_get_missing_custom_exercise_returns_404(monkeypatch):
+    from app.api.v1 import exercises as exercises_api
+
+    async def fake_get_custom_exercise_model_by_id(user, exercise_id):
+        return None
+
+    app.dependency_overrides[require_user] = authenticated_user
+    monkeypatch.setattr(
+        exercises_api,
+        "get_custom_exercise_model_by_id",
+        fake_get_custom_exercise_model_by_id,
+    )
+
+    try:
+        response = client.get(
+            "/api/v1/exercises/custom-11111111-2222-3333-4444-555555555555",
+            headers={"Authorization": "Bearer token-123"},
+        )
+    finally:
+        app.dependency_overrides.pop(require_user, None)
+
+    assert response.status_code == 404
+    assert response.json() == {"detail": "Exercise not found"}
+
+
+def test_get_other_user_custom_exercise_returns_same_404(monkeypatch):
+    from app.api.v1 import exercises as exercises_api
+
+    async def fake_get_custom_exercise_model_by_id(user, exercise_id):
+        return None
+
+    app.dependency_overrides[require_user] = authenticated_user
+    monkeypatch.setattr(
+        exercises_api,
+        "get_custom_exercise_model_by_id",
+        fake_get_custom_exercise_model_by_id,
+    )
+
+    try:
+        response = client.get(
+            "/api/v1/exercises/custom-22222222-3333-4444-5555-666666666666",
+            headers={"Authorization": "Bearer token-123"},
+        )
+    finally:
+        app.dependency_overrides.pop(require_user, None)
+
+    assert response.status_code == 404
+    assert response.json() == {"detail": "Exercise not found"}
+
+
+def test_get_custom_exercise_invalid_uuid_returns_404_without_supabase(monkeypatch):
+    from app.repositories import custom_exercises as custom_exercises_repository
+
+    class FakeClient:
+        def __init__(self, timeout):
+            raise AssertionError("Supabase should not be queried")
+
+    monkeypatch.setattr(
+        custom_exercises_repository.httpx,
+        "AsyncClient",
+        FakeClient,
+    )
+
+    app.dependency_overrides[require_user] = authenticated_user
+
+    try:
+        response = client.get(
+            "/api/v1/exercises/custom-not-a-uuid",
+            headers={"Authorization": "Bearer token-123"},
+        )
+    finally:
+        app.dependency_overrides.pop(require_user, None)
+
+    assert response.status_code == 404
+    assert response.json() == {"detail": "Exercise not found"}
+
+
+def test_get_custom_exercise_supabase_failure_returns_controlled_error(monkeypatch):
+    from app.api.v1 import exercises as exercises_api
+
+    async def fake_get_custom_exercise_model_by_id(user, exercise_id):
+        raise httpx.HTTPStatusError(
+            "server error",
+            request=httpx.Request("GET", "https://example.supabase.co"),
+            response=httpx.Response(500),
+        )
+
+    app.dependency_overrides[require_user] = authenticated_user
+    monkeypatch.setattr(
+        exercises_api,
+        "get_custom_exercise_model_by_id",
+        fake_get_custom_exercise_model_by_id,
+    )
+
+    try:
+        response = client.get(
+            "/api/v1/exercises/custom-11111111-2222-3333-4444-555555555555",
+            headers={"Authorization": "Bearer token-123"},
+        )
+    finally:
+        app.dependency_overrides.pop(require_user, None)
+
+    assert response.status_code == 502
+    assert response.json() == {
+        "detail": "Custom exercises service is unavailable"
+    }
+
+
 def test_unknown_exercise_returns_404():
-    response = client.get("/api/v1/exercises/does-not-exist")
+    app.dependency_overrides[require_user] = authenticated_user
+
+    try:
+        response = client.get(
+            "/api/v1/exercises/does-not-exist",
+            headers={"Authorization": "Bearer token-123"},
+        )
+    finally:
+        app.dependency_overrides.pop(require_user, None)
 
     assert response.status_code == 404
     assert response.json() == {"detail": "Exercise not found"}

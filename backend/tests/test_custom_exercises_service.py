@@ -59,3 +59,99 @@ def test_register_custom_exercise_maps_repository_row(monkeypatch):
         "category": "strength",
         "recordTypes": ["weight", "reps"],
     }
+
+
+def test_list_custom_exercise_models_reuses_row_mapper(monkeypatch):
+    async def fake_list_custom_exercises(user):
+        assert user.id == "user-123"
+
+        return [
+            {
+                "id": "11111111-2222-3333-4444-555555555555",
+                "name": "Press personalizado",
+                "muscle": "Pecho",
+                "equipment": "Mancuernas",
+                "type": "Fuerza",
+                "notes": "Controlar la bajada.",
+                "category": "strength",
+                "record_types": ["weight", "reps"],
+            }
+        ]
+
+    monkeypatch.setattr(
+        service,
+        "list_custom_exercises",
+        fake_list_custom_exercises,
+    )
+
+    user = AuthenticatedUser(
+        id="user-123",
+        email="test@example.com",
+        access_token="token-123",
+    )
+
+    exercises = asyncio.run(service.list_custom_exercise_models(user))
+
+    assert [exercise.model_dump() for exercise in exercises] == [
+        {
+            "id": "custom-11111111-2222-3333-4444-555555555555",
+            "name": "Press personalizado",
+            "muscle": "Pecho",
+            "equipment": "Mancuernas",
+            "type": "Fuerza",
+            "favorite": False,
+            "custom": True,
+            "notes": "Controlar la bajada.",
+            "category": "strength",
+            "recordTypes": ["weight", "reps"],
+        }
+    ]
+
+
+def test_get_custom_exercise_model_by_id_reuses_row_mapper(monkeypatch):
+    async def fake_get_custom_exercise_by_id(user, exercise_id):
+        assert user.id == "user-123"
+        assert exercise_id == "custom-11111111-2222-3333-4444-555555555555"
+
+        return {
+            "id": "11111111-2222-3333-4444-555555555555",
+            "name": "Press personalizado",
+            "muscle": "Pecho",
+            "equipment": "Mancuernas",
+            "type": "Fuerza",
+            "notes": "Controlar la bajada.",
+            "category": "strength",
+            "record_types": ["weight", "reps"],
+        }
+
+    monkeypatch.setattr(
+        service,
+        "get_custom_exercise_by_id",
+        fake_get_custom_exercise_by_id,
+    )
+
+    user = AuthenticatedUser(
+        id="user-123",
+        email="test@example.com",
+        access_token="token-123",
+    )
+
+    exercise = asyncio.run(
+        service.get_custom_exercise_model_by_id(
+            user,
+            "custom-11111111-2222-3333-4444-555555555555",
+        )
+    )
+
+    assert exercise.model_dump() == {
+        "id": "custom-11111111-2222-3333-4444-555555555555",
+        "name": "Press personalizado",
+        "muscle": "Pecho",
+        "equipment": "Mancuernas",
+        "type": "Fuerza",
+        "favorite": False,
+        "custom": True,
+        "notes": "Controlar la bajada.",
+        "category": "strength",
+        "recordTypes": ["weight", "reps"],
+    }

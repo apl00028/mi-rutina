@@ -1,5 +1,6 @@
 import os
 from typing import Any
+from uuid import UUID
 
 import httpx
 
@@ -7,12 +8,16 @@ from auth import AuthenticatedUser
 from app.models.custom_exercise import CustomExerciseCreate
 
 
+class SupabaseConfigError(RuntimeError):
+    pass
+
+
 def _supabase_config() -> tuple[str, str]:
     url = os.getenv("SUPABASE_URL", "").rstrip("/")
     key = os.getenv("SUPABASE_PUBLISHABLE_KEY", "")
 
     if not url or not key:
-        raise RuntimeError("Supabase is not configured.")
+        raise SupabaseConfigError("Supabase is not configured.")
 
     return url, key
 
@@ -56,3 +61,79 @@ async def create_custom_exercise(
         raise RuntimeError("Unexpected Supabase response.")
 
     return data[0]
+
+
+async def list_custom_exercises(
+    user: AuthenticatedUser,
+) -> list[dict[str, Any]]:
+    url, key = _supabase_config()
+
+    headers = {
+        "Authorization": f"Bearer {user.access_token}",
+        "apikey": key,
+    }
+
+    params = {
+        "user_id": f"eq.{user.id}",
+        "order": "created_at.asc",
+    }
+
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        response = await client.get(
+            f"{url}/rest/v1/custom_exercises",
+            headers=headers,
+            params=params,
+        )
+
+    response.raise_for_status()
+
+    data = response.json()
+
+    if not isinstance(data, list):
+        raise RuntimeError("Unexpected Supabase response.")
+
+    return data
+
+
+async def get_custom_exercise_by_id(
+    user: AuthenticatedUser,
+    exercise_id: str,
+) -> dict[str, Any] | None:
+    if not exercise_id.startswith("custom-"):
+        return None
+
+    custom_id = exercise_id.removeprefix("custom-")
+
+    try:
+        custom_id = str(UUID(custom_id))
+    except ValueError:
+        return None
+
+    url, key = _supabase_config()
+
+    headers = {
+        "Authorization": f"Bearer {user.access_token}",
+        "apikey": key,
+    }
+
+    params = {
+        "id": f"eq.{custom_id}",
+        "user_id": f"eq.{user.id}",
+        "limit": "1",
+    }
+
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        response = await client.get(
+            f"{url}/rest/v1/custom_exercises",
+            headers=headers,
+            params=params,
+        )
+
+    response.raise_for_status()
+
+    data = response.json()
+
+    if not isinstance(data, list):
+        raise RuntimeError("Unexpected Supabase response.")
+
+    return data[0] if data else None

@@ -1,15 +1,16 @@
+from typing import Any
+
 from app.models.custom_exercise import CustomExerciseCreate
 from app.models.exercise import Exercise
-from app.repositories.custom_exercises import create_custom_exercise
+from app.repositories.custom_exercises import (
+    create_custom_exercise,
+    get_custom_exercise_by_id,
+    list_custom_exercises,
+)
 from auth import AuthenticatedUser
 
 
-async def register_custom_exercise(
-    user: AuthenticatedUser,
-    payload: CustomExerciseCreate,
-) -> Exercise:
-    row = await create_custom_exercise(user, payload)
-
+def custom_exercise_row_to_model(row: dict[str, Any]) -> Exercise:
     return Exercise(
         id=f"custom-{row['id']}",
         name=row["name"],
@@ -20,5 +21,34 @@ async def register_custom_exercise(
         custom=True,
         notes=row.get("notes", ""),
         category=row["category"],
-        recordTypes=row.get("record_types") or None,
+        recordTypes=row.get("record_types") or [],
     )
+
+
+async def register_custom_exercise(
+    user: AuthenticatedUser,
+    payload: CustomExerciseCreate,
+) -> Exercise:
+    row = await create_custom_exercise(user, payload)
+
+    return custom_exercise_row_to_model(row)
+
+
+async def list_custom_exercise_models(
+    user: AuthenticatedUser,
+) -> list[Exercise]:
+    rows = await list_custom_exercises(user)
+
+    return [custom_exercise_row_to_model(row) for row in rows]
+
+
+async def get_custom_exercise_model_by_id(
+    user: AuthenticatedUser,
+    exercise_id: str,
+) -> Exercise | None:
+    row = await get_custom_exercise_by_id(user, exercise_id)
+
+    if row is None:
+        return None
+
+    return custom_exercise_row_to_model(row)

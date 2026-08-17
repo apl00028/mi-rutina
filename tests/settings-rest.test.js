@@ -404,6 +404,9 @@ function loadAccountDomHarness({syncDirection="none",syncUpdatesLastSyncAt=true}
       if(key==="after") return details.lastSyncAtAfter||"";
       return "";
     },
+    syncDiagnosticFunctionalChecksumValue:key=>context.lastSyncTraceEntry({includeButtonResult:false})?.details?.functionalChecksum?.[key]||"",
+    syncDiagnosticChecksumModeValue:()=>context.lastSyncTraceEntry({includeButtonResult:false})?.details?.checksumMode||"",
+    syncDiagnosticFunctionalDiffDisplay:()=>"Sin diferencias funcionales registradas",
     isHealthyManualSyncResult:result=>["none","download","upload"].includes(result?.direction),
     getLastSyncAt:()=>values.get("gymos:lastSyncAt")||"",
     formatSyncDate:value=>`FMT:${value}`,

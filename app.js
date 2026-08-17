@@ -4720,13 +4720,32 @@ function accountSyncButtonDiagnosticValue(key){
   if(key==="after") return details.lastSyncAtAfter||"";
   return "";
 }
+function syncDiagnosticFunctionalChecksumValue(key){
+  return lastSyncTraceEntry({includeButtonResult:false})?.details?.functionalChecksum?.[key]||"";
+}
+function syncDiagnosticChecksumModeValue(){
+  return lastSyncTraceEntry({includeButtonResult:false})?.details?.checksumMode||"";
+}
+function syncDiagnosticFunctionalDiffDisplay(){
+  const diff=lastSyncTraceEntry({includeButtonResult:false})?.details?.functionalProjectionDiff;
+  const paths=Array.isArray(diff?.diffPaths)?diff.diffPaths:[];
+  if(!paths.length) return diff?.truncated?"Sin rutas visibles; diff truncado":"Sin diferencias funcionales registradas";
+  const rows=paths.map(item=>{
+    const local=item.local||{};
+    const remote=item.remote||{};
+    return `${item.path}: local(${local.exists?"existe":"no existe"}, ${local.type||"absent"}, ${local.hash||"sin hash"}) remoto(${remote.exists?"existe":"no existe"}, ${remote.type||"absent"}, ${remote.hash||"sin hash"})`;
+  });
+  if(diff.truncated) rows.push("... diff truncado");
+  return rows.join("\n");
+}
 function isHealthyManualSyncResult(result){
   return ["none","download","upload"].includes(result?.direction);
 }
 function syncAuditFingerprintSummary({
   remote=null,remoteRevision=null,localRevision=null,lastRemoteRevision=null,
   syncBaseRevision=null,hasPendingChanges=null,checksumComparison=null,
-  localFunctionalChecksum=null,baseFunctionalChecksum=null,condition=null
+  localFunctionalChecksum=null,baseFunctionalChecksum=null,condition=null,
+  functionalProjectionDiff=null
 }={}){
   const remoteFunctional=checksumComparison?.remoteFunctionalChecksum||
     remoteFunctionalChecksum(remote)||null;
@@ -4749,7 +4768,8 @@ function syncAuditFingerprintSummary({
       local:checksumComparison?.localFunctionalChecksum||localFunctionalChecksum||null,
       remote:remoteFunctional,
       base:inferredBaseFunctional
-    }
+    },
+    functionalProjectionDiff
   };
 }
 function simpleChecksum(value){
@@ -4815,6 +4835,99 @@ function functionalSyncProjection(payload){
 }
 function functionalSyncChecksum(payload){
   return simpleChecksum(functionalSyncProjection(payload));
+}
+function functionalDiffValueType(value,exists=true){
+  if(!exists) return "absent";
+  if(value===null) return "null";
+  if(value===undefined) return "undefined";
+  if(Array.isArray(value)) return "array";
+  return typeof value;
+}
+function functionalDiffValueHash(value,exists=true){
+  if(!exists) return null;
+  const type=functionalDiffValueType(value,exists);
+  const normalized=type==="undefined"?"__undefined__":normalizeFunctionalSyncValue(value);
+  return simpleChecksum({type,value:normalized});
+}
+function functionalDiffValueSummary(value,exists=true){
+  const type=functionalDiffValueType(value,exists);
+  const summary={exists,type,hash:functionalDiffValueHash(value,exists)};
+  if(Array.isArray(value)) summary.length=value.length;
+  else if(value&&typeof value==="object") summary.keys=Object.keys(value).length;
+  return summary;
+}
+function functionalDiffPath(parent,key){
+  if(typeof key==="number") return `${parent||"$"}[${key}]`;
+  const safe=/^[A-Za-z_$][\w$]*$/.test(String(key))?String(key):JSON.stringify(String(key));
+  return parent&&parent!=="$"?`${parent}.${safe}`:safe;
+}
+function sameFunctionalDiffValue(left,leftExists,right,rightExists){
+  if(leftExists!==rightExists) return false;
+  if(functionalDiffValueType(left,leftExists)!==functionalDiffValueType(right,rightExists)) return false;
+  return functionalDiffValueHash(left,leftExists)===functionalDiffValueHash(right,rightExists);
+}
+function collectFunctionalProjectionDiffs(localValue,remoteValue,path,diffs,limit){
+  if(diffs.length>=limit) return;
+  const localExists=arguments.length>=1;
+  const remoteExists=arguments.length>=2;
+  if(sameFunctionalDiffValue(localValue,localExists,remoteValue,remoteExists)) return;
+  const localType=functionalDiffValueType(localValue,localExists);
+  const remoteType=functionalDiffValueType(remoteValue,remoteExists);
+  const currentPath=path||"$";
+  if(localType!==remoteType||!["object","array"].includes(localType)){
+    diffs.push({
+      path:currentPath,
+      local:functionalDiffValueSummary(localValue,localExists),
+      remote:functionalDiffValueSummary(remoteValue,remoteExists)
+    });
+    return;
+  }
+  if(localType==="array"){
+    const length=Math.max(localValue.length,remoteValue.length);
+    for(let index=0;index<length&&diffs.length<limit;index++){
+      const hasLocal=index<localValue.length;
+      const hasRemote=index<remoteValue.length;
+      if(hasLocal&&hasRemote){
+        collectFunctionalProjectionDiffs(
+          localValue[index],remoteValue[index],functionalDiffPath(currentPath,index),diffs,limit
+        );
+      }else{
+        diffs.push({
+          path:functionalDiffPath(currentPath,index),
+          local:functionalDiffValueSummary(hasLocal?localValue[index]:undefined,hasLocal),
+          remote:functionalDiffValueSummary(hasRemote?remoteValue[index]:undefined,hasRemote)
+        });
+      }
+    }
+    return;
+  }
+  const keys=new Set([...Object.keys(localValue||{}),...Object.keys(remoteValue||{})]);
+  for(const key of Array.from(keys).sort()){
+    if(diffs.length>=limit) break;
+    const hasLocal=Object.prototype.hasOwnProperty.call(localValue,key);
+    const hasRemote=Object.prototype.hasOwnProperty.call(remoteValue,key);
+    if(hasLocal&&hasRemote){
+      collectFunctionalProjectionDiffs(localValue[key],remoteValue[key],functionalDiffPath(currentPath,key),diffs,limit);
+    }else{
+      diffs.push({
+        path:functionalDiffPath(currentPath,key),
+        local:functionalDiffValueSummary(hasLocal?localValue[key]:undefined,hasLocal),
+        remote:functionalDiffValueSummary(hasRemote?remoteValue[key]:undefined,hasRemote)
+      });
+    }
+  }
+}
+function functionalSyncProjectionDiffSummary(localPayload,remotePayload,{limit=40}={}){
+  const localProjection=functionalSyncProjection(localPayload);
+  const remoteProjection=functionalSyncProjection(remotePayload);
+  const diffPaths=[];
+  collectFunctionalProjectionDiffs(localProjection,remoteProjection,"$",diffPaths,limit);
+  return {
+    localHash:functionalSyncChecksum(localPayload),
+    remoteHash:functionalSyncChecksum(remotePayload),
+    diffPaths,
+    truncated:diffPaths.length>=limit
+  };
 }
 function storedValueHash(key){
   const raw=localStorage.getItem(key);
@@ -5888,7 +6001,10 @@ async function syncNow(options={}){
       remote,remoteRevision,localRevision,lastRemoteRevision:lastRemote,
       syncBaseRevision,hasPendingChanges,checksumComparison,localFunctionalChecksum,
       condition:extra?.condition||null,
-      baseFunctionalChecksum:extra?.baseFunctionalChecksum||null
+      baseFunctionalChecksum:extra?.baseFunctionalChecksum||null,
+      functionalProjectionDiff:remote
+        ?functionalSyncProjectionDiffSummary(localPayload,remote.payload)
+        :null
     });
     addSyncAudit("sync_trace","checksum_comparison",checksumAudit({
       condition:"checksum_comparison"
@@ -6059,6 +6175,11 @@ function updateSyncIndicators(){
   document.querySelectorAll("[data-sync-diagnostic-button-result]").forEach(el=>el.textContent=accountSyncButtonDiagnosticValue("direction"));
   document.querySelectorAll("[data-sync-diagnostic-before]").forEach(el=>el.textContent=accountSyncButtonDiagnosticValue("before"));
   document.querySelectorAll("[data-sync-diagnostic-after]").forEach(el=>el.textContent=accountSyncButtonDiagnosticValue("after"));
+  document.querySelectorAll("[data-sync-diagnostic-functional-local]").forEach(el=>el.textContent=syncDiagnosticFunctionalChecksumValue("local"));
+  document.querySelectorAll("[data-sync-diagnostic-functional-remote]").forEach(el=>el.textContent=syncDiagnosticFunctionalChecksumValue("remote"));
+  document.querySelectorAll("[data-sync-diagnostic-functional-base]").forEach(el=>el.textContent=syncDiagnosticFunctionalChecksumValue("base"));
+  document.querySelectorAll("[data-sync-diagnostic-checksum-mode]").forEach(el=>el.textContent=syncDiagnosticChecksumModeValue());
+  document.querySelectorAll("[data-sync-diagnostic-diff-paths]").forEach(el=>el.textContent=syncDiagnosticFunctionalDiffDisplay());
   document.querySelectorAll(".shell-sync-trigger").forEach(el=>{
     el.classList.remove(
       "local","synced","connected","configured","pending","syncing","offline",
@@ -16300,6 +16421,11 @@ function renderAccount(){
           <p class="subtle">Resultado botón: <span data-sync-diagnostic-button-result>${esc(accountSyncButtonDiagnosticValue("direction"))}</span></p>
           <p class="subtle">lastSyncAt before: <span data-sync-diagnostic-before>${esc(accountSyncButtonDiagnosticValue("before"))}</span></p>
           <p class="subtle">lastSyncAt after: <span data-sync-diagnostic-after>${esc(accountSyncButtonDiagnosticValue("after"))}</span></p>
+          <p class="subtle">functionalChecksum.local: <span data-sync-diagnostic-functional-local>${esc(syncDiagnosticFunctionalChecksumValue("local"))}</span></p>
+          <p class="subtle">functionalChecksum.remote: <span data-sync-diagnostic-functional-remote>${esc(syncDiagnosticFunctionalChecksumValue("remote"))}</span></p>
+          <p class="subtle">functionalChecksum.base: <span data-sync-diagnostic-functional-base>${esc(syncDiagnosticFunctionalChecksumValue("base"))}</span></p>
+          <p class="subtle">checksumComparison.mode: <span data-sync-diagnostic-checksum-mode>${esc(syncDiagnosticChecksumModeValue())}</span></p>
+          <pre class="sync-diagnostic-diff-paths" data-sync-diagnostic-diff-paths>${esc(syncDiagnosticFunctionalDiffDisplay())}</pre>
           <button id="exportSyncAudit" class="secondary full">Exportar registro de sincronización</button>
         </section>
 

@@ -113,6 +113,20 @@ function syncHarness({
         equivalent:legacyAck||remote?.checksum===localChecksum
       };
     },
+    functionalSyncProjectionDiffSummary:(localPayload,remotePayload)=>{
+      const localHash=context.functionalSyncChecksum(localPayload);
+      const remoteHash=context.functionalSyncChecksum(remotePayload);
+      const same=JSON.stringify(localPayload)===JSON.stringify(remotePayload);
+      return {
+        localHash,remoteHash,
+        diffPaths:same?[]:[{
+          path:"$",
+          local:{exists:true,type:typeof localPayload,hash:localHash},
+          remote:{exists:true,type:typeof remotePayload,hash:remoteHash}
+        }],
+        truncated:false
+      };
+    },
     syncAuditFingerprintSummary:details=>({
       appVersion:"test",
       branch:details?.condition||null,
@@ -126,7 +140,8 @@ function syncHarness({
         local:details?.checksumComparison?.localFunctionalChecksum||details?.localFunctionalChecksum||null,
         remote:details?.checksumComparison?.remoteFunctionalChecksum||details?.remote?.payload?.functionalChecksum||null,
         base:details?.baseFunctionalChecksum||values.get("gymos:lastSyncHash")||null
-      }
+      },
+      functionalProjectionDiff:details?.functionalProjectionDiff||null
     }),
     getLocalRevision:()=>Number(values.get("gymos:localRevision")||0),
     setLocalRevision:value=>values.set("gymos:localRevision",String(value)),
@@ -1669,6 +1684,32 @@ test("sync visual: una sync sana limpia rojo previo del indicador y error histó
   assert.equal(visual.nodes.trigger.attrs["aria-label"],"Sincronización: Sincronizado");
 });
 
+test("sync diff funcional: resume rutas divergentes sin exponer valores",()=>{
+  const source=appSource.slice(
+    appSource.indexOf("function simpleChecksum"),
+    appSource.indexOf("function storedValueHash")
+  );
+  const context={};
+  vm.createContext(context);
+  vm.runInContext(`${source}; this.diff=functionalSyncProjectionDiffSummary;`,context);
+  const result=context.diff(
+    {profile:{name:"Nombre Sensible",optional:null},history:[{id:"h1",notes:"privado"}],presentUndefined:undefined},
+    {profile:{name:"Otro Nombre"},history:[]}
+  );
+  const paths=result.diffPaths.map(item=>item.path);
+  assert.deepEqual([...paths],["history[0]","presentUndefined","profile.name","profile.optional"]);
+  assert.equal(result.diffPaths[0].local.exists,true);
+  assert.equal(result.diffPaths[0].remote.exists,false);
+  assert.equal(result.diffPaths[1].local.type,"undefined");
+  assert.equal(result.diffPaths[1].remote.type,"absent");
+  assert.equal(result.diffPaths[3].local.type,"null");
+  assert.equal(result.diffPaths[3].remote.type,"absent");
+  const serialized=JSON.stringify(result);
+  assert.equal(serialized.includes("Nombre Sensible"),false);
+  assert.equal(serialized.includes("Otro Nombre"),false);
+  assert.equal(serialized.includes("privado"),false);
+});
+
 test("syncNow: todos los retornos sanos actualizan lastSyncAt",async()=>{
   const cases=[
     {
@@ -1772,6 +1813,10 @@ test("sync audit: registra ramas y fingerprints seguros para diagnosticar móvil
   await conflict.context.runSync();
   const conflictTrace=conflict.audits.find(item=>item.status==="conflict"&&item.action==="sync_trace");
   assert.equal(conflictTrace.details.branch,"sameRevisionDiverged");
+  assert.equal(conflictTrace.details.checksumMode,"functional_v1");
+  assert.equal(conflictTrace.details.functionalChecksum.local,"functional-same");
+  assert.equal(conflictTrace.details.functionalChecksum.remote,"remote-functional");
+  assert.ok(conflictTrace.details.functionalProjectionDiff.diffPaths.length>=1);
 
   const error=syncHarness({readError:{status:0,code:"network_failed"},pending:true});
   await assert.rejects(()=>error.context.runSync());

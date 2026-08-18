@@ -1,11 +1,14 @@
 import httpx
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Response, status
 
 from auth import AuthenticatedUser, require_user
 from app.models.routine import Routine
 from app.repositories.custom_exercises import SupabaseConfigError
 from app.services.routines import (
+    activate_user_routine,
     create_user_routine,
+    delete_user_routine,
+    get_user_active_routine,
     get_user_routine_by_id,
     list_user_routines,
     replace_user_routine,
@@ -48,6 +51,26 @@ async def list_routines(
         return await list_user_routines(user)
     except (httpx.HTTPError, RuntimeError) as exc:
         _raise_routines_http_error(exc)
+
+
+
+@router.get(
+    "/routines/active",
+    response_model=Routine,
+    response_model_exclude_none=True,
+)
+async def get_active_routine(
+    user: AuthenticatedUser = Depends(require_user),
+) -> Routine:
+    try:
+        routine = await get_user_active_routine(user)
+    except (httpx.HTTPError, RuntimeError) as exc:
+        _raise_routines_http_error(exc)
+
+    if routine is None:
+        raise HTTPException(status_code=404, detail="Active routine not found")
+
+    return routine
 
 
 @router.get(
@@ -104,6 +127,45 @@ async def replace_routine(
 
     try:
         routine = await replace_user_routine(user, routine_id, request)
+    except (httpx.HTTPError, RuntimeError) as exc:
+        _raise_routines_http_error(exc)
+
+    if routine is None:
+        raise HTTPException(status_code=404, detail="Routine not found")
+
+    return routine
+
+@router.delete(
+    "/routines/{routine_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def delete_routine(
+    routine_id: str,
+    user: AuthenticatedUser = Depends(require_user),
+) -> Response:
+    try:
+        deleted = await delete_user_routine(user, routine_id)
+    except (httpx.HTTPError, RuntimeError) as exc:
+        _raise_routines_http_error(exc)
+
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Routine not found")
+
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+
+@router.put(
+    "/routines/{routine_id}/activate",
+    response_model=Routine,
+    response_model_exclude_none=True,
+)
+async def activate_routine(
+    routine_id: str,
+    user: AuthenticatedUser = Depends(require_user),
+) -> Routine:
+    try:
+        routine = await activate_user_routine(user, routine_id)
     except (httpx.HTTPError, RuntimeError) as exc:
         _raise_routines_http_error(exc)
 

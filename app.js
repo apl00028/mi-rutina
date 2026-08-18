@@ -2786,6 +2786,36 @@ async function coachBackendFetch(path,options={}){
     clearTimeout(timeout);
   }
 }
+
+async function persistActivatedRoutineToBackend(routine){
+  if(!routine?.routineId){
+    throw new Error("La rutina activada no tiene routineId.");
+  }
+
+  try{
+    await coachBackendFetch("/api/v1/routines",{
+      method:"POST",
+      body:JSON.stringify(routine)
+    });
+  }catch(error){
+    if(!String(error?.message||"").includes("Routine already exists")){
+      throw error;
+    }
+
+    await coachBackendFetch(
+      `/api/v1/routines/${encodeURIComponent(routine.routineId)}`,
+      {
+        method:"PUT",
+        body:JSON.stringify(routine)
+      }
+    );
+  }
+
+  return coachBackendFetch(
+    `/api/v1/routines/${encodeURIComponent(routine.routineId)}/activate`,
+    {method:"PUT"}
+  );
+}
 async function testCoachConnection(){
   try{
     const data=await coachBackendFetch("/health",{method:"GET"});
@@ -17981,16 +18011,27 @@ function bindRoutineWorkflowEvents(model,proposal,preparation){
       state.routineWorkflow?.busy!=="activating"
     ) return;
     try{
-      const result=activateStoredRoutineProposal(proposal.proposalId,{confirmed:true});
-      state.routineWorkflow=result.ok
-        ?window.GymOSRoutineWorkflowUI.finishOperation(
-          window.GymOSRoutineWorkflowUI.setFlowView(state.routineWorkflow,"summary"),
-          {type:"success",text:"Rutina activada. Tu historial y tus pesos se mantienen."}
-        )
-        :window.GymOSRoutineWorkflowUI.finishOperation(
-          state.routineWorkflow,{type:"error",text:result.message||"No se pudo activar la rutina."}
-        );
-    }catch(error){
+        const result=activateStoredRoutineProposal(proposal.proposalId,{confirmed:true});
+
+        if(result.ok&&!result.idempotent){
+          const canonical=getCanonicalRoutine();
+          try{
+            await persistActivatedRoutineToBackend(canonical);
+          }catch(error){
+            console.warn("Routine backend persistence failed",error);
+          }
+        }
+
+        state.routineWorkflow=result.ok
+          ?window.GymOSRoutineWorkflowUI.finishOperation(
+            window.GymOSRoutineWorkflowUI.setFlowView(state.routineWorkflow,"summary"),
+            {type:"success",text:"Rutina activada. Tu historial y tus pesos se mantienen."}
+          )
+          :window.GymOSRoutineWorkflowUI.finishOperation(
+            state.routineWorkflow,
+            {type:"error",text:result.message||"No se pudo activar la rutina."}
+          );
+      }catch(error){
       state.routineWorkflow=window.GymOSRoutineWorkflowUI.finishOperation(
         state.routineWorkflow,{type:"error",text:error?.message||"No se pudo activar la rutina."}
       );
@@ -18226,9 +18267,23 @@ function renderRoutineHub(){
         persistRoutineProposal(proposal,{ownerId,replacePending}),
       discardProposal:async proposalId=>
         rejectStoredRoutineProposal(proposalId,"Descartada desde el Centro de Rutina.",{ownerId}),
-      activate:async proposalId=>activateStoredRoutineProposal(proposalId,{
-        ownerId,confirmed:true
-      })
+      activate:async proposalId=>{
+        const result=activateStoredRoutineProposal(proposalId,{
+          ownerId,
+          confirmed:true
+        });
+
+        if(result.ok&&!result.idempotent){
+          const canonical=getCanonicalRoutine();
+          try{
+            await persistActivatedRoutineToBackend(canonical);
+          }catch(error){
+            console.warn("Routine backend persistence failed",error);
+          }
+        }
+
+        return result;
+      }
     }
   });
 }
@@ -19566,3 +19621,32 @@ document.addEventListener("DOMContentLoaded",()=>{
 window.matchMedia?.("(prefers-color-scheme: dark)")?.addEventListener?.("change",()=>{
   if(getAppearancePreference()==="system") applyAppearancePreference("system");
 });
+
+async function persistActivatedRoutineToBackend(routine){
+  if(!routine?.routineId) throw new Error("La rutina activada no tiene routineId.");
+
+  try{
+    await coachBackendFetch("/api/v1/routines",{
+      method:"POST",
+      body:JSON.stringify(routine)
+    });
+  }catch(error){
+    // Puede existir ya si estamos reintentando la persistencia.
+    if(!String(error?.message||"").includes("Routine already exists")){
+      throw error;
+    }
+
+    await coachBackendFetch(
+      `/api/v1/routines/${encodeURIComponent(routine.routineId)}`,
+      {
+        method:"PUT",
+        body:JSON.stringify(routine)
+      }
+    );
+  }
+
+  return coachBackendFetch(
+    `/api/v1/routines/${encodeURIComponent(routine.routineId)}/activate`,
+    {method:"PUT"}
+  );
+}

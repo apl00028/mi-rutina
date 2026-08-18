@@ -1,0 +1,88 @@
+.routines-page {
+  max-width: 1000px;
+}
+
+.actions {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.builder {
+  display: grid;
+  gap: 20px;
+}
+
+.session-card,
+.exercise-card {
+  border: 1px solid #ddd;
+  border-radius: 10px;
+  padding: 16px;
+}
+
+.exercise-card {
+  margin: 12px 0;
+  display: grid;
+  gap: 10px;
+}
+
+label {
+  display: grid;
+  gap: 4px;
+}
+
+input {
+  padding: 8px;
+}
+
+.picker {
+  position: fixed;
+  inset: 0;
+  background: rgb(0 0 0 / 35%);
+  display: grid;
+  place-items: center;
+  padding: 20px;
+}
+
+.picker-panel {
+  background: white;
+  width: min(700px, 100%);
+  max-height: 85vh;
+  overflow: auto;
+  padding: 20px;
+  border-radius: 12px;
+}
+
+.exercise-list {
+  display: grid;
+  gap: 8px;
+  margin: 16px 0;
+}
+
+.exercise-option {
+  text-align: left;
+  padding: 12px;
+  display: grid;
+  gap: 3px;
+}
+
+.session-header,
+.builder-actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.success-message {
+  padding: 12px;
+  border: 1px solid #aaa;
+  border-radius: 8px;
+}
+
+.error-message {
+  padding: 12px;
+  border: 1px solid #aaa;
+  border-radius: 8px;
+}

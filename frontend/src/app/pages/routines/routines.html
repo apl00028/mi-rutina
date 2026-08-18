@@ -1,0 +1,456 @@
+<section class="routines-page">
+  <h1>Rutinas</h1>
+
+  @if (saveMessage()) {
+    <p class="success-message">
+      {{ saveMessage() }}
+    </p>
+  }
+
+  @if (saveError()) {
+    <p class="error-message">
+      {{ saveError() }}
+    </p>
+  }
+
+  @if (importMessage()) {
+    <p class="success-message">
+      {{ importMessage() }}
+    </p>
+  }
+
+  @if (importError()) {
+    <p class="error-message">
+      {{ importError() }}
+    </p>
+  }
+
+  @if (!creating()) {
+    <div class="actions">
+      <button
+        type="button"
+        (click)="startManualRoutine()"
+      >
+        + Crear rutina manual
+      </button>
+
+      <label class="import-button">
+        Importar rutina
+
+        <input
+          type="file"
+          accept=".xlsx,.xls"
+          hidden
+          (change)="importRoutineFile($event)"
+        />
+      </label>
+
+      <button
+        type="button"
+        (click)="openExportRecords()"
+      >
+        Exportar registros
+      </button>
+    </div>
+
+    <p>
+      Crea una rutina manualmente, importa una plantilla GymOS
+      o exporta tus entrenamientos realizados.
+    </p>
+  }
+
+  @if (creating()) {
+    <section class="builder">
+      <h2>Nueva rutina</h2>
+
+      <label>
+        Nombre
+
+        <input
+          type="text"
+          [value]="routineName()"
+          (input)="routineName.set(
+            $any($event.target).value
+          )"
+        />
+      </label>
+
+      @for (
+        session of sessions();
+        track session.sessionId
+      ) {
+        <article class="session-card">
+          <div class="session-header">
+            <h3>
+              {{ session.name }}
+            </h3>
+
+            @if (sessions().length > 1) {
+              <button
+                type="button"
+                (click)="removeSession(
+                  session.sessionId
+                )"
+              >
+                Eliminar sesión
+              </button>
+            }
+          </div>
+
+          @for (
+            exercise of session.exercises;
+            track $index
+          ) {
+            <div class="exercise-card">
+              <strong>
+                {{ exercise.name }}
+              </strong>
+
+              <small>
+                GymOS ID:
+                {{ exercise.exerciseId }}
+              </small>
+
+              <label>
+                Series
+
+                <input
+                  type="number"
+                  min="1"
+                  [value]="exercise.sets"
+                  (input)="updateExerciseField(
+                    session.sessionId,
+                    $index,
+                    'sets',
+                    $any($event.target).value
+                  )"
+                />
+              </label>
+
+              <label>
+                Reps mín
+
+                <input
+                  type="number"
+                  min="1"
+                  [value]="exercise.repsMin"
+                  (input)="updateExerciseField(
+                    session.sessionId,
+                    $index,
+                    'repsMin',
+                    $any($event.target).value
+                  )"
+                />
+              </label>
+
+              <label>
+                Reps máx
+
+                <input
+                  type="number"
+                  min="1"
+                  [value]="exercise.repsMax"
+                  (input)="updateExerciseField(
+                    session.sessionId,
+                    $index,
+                    'repsMax',
+                    $any($event.target).value
+                  )"
+                />
+              </label>
+
+              <label>
+                RIR mín
+
+                <input
+                  type="number"
+                  min="0"
+                  step="0.5"
+                  [value]="exercise.rirMin"
+                  (input)="updateExerciseField(
+                    session.sessionId,
+                    $index,
+                    'rirMin',
+                    $any($event.target).value
+                  )"
+                />
+              </label>
+
+              <label>
+                RIR máx
+
+                <input
+                  type="number"
+                  min="0"
+                  step="0.5"
+                  [value]="exercise.rirMax"
+                  (input)="updateExerciseField(
+                    session.sessionId,
+                    $index,
+                    'rirMax',
+                    $any($event.target).value
+                  )"
+                />
+              </label>
+
+              <label>
+                Descanso (s)
+
+                <input
+                  type="number"
+                  min="0"
+                  step="15"
+                  [value]="exercise.restSeconds"
+                  (input)="updateExerciseField(
+                    session.sessionId,
+                    $index,
+                    'restSeconds',
+                    $any($event.target).value
+                  )"
+                />
+              </label>
+
+              <label>
+                Peso inicial (kg)
+
+                <input
+                  type="number"
+                  min="0"
+                  step="0.5"
+                  [value]="exercise.weight ?? ''"
+                  (input)="updateExerciseField(
+                    session.sessionId,
+                    $index,
+                    'weight',
+                    $any($event.target).value
+                  )"
+                />
+              </label>
+
+              <button
+                type="button"
+                (click)="removeExercise(
+                  session.sessionId,
+                  $index
+                )"
+              >
+                Eliminar ejercicio
+              </button>
+            </div>
+          }
+
+          <button
+            type="button"
+            (click)="openExercisePicker(
+              session.sessionId
+            )"
+          >
+            + Añadir ejercicio
+          </button>
+        </article>
+      }
+
+      <div class="builder-actions">
+        <button
+          type="button"
+          (click)="addSession()"
+        >
+          + Añadir sesión
+        </button>
+
+        <button
+          type="button"
+          (click)="saveAndActivateRoutine()"
+          [disabled]="savingRoutine()"
+        >
+          {{
+            savingRoutine()
+              ? 'Guardando...'
+              : 'Guardar y activar rutina'
+          }}
+        </button>
+      </div>
+    </section>
+  }
+
+  @if (exercisePickerSessionId()) {
+    <div class="picker">
+      <div class="picker-panel">
+        <h2>
+          Biblioteca de ejercicios
+        </h2>
+
+        <input
+          type="search"
+          placeholder="Buscar ejercicio, músculo, material o ID..."
+          [value]="exerciseSearch()"
+          (input)="exerciseSearch.set(
+            $any($event.target).value
+          )"
+        />
+
+        @if (loadingExercises()) {
+          <p>
+            Cargando biblioteca...
+          </p>
+        }
+
+        @if (error()) {
+          <p class="error-message">
+            {{ error() }}
+          </p>
+        }
+
+        <div class="exercise-list">
+          @for (
+            exercise of filteredExercises();
+            track exercise.id
+          ) {
+            <button
+              type="button"
+              class="exercise-option"
+              (click)="addExerciseToSession(
+                exercise
+              )"
+            >
+              <strong>
+                {{ exercise.name }}
+              </strong>
+
+              <span>
+                {{ exercise.muscle }}
+                ·
+                {{ exercise.equipment }}
+              </span>
+
+              <small>
+                {{ exercise.id }}
+              </small>
+            </button>
+          }
+        </div>
+
+        <button
+          type="button"
+          (click)="closeExercisePicker()"
+        >
+          Cerrar
+        </button>
+      </div>
+    </div>
+  }
+
+  @if (exportRecordsOpen()) {
+    <div class="picker">
+      <div class="picker-panel">
+        <h2>
+          Exportar registros
+        </h2>
+
+        <p>
+          Selecciona el periodo de entrenamientos que quieres exportar.
+        </p>
+
+        <label>
+          <input
+            type="radio"
+            name="exportPeriod"
+            [checked]="exportPeriod() === '2weeks'"
+            (change)="exportPeriod.set('2weeks')"
+          />
+
+          Últimas 2 semanas
+        </label>
+
+        <label>
+          <input
+            type="radio"
+            name="exportPeriod"
+            [checked]="exportPeriod() === '1month'"
+            (change)="exportPeriod.set('1month')"
+          />
+
+          Último mes
+        </label>
+
+        <label>
+          <input
+            type="radio"
+            name="exportPeriod"
+            [checked]="exportPeriod() === '3months'"
+            (change)="exportPeriod.set('3months')"
+          />
+
+          Últimos 3 meses
+        </label>
+
+        <label>
+          <input
+            type="radio"
+            name="exportPeriod"
+            [checked]="exportPeriod() === 'custom'"
+            (change)="exportPeriod.set('custom')"
+          />
+
+          Periodo personalizado
+        </label>
+
+        @if (exportPeriod() === 'custom') {
+          <div class="custom-date-range">
+            <label>
+              Desde
+
+              <input
+                type="date"
+                [value]="exportFrom()"
+                (input)="exportFrom.set(
+                  $any($event.target).value
+                )"
+              />
+            </label>
+
+            <label>
+              Hasta
+
+              <input
+                type="date"
+                [value]="exportTo()"
+                (input)="exportTo.set(
+                  $any($event.target).value
+                )"
+              />
+            </label>
+          </div>
+        }
+
+        @if (exportRecordsError()) {
+          <p class="error-message">
+            {{ exportRecordsError() }}
+          </p>
+        }
+
+        <div class="builder-actions">
+          <button
+            type="button"
+            (click)="closeExportRecords()"
+            [disabled]="exportingRecords()"
+          >
+            Cancelar
+          </button>
+
+          <button
+            type="button"
+            (click)="exportTrainingRecords()"
+            [disabled]="exportingRecords()"
+          >
+            {{
+              exportingRecords()
+                ? 'Preparando...'
+                : 'Descargar historial'
+            }}
+          </button>
+        </div>
+      </div>
+    </div>
+  }
+</section>

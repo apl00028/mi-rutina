@@ -1,0 +1,261 @@
+<main>
+  <h1>GymOS</h1>
+
+  @if (auth.loading()) {
+    <p>Comprobando sesión...</p>
+
+  } @else if (!auth.session()) {
+    <section>
+      <h2>Iniciar sesión</h2>
+
+      <form (submit)="sendMagicLink($event)">
+        <label>
+          Email
+          <input
+            type="email"
+            [value]="email()"
+            (input)="email.set($any($event.target).value)"
+            required
+          />
+        </label>
+
+        <button
+          type="submit"
+          [disabled]="loginLoading()"
+        >
+          {{
+            loginLoading()
+              ? 'Enviando...'
+              : 'Enviar enlace de acceso'
+          }}
+        </button>
+      </form>
+
+      @if (loginMessage()) {
+        <p>{{ loginMessage() }}</p>
+      }
+    </section>
+
+  } @else if (activeWorkout(); as workout) {
+    @if (activeSession(); as session) {
+      <section>
+        <p>
+          Sesión iniciada como
+          {{ auth.user()?.email }}
+        </p>
+
+        <h2>{{ session.label || session.name }}</h2>
+        <p>Entrenamiento en curso</p>
+
+        @for (
+          exercise of session.exercises;
+          track exercise.exerciseId
+        ) {
+          <article>
+            <h3>{{ exercise.name }}</h3>
+
+            @if (exercise.target) {
+              <p>Objetivo: {{ exercise.target }}</p>
+            }
+
+            @for (
+              setNumber of [].constructor(exercise.sets);
+              track $index
+            ) {
+              <div>
+                <strong>Serie {{ $index + 1 }}</strong>
+
+                @if (
+                  getPreviousSet(
+                    exercise.exerciseId,
+                    $index
+                  );
+                  as previousSet
+                ) {
+                  <p>
+                    <small>
+                      Última vez:
+                      {{ previousSet.weight ?? '—' }} kg ×
+                      {{ previousSet.reps ?? '—' }}
+                      · RIR {{ previousSet.rir ?? '—' }}
+                    </small>
+                  </p>
+                }
+
+                <label>
+                  Kg
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.5"
+                    placeholder="kg"
+                    [value]="getCurrentSet(
+                      exercise.exerciseId,
+                      $index
+                    )?.weight ?? ''"
+                    (input)="updateSet(
+                      exercise.exerciseId,
+                      $index,
+                      'weight',
+                      $any($event.target).value
+                    )"
+                  />
+                </label>
+
+                <label>
+                  Reps
+                  <input
+                    type="number"
+                    min="0"
+                    step="1"
+                    placeholder="reps"
+                    [value]="getCurrentSet(
+                      exercise.exerciseId,
+                      $index
+                    )?.reps ?? ''"
+                    (input)="updateSet(
+                      exercise.exerciseId,
+                      $index,
+                      'reps',
+                      $any($event.target).value
+                    )"
+                  />
+                </label>
+
+                <label>
+                  RIR
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.5"
+                    placeholder="RIR"
+                    [value]="getCurrentSet(
+                      exercise.exerciseId,
+                      $index
+                    )?.rir ?? ''"
+                    (input)="updateSet(
+                      exercise.exerciseId,
+                      $index,
+                      'rir',
+                      $any($event.target).value
+                    )"
+                  />
+                </label>
+
+                <button
+                  type="button"
+                  (click)="completeSet(
+                    exercise.exerciseId,
+                    $index
+                  )"
+                  [disabled]="isSetCompleted(
+                    exercise.exerciseId,
+                    $index
+                  )"
+                >
+                  {{
+                    isSetCompleted(
+                      exercise.exerciseId,
+                      $index
+                    )
+                      ? 'Serie completada'
+                      : 'Completar serie'
+                  }}
+                </button>
+              </div>
+            }
+          </article>
+        }
+
+        <button
+          type="button"
+          (click)="saveWorkout()"
+          [disabled]="workoutLoading()"
+        >
+          {{
+            workoutLoading()
+              ? 'Guardando...'
+              : 'Guardar entrenamiento'
+          }}
+        </button>
+
+        <button
+          type="button"
+          (click)="finishWorkout()"
+          [disabled]="workoutLoading()"
+        >
+          Finalizar entrenamiento
+        </button>
+
+        @if (workoutError()) {
+          <p>{{ workoutError() }}</p>
+        }
+
+        <p>ID workout: {{ workout.workoutId }}</p>
+      </section>
+    }
+
+  } @else {
+    <p>
+      Sesión iniciada como
+      {{ auth.user()?.email }}
+    </p>
+
+    @if (loading()) {
+      <p>Cargando rutina...</p>
+    }
+
+    @if (error()) {
+      <p>{{ error() }}</p>
+    }
+
+    @if (routine(); as routine) {
+      <section>
+        <h2>Rutina activa</h2>
+
+        @for (
+          session of routine.sessions;
+          track session.sessionId
+        ) {
+          <article>
+            <h3>{{ session.label || session.name }}</h3>
+
+            <p>{{ session.exercises.length }} ejercicios</p>
+
+            <button
+              type="button"
+              (click)="startWorkout(session)"
+              [disabled]="workoutLoading()"
+            >
+              {{
+                workoutLoading()
+                  ? 'Iniciando...'
+                  : 'Empezar entrenamiento'
+              }}
+            </button>
+
+            <ul>
+              @for (
+                exercise of session.exercises;
+                track exercise.exerciseId
+              ) {
+                <li>
+                  <strong>{{ exercise.name }}</strong>
+                  — {{ exercise.sets }} series
+
+                  @if (exercise.target) {
+                    · {{ exercise.target }}
+                  }
+                </li>
+              }
+            </ul>
+          </article>
+        }
+
+        @if (workoutError()) {
+          <p>{{ workoutError() }}</p>
+        }
+      </section>
+    }
+  }
+</main>

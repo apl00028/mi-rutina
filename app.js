@@ -19482,32 +19482,3 @@ document.addEventListener("DOMContentLoaded",()=>{
 window.matchMedia?.("(prefers-color-scheme: dark)")?.addEventListener?.("change",()=>{
   if(getAppearancePreference()==="system") applyAppearancePreference("system");
 });
-
-async function persistActivatedRoutineToBackend(routine){
-  if(!routine?.routineId) throw new Error("La rutina activada no tiene routineId.");
-
-  try{
-    await coachBackendFetch("/api/v1/routines",{
-      method:"POST",
-      body:JSON.stringify(routine)
-    });
-  }catch(error){
-    // Puede existir ya si estamos reintentando la persistencia.
-    if(!String(error?.message||"").includes("Routine already exists")){
-      throw error;
-    }
-
-    await coachBackendFetch(
-      `/api/v1/routines/${encodeURIComponent(routine.routineId)}`,
-      {
-        method:"PUT",
-        body:JSON.stringify(routine)
-      }
-    );
-  }
-
-  return coachBackendFetch(
-    `/api/v1/routines/${encodeURIComponent(routine.routineId)}/activate`,
-    {method:"PUT"}
-  );
-}

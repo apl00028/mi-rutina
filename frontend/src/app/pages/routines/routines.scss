@@ -1,11 +1,18 @@
 .routines-page {
-  max-width: 1000px;
+  width: 100%;
+  max-width: 1100px;
+  margin: 0 auto;
 }
 
 .actions {
   display: flex;
   gap: 12px;
   flex-wrap: wrap;
+  margin: 20px 0;
+}
+
+.help-text {
+  margin-top: 12px;
 }
 
 .builder {
@@ -13,59 +20,7 @@
   gap: 20px;
 }
 
-.session-card,
-.exercise-card {
-  border: 1px solid #ddd;
-  border-radius: 10px;
-  padding: 16px;
-}
-
-.exercise-card {
-  margin: 12px 0;
-  display: grid;
-  gap: 10px;
-}
-
-label {
-  display: grid;
-  gap: 4px;
-}
-
-input {
-  padding: 8px;
-}
-
-.picker {
-  position: fixed;
-  inset: 0;
-  background: rgb(0 0 0 / 35%);
-  display: grid;
-  place-items: center;
-  padding: 20px;
-}
-
-.picker-panel {
-  background: white;
-  width: min(700px, 100%);
-  max-height: 85vh;
-  overflow: auto;
-  padding: 20px;
-  border-radius: 12px;
-}
-
-.exercise-list {
-  display: grid;
-  gap: 8px;
-  margin: 16px 0;
-}
-
-.exercise-option {
-  text-align: left;
-  padding: 12px;
-  display: grid;
-  gap: 3px;
-}
-
+.builder-header,
 .session-header,
 .builder-actions {
   display: flex;
@@ -75,14 +30,196 @@ input {
   flex-wrap: wrap;
 }
 
-.success-message {
+.session-card {
+  border: 1px solid #ddd;
+  border-radius: 12px;
+  padding: 16px;
+}
+
+.exercise-card {
+  border: 1px solid #ddd;
+  border-radius: 10px;
+  padding: 16px;
+  margin: 12px 0;
+
+  display: grid;
+  gap: 14px;
+}
+
+.exercise-title {
+  display: grid;
+  gap: 4px;
+}
+
+.exercise-fields {
+  display: grid;
+  grid-template-columns:
+    repeat(
+      auto-fit,
+      minmax(130px, 1fr)
+    );
+  gap: 12px;
+}
+
+label {
+  display: grid;
+  gap: 5px;
+}
+
+input {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 9px;
+}
+
+button,
+.import-button {
+  box-sizing: border-box;
+  padding: 9px 13px;
+  cursor: pointer;
+}
+
+.import-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  border: 1px solid #aaa;
+  border-radius: 6px;
+}
+
+.success-message,
+.error-message {
   padding: 12px;
   border: 1px solid #aaa;
   border-radius: 8px;
 }
 
-.error-message {
+.import-report {
+  display: grid;
+  gap: 10px;
+  margin: 16px 0;
+}
+
+.import-issue {
   padding: 12px;
-  border: 1px solid #aaa;
+  border: 1px solid #bbb;
   border-radius: 8px;
+
+  display: grid;
+  gap: 4px;
+}
+
+.import-issue.error {
+  border-width: 2px;
+}
+
+.import-issue.warning {
+  opacity: 0.85;
+}
+
+.issue-location {
+  font-size: 0.9rem;
+}
+
+.picker {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+
+  background:
+    rgb(0 0 0 / 35%);
+
+  display: grid;
+  place-items: center;
+
+  padding: 20px;
+}
+
+.picker-panel {
+  background: white;
+
+  width: min(720px, 100%);
+  max-height: 85vh;
+
+  overflow: auto;
+
+  padding: 20px;
+
+  border-radius: 12px;
+}
+
+.exercise-list {
+  display: grid;
+  gap: 8px;
+
+  margin: 16px 0;
+}
+
+.exercise-option {
+  text-align: left;
+
+  display: grid;
+  gap: 3px;
+
+  width: 100%;
+
+  padding: 12px;
+}
+
+.period-options {
+  display: grid;
+  gap: 10px;
+
+  margin: 16px 0;
+}
+
+.period-options label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.period-options input {
+  width: auto;
+}
+
+.custom-date-range {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+
+  margin: 16px 0;
+}
+
+.export-panel {
+  max-width: 600px;
+}
+
+@media (max-width: 700px) {
+  .exercise-fields {
+    grid-template-columns:
+      repeat(
+        2,
+        minmax(0, 1fr)
+      );
+  }
+
+  .custom-date-range {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 450px) {
+  .exercise-fields {
+    grid-template-columns: 1fr;
+  }
+
+  .actions {
+    display: grid;
+  }
+
+  .actions > * {
+    width: 100%;
+  }
 }

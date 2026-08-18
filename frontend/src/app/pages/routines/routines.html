@@ -25,6 +25,53 @@
     </p>
   }
 
+  @if (importIssues().length) {
+    <section class="import-report">
+      <h3>
+        Resultado de validación
+      </h3>
+
+      @for (
+        issue of importIssues();
+        track $index
+      ) {
+        <div
+          class="import-issue"
+          [class.warning]="
+            issue.severity === 'warning'
+          "
+          [class.error]="
+            issue.severity === 'error'
+          "
+        >
+          <strong>
+            {{
+              issue.severity === 'error'
+                ? 'Error'
+                : 'Aviso'
+            }}
+          </strong>
+
+          <div class="issue-location">
+            {{ issue.sheet }}
+
+            @if (issue.row) {
+              · fila {{ issue.row }}
+            }
+
+            @if (issue.column) {
+              · {{ issue.column }}
+            }
+          </div>
+
+          <div>
+            {{ issue.message }}
+          </div>
+        </div>
+      }
+    </section>
+  }
+
   @if (!creating()) {
     <div class="actions">
       <button
@@ -47,21 +94,39 @@
 
       <button
         type="button"
+        (click)="downloadChatGPTRoutineTemplate()"
+      >
+        Descargar plantilla para ChatGPT
+      </button>
+
+      <button
+        type="button"
         (click)="openExportRecords()"
       >
         Exportar registros
       </button>
     </div>
 
-    <p>
-      Crea una rutina manualmente, importa una plantilla GymOS
-      o exporta tus entrenamientos realizados.
+    <p class="help-text">
+      Puedes crear una rutina manualmente,
+      descargar una plantilla compatible con GymOS,
+      importar una rutina o exportar tus entrenamientos realizados.
     </p>
   }
 
   @if (creating()) {
     <section class="builder">
-      <h2>Nueva rutina</h2>
+      <div class="builder-header">
+        <div>
+          <h2>
+            Nueva rutina
+          </h2>
+
+          <p>
+            Revisa las sesiones antes de guardar y activar.
+          </p>
+        </div>
+      </div>
 
       <label>
         Nombre
@@ -102,130 +167,140 @@
             track $index
           ) {
             <div class="exercise-card">
-              <strong>
-                {{ exercise.name }}
-              </strong>
+              <div class="exercise-title">
+                <strong>
+                  {{ exercise.name }}
+                </strong>
 
-              <small>
-                GymOS ID:
-                {{ exercise.exerciseId }}
-              </small>
+                <small>
+                  GymOS ID:
+                  {{ exercise.exerciseId }}
+                </small>
+              </div>
 
-              <label>
-                Series
+              <div class="exercise-fields">
+                <label>
+                  Series
 
-                <input
-                  type="number"
-                  min="1"
-                  [value]="exercise.sets"
-                  (input)="updateExerciseField(
-                    session.sessionId,
-                    $index,
-                    'sets',
-                    $any($event.target).value
-                  )"
-                />
-              </label>
+                  <input
+                    type="number"
+                    min="1"
+                    max="10"
+                    [value]="exercise.sets"
+                    (input)="updateExerciseField(
+                      session.sessionId,
+                      $index,
+                      'sets',
+                      $any($event.target).value
+                    )"
+                  />
+                </label>
 
-              <label>
-                Reps mín
+                <label>
+                  Reps mín
 
-                <input
-                  type="number"
-                  min="1"
-                  [value]="exercise.repsMin"
-                  (input)="updateExerciseField(
-                    session.sessionId,
-                    $index,
-                    'repsMin',
-                    $any($event.target).value
-                  )"
-                />
-              </label>
+                  <input
+                    type="number"
+                    min="1"
+                    max="100"
+                    [value]="exercise.repsMin"
+                    (input)="updateExerciseField(
+                      session.sessionId,
+                      $index,
+                      'repsMin',
+                      $any($event.target).value
+                    )"
+                  />
+                </label>
 
-              <label>
-                Reps máx
+                <label>
+                  Reps máx
 
-                <input
-                  type="number"
-                  min="1"
-                  [value]="exercise.repsMax"
-                  (input)="updateExerciseField(
-                    session.sessionId,
-                    $index,
-                    'repsMax',
-                    $any($event.target).value
-                  )"
-                />
-              </label>
+                  <input
+                    type="number"
+                    min="1"
+                    max="100"
+                    [value]="exercise.repsMax"
+                    (input)="updateExerciseField(
+                      session.sessionId,
+                      $index,
+                      'repsMax',
+                      $any($event.target).value
+                    )"
+                  />
+                </label>
 
-              <label>
-                RIR mín
+                <label>
+                  RIR mín
 
-                <input
-                  type="number"
-                  min="0"
-                  step="0.5"
-                  [value]="exercise.rirMin"
-                  (input)="updateExerciseField(
-                    session.sessionId,
-                    $index,
-                    'rirMin',
-                    $any($event.target).value
-                  )"
-                />
-              </label>
+                  <input
+                    type="number"
+                    min="0"
+                    max="10"
+                    step="0.5"
+                    [value]="exercise.rirMin"
+                    (input)="updateExerciseField(
+                      session.sessionId,
+                      $index,
+                      'rirMin',
+                      $any($event.target).value
+                    )"
+                  />
+                </label>
 
-              <label>
-                RIR máx
+                <label>
+                  RIR máx
 
-                <input
-                  type="number"
-                  min="0"
-                  step="0.5"
-                  [value]="exercise.rirMax"
-                  (input)="updateExerciseField(
-                    session.sessionId,
-                    $index,
-                    'rirMax',
-                    $any($event.target).value
-                  )"
-                />
-              </label>
+                  <input
+                    type="number"
+                    min="0"
+                    max="10"
+                    step="0.5"
+                    [value]="exercise.rirMax"
+                    (input)="updateExerciseField(
+                      session.sessionId,
+                      $index,
+                      'rirMax',
+                      $any($event.target).value
+                    )"
+                  />
+                </label>
 
-              <label>
-                Descanso (s)
+                <label>
+                  Descanso (s)
 
-                <input
-                  type="number"
-                  min="0"
-                  step="15"
-                  [value]="exercise.restSeconds"
-                  (input)="updateExerciseField(
-                    session.sessionId,
-                    $index,
-                    'restSeconds',
-                    $any($event.target).value
-                  )"
-                />
-              </label>
+                  <input
+                    type="number"
+                    min="0"
+                    max="600"
+                    step="15"
+                    [value]="exercise.restSeconds"
+                    (input)="updateExerciseField(
+                      session.sessionId,
+                      $index,
+                      'restSeconds',
+                      $any($event.target).value
+                    )"
+                  />
+                </label>
 
-              <label>
-                Peso inicial (kg)
+                <label>
+                  Peso inicial (kg)
 
-                <input
-                  type="number"
-                  min="0"
-                  step="0.5"
-                  [value]="exercise.weight ?? ''"
-                  (input)="updateExerciseField(
-                    session.sessionId,
-                    $index,
-                    'weight',
-                    $any($event.target).value
-                  )"
-                />
-              </label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.5"
+                    [value]="exercise.weight ?? ''"
+                    (input)="updateExerciseField(
+                      session.sessionId,
+                      $index,
+                      'weight',
+                      $any($event.target).value
+                    )"
+                  />
+                </label>
+              </div>
 
               <button
                 type="button"
@@ -342,58 +417,61 @@
 
   @if (exportRecordsOpen()) {
     <div class="picker">
-      <div class="picker-panel">
+      <div class="picker-panel export-panel">
         <h2>
           Exportar registros
         </h2>
 
         <p>
-          Selecciona el periodo de entrenamientos que quieres exportar.
+          Selecciona el periodo de entrenamientos
+          que quieres exportar.
         </p>
 
-        <label>
-          <input
-            type="radio"
-            name="exportPeriod"
-            [checked]="exportPeriod() === '2weeks'"
-            (change)="exportPeriod.set('2weeks')"
-          />
+        <div class="period-options">
+          <label>
+            <input
+              type="radio"
+              name="exportPeriod"
+              [checked]="exportPeriod() === '2weeks'"
+              (change)="exportPeriod.set('2weeks')"
+            />
 
-          Últimas 2 semanas
-        </label>
+            Últimas 2 semanas
+          </label>
 
-        <label>
-          <input
-            type="radio"
-            name="exportPeriod"
-            [checked]="exportPeriod() === '1month'"
-            (change)="exportPeriod.set('1month')"
-          />
+          <label>
+            <input
+              type="radio"
+              name="exportPeriod"
+              [checked]="exportPeriod() === '1month'"
+              (change)="exportPeriod.set('1month')"
+            />
 
-          Último mes
-        </label>
+            Último mes
+          </label>
 
-        <label>
-          <input
-            type="radio"
-            name="exportPeriod"
-            [checked]="exportPeriod() === '3months'"
-            (change)="exportPeriod.set('3months')"
-          />
+          <label>
+            <input
+              type="radio"
+              name="exportPeriod"
+              [checked]="exportPeriod() === '3months'"
+              (change)="exportPeriod.set('3months')"
+            />
 
-          Últimos 3 meses
-        </label>
+            Últimos 3 meses
+          </label>
 
-        <label>
-          <input
-            type="radio"
-            name="exportPeriod"
-            [checked]="exportPeriod() === 'custom'"
-            (change)="exportPeriod.set('custom')"
-          />
+          <label>
+            <input
+              type="radio"
+              name="exportPeriod"
+              [checked]="exportPeriod() === 'custom'"
+              (change)="exportPeriod.set('custom')"
+            />
 
-          Periodo personalizado
-        </label>
+            Periodo personalizado
+          </label>
+        </div>
 
         @if (exportPeriod() === 'custom') {
           <div class="custom-date-range">

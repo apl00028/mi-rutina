@@ -75,6 +75,20 @@ interface StoredRoutine {
   }[];
 }
 
+interface ImportIssue {
+  severity: 'error' | 'warning';
+  sheet: string;
+  row?: number;
+  column?: string;
+  message: string;
+}
+
+interface ImportValidationResult {
+  sessions: RoutineSessionDraft[];
+  errors: ImportIssue[];
+  warnings: ImportIssue[];
+}
+
 @Component({
   selector: 'app-routines',
   standalone: true,
@@ -96,6 +110,7 @@ export class Routines implements OnInit {
 
   importMessage = signal<string | null>(null);
   importError = signal<string | null>(null);
+  importIssues = signal<ImportIssue[]>([]);
 
   exportRecordsOpen = signal(false);
 
@@ -131,20 +146,24 @@ export class Routines implements OnInit {
     await this.loadExercises();
   }
 
+  private async getAuthHeaders(): Promise<HttpHeaders> {
+    const token = await this.auth.getAccessToken();
+
+    if (!token) {
+      throw new Error('Necesitas iniciar sesión.');
+    }
+
+    return new HttpHeaders({
+      Authorization: `Bearer ${token}`
+    });
+  }
+
   async loadExercises(): Promise<void> {
     this.loadingExercises.set(true);
     this.error.set(null);
 
     try {
-      const token = await this.auth.getAccessToken();
-
-      if (!token) {
-        throw new Error('Necesitas iniciar sesión.');
-      }
-
-      const headers = new HttpHeaders({
-        Authorization: `Bearer ${token}`
-      });
+      const headers = await this.getAuthHeaders();
 
       const exercises = await new Promise<Exercise[]>(
         (resolve, reject) => {
@@ -161,7 +180,6 @@ export class Routines implements OnInit {
       );
 
       this.exercises.set(exercises);
-
     } catch (err: any) {
       this.error.set(
         err?.error?.detail ??
@@ -176,11 +194,22 @@ export class Routines implements OnInit {
   startManualRoutine(): void {
     this.creating.set(true);
 
+    this.routineName.set('Mi rutina');
+
+    this.sessions.set([
+      {
+        sessionId: crypto.randomUUID(),
+        name: 'Sesión A',
+        exercises: []
+      }
+    ]);
+
     this.saveMessage.set(null);
     this.saveError.set(null);
 
     this.importMessage.set(null);
     this.importError.set(null);
+    this.importIssues.set([]);
   }
 
   addSession(): void {
@@ -243,8 +272,7 @@ export class Routines implements OnInit {
   }
 
   addExerciseToSession(exercise: Exercise): void {
-    const sessionId =
-      this.exercisePickerSessionId();
+    const sessionId = this.exercisePickerSessionId();
 
     if (!sessionId) {
       return;
@@ -365,15 +393,17 @@ export class Routines implements OnInit {
 
         if (
           !Number.isFinite(exercise.sets) ||
-          exercise.sets < 1
+          exercise.sets < 1 ||
+          exercise.sets > 10
         ) {
-          return `${exercise.name}: el número de series no es válido.`;
+          return `${exercise.name}: las series deben estar entre 1 y 10.`;
         }
 
         if (
           !Number.isFinite(exercise.repsMin) ||
           !Number.isFinite(exercise.repsMax) ||
           exercise.repsMin < 1 ||
+          exercise.repsMax > 100 ||
           exercise.repsMax < exercise.repsMin
         ) {
           return `${exercise.name}: el rango de repeticiones no es válido.`;
@@ -383,6 +413,7 @@ export class Routines implements OnInit {
           !Number.isFinite(exercise.rirMin) ||
           !Number.isFinite(exercise.rirMax) ||
           exercise.rirMin < 0 ||
+          exercise.rirMax > 10 ||
           exercise.rirMax < exercise.rirMin
         ) {
           return `${exercise.name}: el rango de RIR no es válido.`;
@@ -390,9 +421,10 @@ export class Routines implements OnInit {
 
         if (
           !Number.isFinite(exercise.restSeconds) ||
-          exercise.restSeconds < 0
+          exercise.restSeconds < 0 ||
+          exercise.restSeconds > 600
         ) {
-          return `${exercise.name}: el descanso no es válido.`;
+          return `${exercise.name}: el descanso debe estar entre 0 y 600 segundos.`;
         }
       }
     }
@@ -404,35 +436,26 @@ export class Routines implements OnInit {
     const now = new Date().toISOString();
 
     return {
-      routineId:
-        `routine-${crypto.randomUUID()}`,
-
+      routineId: `routine-${crypto.randomUUID()}`,
       schemaVersion: '4.2',
       revision: 1,
-
       name: this.routineName().trim(),
-
       createdAt: now,
       updatedAt: now,
 
       sessions: this.sessions().map(
         (session, sessionIndex) => ({
           sessionId: session.sessionId,
-
           name: session.name,
           label: session.name,
-
           order: sessionIndex + 1,
 
           exercises: session.exercises.map(
             (exercise, exerciseIndex) => ({
               exerciseId: exercise.exerciseId,
               id: exercise.exerciseId,
-
               name: exercise.name,
-
               order: exerciseIndex + 1,
-
               sets: exercise.sets,
 
               target:
@@ -443,11 +466,8 @@ export class Routines implements OnInit {
                 max: exercise.rirMax
               },
 
-              restSeconds:
-                exercise.restSeconds,
-
-              weight:
-                exercise.weight ?? null,
+              restSeconds: exercise.restSeconds,
+              weight: exercise.weight ?? null,
 
               prescription: {
                 sets: exercise.sets,
@@ -462,11 +482,8 @@ export class Routines implements OnInit {
                   max: exercise.rirMax
                 },
 
-                restSeconds:
-                  exercise.restSeconds,
-
-                weight:
-                  exercise.weight ?? null
+                restSeconds: exercise.restSeconds,
+                weight: exercise.weight ?? null
               }
             })
           )
@@ -476,8 +493,7 @@ export class Routines implements OnInit {
   }
 
   async saveAndActivateRoutine(): Promise<void> {
-    const validationError =
-      this.validateRoutine();
+    const validationError = this.validateRoutine();
 
     if (validationError) {
       this.saveError.set(validationError);
@@ -486,18 +502,14 @@ export class Routines implements OnInit {
     }
 
     this.savingRoutine.set(true);
-
     this.saveError.set(null);
     this.saveMessage.set(null);
 
     try {
-      const token =
-        await this.auth.getAccessToken();
+      const token = await this.auth.getAccessToken();
 
       if (!token) {
-        throw new Error(
-          'Necesitas iniciar sesión.'
-        );
+        throw new Error('Necesitas iniciar sesión.');
       }
 
       const headers = new HttpHeaders({
@@ -505,8 +517,7 @@ export class Routines implements OnInit {
         'Content-Type': 'application/json'
       });
 
-      const routine =
-        this.buildCanonicalRoutine();
+      const routine = this.buildCanonicalRoutine();
 
       const created =
         await new Promise<CanonicalRoutine>(
@@ -572,27 +583,690 @@ export class Routines implements OnInit {
       .toLowerCase();
   }
 
-  private readSheetRows(
-    workbook: XLSX.WorkBook,
-    sheetName: string
-  ): Record<string, any>[] {
+  private readGymOSMetadata(
+    workbook: XLSX.WorkBook
+  ): Record<string, string> {
     const sheet =
-      workbook.Sheets[sheetName];
+      workbook.Sheets['_GymOS'];
 
     if (!sheet) {
-      throw new Error(
-        `Falta la hoja "${sheetName}".`
-      );
+      return {};
     }
 
-    return XLSX.utils.sheet_to_json<
-      Record<string, any>
-    >(
-      sheet,
-      {
-        defval: ''
+    const rows =
+      XLSX.utils.sheet_to_json<any[]>(
+        sheet,
+        {
+          header: 1,
+          defval: ''
+        }
+      );
+
+    const metadata:
+      Record<string, string> = {};
+
+    for (const row of rows) {
+      const key =
+        String(row?.[0] ?? '').trim();
+
+      const value =
+        String(row?.[1] ?? '').trim();
+
+      if (key) {
+        metadata[key] = value;
+      }
+    }
+
+    return metadata;
+  }
+
+  private addImportIssue(
+    target: ImportIssue[],
+    issue: ImportIssue
+  ): void {
+    target.push(issue);
+  }
+
+  private validateImportedWorkbook(
+    workbook: XLSX.WorkBook
+  ): ImportValidationResult {
+    const errors: ImportIssue[] = [];
+    const warnings: ImportIssue[] = [];
+
+    const metadata =
+      this.readGymOSMetadata(workbook);
+
+    if (
+      metadata['templateVersion'] !== '2'
+    ) {
+      this.addImportIssue(errors, {
+        severity: 'error',
+        sheet: '_GymOS',
+        column: 'templateVersion',
+        message:
+          `GymOS requiere templateVersion 2. Se encontró "${metadata['templateVersion'] || 'ausente'}".`
+      });
+    }
+
+    if (
+      metadata['schemaVersion'] !== '4.2'
+    ) {
+      this.addImportIssue(errors, {
+        severity: 'error',
+        sheet: '_GymOS',
+        column: 'schemaVersion',
+        message:
+          `GymOS requiere schemaVersion 4.2. Se encontró "${metadata['schemaVersion'] || 'ausente'}".`
+      });
+    }
+
+    const sessionSheet =
+      workbook.Sheets['Sesiones'];
+
+    const routineSheet =
+      workbook.Sheets['Rutina'];
+
+    if (!sessionSheet) {
+      this.addImportIssue(errors, {
+        severity: 'error',
+        sheet: 'Sesiones',
+        message:
+          'Falta la hoja obligatoria "Sesiones".'
+      });
+    }
+
+    if (!routineSheet) {
+      this.addImportIssue(errors, {
+        severity: 'error',
+        sheet: 'Rutina',
+        message:
+          'Falta la hoja obligatoria "Rutina".'
+      });
+    }
+
+    if (
+      !sessionSheet ||
+      !routineSheet
+    ) {
+      return {
+        sessions: [],
+        errors,
+        warnings
+      };
+    }
+
+    const sessionRows =
+      XLSX.utils.sheet_to_json<
+        Record<string, any>
+      >(
+        sessionSheet,
+        { defval: '' }
+      );
+
+    const routineRows =
+      XLSX.utils.sheet_to_json<
+        Record<string, any>
+      >(
+        routineSheet,
+        { defval: '' }
+      );
+
+    if (
+      sessionRows.length < 2 ||
+      sessionRows.length > 6
+    ) {
+      this.addImportIssue(errors, {
+        severity: 'error',
+        sheet: 'Sesiones',
+        message:
+          `La rutina debe contener entre 2 y 6 sesiones. Se encontraron ${sessionRows.length}.`
+      });
+    }
+
+    const catalogById =
+      new Map(
+        this.exercises().map(
+          exercise => [
+            exercise.id,
+            exercise
+          ]
+        )
+      );
+
+    const importedSessions:
+      RoutineSessionDraft[] = [];
+
+    const sessionByKey =
+      new Map<
+        string,
+        RoutineSessionDraft
+      >();
+
+    const sessionOrders =
+      new Set<number>();
+
+    const sessionIdHints =
+      new Set<string>();
+
+    sessionRows.forEach(
+      (row, index) => {
+        const excelRow =
+          index + 2;
+
+        const key =
+          String(
+            row['Sesión'] ?? ''
+          ).trim();
+
+        const name =
+          String(
+            row['Nombre'] ?? ''
+          ).trim();
+
+        const order =
+          Number(row['Orden']);
+
+        const sessionId =
+          String(
+            row['_GymOS session'] ?? ''
+          ).trim();
+
+        if (!key) {
+          this.addImportIssue(errors, {
+            severity: 'error',
+            sheet: 'Sesiones',
+            row: excelRow,
+            column: 'Sesión',
+            message:
+              'Falta la clave de sesión.'
+          });
+        }
+
+        if (
+          !Number.isInteger(order) ||
+          order < 1 ||
+          order > 6
+        ) {
+          this.addImportIssue(errors, {
+            severity: 'error',
+            sheet: 'Sesiones',
+            row: excelRow,
+            column: 'Orden',
+            message:
+              'El orden debe ser un entero entre 1 y 6.'
+          });
+        } else if (
+          sessionOrders.has(order)
+        ) {
+          this.addImportIssue(errors, {
+            severity: 'error',
+            sheet: 'Sesiones',
+            row: excelRow,
+            column: 'Orden',
+            message:
+              `El orden ${order} está repetido.`
+          });
+        } else {
+          sessionOrders.add(order);
+        }
+
+        if (!name) {
+          this.addImportIssue(errors, {
+            severity: 'error',
+            sheet: 'Sesiones',
+            row: excelRow,
+            column: 'Nombre',
+            message:
+              'Falta el nombre de la sesión.'
+          });
+        }
+
+        if (
+          key &&
+          sessionByKey.has(key)
+        ) {
+          this.addImportIssue(errors, {
+            severity: 'error',
+            sheet: 'Sesiones',
+            row: excelRow,
+            column: 'Sesión',
+            message:
+              `La sesión "${key}" está repetida.`
+          });
+        }
+
+        if (
+          sessionId &&
+          sessionIdHints.has(sessionId)
+        ) {
+          this.addImportIssue(errors, {
+            severity: 'error',
+            sheet: 'Sesiones',
+            row: excelRow,
+            column: '_GymOS session',
+            message:
+              'El archivo repite un identificador interno de sesión.'
+          });
+        }
+
+        if (sessionId) {
+          sessionIdHints.add(sessionId);
+        }
+
+        const session: RoutineSessionDraft = {
+          sessionId:
+            sessionId ||
+            crypto.randomUUID(),
+
+          name:
+            name ||
+            `Sesión ${key}`,
+
+          exercises: []
+        };
+
+        importedSessions.push(session);
+
+        if (
+          key &&
+          !sessionByKey.has(key)
+        ) {
+          sessionByKey.set(
+            key,
+            session
+          );
+        }
       }
     );
+
+    const ordersBySession =
+      new Map<
+        string,
+        Set<number>
+      >();
+
+    const exerciseIdsBySession =
+      new Map<
+        string,
+        Set<string>
+      >();
+
+    let totalExercises = 0;
+
+    routineRows.forEach(
+      (row, index) => {
+        const excelRow =
+          index + 2;
+
+        const rowErrorsBefore =
+          errors.length;
+
+        const sessionKey =
+          String(
+            row['Sesión'] ?? ''
+          ).trim();
+
+        const session =
+          sessionByKey.get(
+            sessionKey
+          );
+
+        if (!session) {
+          this.addImportIssue(errors, {
+            severity: 'error',
+            sheet: 'Rutina',
+            row: excelRow,
+            column: 'Sesión',
+            message:
+              `La sesión "${sessionKey || '(vacía)'}" no existe en la hoja Sesiones.`
+          });
+        }
+
+        const order =
+          Number(row['Orden']);
+
+        if (
+          !Number.isInteger(order) ||
+          order < 1
+        ) {
+          this.addImportIssue(errors, {
+            severity: 'error',
+            sheet: 'Rutina',
+            row: excelRow,
+            column: 'Orden',
+            message:
+              'El orden debe ser un entero positivo.'
+          });
+        } else if (sessionKey) {
+          const usedOrders =
+            ordersBySession.get(
+              sessionKey
+            ) ??
+            new Set<number>();
+
+          if (
+            usedOrders.has(order)
+          ) {
+            this.addImportIssue(errors, {
+              severity: 'error',
+              sheet: 'Rutina',
+              row: excelRow,
+              column: 'Orden',
+              message:
+                `El orden ${order} está repetido dentro de la sesión ${sessionKey}.`
+            });
+          }
+
+          usedOrders.add(order);
+
+          ordersBySession.set(
+            sessionKey,
+            usedOrders
+          );
+        }
+
+        const exerciseId =
+          String(
+            row['_GymOS exercise'] ?? ''
+          ).trim();
+
+        const suppliedName =
+          String(
+            row['Ejercicio'] ?? ''
+          ).trim();
+
+        let canonicalExercise:
+          Exercise | undefined;
+
+        if (!exerciseId) {
+          this.addImportIssue(errors, {
+            severity: 'error',
+            sheet: 'Rutina',
+            row: excelRow,
+            column: '_GymOS exercise',
+            message:
+              'Falta el ID canónico. GymOS no identifica ejercicios únicamente por nombre.'
+          });
+        } else {
+          canonicalExercise =
+            catalogById.get(
+              exerciseId
+            );
+
+          if (!canonicalExercise) {
+            this.addImportIssue(errors, {
+              severity: 'error',
+              sheet: 'Rutina',
+              row: excelRow,
+              column: '_GymOS exercise',
+              message:
+                `El ID "${exerciseId}" no existe en el catálogo actual de GymOS.`
+            });
+          }
+        }
+
+        if (
+          canonicalExercise &&
+          suppliedName &&
+          suppliedName !==
+            canonicalExercise.name
+        ) {
+          this.addImportIssue(warnings, {
+            severity: 'warning',
+            sheet: 'Rutina',
+            row: excelRow,
+            column: 'Ejercicio',
+            message:
+              `"${suppliedName}" no coincide con "${exerciseId}". GymOS utilizará el nombre canónico "${canonicalExercise.name}".`
+          });
+        }
+
+        if (
+          canonicalExercise &&
+          sessionKey
+        ) {
+          const usedExerciseIds =
+            exerciseIdsBySession.get(
+              sessionKey
+            ) ??
+            new Set<string>();
+
+          if (
+            usedExerciseIds.has(
+              canonicalExercise.id
+            )
+          ) {
+            this.addImportIssue(warnings, {
+              severity: 'warning',
+              sheet: 'Rutina',
+              row: excelRow,
+              column: '_GymOS exercise',
+              message:
+                `El ejercicio "${canonicalExercise.name}" aparece más de una vez en la sesión ${sessionKey}.`
+            });
+          }
+
+          usedExerciseIds.add(
+            canonicalExercise.id
+          );
+
+          exerciseIdsBySession.set(
+            sessionKey,
+            usedExerciseIds
+          );
+        }
+
+        const sets =
+          Number(row['Series']);
+
+        if (
+          !Number.isInteger(sets) ||
+          sets < 1 ||
+          sets > 10
+        ) {
+          this.addImportIssue(errors, {
+            severity: 'error',
+            sheet: 'Rutina',
+            row: excelRow,
+            column: 'Series',
+            message:
+              'Las series deben estar entre 1 y 10.'
+          });
+        }
+
+        const targetType =
+          this.normalizeHeader(
+            row['Tipo de objetivo']
+          );
+
+        if (
+          ![
+            'repeticiones',
+            'repeticion',
+            'reps',
+            'rep'
+          ].includes(targetType)
+        ) {
+          this.addImportIssue(errors, {
+            severity: 'error',
+            sheet: 'Rutina',
+            row: excelRow,
+            column: 'Tipo de objetivo',
+            message:
+              'En esta versión usa "repeticiones".'
+          });
+        }
+
+        const repsMin =
+          Number(
+            row['Objetivo mínimo']
+          );
+
+        const repsMaxRaw =
+          row['Objetivo máximo'];
+
+        const repsMax =
+          repsMaxRaw === '' ||
+          repsMaxRaw === null ||
+          repsMaxRaw === undefined
+            ? repsMin
+            : Number(repsMaxRaw);
+
+        if (
+          !Number.isFinite(repsMin) ||
+          !Number.isFinite(repsMax) ||
+          repsMin < 1 ||
+          repsMin > 100 ||
+          repsMax < repsMin ||
+          repsMax > 100
+        ) {
+          this.addImportIssue(errors, {
+            severity: 'error',
+            sheet: 'Rutina',
+            row: excelRow,
+            column:
+              'Objetivo mínimo/máximo',
+            message:
+              'Las repeticiones deben estar entre 1 y 100 y el máximo no puede ser menor que el mínimo.'
+          });
+        }
+
+        const rirMin =
+          Number(
+            row['RIR mínimo']
+          );
+
+        const rirMaxRaw =
+          row['RIR máximo'];
+
+        const rirMax =
+          rirMaxRaw === '' ||
+          rirMaxRaw === null ||
+          rirMaxRaw === undefined
+            ? rirMin
+            : Number(rirMaxRaw);
+
+        if (
+          !Number.isFinite(rirMin) ||
+          !Number.isFinite(rirMax) ||
+          rirMin < 0 ||
+          rirMin > 10 ||
+          rirMax < rirMin ||
+          rirMax > 10
+        ) {
+          this.addImportIssue(errors, {
+            severity: 'error',
+            sheet: 'Rutina',
+            row: excelRow,
+            column: 'RIR',
+            message:
+              'El RIR debe estar entre 0 y 10 y el máximo no puede ser menor que el mínimo.'
+          });
+        }
+
+        const restSeconds =
+          Number(
+            row['Descanso (s)']
+          );
+
+        if (
+          !Number.isFinite(
+            restSeconds
+          ) ||
+          restSeconds < 0 ||
+          restSeconds > 600
+        ) {
+          this.addImportIssue(errors, {
+            severity: 'error',
+            sheet: 'Rutina',
+            row: excelRow,
+            column: 'Descanso (s)',
+            message:
+              'El descanso debe estar entre 0 y 600 segundos.'
+          });
+        }
+
+        totalExercises += 1;
+
+        if (
+          session &&
+          session.exercises.length >= 20
+        ) {
+          this.addImportIssue(errors, {
+            severity: 'error',
+            sheet: 'Rutina',
+            row: excelRow,
+            column: 'Sesión',
+            message:
+              `La sesión ${sessionKey} supera el máximo de 20 ejercicios.`
+          });
+        }
+
+        const rowHasErrors =
+          errors.length >
+          rowErrorsBefore;
+
+        if (
+          !rowHasErrors &&
+          session &&
+          canonicalExercise
+        ) {
+          session.exercises.push({
+            exerciseId:
+              canonicalExercise.id,
+
+            name:
+              canonicalExercise.name,
+
+            sets,
+
+            repsMin,
+            repsMax,
+
+            rirMin,
+            rirMax,
+
+            restSeconds,
+
+            weight: null
+          });
+        }
+      }
+    );
+
+    if (
+      totalExercises > 100
+    ) {
+      this.addImportIssue(errors, {
+        severity: 'error',
+        sheet: 'Rutina',
+        message:
+          `La rutina contiene ${totalExercises} ejercicios. El máximo permitido es 100.`
+      });
+    }
+
+    importedSessions.forEach(
+      session => {
+        if (
+          !session.exercises.length
+        ) {
+          this.addImportIssue(warnings, {
+            severity: 'warning',
+            sheet: 'Sesiones',
+            message:
+              `${session.name} no contiene ejercicios válidos.`
+          });
+        }
+      }
+    );
+
+    return {
+      sessions:
+        importedSessions,
+
+      errors,
+      warnings
+    };
   }
 
   async importRoutineFile(
@@ -610,11 +1284,20 @@ export class Routines implements OnInit {
 
     this.importMessage.set(null);
     this.importError.set(null);
+    this.importIssues.set([]);
 
     this.saveMessage.set(null);
     this.saveError.set(null);
 
     try {
+      if (
+        !this.exercises().length
+      ) {
+        throw new Error(
+          'La biblioteca de ejercicios todavía no está disponible.'
+        );
+      }
+
       const buffer =
         await file.arrayBuffer();
 
@@ -626,286 +1309,28 @@ export class Routines implements OnInit {
           }
         );
 
-      const sessionRows =
-        this.readSheetRows(
-          workbook,
-          'Sesiones'
+      const validation =
+        this.validateImportedWorkbook(
+          workbook
         );
 
-      const routineRows =
-        this.readSheetRows(
-          workbook,
-          'Rutina'
-        );
+      this.importIssues.set([
+        ...validation.errors,
+        ...validation.warnings
+      ]);
 
-      if (!sessionRows.length) {
-        throw new Error(
-          'La hoja Sesiones está vacía.'
-        );
-      }
-
-      if (!routineRows.length) {
-        throw new Error(
-          'La hoja Rutina está vacía.'
-        );
-      }
-
-      const catalogById =
-        new Map(
-          this.exercises().map(
-            exercise => [
-              exercise.id,
-              exercise
-            ]
-          )
-        );
-
-      const importedSessions:
-        RoutineSessionDraft[] =
-        sessionRows.map(
-          (row, index) => {
-            const sessionKey =
-              String(
-                row['Sesión'] ?? ''
-              ).trim();
-
-            if (!sessionKey) {
-              throw new Error(
-                `Sesiones, fila ${index + 2}: falta Sesión.`
-              );
-            }
-
-            const sessionId =
-              String(
-                row['_GymOS session'] ?? ''
-              ).trim() ||
-              crypto.randomUUID();
-
-            return {
-              sessionId,
-
-              name:
-                String(
-                  row['Nombre'] ?? ''
-                ).trim() ||
-                `Sesión ${sessionKey}`,
-
-              exercises: []
-            };
-          }
-        );
-
-      const sessionByKey =
-        new Map<
-          string,
-          RoutineSessionDraft
-        >();
-
-      sessionRows.forEach(
-        (row, index) => {
-          const key =
-            String(
-              row['Sesión'] ?? ''
-            ).trim();
-
-          sessionByKey.set(
-            key,
-            importedSessions[index]
-          );
-        }
-      );
-
-      routineRows.forEach(
-        (row, index) => {
-          const excelRow =
-            index + 2;
-
-          const sessionKey =
-            String(
-              row['Sesión'] ?? ''
-            ).trim();
-
-          const session =
-            sessionByKey.get(sessionKey);
-
-          if (!session) {
-            throw new Error(
-              `Rutina, fila ${excelRow}: la sesión "${sessionKey}" no existe en la hoja Sesiones.`
-            );
-          }
-
-          const exerciseId =
-            String(
-              row['_GymOS exercise'] ?? ''
-            ).trim();
-
-          const exerciseName =
-            String(
-              row['Ejercicio'] ?? ''
-            ).trim();
-
-          if (!exerciseId) {
-            throw new Error(
-              `Rutina, fila ${excelRow}: falta _GymOS exercise. GymOS no importa ejercicios únicamente por nombre.`
-            );
-          }
-
-          const canonicalExercise =
-            catalogById.get(exerciseId);
-
-          if (!canonicalExercise) {
-            throw new Error(
-              `Rutina, fila ${excelRow}: el ID "${exerciseId}" no existe en el catálogo actual de GymOS.`
-            );
-          }
-
-          const sets =
-            Number(row['Series']);
-
-          const targetType =
-            this.normalizeHeader(
-              row['Tipo de objetivo']
-            );
-
-          const targetMin =
-            Number(
-              row['Objetivo mínimo']
-            );
-
-          const targetMaxRaw =
-            row['Objetivo máximo'];
-
-          const targetMax =
-            targetMaxRaw === '' ||
-            targetMaxRaw === null ||
-            targetMaxRaw === undefined
-              ? targetMin
-              : Number(targetMaxRaw);
-
-          const rirMin =
-            Number(
-              row['RIR mínimo']
-            );
-
-          const rirMaxRaw =
-            row['RIR máximo'];
-
-          const rirMax =
-            rirMaxRaw === '' ||
-            rirMaxRaw === null ||
-            rirMaxRaw === undefined
-              ? rirMin
-              : Number(rirMaxRaw);
-
-          const restSeconds =
-            Number(
-              row['Descanso (s)']
-            );
-
-          if (
-            !Number.isInteger(sets) ||
-            sets < 1
-          ) {
-            throw new Error(
-              `Rutina, fila ${excelRow}: Series no es válido.`
-            );
-          }
-
-          if (
-            ![
-              'repeticiones',
-              'repeticion',
-              'reps',
-              'rep'
-            ].includes(targetType)
-          ) {
-            throw new Error(
-              `Rutina, fila ${excelRow}: el tipo de objetivo "${row['Tipo de objetivo']}" todavía no es compatible con el constructor Angular.`
-            );
-          }
-
-          if (
-            !Number.isFinite(targetMin) ||
-            !Number.isFinite(targetMax) ||
-            targetMin < 1 ||
-            targetMax < targetMin
-          ) {
-            throw new Error(
-              `Rutina, fila ${excelRow}: rango de repeticiones no válido.`
-            );
-          }
-
-          if (
-            !Number.isFinite(rirMin) ||
-            !Number.isFinite(rirMax) ||
-            rirMin < 0 ||
-            rirMax < rirMin
-          ) {
-            throw new Error(
-              `Rutina, fila ${excelRow}: rango de RIR no válido.`
-            );
-          }
-
-          if (
-            !Number.isFinite(restSeconds) ||
-            restSeconds < 0
-          ) {
-            throw new Error(
-              `Rutina, fila ${excelRow}: descanso no válido.`
-            );
-          }
-
-          if (
-            exerciseName &&
-            exerciseName !==
-              canonicalExercise.name
-          ) {
-            console.warn(
-              `GymOS: "${exerciseName}" sustituido por "${canonicalExercise.name}" porque el ID autoritativo es "${exerciseId}".`
-            );
-          }
-
-          session.exercises.push({
-            exerciseId:
-              canonicalExercise.id,
-
-            name:
-              canonicalExercise.name,
-
-            sets,
-
-            repsMin:
-              targetMin,
-
-            repsMax:
-              targetMax,
-
-            rirMin,
-
-            rirMax,
-
-            restSeconds,
-
-            weight: null
-          });
-        }
-      );
-
-      for (
-        const session
-        of importedSessions
+      if (
+        validation.errors.length
       ) {
-        if (
-          !session.exercises.length
-        ) {
-          throw new Error(
-            `${session.name} no contiene ejercicios.`
-          );
-        }
+        this.importError.set(
+          `No se puede importar todavía. Se encontraron ${validation.errors.length} error(es).`
+        );
+
+        return;
       }
 
       this.sessions.set(
-        importedSessions
+        validation.sessions
       );
 
       this.routineName.set(
@@ -918,7 +1343,9 @@ export class Routines implements OnInit {
       this.creating.set(true);
 
       this.importMessage.set(
-        `Rutina importada correctamente: ${importedSessions.length} sesiones. Revísala antes de guardarla y activarla.`
+        validation.warnings.length
+          ? `Rutina válida con ${validation.warnings.length} aviso(s). Revísala antes de guardarla y activarla.`
+          : 'Rutina validada correctamente. Revísala antes de guardarla y activarla.'
       );
 
     } catch (err: any) {
@@ -929,6 +1356,221 @@ export class Routines implements OnInit {
     } finally {
       input.value = '';
     }
+  }
+
+  downloadChatGPTRoutineTemplate(): void {
+    this.importError.set(null);
+    this.importMessage.set(null);
+
+    if (!this.exercises().length) {
+      this.importError.set(
+        'No se puede generar la plantilla porque la biblioteca de ejercicios no está disponible.'
+      );
+
+      return;
+    }
+
+    const workbook =
+      XLSX.utils.book_new();
+
+    const instructions = [
+      [
+        'Plantilla de Rutina GymOS',
+        'Versión 2'
+      ],
+      [
+        'IMPORTANTE',
+        '_GymOS exercise es la identidad autoritativa de cada ejercicio.'
+      ],
+      [
+        'ChatGPT',
+        'Usa exclusivamente ejercicios presentes en la hoja Biblioteca.'
+      ],
+      [
+        'ChatGPT',
+        'Copia literalmente Ejercicio y _GymOS exercise desde Biblioteca.'
+      ],
+      [
+        'ChatGPT',
+        'No inventes, traduzcas, abrevies ni modifiques IDs.'
+      ],
+      [
+        'Sesiones',
+        'La rutina debe contener entre 2 y 6 sesiones.'
+      ],
+      [
+        'Series',
+        'Cada ejercicio debe tener entre 1 y 10 series.'
+      ],
+      [
+        'Repeticiones',
+        'Usa objetivos entre 1 y 100 repeticiones.'
+      ],
+      [
+        'RIR',
+        'Usa valores entre 0 y 10.'
+      ],
+      [
+        'Descanso',
+        'Usa entre 0 y 600 segundos.'
+      ],
+      [
+        'Importación',
+        'GymOS volverá a validar todos los IDs contra su catálogo actual.'
+      ],
+      [
+        'Activación',
+        'Importar no activa automáticamente la rutina. Primero debe revisarse.'
+      ]
+    ];
+
+    const sessions = [
+      {
+        'Sesión': 'A',
+        'Orden': 1,
+        'Nombre': 'Sesión A',
+        'Enfoque': '',
+        'Duración estimada (min)': '',
+        'Notas de sesión': '',
+        '_GymOS session': ''
+      },
+      {
+        'Sesión': 'B',
+        'Orden': 2,
+        'Nombre': 'Sesión B',
+        'Enfoque': '',
+        'Duración estimada (min)': '',
+        'Notas de sesión': '',
+        '_GymOS session': ''
+      }
+    ];
+
+    const routine = [
+      {
+        'Sesión': '',
+        'Orden': '',
+        'Ejercicio': '',
+        'Series': '',
+        'Tipo de objetivo':
+          'repeticiones',
+        'Objetivo mínimo': '',
+        'Objetivo máximo': '',
+        'RIR mínimo': '',
+        'RIR máximo': '',
+        'Descanso (s)': '',
+        'Notas': '',
+        '_GymOS exercise': ''
+      }
+    ];
+
+    const library =
+      this.exercises()
+        .filter(
+          exercise =>
+            !exercise.custom
+        )
+        .map(
+          exercise => ({
+            '_GymOS exercise':
+              exercise.id,
+
+            'Ejercicio':
+              exercise.name,
+
+            'Músculo':
+              exercise.muscle,
+
+            'Equipamiento':
+              exercise.equipment,
+
+            'Tipo':
+              exercise.type,
+
+            'Categoría':
+              exercise.category,
+
+            'Notas':
+              exercise.notes ?? ''
+          })
+        );
+
+    XLSX.utils.book_append_sheet(
+      workbook,
+      XLSX.utils.aoa_to_sheet(
+        instructions
+      ),
+      'Instrucciones'
+    );
+
+    XLSX.utils.book_append_sheet(
+      workbook,
+      XLSX.utils.json_to_sheet(
+        sessions
+      ),
+      'Sesiones'
+    );
+
+    XLSX.utils.book_append_sheet(
+      workbook,
+      XLSX.utils.json_to_sheet(
+        routine
+      ),
+      'Rutina'
+    );
+
+    XLSX.utils.book_append_sheet(
+      workbook,
+      XLSX.utils.json_to_sheet(
+        library
+      ),
+      'Biblioteca'
+    );
+
+    XLSX.utils.book_append_sheet(
+      workbook,
+      XLSX.utils.aoa_to_sheet([
+        ['Tipos de objetivo'],
+        ['repeticiones']
+      ]),
+      '_Catálogos'
+    );
+
+    XLSX.utils.book_append_sheet(
+      workbook,
+      XLSX.utils.aoa_to_sheet([
+        [
+          'templateVersion',
+          2
+        ],
+        [
+          'schemaVersion',
+          '4.2'
+        ],
+        [
+          'kind',
+          'template'
+        ]
+      ]),
+      '_GymOS'
+    );
+
+    workbook.Workbook = {
+      Sheets: workbook.SheetNames.map(
+        sheetName => ({
+          Hidden:
+            sheetName === '_GymOS'
+              ? 2
+              : sheetName === '_Catálogos'
+                ? 1
+                : 0
+        })
+      )
+    } as any;
+
+    XLSX.writeFile(
+      workbook,
+      'GymOS_plantilla_rutina_v2.xlsx'
+    );
   }
 
   openExportRecords(): void {
@@ -1044,22 +1686,6 @@ export class Routines implements OnInit {
             'ultimo_mes'
         };
     }
-  }
-
-  private async getAuthHeaders(): Promise<HttpHeaders> {
-    const token =
-      await this.auth.getAccessToken();
-
-    if (!token) {
-      throw new Error(
-        'Necesitas iniciar sesión.'
-      );
-    }
-
-    return new HttpHeaders({
-      Authorization:
-        `Bearer ${token}`
-    });
   }
 
   async exportTrainingRecords(): Promise<void> {
@@ -1313,47 +1939,36 @@ export class Routines implements OnInit {
         {
           'Métrica':
             'Periodo desde',
-
           'Valor':
             from.toISOString()
         },
-
         {
           'Métrica':
             'Periodo hasta',
-
           'Valor':
             to.toISOString()
         },
-
         {
           'Métrica':
             'Entrenamientos',
-
           'Valor':
             workoutIds.size
         },
-
         {
           'Métrica':
             'Series completadas',
-
           'Valor':
             rows.length
         },
-
         {
           'Métrica':
             'Ejercicios distintos',
-
           'Valor':
             exerciseIds.size
         },
-
         {
           'Métrica':
             'Volumen registrado (kg × reps)',
-
           'Valor':
             totalVolume
         }
@@ -1383,9 +1998,7 @@ export class Routines implements OnInit {
         `GymOS_registros_${label}.xlsx`
       );
 
-      this.exportRecordsOpen.set(
-        false
-      );
+      this.exportRecordsOpen.set(false);
 
     } catch (err: any) {
       this.exportRecordsError.set(
@@ -1394,9 +2007,7 @@ export class Routines implements OnInit {
         'No se pudieron exportar los registros.'
       );
     } finally {
-      this.exportingRecords.set(
-        false
-      );
+      this.exportingRecords.set(false);
     }
   }
 }

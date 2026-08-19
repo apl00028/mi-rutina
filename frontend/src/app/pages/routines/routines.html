@@ -37,12 +37,8 @@
       ) {
         <div
           class="import-issue"
-          [class.warning]="
-            issue.severity === 'warning'
-          "
-          [class.error]="
-            issue.severity === 'error'
-          "
+          [class.warning]="issue.severity === 'warning'"
+          [class.error]="issue.severity === 'error'"
         >
           <strong>
             {{
@@ -73,46 +69,274 @@
   }
 
   @if (!creating()) {
-    <div class="actions">
-      <button
-        type="button"
-        (click)="startManualRoutine()"
-      >
-        + Crear rutina manual
-      </button>
+    <details class="routine-management">
+      <summary class="routine-management-summary">
+        <span class="management-icon">
+          ☰
+        </span>
 
-      <label class="import-button">
-        Importar rutina
+        <span class="management-content">
+          <strong>
+            Gestionar rutina
+          </strong>
 
-        <input
-          type="file"
-          accept=".xlsx,.xls"
-          hidden
-          (change)="importRoutineFile($event)"
-        />
-      </label>
+          <span>
+            Crear, importar, generar plantillas
+            o exportar tus registros de entrenamiento.
+          </span>
+        </span>
 
-      <button
-        type="button"
-        (click)="downloadChatGPTRoutineTemplate()"
-      >
-        Descargar plantilla para ChatGPT
-      </button>
+        <span class="management-chevron">
+          ›
+        </span>
+      </summary>
 
-      <button
-        type="button"
-        (click)="openExportRecords()"
-      >
-        Exportar registros
-      </button>
+      <div class="routine-actions">
+        <button
+          type="button"
+          class="routine-action-card"
+          (click)="startManualRoutine()"
+        >
+          <span class="routine-action-icon">
+            +
+          </span>
+
+          <span class="routine-action-content">
+            <strong>
+              Crear rutina manual
+            </strong>
+
+            <span>
+              Diseña una rutina desde cero seleccionando
+              sesiones, ejercicios, series, repeticiones,
+              RIR y descansos.
+            </span>
+          </span>
+
+          <span class="routine-action-arrow">
+            ›
+          </span>
+        </button>
+
+        <label
+          class="routine-action-card import-action"
+        >
+          <span class="routine-action-icon">
+            ↑
+          </span>
+
+          <span class="routine-action-content">
+            <strong>
+              Importar rutina
+            </strong>
+
+            <span>
+              Carga una plantilla GymOS y valida
+              automáticamente sesiones, ejercicios e IDs
+              antes de activarla.
+            </span>
+          </span>
+
+          <span class="routine-action-arrow">
+            ›
+          </span>
+
+          <input
+            type="file"
+            accept=".xlsx,.xls"
+            hidden
+            (change)="importRoutineFile($event)"
+          />
+        </label>
+
+        <button
+          type="button"
+          class="routine-action-card"
+          (click)="downloadChatGPTRoutineTemplate()"
+        >
+          <span class="routine-action-icon">
+            ↓
+          </span>
+
+          <span class="routine-action-content">
+            <strong>
+              Plantilla para ChatGPT
+            </strong>
+
+            <span>
+              Descarga una plantilla con el catálogo actual
+              de GymOS para generar nuevas rutinas sin
+              inventar IDs de ejercicios.
+            </span>
+          </span>
+
+          <span class="routine-action-arrow">
+            ›
+          </span>
+        </button>
+
+        <button
+          type="button"
+          class="routine-action-card"
+          (click)="openExportRecords()"
+        >
+          <span class="routine-action-icon">
+            ↗
+          </span>
+
+          <span class="routine-action-content">
+            <strong>
+              Exportar registros
+            </strong>
+
+            <span>
+              Descarga tus entrenamientos realizados durante
+              las últimas semanas, meses o un periodo
+              personalizado.
+            </span>
+          </span>
+
+          <span class="routine-action-arrow">
+            ›
+          </span>
+        </button>
+      </div>
+    </details>
+  }
+
+<details class="routine-management analysis-management">
+  <summary class="routine-management-summary">
+    <span class="management-icon">
+      📊
+    </span>
+
+    <span class="management-content">
+      <strong>
+        Análisis de entrenamiento
+      </strong>
+
+      <span>
+        Revisa tu progreso, volumen, fuerza y equilibrio
+        entre grupos musculares.
+      </span>
+    </span>
+
+    <span class="management-chevron">
+      ›
+    </span>
+  </summary>
+
+  <div class="analysis-content">
+    <div class="analysis-period">
+      <strong>Periodo</strong>
+
+      <div class="period-selector">
+        <button type="button">
+          4 semanas
+        </button>
+
+        <button type="button">
+          3 meses
+        </button>
+
+        <button type="button">
+          6 meses
+        </button>
+
+        <button type="button">
+          Todo
+        </button>
+      </div>
     </div>
 
-    <p class="help-text">
-      Puedes crear una rutina manualmente,
-      descargar una plantilla compatible con GymOS,
-      importar una rutina o exportar tus entrenamientos realizados.
-    </p>
-  }
+    <section class="analysis-section">
+      <div class="analysis-section-header">
+        <div>
+          <h3>Resumen</h3>
+
+          <p>
+            Una visión general de tu actividad y progresión.
+          </p>
+        </div>
+      </div>
+
+      <div class="metric-grid">
+        <article class="metric-card">
+          <span>Entrenamientos</span>
+          <strong>—</strong>
+        </article>
+
+        <article class="metric-card">
+          <span>Series completadas</span>
+          <strong>—</strong>
+        </article>
+
+        <article class="metric-card">
+          <span>Volumen total</span>
+          <strong>—</strong>
+        </article>
+
+        <article class="metric-card">
+          <span>Ejercicios realizados</span>
+          <strong>—</strong>
+        </article>
+      </div>
+    </section>
+
+    <section class="analysis-section">
+      <div class="analysis-section-header">
+        <div>
+          <h3>Grupos musculares</h3>
+
+          <p>
+            Comprueba qué grupos estás trabajando más
+            y cuáles reciben menos volumen.
+          </p>
+        </div>
+      </div>
+
+      <div class="analysis-placeholder">
+        Aquí mostraremos el volumen por grupo muscular
+        y un ranking de más a menos trabajado.
+      </div>
+    </section>
+
+    <section class="analysis-section">
+      <div class="analysis-section-header">
+        <div>
+          <h3>Fuerza y ejercicios</h3>
+
+          <p>
+            Compara tus marcas, volumen acumulado
+            y progresión por ejercicio.
+          </p>
+        </div>
+      </div>
+
+      <div class="analysis-placeholder">
+        Aquí aparecerá el ranking por ejercicio:
+        peso máximo, mejor serie, volumen total y evolución.
+      </div>
+    </section>
+
+    <section class="analysis-section">
+      <div class="analysis-section-header">
+        <div>
+          <h3>Evolución</h3>
+
+          <p>
+            Analiza cómo cambian tus pesos,
+            repeticiones, RIR y rendimiento con el tiempo.
+          </p>
+        </div>
+      </div>
+
+      <div class="analysis-placeholder">
+        Aquí añadiremos las gráficas temporales.
+      </div>
+    </section>
+  </div>
+</details>
 
   @if (creating()) {
     <section class="builder">

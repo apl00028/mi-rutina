@@ -223,3 +223,313 @@ button,
     width: 100%;
   }
 }
+
+.routine-actions {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+  margin: 24px 0;
+}
+
+.routine-action-card {
+  width: 100%;
+  box-sizing: border-box;
+
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr) 24px;
+  align-items: center;
+  gap: 14px;
+
+  padding: 16px 18px;
+
+  border: 1px solid #e5e7eb;
+  border-radius: 14px;
+
+  background: #ffffff;
+  color: #111827;
+
+  text-align: left;
+  cursor: pointer;
+
+  box-shadow: 0 1px 2px rgb(0 0 0 / 4%);
+
+  transition:
+    border-color 140ms ease,
+    box-shadow 140ms ease,
+    transform 140ms ease;
+}
+
+.routine-action-card:hover {
+  border-color: #cbd5e1;
+  box-shadow: 0 5px 16px rgb(0 0 0 / 6%);
+  transform: translateY(-1px);
+}
+
+.routine-action-icon {
+  width: 42px;
+  height: 42px;
+
+  display: grid;
+  place-items: center;
+
+  border-radius: 11px;
+
+  background: #f3f4f6;
+  color: #111827;
+
+  font-size: 1.35rem;
+  font-weight: 700;
+}
+
+.routine-action-content {
+  min-width: 0;
+
+  display: grid;
+  gap: 4px;
+}
+
+.routine-action-content strong {
+  font-size: 1rem;
+}
+
+.routine-action-content > span {
+  color: #6b7280;
+  font-size: 0.88rem;
+  line-height: 1.4;
+}
+
+.routine-action-arrow {
+  color: #9ca3af;
+  font-size: 1.5rem;
+}
+
+.import-action {
+  cursor: pointer;
+}
+
+.routine-management {
+  width: 100%;
+  margin: 24px 0;
+}
+
+.routine-management-summary {
+  box-sizing: border-box;
+
+  display: grid;
+  grid-template-columns:
+    44px
+    minmax(0, 1fr)
+    24px;
+
+  align-items: center;
+  gap: 14px;
+
+  width: 100%;
+  padding: 16px 18px;
+
+  border: 1px solid #e5e7eb;
+  border-radius: 14px;
+
+  background: #ffffff;
+  color: #111827;
+
+  cursor: pointer;
+  list-style: none;
+
+  box-shadow:
+    0 1px 2px rgb(0 0 0 / 4%);
+}
+
+.routine-management-summary::-webkit-details-marker {
+  display: none;
+}
+
+.management-icon {
+  width: 42px;
+  height: 42px;
+
+  display: grid;
+  place-items: center;
+
+  border-radius: 11px;
+
+  background: #111827;
+  color: #ffffff;
+
+  font-size: 1.1rem;
+}
+
+.management-content {
+  display: grid;
+  gap: 4px;
+}
+
+.management-content strong {
+  font-size: 1rem;
+}
+
+.management-content > span {
+  color: #6b7280;
+
+  font-size: 0.88rem;
+  line-height: 1.4;
+}
+
+.management-chevron {
+  color: #9ca3af;
+
+  font-size: 1.5rem;
+
+  transition:
+    transform 160ms ease;
+}
+
+.routine-management[open]
+.management-chevron {
+  transform: rotate(90deg);
+}
+
+.routine-management
+.routine-actions {
+  margin: 12px 0 0;
+  padding-left: 18px;
+}
+
+@media (max-width: 600px) {
+  .routine-management
+  .routine-actions {
+    padding-left: 0;
+  }
+}
+
+.analysis-management {
+  margin-top: 14px;
+}
+
+.analysis-content {
+  display: grid;
+  gap: 22px;
+
+  margin-top: 12px;
+  padding: 18px;
+
+  border: 1px solid #e5e7eb;
+  border-radius: 14px;
+
+  background: #ffffff;
+}
+
+.analysis-period {
+  display: grid;
+  gap: 10px;
+}
+
+.period-selector {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.period-selector button {
+  padding: 8px 12px;
+
+  border: 1px solid #d1d5db;
+  border-radius: 999px;
+
+  background: #ffffff;
+  color: #374151;
+
+  cursor: pointer;
+}
+
+.period-selector button:hover {
+  background: #f3f4f6;
+}
+
+.analysis-section {
+  display: grid;
+  gap: 14px;
+}
+
+.analysis-section + .analysis-section {
+  padding-top: 20px;
+
+  border-top: 1px solid #f0f1f3;
+}
+
+.analysis-section-header h3 {
+  margin: 0 0 4px;
+}
+
+.analysis-section-header p {
+  margin: 0;
+
+  color: #6b7280;
+
+  font-size: 0.9rem;
+}
+
+.metric-grid {
+  display: grid;
+  grid-template-columns:
+    repeat(
+      4,
+      minmax(0, 1fr)
+    );
+
+  gap: 12px;
+}
+
+.metric-card {
+  display: grid;
+  gap: 6px;
+
+  padding: 14px;
+
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+
+  background: #f9fafb;
+}
+
+.metric-card span {
+  color: #6b7280;
+
+  font-size: 0.82rem;
+}
+
+.metric-card strong {
+  font-size: 1.4rem;
+}
+
+.analysis-placeholder {
+  padding: 16px;
+
+  border: 1px dashed #d1d5db;
+  border-radius: 12px;
+
+  background: #f9fafb;
+  color: #6b7280;
+
+  font-size: 0.9rem;
+}
+
+@media (max-width: 800px) {
+  .metric-grid {
+    grid-template-columns:
+      repeat(
+        2,
+        minmax(0, 1fr)
+      );
+  }
+}
+
+@media (max-width: 500px) {
+  .metric-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .analysis-content {
+    padding: 14px;
+  }
+}

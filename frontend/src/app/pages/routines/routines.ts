@@ -1,6 +1,7 @@
 import { Component, OnInit, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { HttpClient, HttpHeaders } from '@angular/common/http';
+import { environment } from '../../../environments/environment';
 import * as XLSX from 'xlsx';
 
 import { AuthService } from '../../core/auth.service';
@@ -135,7 +136,7 @@ export class Routines implements OnInit {
   exercisePickerSessionId = signal<string | null>(null);
   exerciseSearch = signal('');
 
-  private readonly apiUrl = 'http://127.0.0.1:8080/api/v1';
+  private readonly apiUrl = environment.apiUrl;
 
   constructor(
     private http: HttpClient,

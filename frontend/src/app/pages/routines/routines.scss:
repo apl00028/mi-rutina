@@ -1,0 +1,12 @@
+.custom-date-range {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin: 16px 0;
+}
+
+@media (max-width: 600px) {
+  .custom-date-range {
+    grid-template-columns: 1fr;
+  }
+}

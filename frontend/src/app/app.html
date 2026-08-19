@@ -1,261 +1,117 @@
-<main>
-  <h1>GymOS</h1>
+<div
+  class="app-shell"
+  [class.sidebar-expanded]="sidebarExpanded()"
+  [class.sidebar-collapsed]="!sidebarExpanded()"
+>
+  <aside class="sidebar">
+    <div class="sidebar-top">
+      <div class="brand">
+        <div class="brand-icon">
+          G
+        </div>
 
-  @if (auth.loading()) {
-    <p>Comprobando sesión...</p>
-
-  } @else if (!auth.session()) {
-    <section>
-      <h2>Iniciar sesión</h2>
-
-      <form (submit)="sendMagicLink($event)">
-        <label>
-          Email
-          <input
-            type="email"
-            [value]="email()"
-            (input)="email.set($any($event.target).value)"
-            required
-          />
-        </label>
-
-        <button
-          type="submit"
-          [disabled]="loginLoading()"
-        >
-          {{
-            loginLoading()
-              ? 'Enviando...'
-              : 'Enviar enlace de acceso'
-          }}
-        </button>
-      </form>
-
-      @if (loginMessage()) {
-        <p>{{ loginMessage() }}</p>
-      }
-    </section>
-
-  } @else if (activeWorkout(); as workout) {
-    @if (activeSession(); as session) {
-      <section>
-        <p>
-          Sesión iniciada como
-          {{ auth.user()?.email }}
-        </p>
-
-        <h2>{{ session.label || session.name }}</h2>
-        <p>Entrenamiento en curso</p>
-
-        @for (
-          exercise of session.exercises;
-          track exercise.exerciseId
-        ) {
-          <article>
-            <h3>{{ exercise.name }}</h3>
-
-            @if (exercise.target) {
-              <p>Objetivo: {{ exercise.target }}</p>
-            }
-
-            @for (
-              setNumber of [].constructor(exercise.sets);
-              track $index
-            ) {
-              <div>
-                <strong>Serie {{ $index + 1 }}</strong>
-
-                @if (
-                  getPreviousSet(
-                    exercise.exerciseId,
-                    $index
-                  );
-                  as previousSet
-                ) {
-                  <p>
-                    <small>
-                      Última vez:
-                      {{ previousSet.weight ?? '—' }} kg ×
-                      {{ previousSet.reps ?? '—' }}
-                      · RIR {{ previousSet.rir ?? '—' }}
-                    </small>
-                  </p>
-                }
-
-                <label>
-                  Kg
-                  <input
-                    type="number"
-                    min="0"
-                    step="0.5"
-                    placeholder="kg"
-                    [value]="getCurrentSet(
-                      exercise.exerciseId,
-                      $index
-                    )?.weight ?? ''"
-                    (input)="updateSet(
-                      exercise.exerciseId,
-                      $index,
-                      'weight',
-                      $any($event.target).value
-                    )"
-                  />
-                </label>
-
-                <label>
-                  Reps
-                  <input
-                    type="number"
-                    min="0"
-                    step="1"
-                    placeholder="reps"
-                    [value]="getCurrentSet(
-                      exercise.exerciseId,
-                      $index
-                    )?.reps ?? ''"
-                    (input)="updateSet(
-                      exercise.exerciseId,
-                      $index,
-                      'reps',
-                      $any($event.target).value
-                    )"
-                  />
-                </label>
-
-                <label>
-                  RIR
-                  <input
-                    type="number"
-                    min="0"
-                    step="0.5"
-                    placeholder="RIR"
-                    [value]="getCurrentSet(
-                      exercise.exerciseId,
-                      $index
-                    )?.rir ?? ''"
-                    (input)="updateSet(
-                      exercise.exerciseId,
-                      $index,
-                      'rir',
-                      $any($event.target).value
-                    )"
-                  />
-                </label>
-
-                <button
-                  type="button"
-                  (click)="completeSet(
-                    exercise.exerciseId,
-                    $index
-                  )"
-                  [disabled]="isSetCompleted(
-                    exercise.exerciseId,
-                    $index
-                  )"
-                >
-                  {{
-                    isSetCompleted(
-                      exercise.exerciseId,
-                      $index
-                    )
-                      ? 'Serie completada'
-                      : 'Completar serie'
-                  }}
-                </button>
-              </div>
-            }
-          </article>
+        @if (sidebarExpanded()) {
+          <span class="brand-text">
+            GymOS
+          </span>
         }
+      </div>
 
-        <button
-          type="button"
-          (click)="saveWorkout()"
-          [disabled]="workoutLoading()"
-        >
-          {{
-            workoutLoading()
-              ? 'Guardando...'
-              : 'Guardar entrenamiento'
-          }}
-        </button>
-
-        <button
-          type="button"
-          (click)="finishWorkout()"
-          [disabled]="workoutLoading()"
-        >
-          Finalizar entrenamiento
-        </button>
-
-        @if (workoutError()) {
-          <p>{{ workoutError() }}</p>
+      <button
+        type="button"
+        class="sidebar-toggle"
+        (click)="toggleSidebar()"
+        [attr.aria-label]="
+          sidebarExpanded()
+            ? 'Plegar barra lateral'
+            : 'Desplegar barra lateral'
+        "
+      >
+        @if (sidebarExpanded()) {
+          ‹
+        } @else {
+          ›
         }
+      </button>
+    </div>
 
-        <p>ID workout: {{ workout.workoutId }}</p>
-      </section>
-    }
+    <nav class="sidebar-nav">
+      <a
+        routerLink="/"
+        routerLinkActive="active"
+        [routerLinkActiveOptions]="{
+          exact: true
+        }"
+        title="Inicio"
+      >
+        <span class="nav-icon">
+          ⌂
+        </span>
 
-  } @else {
-    <p>
-      Sesión iniciada como
-      {{ auth.user()?.email }}
-    </p>
-
-    @if (loading()) {
-      <p>Cargando rutina...</p>
-    }
-
-    @if (error()) {
-      <p>{{ error() }}</p>
-    }
-
-    @if (routine(); as routine) {
-      <section>
-        <h2>Rutina activa</h2>
-
-        @for (
-          session of routine.sessions;
-          track session.sessionId
-        ) {
-          <article>
-            <h3>{{ session.label || session.name }}</h3>
-
-            <p>{{ session.exercises.length }} ejercicios</p>
-
-            <button
-              type="button"
-              (click)="startWorkout(session)"
-              [disabled]="workoutLoading()"
-            >
-              {{
-                workoutLoading()
-                  ? 'Iniciando...'
-                  : 'Empezar entrenamiento'
-              }}
-            </button>
-
-            <ul>
-              @for (
-                exercise of session.exercises;
-                track exercise.exerciseId
-              ) {
-                <li>
-                  <strong>{{ exercise.name }}</strong>
-                  — {{ exercise.sets }} series
-
-                  @if (exercise.target) {
-                    · {{ exercise.target }}
-                  }
-                </li>
-              }
-            </ul>
-          </article>
+        @if (sidebarExpanded()) {
+          <span class="nav-label">
+            Inicio
+          </span>
         }
+      </a>
 
-        @if (workoutError()) {
-          <p>{{ workoutError() }}</p>
+      <a
+        routerLink="/entrenar"
+        routerLinkActive="active"
+        title="Entrenar"
+      >
+        <span class="nav-icon">
+          ◫
+        </span>
+
+        @if (sidebarExpanded()) {
+          <span class="nav-label">
+            Entrenar
+          </span>
         }
-      </section>
-    }
-  }
-</main>
+      </a>
+
+      <a
+        routerLink="/rutinas"
+        routerLinkActive="active"
+        title="Rutinas"
+      >
+        <span class="nav-icon">
+          ☷
+        </span>
+
+        @if (sidebarExpanded()) {
+          <span class="nav-label">
+            Rutinas
+          </span>
+        }
+      </a>
+    </nav>
+
+    <div class="sidebar-footer">
+      <button
+        type="button"
+        class="collapse-button"
+        (click)="toggleSidebar()"
+      >
+        <span class="nav-icon">
+          @if (sidebarExpanded()) {
+            ‹
+          } @else {
+            ›
+          }
+        </span>
+
+        @if (sidebarExpanded()) {
+          <span class="nav-label">
+            Contraer
+          </span>
+        }
+      </button>
+    </div>
+  </aside>
+
+  <main class="content">
+    <router-outlet />
+  </main>
+</div>

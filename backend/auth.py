@@ -12,6 +12,7 @@ from fastapi import Header, HTTPException, status
 class AuthenticatedUser:
     id: str
     email: str | None = None
+    access_token: str | None = None
     plan: str | None = None
     role: str | None = None
 
@@ -122,6 +123,7 @@ async def require_user(
     return AuthenticatedUser(
         id=user_id,
         email=user_payload.get("email"),
+        access_token=token,
         plan=access.get("plan"),
         role=access.get("role"),
     )

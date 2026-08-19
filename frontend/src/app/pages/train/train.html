@@ -1,57 +1,5 @@
 <main class="train-page">
-  @if (auth.loading()) {
-    <section class="state-card">
-      <h1>Entrenar</h1>
-      <p>Comprobando sesión...</p>
-    </section>
-
-  } @else if (!auth.session()) {
-    <section class="login-card">
-      <div>
-        <span class="eyebrow">GymOS</span>
-        <h1>Iniciar sesión</h1>
-        <p>
-          Accede para cargar tu rutina y registrar tus entrenamientos.
-        </p>
-      </div>
-
-      <form
-        class="login-form"
-        (submit)="sendMagicLink($event)"
-      >
-        <label>
-          Email
-
-          <input
-            type="email"
-            [value]="email()"
-            (input)="email.set($any($event.target).value)"
-            placeholder="tu@email.com"
-            required
-          />
-        </label>
-
-        <button
-          type="submit"
-          class="primary-button"
-          [disabled]="loginLoading()"
-        >
-          {{
-            loginLoading()
-              ? 'Enviando...'
-              : 'Enviar enlace de acceso'
-          }}
-        </button>
-      </form>
-
-      @if (loginMessage()) {
-        <p class="message">
-          {{ loginMessage() }}
-        </p>
-      }
-    </section>
-
-  } @else if (activeWorkout(); as workout) {
+  @if (activeWorkout(); as workout) {
     @if (activeSession(); as session) {
       <section class="active-workout">
         <header class="workout-header">
@@ -290,7 +238,6 @@
           </h1>
 
           <p class="muted">
-            Sesión iniciada como
             {{ auth.user()?.email }}
           </p>
         </div>
@@ -298,7 +245,9 @@
 
       @if (loading()) {
         <section class="state-card">
-          <p>Cargando rutina...</p>
+          <p>
+            Cargando rutina...
+          </p>
         </section>
       }
 

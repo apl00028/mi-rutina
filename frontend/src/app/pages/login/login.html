@@ -1,0 +1,110 @@
+<main class="login-page">
+  <section class="login-card">
+    <div class="login-brand">
+      <div class="brand-mark">
+        G
+      </div>
+
+      <div>
+        <h1>GymOS</h1>
+        <p>Tu sistema de entrenamiento.</p>
+      </div>
+    </div>
+
+    <div class="login-heading">
+      <span class="eyebrow">
+        Acceso a GymOS
+      </span>
+
+      <h2>
+        Bienvenido de nuevo
+      </h2>
+
+      <p>
+        Accede a tu espacio para gestionar tus rutinas,
+        entrenamientos y progreso.
+      </p>
+    </div>
+
+    <button
+      type="button"
+      class="google-button"
+      (click)="signInWithGoogle()"
+      [disabled]="googleLoading()"
+    >
+      <span class="google-icon">
+        G
+      </span>
+
+      {{
+        googleLoading()
+          ? 'Conectando...'
+          : 'Continuar con Google'
+      }}
+    </button>
+
+    <div class="separator">
+      <span></span>
+      <small>o</small>
+      <span></span>
+    </div>
+
+    <form
+      class="login-form"
+      (submit)="sendMagicLink($event)"
+    >
+      <label>
+        Email
+
+        <input
+          type="email"
+          autocomplete="email"
+          placeholder="nombre@email.com"
+          [value]="email()"
+          (input)="email.set(
+            $any($event.target).value
+          )"
+          required
+        />
+      </label>
+
+      <button
+        type="submit"
+        class="primary-button"
+        [disabled]="loading()"
+      >
+        {{
+          loading()
+            ? 'Enviando...'
+            : 'Enviar enlace de acceso'
+        }}
+      </button>
+    </form>
+
+    @if (message()) {
+      <p class="success-message">
+        {{ message() }}
+      </p>
+    }
+
+    @if (error()) {
+      <p class="error-message">
+        {{ error() }}
+      </p>
+    }
+
+    <div class="access-footer">
+      <span>
+        ¿No tienes acceso?
+      </span>
+
+      <button
+        type="button"
+        class="request-access-button"
+        (click)="requestAccess()"
+      >
+        Solicitar acceso
+      </button>
+    </div>
+  </section>
+</main>

@@ -1,0 +1,758 @@
+<section class="routines-page">
+  <h1>Rutinas</h1>
+
+  @if (saveMessage()) {
+    <p class="success-message">
+      {{ saveMessage() }}
+    </p>
+  }
+
+  @if (saveError()) {
+    <p class="error-message">
+      {{ saveError() }}
+    </p>
+  }
+
+  @if (importMessage()) {
+    <p class="success-message">
+      {{ importMessage() }}
+    </p>
+  }
+
+  @if (importError()) {
+    <p class="error-message">
+      {{ importError() }}
+    </p>
+  }
+
+  @if (importIssues().length) {
+    <section class="import-report">
+      <h3>
+        Resultado de validación
+      </h3>
+
+      @for (
+        issue of importIssues();
+        track $index
+      ) {
+        <div
+          class="import-issue"
+          [class.warning]="issue.severity === 'warning'"
+          [class.error]="issue.severity === 'error'"
+        >
+          <strong>
+            {{
+              issue.severity === 'error'
+                ? 'Error'
+                : 'Aviso'
+            }}
+          </strong>
+
+          <div class="issue-location">
+            {{ issue.sheet }}
+
+            @if (issue.row) {
+              · fila {{ issue.row }}
+            }
+
+            @if (issue.column) {
+              · {{ issue.column }}
+            }
+          </div>
+
+          <div>
+            {{ issue.message }}
+          </div>
+        </div>
+      }
+    </section>
+  }
+
+  @if (!creating()) {
+    <details class="routine-management">
+      <summary class="routine-management-summary">
+        <span class="management-icon">
+          ☰
+        </span>
+
+        <span class="management-content">
+          <strong>
+            Gestionar rutina
+          </strong>
+
+          <span>
+            Crear, importar, generar plantillas
+            o exportar tus registros de entrenamiento.
+          </span>
+        </span>
+
+        <span class="management-chevron">
+          ›
+        </span>
+      </summary>
+
+      <div class="routine-actions">
+        <button
+          type="button"
+          class="routine-action-card"
+          (click)="startManualRoutine()"
+        >
+          <span class="routine-action-icon">
+            +
+          </span>
+
+          <span class="routine-action-content">
+            <strong>
+              Crear rutina manual
+            </strong>
+
+            <span>
+              Diseña una rutina desde cero seleccionando
+              sesiones, ejercicios, series, repeticiones,
+              RIR y descansos.
+            </span>
+          </span>
+
+          <span class="routine-action-arrow">
+            ›
+          </span>
+        </button>
+
+        <label
+          class="routine-action-card import-action"
+        >
+          <span class="routine-action-icon">
+            ↑
+          </span>
+
+          <span class="routine-action-content">
+            <strong>
+              Importar rutina
+            </strong>
+
+            <span>
+              Carga una plantilla GymOS y valida
+              automáticamente sesiones, ejercicios e IDs
+              antes de activarla.
+            </span>
+          </span>
+
+          <span class="routine-action-arrow">
+            ›
+          </span>
+
+          <input
+            type="file"
+            accept=".xlsx,.xls"
+            hidden
+            (change)="importRoutineFile($event)"
+          />
+        </label>
+
+        <button
+          type="button"
+          class="routine-action-card"
+          (click)="downloadChatGPTRoutineTemplate()"
+        >
+          <span class="routine-action-icon">
+            ↓
+          </span>
+
+          <span class="routine-action-content">
+            <strong>
+              Plantilla para ChatGPT
+            </strong>
+
+            <span>
+              Descarga una plantilla con el catálogo actual
+              de GymOS para generar nuevas rutinas sin
+              inventar IDs de ejercicios.
+            </span>
+          </span>
+
+          <span class="routine-action-arrow">
+            ›
+          </span>
+        </button>
+
+        <button
+          type="button"
+          class="routine-action-card"
+          (click)="openExportRecords()"
+        >
+          <span class="routine-action-icon">
+            ↗
+          </span>
+
+          <span class="routine-action-content">
+            <strong>
+              Exportar registros
+            </strong>
+
+            <span>
+              Descarga tus entrenamientos realizados durante
+              las últimas semanas, meses o un periodo
+              personalizado.
+            </span>
+          </span>
+
+          <span class="routine-action-arrow">
+            ›
+          </span>
+        </button>
+      </div>
+    </details>
+  }
+
+<details class="routine-management analysis-management">
+  <summary class="routine-management-summary">
+    <span class="management-icon">
+      📊
+    </span>
+
+    <span class="management-content">
+      <strong>
+        Análisis de entrenamiento
+      </strong>
+
+      <span>
+        Revisa tu progreso, volumen, fuerza y equilibrio
+        entre grupos musculares.
+      </span>
+    </span>
+
+    <span class="management-chevron">
+      ›
+    </span>
+  </summary>
+
+  <div class="analysis-content">
+    <div class="analysis-period">
+      <strong>Periodo</strong>
+
+      <div class="period-selector">
+        <button type="button">
+          4 semanas
+        </button>
+
+        <button type="button">
+          3 meses
+        </button>
+
+        <button type="button">
+          6 meses
+        </button>
+
+        <button type="button">
+          Todo
+        </button>
+      </div>
+    </div>
+
+    <section class="analysis-section">
+      <div class="analysis-section-header">
+        <div>
+          <h3>Resumen</h3>
+
+          <p>
+            Una visión general de tu actividad y progresión.
+          </p>
+        </div>
+      </div>
+
+      <div class="metric-grid">
+        <article class="metric-card">
+          <span>Entrenamientos</span>
+          <strong>—</strong>
+        </article>
+
+        <article class="metric-card">
+          <span>Series completadas</span>
+          <strong>—</strong>
+        </article>
+
+        <article class="metric-card">
+          <span>Volumen total</span>
+          <strong>—</strong>
+        </article>
+
+        <article class="metric-card">
+          <span>Ejercicios realizados</span>
+          <strong>—</strong>
+        </article>
+      </div>
+    </section>
+
+    <section class="analysis-section">
+      <div class="analysis-section-header">
+        <div>
+          <h3>Grupos musculares</h3>
+
+          <p>
+            Comprueba qué grupos estás trabajando más
+            y cuáles reciben menos volumen.
+          </p>
+        </div>
+      </div>
+
+      <div class="analysis-placeholder">
+        Aquí mostraremos el volumen por grupo muscular
+        y un ranking de más a menos trabajado.
+      </div>
+    </section>
+
+    <section class="analysis-section">
+      <div class="analysis-section-header">
+        <div>
+          <h3>Fuerza y ejercicios</h3>
+
+          <p>
+            Compara tus marcas, volumen acumulado
+            y progresión por ejercicio.
+          </p>
+        </div>
+      </div>
+
+      <div class="analysis-placeholder">
+        Aquí aparecerá el ranking por ejercicio:
+        peso máximo, mejor serie, volumen total y evolución.
+      </div>
+    </section>
+
+    <section class="analysis-section">
+      <div class="analysis-section-header">
+        <div>
+          <h3>Evolución</h3>
+
+          <p>
+            Analiza cómo cambian tus pesos,
+            repeticiones, RIR y rendimiento con el tiempo.
+          </p>
+        </div>
+      </div>
+
+      <div class="analysis-placeholder">
+        Aquí añadiremos las gráficas temporales.
+      </div>
+    </section>
+  </div>
+</details>
+
+  @if (creating()) {
+    <section class="builder">
+      <div class="builder-header">
+        <div>
+          <h2>
+            Nueva rutina
+          </h2>
+
+          <p>
+            Revisa las sesiones antes de guardar y activar.
+          </p>
+        </div>
+      </div>
+
+      <label>
+        Nombre
+
+        <input
+          type="text"
+          [value]="routineName()"
+          (input)="routineName.set(
+            $any($event.target).value
+          )"
+        />
+      </label>
+
+      @for (
+        session of sessions();
+        track session.sessionId
+      ) {
+        <article class="session-card">
+          <div class="session-header">
+            <h3>
+              {{ session.name }}
+            </h3>
+
+            @if (sessions().length > 1) {
+              <button
+                type="button"
+                (click)="removeSession(
+                  session.sessionId
+                )"
+              >
+                Eliminar sesión
+              </button>
+            }
+          </div>
+
+          @for (
+            exercise of session.exercises;
+            track $index
+          ) {
+            <div class="exercise-card">
+              <div class="exercise-title">
+                <strong>
+                  {{ exercise.name }}
+                </strong>
+
+                <small>
+                  GymOS ID:
+                  {{ exercise.exerciseId }}
+                </small>
+              </div>
+
+              <div class="exercise-fields">
+                <label>
+                  Series
+
+                  <input
+                    type="number"
+                    min="1"
+                    max="10"
+                    [value]="exercise.sets"
+                    (input)="updateExerciseField(
+                      session.sessionId,
+                      $index,
+                      'sets',
+                      $any($event.target).value
+                    )"
+                  />
+                </label>
+
+                <label>
+                  Reps mín
+
+                  <input
+                    type="number"
+                    min="1"
+                    max="100"
+                    [value]="exercise.repsMin"
+                    (input)="updateExerciseField(
+                      session.sessionId,
+                      $index,
+                      'repsMin',
+                      $any($event.target).value
+                    )"
+                  />
+                </label>
+
+                <label>
+                  Reps máx
+
+                  <input
+                    type="number"
+                    min="1"
+                    max="100"
+                    [value]="exercise.repsMax"
+                    (input)="updateExerciseField(
+                      session.sessionId,
+                      $index,
+                      'repsMax',
+                      $any($event.target).value
+                    )"
+                  />
+                </label>
+
+                <label>
+                  RIR mín
+
+                  <input
+                    type="number"
+                    min="0"
+                    max="10"
+                    step="0.5"
+                    [value]="exercise.rirMin"
+                    (input)="updateExerciseField(
+                      session.sessionId,
+                      $index,
+                      'rirMin',
+                      $any($event.target).value
+                    )"
+                  />
+                </label>
+
+                <label>
+                  RIR máx
+
+                  <input
+                    type="number"
+                    min="0"
+                    max="10"
+                    step="0.5"
+                    [value]="exercise.rirMax"
+                    (input)="updateExerciseField(
+                      session.sessionId,
+                      $index,
+                      'rirMax',
+                      $any($event.target).value
+                    )"
+                  />
+                </label>
+
+                <label>
+                  Descanso (s)
+
+                  <input
+                    type="number"
+                    min="0"
+                    max="600"
+                    step="15"
+                    [value]="exercise.restSeconds"
+                    (input)="updateExerciseField(
+                      session.sessionId,
+                      $index,
+                      'restSeconds',
+                      $any($event.target).value
+                    )"
+                  />
+                </label>
+
+                <label>
+                  Peso inicial (kg)
+
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.5"
+                    [value]="exercise.weight ?? ''"
+                    (input)="updateExerciseField(
+                      session.sessionId,
+                      $index,
+                      'weight',
+                      $any($event.target).value
+                    )"
+                  />
+                </label>
+              </div>
+
+              <button
+                type="button"
+                (click)="removeExercise(
+                  session.sessionId,
+                  $index
+                )"
+              >
+                Eliminar ejercicio
+              </button>
+            </div>
+          }
+
+          <button
+            type="button"
+            (click)="openExercisePicker(
+              session.sessionId
+            )"
+          >
+            + Añadir ejercicio
+          </button>
+        </article>
+      }
+
+      <div class="builder-actions">
+        <button
+          type="button"
+          (click)="addSession()"
+        >
+          + Añadir sesión
+        </button>
+
+        <button
+          type="button"
+          (click)="saveAndActivateRoutine()"
+          [disabled]="savingRoutine()"
+        >
+          {{
+            savingRoutine()
+              ? 'Guardando...'
+              : 'Guardar y activar rutina'
+          }}
+        </button>
+      </div>
+    </section>
+  }
+
+  @if (exercisePickerSessionId()) {
+    <div class="picker">
+      <div class="picker-panel">
+        <h2>
+          Biblioteca de ejercicios
+        </h2>
+
+        <input
+          type="search"
+          placeholder="Buscar ejercicio, músculo, material o ID..."
+          [value]="exerciseSearch()"
+          (input)="exerciseSearch.set(
+            $any($event.target).value
+          )"
+        />
+
+        @if (loadingExercises()) {
+          <p>
+            Cargando biblioteca...
+          </p>
+        }
+
+        @if (error()) {
+          <p class="error-message">
+            {{ error() }}
+          </p>
+        }
+
+        <div class="exercise-list">
+          @for (
+            exercise of filteredExercises();
+            track exercise.id
+          ) {
+            <button
+              type="button"
+              class="exercise-option"
+              (click)="addExerciseToSession(
+                exercise
+              )"
+            >
+              <strong>
+                {{ exercise.name }}
+              </strong>
+
+              <span>
+                {{ exercise.muscle }}
+                ·
+                {{ exercise.equipment }}
+              </span>
+
+              <small>
+                {{ exercise.id }}
+              </small>
+            </button>
+          }
+        </div>
+
+        <button
+          type="button"
+          (click)="closeExercisePicker()"
+        >
+          Cerrar
+        </button>
+      </div>
+    </div>
+  }
+
+  @if (exportRecordsOpen()) {
+    <div class="picker">
+      <div class="picker-panel export-panel">
+        <h2>
+          Exportar registros
+        </h2>
+
+        <p>
+          Selecciona el periodo de entrenamientos
+          que quieres exportar.
+        </p>
+
+        <div class="period-options">
+          <label>
+            <input
+              type="radio"
+              name="exportPeriod"
+              [checked]="exportPeriod() === '2weeks'"
+              (change)="exportPeriod.set('2weeks')"
+            />
+
+            Últimas 2 semanas
+          </label>
+
+          <label>
+            <input
+              type="radio"
+              name="exportPeriod"
+              [checked]="exportPeriod() === '1month'"
+              (change)="exportPeriod.set('1month')"
+            />
+
+            Último mes
+          </label>
+
+          <label>
+            <input
+              type="radio"
+              name="exportPeriod"
+              [checked]="exportPeriod() === '3months'"
+              (change)="exportPeriod.set('3months')"
+            />
+
+            Últimos 3 meses
+          </label>
+
+          <label>
+            <input
+              type="radio"
+              name="exportPeriod"
+              [checked]="exportPeriod() === 'custom'"
+              (change)="exportPeriod.set('custom')"
+            />
+
+            Periodo personalizado
+          </label>
+        </div>
+
+        @if (exportPeriod() === 'custom') {
+          <div class="custom-date-range">
+            <label>
+              Desde
+
+              <input
+                type="date"
+                [value]="exportFrom()"
+                (input)="exportFrom.set(
+                  $any($event.target).value
+                )"
+              />
+            </label>
+
+            <label>
+              Hasta
+
+              <input
+                type="date"
+                [value]="exportTo()"
+                (input)="exportTo.set(
+                  $any($event.target).value
+                )"
+              />
+            </label>
+          </div>
+        }
+
+        @if (exportRecordsError()) {
+          <p class="error-message">
+            {{ exportRecordsError() }}
+          </p>
+        }
+
+        <div class="builder-actions">
+          <button
+            type="button"
+            (click)="closeExportRecords()"
+            [disabled]="exportingRecords()"
+          >
+            Cancelar
+          </button>
+
+          <button
+            type="button"
+            (click)="exportTrainingRecords()"
+            [disabled]="exportingRecords()"
+          >
+            {{
+              exportingRecords()
+                ? 'Preparando...'
+                : 'Descargar historial'
+            }}
+          </button>
+        </div>
+      </div>
+    </div>
+  }
+</section>

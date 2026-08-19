@@ -1,0 +1,117 @@
+<div
+  class="app-shell"
+  [class.sidebar-expanded]="sidebarExpanded()"
+  [class.sidebar-collapsed]="!sidebarExpanded()"
+>
+  <aside class="sidebar">
+    <div class="sidebar-top">
+      <div class="brand">
+        <div class="brand-icon">
+          G
+        </div>
+
+        @if (sidebarExpanded()) {
+          <span class="brand-text">
+            GymOS
+          </span>
+        }
+      </div>
+
+      <button
+        type="button"
+        class="sidebar-toggle"
+        (click)="toggleSidebar()"
+        [attr.aria-label]="
+          sidebarExpanded()
+            ? 'Plegar barra lateral'
+            : 'Desplegar barra lateral'
+        "
+      >
+        @if (sidebarExpanded()) {
+          ‹
+        } @else {
+          ›
+        }
+      </button>
+    </div>
+
+    <nav class="sidebar-nav">
+      <a
+        routerLink="/"
+        routerLinkActive="active"
+        [routerLinkActiveOptions]="{
+          exact: true
+        }"
+        title="Inicio"
+      >
+        <span class="nav-icon">
+          ⌂
+        </span>
+
+        @if (sidebarExpanded()) {
+          <span class="nav-label">
+            Inicio
+          </span>
+        }
+      </a>
+
+      <a
+        routerLink="/entrenar"
+        routerLinkActive="active"
+        title="Entrenar"
+      >
+        <span class="nav-icon">
+          ◫
+        </span>
+
+        @if (sidebarExpanded()) {
+          <span class="nav-label">
+            Entrenar
+          </span>
+        }
+      </a>
+
+      <a
+        routerLink="/rutinas"
+        routerLinkActive="active"
+        title="Rutinas"
+      >
+        <span class="nav-icon">
+          ☷
+        </span>
+
+        @if (sidebarExpanded()) {
+          <span class="nav-label">
+            Rutinas
+          </span>
+        }
+      </a>
+    </nav>
+
+    <div class="sidebar-footer">
+      <button
+        type="button"
+        class="collapse-button"
+        (click)="toggleSidebar()"
+      >
+        <span class="nav-icon">
+          @if (sidebarExpanded()) {
+            ‹
+          } @else {
+            ›
+          }
+        </span>
+
+        @if (sidebarExpanded()) {
+          <span class="nav-label">
+            Contraer
+          </span>
+        }
+      </button>
+    </div>
+  </aside>
+
+  <main class="content">
+    <router-outlet />
+  </main>
+</div>

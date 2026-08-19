@@ -1,4 +1,4 @@
 export const environment = {
   production: true,
-  apiUrl: 'https://AQUI-IRA-TU-BACKEND/api/v1'
+  apiUrl: 'https://gymos-api-cdyt.onrender.com/api/v1'
 };

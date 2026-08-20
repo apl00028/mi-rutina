@@ -90,6 +90,59 @@ interface ImportValidationResult {
   warnings: ImportIssue[];
 }
 
+type TrainingAnalyticsPeriod =
+  '4w' | '3m' | '6m' | 'all';
+
+interface TrainingAnalyticsSummary {
+  workouts: number;
+  completedSets: number;
+  totalVolume: number;
+  uniqueExercises: number;
+}
+
+interface MuscleGroupAnalyticsItem {
+  muscle: string;
+  completedSets: number;
+}
+
+interface ExerciseAnalyticsItem {
+  exerciseId: string;
+  name: string;
+  recordTypes: string[];
+  sessions: number;
+  completedSets: number;
+  maxWeight?: number | null;
+  bestSet?: string | null;
+  bestE1rm?: number | null;
+  totalVolume?: number | null;
+  lastMark?: string | null;
+}
+
+interface ExerciseProgressPoint {
+  workoutId: string;
+  date: string;
+  maxWeight?: number | null;
+  bestE1rm?: number | null;
+  bestReps?: number | null;
+  rir?: number | null;
+}
+
+interface ExerciseProgressSeries {
+  exerciseId: string;
+  name: string;
+  points: ExerciseProgressPoint[];
+}
+
+interface TrainingAnalyticsResponse {
+  period: TrainingAnalyticsPeriod;
+  fromDate?: string | null;
+  toDate: string;
+  summary: TrainingAnalyticsSummary;
+  muscleGroups: MuscleGroupAnalyticsItem[];
+  exercises: ExerciseAnalyticsItem[];
+  progress: ExerciseProgressSeries[];
+}
+
 @Component({
   selector: 'app-routines',
   standalone: true,
@@ -125,6 +178,16 @@ export class Routines implements OnInit {
   exportingRecords = signal(false);
   exportRecordsError = signal<string | null>(null);
 
+  analysisPeriod =
+    signal<TrainingAnalyticsPeriod>('4w');
+
+  loadingAnalysis = signal(false);
+  analysisError = signal<string | null>(null);
+  trainingAnalytics =
+    signal<TrainingAnalyticsResponse | null>(null);
+  selectedAnalyticsExerciseId =
+    signal<string | null>(null);
+
   sessions = signal<RoutineSessionDraft[]>([
     {
       sessionId: crypto.randomUUID(),
@@ -144,7 +207,10 @@ export class Routines implements OnInit {
   ) {}
 
   async ngOnInit(): Promise<void> {
-    await this.loadExercises();
+    await Promise.all([
+      this.loadExercises(),
+      this.loadTrainingAnalytics()
+    ]);
   }
 
   private async getAuthHeaders(): Promise<HttpHeaders> {
@@ -190,6 +256,230 @@ export class Routines implements OnInit {
     } finally {
       this.loadingExercises.set(false);
     }
+  }
+
+  async loadTrainingAnalytics(): Promise<void> {
+    this.loadingAnalysis.set(true);
+    this.analysisError.set(null);
+
+    try {
+      const headers = await this.getAuthHeaders();
+
+      const analytics =
+        await new Promise<TrainingAnalyticsResponse>(
+          (resolve, reject) => {
+            this.http
+              .get<TrainingAnalyticsResponse>(
+                `${this.apiUrl}/analytics/training`,
+                {
+                  headers,
+                  params: {
+                    period:
+                      this.analysisPeriod()
+                  }
+                }
+              )
+              .subscribe({
+                next: resolve,
+                error: reject
+              });
+          }
+        );
+
+      this.trainingAnalytics.set(analytics);
+
+      const selected =
+        this.selectedAnalyticsExerciseId();
+
+      if (
+        !selected ||
+        !analytics.progress.some(
+          item =>
+            item.exerciseId === selected
+        )
+      ) {
+        this.selectedAnalyticsExerciseId.set(
+          analytics.progress[0]?.exerciseId ??
+          null
+        );
+      }
+    } catch (err: any) {
+      this.trainingAnalytics.set(null);
+      this.analysisError.set(
+        this.trainingAnalyticsErrorMessage(err)
+      );
+    } finally {
+      this.loadingAnalysis.set(false);
+    }
+  }
+
+  private trainingAnalyticsErrorMessage(
+    err: any
+  ): string {
+    if (
+      err?.status &&
+      err.status >= 400
+    ) {
+      return 'No se pudo cargar el análisis de entrenamiento.';
+    }
+
+    return (
+      err?.message ??
+      'No se pudo cargar el análisis de entrenamiento.'
+    );
+  }
+
+  async setAnalysisPeriod(
+    period: TrainingAnalyticsPeriod
+  ): Promise<void> {
+    if (this.analysisPeriod() === period) {
+      return;
+    }
+
+    this.analysisPeriod.set(period);
+    await this.loadTrainingAnalytics();
+  }
+
+  hasAnalysisData(): boolean {
+    const analytics =
+      this.trainingAnalytics();
+
+    return (
+      (analytics?.summary.workouts ?? 0) > 0
+    );
+  }
+
+  selectedProgress():
+    ExerciseProgressSeries | null {
+    const exerciseId =
+      this.selectedAnalyticsExerciseId();
+
+    if (!exerciseId) {
+      return null;
+    }
+
+    return (
+      this.trainingAnalytics()
+        ?.progress
+        .find(
+          item =>
+            item.exerciseId === exerciseId
+        ) ?? null
+    );
+  }
+
+  selectAnalyticsExercise(
+    event: Event
+  ): void {
+    const select =
+      event.target as HTMLSelectElement;
+
+    this.selectedAnalyticsExerciseId.set(
+      select.value || null
+    );
+  }
+
+  formatInteger(
+    value: number | null | undefined
+  ): string {
+    if (
+      value === null ||
+      value === undefined ||
+      !Number.isFinite(value)
+    ) {
+      return 'No aplicable';
+    }
+
+    return new Intl.NumberFormat(
+      'es-ES',
+      {
+        maximumFractionDigits: 0
+      }
+    ).format(value);
+  }
+
+  formatKg(
+    value: number | null | undefined
+  ): string {
+    if (
+      value === null ||
+      value === undefined ||
+      !Number.isFinite(value)
+    ) {
+      return 'No aplicable';
+    }
+
+    return `${new Intl.NumberFormat(
+      'es-ES',
+      {
+        maximumFractionDigits: 1
+      }
+    ).format(value)} kg`;
+  }
+
+  formatDecimal(
+    value: number | null | undefined
+  ): string {
+    if (
+      value === null ||
+      value === undefined ||
+      !Number.isFinite(value)
+    ) {
+      return 'No aplicable';
+    }
+
+    return new Intl.NumberFormat(
+      'es-ES',
+      {
+        maximumFractionDigits: 1
+      }
+    ).format(value);
+  }
+
+  formatVolume(
+    value: number | null | undefined
+  ): string {
+    if (
+      value === null ||
+      value === undefined ||
+      !Number.isFinite(value)
+    ) {
+      return 'No aplicable';
+    }
+
+    return `${new Intl.NumberFormat(
+      'es-ES',
+      {
+        maximumFractionDigits: 0
+      }
+    ).format(value)} kg`;
+  }
+
+  formatDate(
+    value: string | null | undefined
+  ): string {
+    if (!value) {
+      return 'No aplicable';
+    }
+
+    const date = new Date(value);
+
+    if (
+      Number.isNaN(
+        date.getTime()
+      )
+    ) {
+      return 'No aplicable';
+    }
+
+    return new Intl.DateTimeFormat(
+      'es-ES',
+      {
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric'
+      }
+    ).format(date);
   }
 
   startManualRoutine(): void {

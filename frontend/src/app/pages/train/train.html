@@ -40,7 +40,7 @@
                       aria-label="Objetivos del ejercicio"
                     >
                       <span>
-                        Reps objetivo
+                        {{ targetLabel(exercise) }}
                         <strong>
                           {{ exercise.target }}
                         </strong>
@@ -113,11 +113,11 @@
                     as recommendation
                   ) {
                     <div class="progression-suggestion">
-                      <span>
-                        Sugerencia
-                      </span>
-
                       <p>
+                        <span>
+                          Sugerencia
+                        </span>
+
                         {{
                           recommendation.title
                         }}
@@ -152,6 +152,9 @@
                         $index
                       )
                     "
+                    [class.duration-set]="
+                      isDurationExercise(exercise)
+                    "
                   >
                     <div class="set-meta">
                       <div class="set-number">
@@ -182,29 +185,12 @@
                             Pendiente
                           }
                         </span>
-
-                        @if (
-                          getPreviousSet(
-                            exercise.exerciseId,
-                            $index
-                          );
-                          as previousSet
-                        ) {
-                          <p class="previous-set">
-                            Última vez:
-                            {{
-                              previousSetWeightLabel(
-                                exercise.exerciseId,
-                                $index
-                              ) || 'registro previo'
-                            }}
-                          </p>
-                        }
                       </div>
                     </div>
 
                     <div class="set-inputs">
-                      <label>
+                      @if (supportsWeight(exercise)) {
+                        <label>
                         <span>Kg</span>
 
                         <input
@@ -225,6 +211,10 @@
                             exercise.exerciseId,
                             $index
                           )?.weight ?? ''"
+                          [disabled]="
+                            workoutLoading() ||
+                            cancellingWorkout()
+                          "
                           (input)="updateSet(
                             exercise.exerciseId,
                             $index,
@@ -232,9 +222,11 @@
                             $any($event.target).value
                           )"
                         />
-                      </label>
+                        </label>
+                      }
 
-                      <label>
+                      @if (supportsReps(exercise)) {
+                        <label>
                         <span>Reps</span>
 
                         <input
@@ -255,6 +247,10 @@
                             exercise.exerciseId,
                             $index
                           )?.reps ?? ''"
+                          [disabled]="
+                            workoutLoading() ||
+                            cancellingWorkout()
+                          "
                           (input)="updateSet(
                             exercise.exerciseId,
                             $index,
@@ -262,9 +258,47 @@
                             $any($event.target).value
                           )"
                         />
-                      </label>
+                        </label>
+                      }
 
-                      <label>
+                      @if (isDurationExercise(exercise)) {
+                        <label>
+                          <span>Duración</span>
+
+                          <input
+                            type="number"
+                            min="0"
+                            step="1"
+                            inputmode="numeric"
+                            enterkeyhint="next"
+                            autocomplete="off"
+                            placeholder="0"
+                            [attr.aria-label]="
+                              durationInputLabel(
+                                exercise,
+                                $index
+                              )
+                            "
+                            [value]="getCurrentSet(
+                              exercise.exerciseId,
+                              $index
+                            )?.durationSeconds ?? ''"
+                            [disabled]="
+                              workoutLoading() ||
+                              cancellingWorkout()
+                            "
+                            (input)="updateSet(
+                              exercise.exerciseId,
+                              $index,
+                              'durationSeconds',
+                              $any($event.target).value
+                            )"
+                          />
+                        </label>
+                      }
+
+                      @if (supportsRir(exercise)) {
+                        <label>
                         <span>RIR</span>
 
                         <input
@@ -285,6 +319,10 @@
                             exercise.exerciseId,
                             $index
                           )?.rir ?? ''"
+                          [disabled]="
+                            workoutLoading() ||
+                            cancellingWorkout()
+                          "
                           (input)="updateSet(
                             exercise.exerciseId,
                             $index,
@@ -292,10 +330,12 @@
                             $any($event.target).value
                           )"
                         />
-                      </label>
+                        </label>
+                      }
                     </div>
 
                     @if (
+                      supportsWeight(exercise) &&
                       previousSetWeightLabel(
                         exercise.exerciseId,
                         $index
@@ -308,6 +348,10 @@
                           exercise.exerciseId,
                           $index
                         )"
+                        [disabled]="
+                          workoutLoading() ||
+                          cancellingWorkout()
+                        "
                         [attr.aria-label]="
                           'Usar carga anterior de ' +
                           previousSetWeightLabel(
@@ -320,8 +364,142 @@
                           ($index + 1)
                         "
                       >
-                        Usar carga anterior
+                        Usar
+                        {{
+                          previousSetWeightLabel(
+                            exercise.exerciseId,
+                            $index
+                          )
+                        }}
                       </button>
+                    }
+
+                    @if (isDurationExercise(exercise)) {
+                      <div class="set-timer-panel">
+                        @if (
+                          setTimerForSet(
+                            exercise.exerciseId,
+                            $index
+                          );
+                          as timer
+                        ) {
+                          <div class="set-timer-display">
+                            <span>
+                              {{
+                                setTimerStatusLabel(
+                                  exercise,
+                                  $index
+                                )
+                              }}
+                            </span>
+
+                            <strong>
+                              {{
+                                setTimerLabel(
+                                  exercise.exerciseId,
+                                  $index
+                                )
+                              }}
+                            </strong>
+                          </div>
+
+                          <div class="set-timer-actions">
+                            @if (timer.status === 'running') {
+                              <button
+                                type="button"
+                                class="secondary-button"
+                                (click)="pauseSetTimer()"
+                                [disabled]="
+                                  workoutLoading() ||
+                                  cancellingWorkout()
+                                "
+                              >
+                                Pausar
+                              </button>
+                            } @else if (timer.status === 'paused') {
+                              <button
+                                type="button"
+                                class="secondary-button"
+                                (click)="resumeSetTimer()"
+                                [disabled]="
+                                  workoutLoading() ||
+                                  cancellingWorkout()
+                                "
+                              >
+                                Reanudar
+                              </button>
+                            } @else {
+                              <button
+                                type="button"
+                                class="secondary-button"
+                                (click)="startTimedSet(
+                                  exercise.exerciseId,
+                                  $index
+                                )"
+                                [disabled]="
+                                  workoutLoading() ||
+                                  cancellingWorkout()
+                                "
+                              >
+                                Iniciar
+                              </button>
+                            }
+
+                            @if (timer.status !== 'finished') {
+                              <button
+                                type="button"
+                                class="complete-set-button"
+                                (click)="finishTimedSet()"
+                                [disabled]="
+                                  workoutLoading() ||
+                                  cancellingWorkout()
+                                "
+                              >
+                                Finalizar
+                              </button>
+                            }
+                          </div>
+                        } @else {
+                          <div class="set-timer-display">
+                            <span>
+                              {{
+                                setTimerStatusLabel(
+                                  exercise,
+                                  $index
+                                )
+                              }}
+                            </span>
+
+                            <strong>
+                              {{
+                                setTimerLabel(
+                                  exercise.exerciseId,
+                                  $index
+                                )
+                              }}
+                            </strong>
+                          </div>
+
+                          <button
+                            type="button"
+                            class="secondary-button start-set-timer-button"
+                            (click)="startTimedSet(
+                              exercise.exerciseId,
+                              $index
+                            )"
+                            [disabled]="
+                              workoutLoading() ||
+                              cancellingWorkout() ||
+                              isSetCompleted(
+                                exercise.exerciseId,
+                                $index
+                              )
+                            "
+                          >
+                            Iniciar
+                          </button>
+                        }
+                      </div>
                     }
 
                     <button
@@ -331,7 +509,10 @@
                         exercise.exerciseId,
                         $index
                       )"
-                      [disabled]="workoutLoading()"
+                      [disabled]="
+                        workoutLoading() ||
+                        cancellingWorkout()
+                      "
                       [attr.aria-label]="
                         (
                           isSetCompleted(
@@ -401,6 +582,10 @@
                   type="button"
                   class="secondary-button"
                   (click)="addRestTime(-30)"
+                  [disabled]="
+                    workoutLoading() ||
+                    cancellingWorkout()
+                  "
                   aria-label="Reducir descanso 30 segundos"
                 >
                   -30 s
@@ -410,6 +595,10 @@
                   type="button"
                   class="secondary-button"
                   (click)="addRestTime(30)"
+                  [disabled]="
+                    workoutLoading() ||
+                    cancellingWorkout()
+                  "
                   aria-label="Añadir 30 segundos de descanso"
                 >
                   +30 s
@@ -419,6 +608,10 @@
                   type="button"
                   class="secondary-button"
                   (click)="skipRestTimer()"
+                  [disabled]="
+                    workoutLoading() ||
+                    cancellingWorkout()
+                  "
                   aria-label="Saltar descanso"
                 >
                   Saltar
@@ -439,9 +632,24 @@
 
           <button
             type="button"
+            class="secondary-button cancel-workout-button"
+            (click)="openCancelWorkoutConfirmation()"
+            [disabled]="
+              workoutLoading() ||
+              cancellingWorkout()
+            "
+          >
+            Cancelar entrenamiento
+          </button>
+
+          <button
+            type="button"
             class="secondary-button"
             (click)="saveWorkout()"
-            [disabled]="workoutLoading()"
+            [disabled]="
+              workoutLoading() ||
+              cancellingWorkout()
+            "
           >
             {{
               workoutLoading()
@@ -454,11 +662,59 @@
             type="button"
             class="finish-button"
             (click)="finishWorkout()"
-            [disabled]="workoutLoading()"
+            [disabled]="
+              workoutLoading() ||
+              cancellingWorkout()
+            "
           >
             Finalizar entrenamiento
           </button>
         </footer>
+
+        @if (cancelConfirmationOpen()) {
+          <section
+            class="confirm-overlay"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="cancel-workout-title"
+          >
+            <div class="state-card confirm-modal">
+              <h2 id="cancel-workout-title">
+                ¿Cancelar este entrenamiento?
+              </h2>
+
+              <p>
+                Se descartará el entrenamiento en curso y las series
+                registradas en esta sesión no contarán en tu historial
+                ni en tu progreso.
+              </p>
+
+              <div class="confirm-actions">
+                <button
+                  type="button"
+                  class="secondary-button"
+                  (click)="closeCancelWorkoutConfirmation()"
+                  [disabled]="cancellingWorkout()"
+                >
+                  Seguir entrenando
+                </button>
+
+                <button
+                  type="button"
+                  class="secondary-button cancel-workout-button"
+                  (click)="cancelWorkout()"
+                  [disabled]="cancellingWorkout()"
+                >
+                  {{
+                    cancellingWorkout()
+                      ? 'Cancelando...'
+                      : 'Cancelar entrenamiento'
+                  }}
+                </button>
+              </div>
+            </div>
+          </section>
+        }
 
         <p class="workout-id">
           ID: {{ workout.workoutId }}

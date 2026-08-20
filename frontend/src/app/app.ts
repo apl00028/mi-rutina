@@ -1,5 +1,6 @@
 import {
   Component,
+  HostListener,
   signal
 } from '@angular/core';
 
@@ -148,6 +149,38 @@ export class App {
   }
 
 
+  @HostListener(
+    'document:click',
+    ['$event']
+  )
+  closeUserMenuOnOutsideClick(
+    event: MouseEvent
+  ): void {
+    const target =
+      event.target as Element | null;
+
+    if (
+      !this.userMenuOpen() ||
+      (
+        target instanceof Element &&
+        target.closest('.user-menu-wrapper')
+      )
+    ) {
+      return;
+    }
+
+    this.closeUserMenu();
+  }
+
+
+  @HostListener(
+    'document:keydown.escape'
+  )
+  closeUserMenuOnEscape(): void {
+    this.closeUserMenu();
+  }
+
+
   closeUserMenu(): void {
     this.userMenuOpen.set(false);
   }
@@ -190,8 +223,22 @@ export class App {
 
 
   userInitial(): string {
-    return this.userDisplayName()
-      .charAt(0)
+    const parts =
+      this.userDisplayName()
+        .trim()
+        .split(/\s+/)
+        .filter(Boolean);
+
+    if (!parts.length) {
+      return 'U';
+    }
+
+    return parts
+      .slice(0, 2)
+      .map(part =>
+        part.charAt(0)
+      )
+      .join('')
       .toUpperCase();
   }
 }

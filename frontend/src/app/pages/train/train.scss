@@ -239,6 +239,11 @@ button:disabled {
   padding: 10px 18px;
 }
 
+.cancel-workout-button {
+  border-color: #fecaca;
+  color: #b91c1c;
+}
+
 .exercise-stack {
   display: grid;
   gap: 20px;
@@ -292,9 +297,9 @@ button:disabled {
 
 .previous-exercise {
   display: grid;
-  gap: 4px;
+  gap: 3px;
 
-  padding: 12px 20px;
+  padding: 10px 20px;
 
   border-bottom: 1px solid #f3f4f6;
 
@@ -314,44 +319,8 @@ button:disabled {
 
   color: #374151;
 
-  font-size: 0.9rem;
+  font-size: 0.84rem;
   font-weight: 650;
-}
-
-.previous-exercise strong {
-  color: #166534;
-
-  font-size: 0.74rem;
-}
-
-.progression-suggestion {
-  display: grid;
-  gap: 2px;
-
-  margin-top: 6px;
-  padding: 8px 10px;
-
-  border: 1px solid #e0e7ff;
-  border-radius: 10px;
-
-  background: #eef2ff;
-}
-
-.progression-suggestion p,
-.progression-suggestion small {
-  margin: 0;
-}
-
-.progression-suggestion p {
-  color: #312e81;
-
-  font-size: 0.86rem;
-}
-
-.progression-suggestion small {
-  color: #4338ca;
-
-  font-size: 0.76rem;
 }
 
 .set-row {
@@ -376,12 +345,20 @@ button:disabled {
     opacity 140ms ease;
 }
 
+.set-row.duration-set {
+  grid-template-columns:
+    minmax(180px, 1fr)
+    minmax(170px, 0.8fr)
+    minmax(240px, 1fr)
+    150px;
+}
+
 .set-row:last-child {
   border-bottom: 0;
 }
 
 .set-row.completed {
-  background: #f0fdf4;
+  background: #fcfdfc;
 }
 
 .set-row.next-set {
@@ -422,7 +399,7 @@ button:disabled {
 }
 
 .completed .set-number {
-  background: #dcfce7;
+  background: #f0fdf4;
   color: #166534;
 }
 
@@ -452,22 +429,14 @@ button:disabled {
 }
 
 .completed .set-state {
-  background: #dcfce7;
+  background: #f0fdf4;
   color: #166534;
-}
-
-.previous-set {
-  margin: 3px 0 0;
-
-  color: #6b7280;
-
-  font-size: 0.78rem;
 }
 
 .set-inputs {
   display: grid;
   grid-template-columns:
-    repeat(3, minmax(0, 1fr));
+    repeat(auto-fit, minmax(88px, 1fr));
 
   gap: 8px;
 }
@@ -531,14 +500,62 @@ button:disabled {
 
   color: #1e3a8a;
 
-  font-size: 0.78rem;
+  font-size: 0.76rem;
+}
+
+.set-timer-panel {
+  display: grid;
+  gap: 8px;
+}
+
+.set-timer-display {
+  display: grid;
+  gap: 2px;
+
+  padding: 8px 10px;
+
+  border: 1px solid #dbeafe;
+  border-radius: 10px;
+
+  background: #eff6ff;
+  color: #1e3a8a;
+}
+
+.set-timer-display span {
+  font-size: 0.72rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.set-timer-display strong {
+  font-size: 1.28rem;
+  font-weight: 900;
+  line-height: 1;
+}
+
+.set-timer-actions {
+  display: grid;
+  grid-template-columns:
+    repeat(2, minmax(110px, 1fr));
+
+  gap: 8px;
+}
+
+.set-timer-actions button,
+.start-set-timer-button {
+  min-height: 42px;
+  min-width: 110px;
+  width: 100%;
+
+  text-align: center;
+  white-space: nowrap;
 }
 
 .completed .complete-set-button {
-  border-color: #16a34a;
+  border-color: #bbf7d0;
 
-  background: #166534;
-  color: #ffffff;
+  background: #f0fdf4;
+  color: #166534;
 }
 
 .workout-actions {
@@ -568,6 +585,18 @@ button:disabled {
     0 10px 30px
     rgb(0 0 0 / 8%);
 }
+
+.confirm-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+
+  display: grid;
+  place-items: center;
+
+  background: rgb(17 24 39 / 42%);
+}
+
 
 .rest-timer {
   min-width: min(100%, 360px);
@@ -706,6 +735,10 @@ button:disabled {
     grid-template-columns: 1fr;
   }
 
+  .set-row.duration-set {
+    grid-template-columns: 1fr;
+  }
+
   .complete-set-button {
     max-width: none;
   }
@@ -793,12 +826,17 @@ button:disabled {
   }
 
   .reuse-weight-button {
-    min-height: 46px;
+    min-height: 40px;
+  }
+
+  .set-timer-actions {
+    grid-template-columns:
+      repeat(2, minmax(110px, 1fr));
   }
 
   .previous-exercise {
     padding:
-      12px 16px;
+      10px 16px;
   }
 
   .workout-actions {

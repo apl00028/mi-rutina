@@ -119,18 +119,29 @@ def test_routine_payload_strips_client_user_fields():
     row = routine_row()
     row["data"]["user_id"] = "attacker-user"
     row["data"]["userId"] = "attacker-user"
+    row["data"]["owner_id"] = "attacker-user"
+    row["data"]["ownerId"] = "attacker-user"
+    row["data"]["created_by"] = "attacker-user"
+    row["data"]["createdBy"] = "attacker-user"
+    row["data"]["is_admin"] = True
+    row["data"]["isAdmin"] = True
 
     routine = service.routine_row_to_model(row)
     payload = service.routine_to_storage_payload(routine)
 
-    assert "user_id" not in routine.model_dump(
-        exclude_none=True
-    )
-    assert "userId" not in routine.model_dump(
-        exclude_none=True
-    )
-    assert "user_id" not in payload
-    assert "userId" not in payload
+    dumped = routine.model_dump(exclude_none=True)
+    for field in (
+        "user_id",
+        "userId",
+        "owner_id",
+        "ownerId",
+        "created_by",
+        "createdBy",
+        "is_admin",
+        "isAdmin",
+    ):
+        assert field not in dumped
+        assert field not in payload
 
 
 def test_create_user_routine_maps_created_row(monkeypatch):

@@ -231,23 +231,65 @@
       <strong>Periodo</strong>
 
       <div class="period-selector">
-        <button type="button">
+        <button
+          type="button"
+          [class.active]="analysisPeriod() === '4w'"
+          [disabled]="loadingAnalysis()"
+          (click)="setAnalysisPeriod('4w')"
+        >
           4 semanas
         </button>
 
-        <button type="button">
+        <button
+          type="button"
+          [class.active]="analysisPeriod() === '3m'"
+          [disabled]="loadingAnalysis()"
+          (click)="setAnalysisPeriod('3m')"
+        >
           3 meses
         </button>
 
-        <button type="button">
+        <button
+          type="button"
+          [class.active]="analysisPeriod() === '6m'"
+          [disabled]="loadingAnalysis()"
+          (click)="setAnalysisPeriod('6m')"
+        >
           6 meses
         </button>
 
-        <button type="button">
+        <button
+          type="button"
+          [class.active]="analysisPeriod() === 'all'"
+          [disabled]="loadingAnalysis()"
+          (click)="setAnalysisPeriod('all')"
+        >
           Todo
         </button>
       </div>
     </div>
+
+    @if (loadingAnalysis()) {
+      <div class="analysis-placeholder">
+        Cargando análisis de entrenamiento...
+      </div>
+    }
+
+    @if (analysisError()) {
+      <div class="analysis-placeholder analysis-error">
+        {{ analysisError() }}
+      </div>
+    }
+
+    @if (
+      !loadingAnalysis() &&
+      !analysisError() &&
+      !hasAnalysisData()
+    ) {
+      <div class="analysis-placeholder">
+        No hay entrenamientos completados en este período.
+      </div>
+    }
 
     <section class="analysis-section">
       <div class="analysis-section-header">
@@ -263,22 +305,54 @@
       <div class="metric-grid">
         <article class="metric-card">
           <span>Entrenamientos</span>
-          <strong>—</strong>
+          <strong>
+            {{
+              formatInteger(
+                trainingAnalytics()
+                  ?.summary
+                  ?.workouts
+              )
+            }}
+          </strong>
         </article>
 
         <article class="metric-card">
           <span>Series completadas</span>
-          <strong>—</strong>
+          <strong>
+            {{
+              formatInteger(
+                trainingAnalytics()
+                  ?.summary
+                  ?.completedSets
+              )
+            }}
+          </strong>
         </article>
 
         <article class="metric-card">
           <span>Volumen total</span>
-          <strong>—</strong>
+          <strong>
+            {{
+              formatVolume(
+                trainingAnalytics()
+                  ?.summary
+                  ?.totalVolume
+              )
+            }}
+          </strong>
         </article>
 
         <article class="metric-card">
           <span>Ejercicios realizados</span>
-          <strong>—</strong>
+          <strong>
+            {{
+              formatInteger(
+                trainingAnalytics()
+                  ?.summary
+                  ?.uniqueExercises
+              )
+            }}
+          </strong>
         </article>
       </div>
     </section>
@@ -295,10 +369,31 @@
         </div>
       </div>
 
-      <div class="analysis-placeholder">
-        Aquí mostraremos el volumen por grupo muscular
-        y un ranking de más a menos trabajado.
-      </div>
+      @if (trainingAnalytics()?.muscleGroups?.length) {
+        <div class="analysis-ranking">
+          @for (
+            item of trainingAnalytics()?.muscleGroups;
+            track item.muscle
+          ) {
+            <div class="analysis-ranking-row">
+              <span>{{ item.muscle }}</span>
+              <strong>
+                {{
+                  formatInteger(
+                    item.completedSets
+                  )
+                }}
+                series
+              </strong>
+            </div>
+          }
+        </div>
+      } @else {
+        <div class="analysis-placeholder">
+          No hay series completadas con grupo muscular
+          identificado en este período.
+        </div>
+      }
     </section>
 
     <section class="analysis-section">
@@ -313,10 +408,66 @@
         </div>
       </div>
 
-      <div class="analysis-placeholder">
-        Aquí aparecerá el ranking por ejercicio:
-        peso máximo, mejor serie, volumen total y evolución.
-      </div>
+      @if (trainingAnalytics()?.exercises?.length) {
+        <div class="analysis-table">
+          <div class="analysis-table-row analysis-table-head">
+            <span>Ejercicio</span>
+            <span>Sesiones</span>
+            <span>Series</span>
+            <span>Peso máximo</span>
+            <span>Mejor serie</span>
+            <span>Volumen</span>
+            <span>Última marca</span>
+          </div>
+
+          @for (
+            exercise of trainingAnalytics()?.exercises;
+            track exercise.exerciseId
+          ) {
+            <div class="analysis-table-row">
+              <span>{{ exercise.name }}</span>
+              <span>
+                {{
+                  formatInteger(
+                    exercise.sessions
+                  )
+                }}
+              </span>
+              <span>
+                {{
+                  formatInteger(
+                    exercise.completedSets
+                  )
+                }}
+              </span>
+              <span>
+                {{
+                  formatKg(
+                    exercise.maxWeight
+                  )
+                }}
+              </span>
+              <span>
+                {{ exercise.bestSet ?? 'No aplicable' }}
+              </span>
+              <span>
+                {{
+                  formatVolume(
+                    exercise.totalVolume
+                  )
+                }}
+              </span>
+              <span>
+                {{ exercise.lastMark ?? 'No aplicable' }}
+              </span>
+            </div>
+          }
+        </div>
+      } @else {
+        <div class="analysis-placeholder">
+          No hay ejercicios completados en este período.
+        </div>
+      }
     </section>
 
     <section class="analysis-section">
@@ -331,9 +482,74 @@
         </div>
       </div>
 
-      <div class="analysis-placeholder">
-        Aquí añadiremos las gráficas temporales.
-      </div>
+      @if (trainingAnalytics()?.progress?.length) {
+        <div class="analysis-evolution">
+          <label>
+            Ejercicio
+
+            <select
+              [value]="selectedAnalyticsExerciseId() ?? ''"
+              (change)="selectAnalyticsExercise($event)"
+            >
+              @for (
+                exercise of trainingAnalytics()?.progress;
+                track exercise.exerciseId
+              ) {
+                <option [value]="exercise.exerciseId">
+                  {{ exercise.name }}
+                </option>
+              }
+            </select>
+          </label>
+
+          @if (selectedProgress()) {
+            <div class="analysis-table">
+              <div class="analysis-table-row analysis-table-head">
+                <span>Fecha</span>
+                <span>Peso máximo</span>
+                <span>Mejor e1RM</span>
+                <span>Reps mejor serie</span>
+                <span>RIR</span>
+              </div>
+
+              @for (
+                point of selectedProgress()?.points;
+                track point.workoutId
+              ) {
+                <div class="analysis-table-row">
+                  <span>
+                    {{ formatDate(point.date) }}
+                  </span>
+                  <span>
+                    {{ formatKg(point.maxWeight) }}
+                  </span>
+                  <span>
+                    {{ formatKg(point.bestE1rm) }}
+                  </span>
+                  <span>
+                    {{
+                      formatInteger(
+                        point.bestReps
+                      )
+                    }}
+                  </span>
+                  <span>
+                    {{
+                      formatDecimal(
+                        point.rir
+                      )
+                    }}
+                  </span>
+                </div>
+              }
+            </div>
+          }
+        </div>
+      } @else {
+        <div class="analysis-placeholder">
+          No hay evolución disponible en este período.
+        </div>
+      }
     </section>
   </div>
 </details>

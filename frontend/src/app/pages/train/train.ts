@@ -9,11 +9,24 @@ interface Exercise {
   name: string;
   sets: number;
   target?: string;
+  recordType?: string | null;
+  recordTypes?: string[] | null;
+  prescription?: {
+    recordType?: string | null;
+    target?: {
+      type?: string | null;
+    } | null;
+  } | null;
   targetRir?: {
     min: number;
     max: number;
   } | null;
   restSeconds?: number | null;
+}
+
+interface CatalogExercise {
+  id: string;
+  recordTypes?: string[] | null;
 }
 
 interface RoutineSession {
@@ -58,6 +71,17 @@ interface RestTimerState {
   endsAt: number;
   remainingSeconds: number;
   finished: boolean;
+}
+
+interface SetTimerState {
+  exerciseId: string;
+  setIndex: number;
+  targetMinSeconds: number | null;
+  targetMaxSeconds: number | null;
+  startedAt: number | null;
+  accumulatedSeconds: number;
+  elapsedSeconds: number;
+  status: 'running' | 'paused' | 'finished';
 }
 
 interface ExerciseHistory {
@@ -117,10 +141,14 @@ export class Train implements OnInit, OnDestroy {
 
   workoutLoading = signal(false);
   workoutError = signal<string | null>(null);
+  cancelConfirmationOpen = signal(false);
+  cancellingWorkout = signal(false);
   autosaveStatus =
     signal<AutosaveStatus>('idle');
   restTimer =
     signal<RestTimerState | null>(null);
+  setTimer =
+    signal<SetTimerState | null>(null);
 
   email = signal('');
   loginLoading = signal(false);
@@ -132,6 +160,8 @@ export class Train implements OnInit, OnDestroy {
   private autosaveTimer:
     ReturnType<typeof setTimeout> | null = null;
   private restTimerInterval:
+    ReturnType<typeof setInterval> | null = null;
+  private setTimerInterval:
     ReturnType<typeof setInterval> | null = null;
 
   private currentSave:
@@ -157,6 +187,7 @@ export class Train implements OnInit, OnDestroy {
 
   ngOnDestroy(): void {
     this.destroyed = true;
+    this.clearSetTimer();
     this.clearRestTimer();
 
     if (this.autosaveTimer) {
@@ -170,7 +201,8 @@ export class Train implements OnInit, OnDestroy {
       workout?.status === 'in_progress' &&
       this.workoutEditVersion >
       this.persistedEditVersion &&
-      !this.currentSave
+      !this.currentSave &&
+      !this.cancellingWorkout()
     ) {
       void this.saveLatestWorkout({
         showLoading: false
@@ -217,7 +249,15 @@ export class Train implements OnInit, OnDestroy {
         return;
       }
 
-      this.routine.set(normalized);
+      const exerciseRecordTypes =
+        await this.loadExerciseRecordTypes(headers);
+
+      this.routine.set(
+        this.enrichRoutineWithRecordTypes(
+          normalized,
+          exerciseRecordTypes
+        )
+      );
 
     } catch (err: any) {
       if (err?.status === 404) {
@@ -235,6 +275,113 @@ export class Train implements OnInit, OnDestroy {
     } finally {
       this.loading.set(false);
     }
+  }
+
+
+  private async loadExerciseRecordTypes(
+    headers: HttpHeaders
+  ): Promise<Map<string, string[]>> {
+    try {
+      const exercises =
+        await new Promise<CatalogExercise[]>((resolve, reject) => {
+          this.http
+            .get<CatalogExercise[]>(
+              `${this.apiUrl}/exercises`,
+              { headers }
+            )
+            .subscribe({
+              next: resolve,
+              error: reject
+            });
+        });
+
+      return new Map(
+        exercises
+          .filter(
+            exercise =>
+              typeof exercise?.id === 'string' &&
+              exercise.id.trim() &&
+              Array.isArray(exercise.recordTypes)
+          )
+          .map(
+            exercise => [
+              exercise.id,
+              this.cleanRecordTypes(
+                exercise.recordTypes
+              )
+            ]
+          )
+      );
+
+    } catch (err) {
+      console.error(
+        'No se pudo cargar la metadata de ejercicios',
+        err
+      );
+      return new Map();
+    }
+  }
+
+
+  private enrichRoutineWithRecordTypes(
+    routine: Routine,
+    catalogRecordTypes: Map<string, string[]>
+  ): Routine {
+    return {
+      ...routine,
+      sessions:
+        routine.sessions.map(session => ({
+          ...session,
+          exercises:
+            session.exercises.map(exercise => {
+              const currentRecordTypes =
+                this.exerciseRecordTypes(exercise);
+
+              if (currentRecordTypes.length) {
+                return {
+                  ...exercise,
+                  recordTypes:
+                    currentRecordTypes
+                };
+              }
+
+              const recordTypes =
+                catalogRecordTypes.get(
+                  exercise.exerciseId
+                ) ?? [];
+
+              return recordTypes.length
+                ? {
+                    ...exercise,
+                    recordTypes
+                  }
+                : exercise;
+            })
+        }))
+    };
+  }
+
+
+  private cleanRecordTypes(
+    value: unknown
+  ): string[] {
+    if (!Array.isArray(value)) {
+      return [];
+    }
+
+    return [
+      ...new Set(
+        value
+          .filter(
+            item =>
+              typeof item === 'string' &&
+              item.trim()
+          )
+          .map(item =>
+            item.trim()
+          )
+      )
+    ];
   }
 
 
@@ -362,6 +509,189 @@ export class Train implements OnInit, OnDestroy {
   }
 
 
+  setTimerLabel(
+    exerciseId: string,
+    setIndex: number
+  ): string {
+    const timer =
+      this.setTimerForSet(
+        exerciseId,
+        setIndex
+      );
+
+    if (!timer) {
+      return this.formatRestTime(0);
+    }
+
+    return this.formatRestTime(
+      timer.elapsedSeconds
+    );
+  }
+
+
+  setTimerStatusLabel(
+    exercise: Exercise,
+    setIndex: number
+  ): string {
+    const timer =
+      this.setTimerForSet(
+        exercise.exerciseId,
+        setIndex
+      );
+    const elapsedSeconds =
+      timer?.elapsedSeconds ??
+      this.getCurrentSet(
+        exercise.exerciseId,
+        setIndex
+      )?.durationSeconds ??
+      0;
+    const target =
+      this.durationTargetRangeSeconds(
+        exercise
+      );
+
+    if (
+      target?.max !== null &&
+      target?.max !== undefined &&
+      elapsedSeconds >= target.max
+    ) {
+      return 'Parte superior del rango alcanzada';
+    }
+
+    if (
+      target?.min !== null &&
+      target?.min !== undefined &&
+      elapsedSeconds >= target.min
+    ) {
+      return 'Objetivo mínimo alcanzado';
+    }
+
+    return 'Cronómetro';
+  }
+
+
+  setTimerForSet(
+    exerciseId: string,
+    setIndex: number
+  ): SetTimerState | null {
+    const timer =
+      this.setTimer();
+
+    if (
+      timer?.exerciseId !== exerciseId ||
+      timer.setIndex !== setIndex
+    ) {
+      return null;
+    }
+
+    return timer;
+  }
+
+
+  exerciseRecordTypes(
+    exercise: Exercise
+  ): string[] {
+    const direct =
+      this.cleanRecordTypes(
+        exercise.recordTypes
+      );
+
+    if (direct.length) {
+      return direct;
+    }
+
+    const candidates = [
+      exercise.recordType,
+      exercise.prescription?.recordType,
+      exercise.prescription?.target?.type === 'duration'
+        ? 'duration'
+        : null
+    ];
+
+    return this.cleanRecordTypes(
+      candidates
+    );
+  }
+
+
+  isDurationExercise(
+    exercise: Exercise
+  ): boolean {
+    return this
+      .exerciseRecordTypes(exercise)
+      .includes('duration');
+  }
+
+
+  supportsWeight(
+    exercise: Exercise
+  ): boolean {
+    const recordTypes =
+      this.exerciseRecordTypes(exercise);
+
+    if (!recordTypes.length) {
+      return true;
+    }
+
+    return recordTypes.some(
+        type =>
+          type === 'weight_reps' ||
+          type === 'assisted_reps' ||
+          type.includes('weight')
+      );
+  }
+
+
+  supportsReps(
+    exercise: Exercise
+  ): boolean {
+    const recordTypes =
+      this.exerciseRecordTypes(exercise);
+
+    if (!recordTypes.length) {
+      return true;
+    }
+
+    return recordTypes.some(
+        type =>
+          type === 'weight_reps' ||
+          type === 'bodyweight_reps' ||
+          type === 'assisted_reps' ||
+          type === 'guided_repetitions' ||
+          type.includes('reps')
+      );
+  }
+
+
+  supportsRir(
+    exercise: Exercise
+  ): boolean {
+    return Boolean(exercise.targetRir);
+  }
+
+
+  targetLabel(
+    exercise: Exercise
+  ): string {
+    return this.isDurationExercise(exercise)
+      ? 'Duración objetivo'
+      : 'Reps objetivo';
+  }
+
+
+  durationInputLabel(
+    exercise: Exercise,
+    setIndex: number
+  ): string {
+    return (
+      'Duración realizada en segundos para ' +
+      exercise.name +
+      ', serie ' +
+      (setIndex + 1)
+    );
+  }
+
+
   private formatRestTime(
     seconds: number
   ): string {
@@ -453,6 +783,13 @@ export class Train implements OnInit, OnDestroy {
                       set.reps !== null &&
                       set.reps !== undefined &&
                       Number.isFinite(set.reps)
+                    ) ||
+                    (
+                      set.durationSeconds !== null &&
+                      set.durationSeconds !== undefined &&
+                      Number.isFinite(
+                        set.durationSeconds
+                      )
                     )
                   )
               )
@@ -943,6 +1280,18 @@ export class Train implements OnInit, OnDestroy {
     }
 
     if (
+      set.durationSeconds !== null &&
+      set.durationSeconds !== undefined &&
+      Number.isFinite(set.durationSeconds)
+    ) {
+      parts.push(
+        this.formatDurationSeconds(
+          set.durationSeconds
+        )
+      );
+    }
+
+    if (
       set.rir !== null &&
       set.rir !== undefined &&
       Number.isFinite(set.rir)
@@ -951,6 +1300,30 @@ export class Train implements OnInit, OnDestroy {
     }
 
     return parts.join(' ');
+  }
+
+
+  private formatDurationSeconds(
+    seconds: number
+  ): string {
+    const safeSeconds =
+      Math.max(
+        0,
+        Math.round(seconds)
+      );
+
+    if (safeSeconds < 60) {
+      return `${safeSeconds} s`;
+    }
+
+    const minutes =
+      Math.floor(safeSeconds / 60);
+    const remaining =
+      safeSeconds % 60;
+
+    return remaining
+      ? `${minutes} min ${remaining} s`
+      : `${minutes} min`;
   }
 
 
@@ -1200,7 +1573,10 @@ export class Train implements OnInit, OnDestroy {
       return;
     }
 
-    if (this.workoutLoading()) {
+    if (
+      this.workoutLoading() ||
+      this.cancellingWorkout()
+    ) {
       return;
     }
 
@@ -1248,6 +1624,7 @@ export class Train implements OnInit, OnDestroy {
 
       this.activeWorkout.set(created);
       this.activeSession.set(session);
+      this.cancelConfirmationOpen.set(false);
       this.workoutEditVersion = 0;
       this.persistedEditVersion = 0;
       this.autosaveStatus.set('saved');
@@ -1271,12 +1648,15 @@ export class Train implements OnInit, OnDestroy {
   updateSet(
     exerciseId: string,
     setIndex: number,
-    field: 'weight' | 'reps' | 'rir',
+    field: 'weight' | 'reps' | 'rir' | 'durationSeconds',
     value: string
   ): void {
     const workout = this.activeWorkout();
 
-    if (!workout) {
+    if (
+      !workout ||
+      this.cancellingWorkout()
+    ) {
       return;
     }
 
@@ -1332,6 +1712,10 @@ export class Train implements OnInit, OnDestroy {
           rir:
             field === 'rir'
               ? numericValue
+              : null,
+          durationSeconds:
+            field === 'durationSeconds'
+              ? numericValue
               : null
         }
       ];
@@ -1352,11 +1736,17 @@ export class Train implements OnInit, OnDestroy {
   ): Promise<void> {
     const workout = this.activeWorkout();
 
-    if (!workout) {
+    if (
+      !workout ||
+      this.cancellingWorkout()
+    ) {
       return;
     }
 
-    if (this.workoutLoading()) {
+    if (
+      this.workoutLoading() ||
+      this.cancellingWorkout()
+    ) {
       return;
     }
 
@@ -1417,6 +1807,297 @@ export class Train implements OnInit, OnDestroy {
   }
 
 
+  startTimedSet(
+    exerciseId: string,
+    setIndex: number
+  ): void {
+    const exercise =
+      this.findSessionExercise(
+        exerciseId
+      );
+
+    if (
+      !exercise ||
+      !this.isDurationExercise(exercise) ||
+      this.workoutLoading() ||
+      this.cancellingWorkout()
+    ) {
+      return;
+    }
+
+    const target =
+      this.durationTargetRangeSeconds(
+        exercise
+      );
+    const currentSet =
+      this.getCurrentSet(
+        exerciseId,
+        setIndex
+      );
+    const initialSeconds =
+      Number.isFinite(
+        currentSet?.durationSeconds
+      )
+        ? Math.max(
+            0,
+            Number(
+              currentSet?.durationSeconds
+            )
+          )
+        : 0;
+
+    this.clearSetTimerInterval();
+
+    this.setTimer.set({
+      exerciseId,
+      setIndex,
+      targetMinSeconds:
+        target?.min ?? null,
+      targetMaxSeconds:
+        target?.max ?? null,
+      startedAt:
+        Date.now(),
+      accumulatedSeconds:
+        initialSeconds,
+      elapsedSeconds:
+        initialSeconds,
+      status:
+        'running'
+    });
+
+    this.setTimerInterval =
+      setInterval(
+        () => this.reconcileSetTimer(),
+        250
+      );
+
+    this.reconcileSetTimer();
+  }
+
+
+  pauseSetTimer(): void {
+    const timer =
+      this.reconciledSetTimer();
+
+    if (
+      !timer ||
+      timer.status !== 'running'
+    ) {
+      return;
+    }
+
+    this.setTimer.set({
+      ...timer,
+      startedAt: null,
+      accumulatedSeconds:
+        timer.elapsedSeconds,
+      status:
+        'paused'
+    });
+
+    this.clearSetTimerInterval();
+  }
+
+
+  resumeSetTimer(): void {
+    const timer =
+      this.setTimer();
+
+    if (
+      !timer ||
+      timer.status !== 'paused'
+    ) {
+      return;
+    }
+
+    this.setTimer.set({
+      ...timer,
+      startedAt:
+        Date.now(),
+      status:
+        'running'
+    });
+
+    this.setTimerInterval =
+      setInterval(
+        () => this.reconcileSetTimer(),
+        250
+      );
+
+    this.reconcileSetTimer();
+  }
+
+
+  async finishTimedSet(): Promise<void> {
+    const timer =
+      this.reconciledSetTimer();
+
+    if (!timer) {
+      return;
+    }
+
+    const elapsedSeconds =
+      Math.max(
+        1,
+        Math.round(timer.elapsedSeconds)
+      );
+
+    this.clearSetTimerInterval();
+    this.setTimer.set({
+      ...timer,
+      startedAt: null,
+      accumulatedSeconds:
+        elapsedSeconds,
+      elapsedSeconds,
+      status:
+        'finished'
+    });
+
+    this.setDurationForSet(
+      timer.exerciseId,
+      timer.setIndex,
+      elapsedSeconds
+    );
+  }
+
+
+  private durationTargetRangeSeconds(
+    exercise: Exercise
+  ): {
+    min: number;
+    max: number;
+  } | null {
+    const target =
+      this.parseRepTarget(
+        exercise.target
+      );
+
+    if (!target) {
+      return null;
+    }
+
+    return {
+      min:
+        Math.floor(target.min),
+      max:
+        Math.floor(target.max)
+    };
+  }
+
+
+  private setDurationForSet(
+    exerciseId: string,
+    setIndex: number,
+    durationSeconds: number
+  ): void {
+    const workout =
+      this.activeWorkout();
+
+    if (!workout) {
+      return;
+    }
+
+    const existing =
+      workout.sets.find(
+        set =>
+          set.exerciseId === exerciseId &&
+          set.setIndex === setIndex
+      );
+
+    const sets =
+      existing
+        ? workout.sets.map(set =>
+            set.exerciseId === exerciseId &&
+            set.setIndex === setIndex
+              ? {
+                  ...set,
+                  durationSeconds
+                }
+              : set
+          )
+        : [
+            ...workout.sets,
+            {
+              setId:
+                crypto.randomUUID(),
+              exerciseId,
+              setIndex,
+              durationSeconds
+            }
+          ];
+
+    this.activeWorkout.set({
+      ...workout,
+      sets
+    });
+
+    this.workoutEditVersion += 1;
+    this.scheduleAutosave();
+  }
+
+
+  private reconciledSetTimer():
+    SetTimerState | null {
+    this.reconcileSetTimer();
+    return this.setTimer();
+  }
+
+
+  private reconcileSetTimer(): void {
+    const timer =
+      this.setTimer();
+
+    if (!timer) {
+      this.clearSetTimerInterval();
+      return;
+    }
+
+    if (
+      timer.status !== 'running' ||
+      timer.startedAt === null
+    ) {
+      return;
+    }
+
+    const elapsedSeconds =
+      Math.max(
+        0,
+        timer.accumulatedSeconds +
+        (Date.now() - timer.startedAt) /
+        1000
+      );
+    const roundedElapsed =
+      Math.floor(elapsedSeconds);
+
+    if (
+      roundedElapsed !==
+      timer.elapsedSeconds
+    ) {
+      this.setTimer.set({
+        ...timer,
+        elapsedSeconds:
+          roundedElapsed
+      });
+    }
+  }
+
+
+  private clearSetTimerInterval(): void {
+    if (!this.setTimerInterval) {
+      return;
+    }
+
+    clearInterval(this.setTimerInterval);
+    this.setTimerInterval = null;
+  }
+
+
+  private clearSetTimer(): void {
+    this.clearSetTimerInterval();
+    this.setTimer.set(null);
+  }
+
+
   private startRestTimerForSet(
     exerciseId: string,
     setIndex: number
@@ -1429,6 +2110,7 @@ export class Train implements OnInit, OnDestroy {
     const restSeconds =
       Number(exercise?.restSeconds);
 
+    this.clearSetTimer();
     this.clearRestTimer();
 
     if (
@@ -1605,7 +2287,10 @@ export class Train implements OnInit, OnDestroy {
   async saveWorkout(): Promise<void> {
     const workout = this.activeWorkout();
 
-    if (!workout) {
+    if (
+      !workout ||
+      this.cancellingWorkout()
+    ) {
       return;
     }
 
@@ -1710,6 +2395,19 @@ export class Train implements OnInit, OnDestroy {
   }
 
 
+  private removeWorkoutFromHistory(
+    workoutId: string
+  ): void {
+    this.workoutHistory.set(
+      this.workoutHistory()
+        .filter(
+          workout =>
+            workout.workoutId !== workoutId
+        )
+    );
+  }
+
+
   private scheduleAutosave(): void {
     if (this.destroyed) {
       return;
@@ -1721,7 +2419,8 @@ export class Train implements OnInit, OnDestroy {
     if (
       !workout ||
       workout.status !== 'in_progress' ||
-      this.finishingWorkout
+      this.finishingWorkout ||
+      this.cancellingWorkout()
     ) {
       return;
     }
@@ -1758,7 +2457,8 @@ export class Train implements OnInit, OnDestroy {
 
     if (
       this.destroyed ||
-      this.finishingWorkout
+      this.finishingWorkout ||
+      this.cancellingWorkout()
     ) {
       return;
     }
@@ -1824,6 +2524,7 @@ export class Train implements OnInit, OnDestroy {
             current &&
             current.workoutId === saved.workoutId &&
             !this.finishingWorkout &&
+            !this.cancellingWorkout() &&
             this.workoutEditVersion === snapshotVersion
           ) {
             this.activeWorkout.set(saved);
@@ -1831,7 +2532,9 @@ export class Train implements OnInit, OnDestroy {
               snapshotVersion;
           }
 
-          this.updateWorkoutHistory(saved);
+          if (!this.cancellingWorkout()) {
+            this.updateWorkoutHistory(saved);
+          }
 
           if (
             this.workoutEditVersion === snapshotVersion
@@ -1854,7 +2557,8 @@ export class Train implements OnInit, OnDestroy {
           if (
             this.saveQueued &&
             !this.destroyed &&
-            !this.finishingWorkout
+            !this.finishingWorkout &&
+            !this.cancellingWorkout()
           ) {
             this.saveQueued = false;
             void this.runAutosave();
@@ -1869,14 +2573,21 @@ export class Train implements OnInit, OnDestroy {
   async finishWorkout(): Promise<void> {
     const workout = this.activeWorkout();
 
-    if (!workout) {
+    if (
+      !workout ||
+      this.cancellingWorkout()
+    ) {
       return;
     }
 
-    if (this.workoutLoading()) {
+    if (
+      this.workoutLoading() ||
+      this.cancellingWorkout()
+    ) {
       return;
     }
 
+    this.clearSetTimer();
     this.clearRestTimer();
 
     this.cancelAutosaveTimer();
@@ -1920,6 +2631,7 @@ export class Train implements OnInit, OnDestroy {
 
       this.activeWorkout.set(null);
       this.activeSession.set(null);
+      this.cancelConfirmationOpen.set(false);
 
     } catch (err: any) {
       this.workoutError.set(
@@ -1929,6 +2641,116 @@ export class Train implements OnInit, OnDestroy {
       );
     } finally {
       this.finishingWorkout = false;
+    }
+  }
+
+
+  openCancelWorkoutConfirmation(): void {
+    if (
+      !this.activeWorkout() ||
+      this.workoutLoading() ||
+      this.cancellingWorkout()
+    ) {
+      return;
+    }
+
+    this.workoutError.set(null);
+    this.cancelConfirmationOpen.set(true);
+  }
+
+
+  closeCancelWorkoutConfirmation(): void {
+    if (this.cancellingWorkout()) {
+      return;
+    }
+
+    this.cancelConfirmationOpen.set(false);
+  }
+
+
+  async cancelWorkout(): Promise<void> {
+    const workout =
+      this.activeWorkout();
+
+    if (
+      !workout ||
+      this.cancellingWorkout()
+    ) {
+      return;
+    }
+
+    this.cancellingWorkout.set(true);
+    this.workoutLoading.set(true);
+    this.workoutError.set(null);
+    this.cancelAutosaveTimer();
+    this.saveQueued = false;
+    this.clearSetTimer();
+    this.clearRestTimer();
+
+    if (this.currentSave) {
+      try {
+        await this.currentSave;
+      } catch {
+        // Cancellation removes the transient workout; stale autosave failure is ignored.
+      }
+    }
+
+    const currentWorkout =
+      this.activeWorkout();
+
+    if (!currentWorkout) {
+      this.cancelConfirmationOpen.set(false);
+      this.cancellingWorkout.set(false);
+      this.workoutLoading.set(false);
+      return;
+    }
+
+    try {
+      const token =
+        await this.auth.getAccessToken();
+
+      if (!token) {
+        throw new Error('Necesitas iniciar sesión.');
+      }
+
+      const headers =
+        new HttpHeaders({
+          Authorization:
+            `Bearer ${token}`
+        });
+
+      await new Promise<void>((resolve, reject) => {
+        this.http
+          .delete<void>(
+            `${this.apiUrl}/workouts/${currentWorkout.workoutId}`,
+            { headers }
+          )
+          .subscribe({
+            next: () => resolve(),
+            error: reject
+          });
+      });
+
+      this.removeWorkoutFromHistory(
+        currentWorkout.workoutId
+      );
+      this.activeWorkout.set(null);
+      this.activeSession.set(null);
+      this.cancelConfirmationOpen.set(false);
+      this.autosaveStatus.set('idle');
+      this.workoutEditVersion = 0;
+      this.persistedEditVersion = 0;
+      this.saveQueued = false;
+
+    } catch (err: any) {
+      this.workoutError.set(
+        err?.error?.detail ??
+        err?.message ??
+        'No se pudo cancelar el entrenamiento.'
+      );
+    } finally {
+      this.cancellingWorkout.set(false);
+      this.workoutLoading.set(false);
     }
   }
 }

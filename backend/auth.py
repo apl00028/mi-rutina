@@ -5,7 +5,16 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 
 import httpx
-from fastapi import Header, HTTPException, status
+from fastapi import HTTPException, Security, status
+from fastapi.security import (
+    HTTPAuthorizationCredentials,
+    HTTPBearer,
+)
+
+
+bearer_scheme = HTTPBearer(
+    auto_error=False
+)
 
 
 @dataclass(frozen=True)
@@ -56,13 +65,12 @@ def _supabase_config() -> tuple[str, str]:
 
 
 def _extract_bearer_token(
-    authorization: str | None,
+    credentials:
+        HTTPAuthorizationCredentials | None,
 ) -> str:
     if (
-        not authorization
-        or not authorization
-        .lower()
-        .startswith("bearer ")
+        credentials is None
+        or credentials.scheme.lower() != "bearer"
     ):
         raise HTTPException(
             status_code=(
@@ -71,10 +79,7 @@ def _extract_bearer_token(
             detail="Missing bearer token",
         )
 
-    token = authorization.split(
-        " ",
-        1,
-    )[1].strip()
+    token = credentials.credentials.strip()
 
     if not token:
         raise HTTPException(
@@ -88,8 +93,9 @@ def _extract_bearer_token(
 
 
 async def authenticate_user(
-    authorization: str | None = Header(
-        default=None
+    credentials:
+        HTTPAuthorizationCredentials | None = Security(
+            bearer_scheme
     ),
 ) -> AuthenticatedUser:
     """
@@ -110,7 +116,7 @@ async def authenticate_user(
     ) = _supabase_config()
 
     token = _extract_bearer_token(
-        authorization
+        credentials
     )
 
     headers = {
@@ -332,12 +338,13 @@ def _validate_active_access(
 
 
 async def require_user(
-    authorization: str | None = Header(
-        default=None
+    credentials:
+        HTTPAuthorizationCredentials | None = Security(
+            bearer_scheme
     ),
 ) -> AuthenticatedUser:
     identity = await authenticate_user(
-        authorization
+        credentials
     )
 
     access = await get_gymos_access(

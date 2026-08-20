@@ -11,19 +11,25 @@ from app.repositories.workouts import (
 )
 
 
-USER_ID_FIELDS = {
+CLIENT_CONTROLLED_FIELDS = {
     "user_id",
     "userId",
+    "owner_id",
+    "ownerId",
+    "created_by",
+    "createdBy",
+    "is_admin",
+    "isAdmin",
 }
 
 
-def _strip_client_user_fields(
+def _strip_client_controlled_fields(
     payload: dict[str, Any],
 ) -> dict[str, Any]:
     return {
         key: value
         for key, value in payload.items()
-        if key not in USER_ID_FIELDS
+        if key not in CLIENT_CONTROLLED_FIELDS
     }
 
 
@@ -39,7 +45,7 @@ def workout_row_to_model(row: dict[str, Any]) -> Workout:
     if not isinstance(data, dict):
         raise RuntimeError("Unexpected Supabase response.")
 
-    payload = _strip_client_user_fields(
+    payload = _strip_client_controlled_fields(
         dict(data)
     )
     payload.setdefault("workoutId", row.get("id"))
@@ -49,7 +55,7 @@ def workout_row_to_model(row: dict[str, Any]) -> Workout:
 
 
 def workout_to_storage_payload(workout: Workout) -> dict[str, Any]:
-    return _strip_client_user_fields(
+    return _strip_client_controlled_fields(
         workout.model_dump(
             exclude_none=True
         )

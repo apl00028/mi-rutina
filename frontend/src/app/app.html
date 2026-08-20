@@ -124,39 +124,64 @@
               type="button"
               class="user-button"
               (click)="toggleUserMenu()"
+              aria-haspopup="menu"
+              [attr.aria-expanded]="
+                userMenuOpen()
+              "
+              aria-label="Abrir menú de usuario"
             >
               <span class="user-avatar">
-                {{
-                  userDisplayName()
-                    .charAt(0)
-                    .toUpperCase()
-                }}
+                {{ userInitial() }}
               </span>
 
-              <span class="user-name">
-                {{ userDisplayName() }}
+              <span class="user-button-copy">
+                <span class="user-name">
+                  {{ userDisplayName() }}
+                </span>
+
+                <span class="user-context">
+                  Mi cuenta
+                </span>
               </span>
 
-              <span>
+              <span
+                class="user-caret"
+                aria-hidden="true"
+              >
                 ▾
               </span>
             </button>
 
             @if (userMenuOpen()) {
-              <div class="user-dropdown">
+              <div
+                class="user-dropdown"
+                role="menu"
+              >
                 <div class="user-dropdown-header">
-                  <strong>
-                    {{ userDisplayName() }}
-                  </strong>
-
-                  <span>
-                    {{ auth.user()?.email }}
+                  <span class="user-avatar">
+                    {{ userInitial() }}
                   </span>
+
+                  <div>
+                    <span class="user-dropdown-kicker">
+                      Sesión iniciada como
+                    </span>
+
+                    <strong>
+                      {{ userDisplayName() }}
+                    </strong>
+
+                    <span>
+                      {{ auth.user()?.email }}
+                    </span>
+                  </div>
                 </div>
 
                 <button
                   type="button"
                   disabled
+                  aria-disabled="true"
+                  role="menuitem"
                 >
                   Mi cuenta
                 </button>
@@ -166,6 +191,7 @@
                     class="user-dropdown-link"
                     routerLink="/admin/access"
                     (click)="closeUserMenu()"
+                    role="menuitem"
                   >
                     Solicitudes de acceso
                   </a>
@@ -174,14 +200,19 @@
                 <button
                   type="button"
                   disabled
+                  aria-disabled="true"
+                  role="menuitem"
                 >
                   Configuración
                 </button>
+
+                <div class="user-dropdown-separator"></div>
 
                 <button
                   type="button"
                   class="signout-button"
                   (click)="signOut()"
+                  role="menuitem"
                 >
                   Cerrar sesión
                 </button>

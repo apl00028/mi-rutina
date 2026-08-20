@@ -1,6 +1,9 @@
 from fastapi import APIRouter
 
 from .admin import router as admin_router
+from .analytics import (
+    router as analytics_router,
+)
 from .exercises import router as exercises_router
 from .health import router as health_router
 from .me import router as me_router
@@ -27,6 +30,10 @@ router.include_router(
 
 router.include_router(
     admin_router
+)
+
+router.include_router(
+    analytics_router
 )
 
 router.include_router(

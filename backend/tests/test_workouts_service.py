@@ -20,17 +20,28 @@ def test_workout_payload_strips_client_user_fields():
     row = workout_row()
     row["data"]["user_id"] = "attacker-user"
     row["data"]["userId"] = "attacker-user"
+    row["data"]["owner_id"] = "attacker-user"
+    row["data"]["ownerId"] = "attacker-user"
+    row["data"]["created_by"] = "attacker-user"
+    row["data"]["createdBy"] = "attacker-user"
+    row["data"]["is_admin"] = True
+    row["data"]["isAdmin"] = True
 
     workout = service.workout_row_to_model(row)
     payload = service.workout_to_storage_payload(
         workout
     )
 
-    assert "user_id" not in workout.model_dump(
-        exclude_none=True
-    )
-    assert "userId" not in workout.model_dump(
-        exclude_none=True
-    )
-    assert "user_id" not in payload
-    assert "userId" not in payload
+    dumped = workout.model_dump(exclude_none=True)
+    for field in (
+        "user_id",
+        "userId",
+        "owner_id",
+        "ownerId",
+        "created_by",
+        "createdBy",
+        "is_admin",
+        "isAdmin",
+    ):
+        assert field not in dumped
+        assert field not in payload

@@ -60,6 +60,19 @@ interface RestTimerState {
   finished: boolean;
 }
 
+interface ExerciseHistory {
+  workoutId: string;
+  performedAt: string | null;
+  sets: WorkoutSetInput[];
+}
+
+interface ExerciseProgressMetrics {
+  maxWeight: number | null;
+  totalReps: number | null;
+  volume: number | null;
+  bestSet: WorkoutSetInput | null;
+}
+
 type AutosaveStatus =
   | 'idle'
   | 'saving'
@@ -375,30 +388,115 @@ export class Train implements OnInit, OnDestroy {
     exerciseId: string,
     setIndex: number
   ): WorkoutSetInput | null {
-    const currentWorkoutId = this.activeWorkout()?.workoutId;
+    return (
+      this
+        .getPreviousExerciseHistory(exerciseId)
+        ?.sets
+        .find(
+          set =>
+            set.setIndex === setIndex
+        ) ??
+      null
+    );
+  }
 
-    for (const workout of this.workoutHistory()) {
-      if (workout.workoutId === currentWorkoutId) {
-        continue;
-      }
 
-      if (workout.status !== 'finished') {
-        continue;
-      }
+  getPreviousExerciseHistory(
+    exerciseId: string
+  ): ExerciseHistory | null {
+    const currentWorkoutId =
+      this.activeWorkout()?.workoutId;
 
-      const previousSet = workout.sets.find(
-        set =>
-          set.exerciseId === exerciseId &&
-          set.setIndex === setIndex &&
-          Boolean(set.completedAt)
-      );
+    const histories =
+      this
+        .workoutHistory()
+        .filter(
+          workout =>
+            workout.workoutId !== currentWorkoutId &&
+            workout.status === 'finished' &&
+            Array.isArray(workout.sets)
+        )
+        .map(workout => {
+          const sets =
+            workout.sets
+              .filter(
+                set =>
+                  set.exerciseId === exerciseId &&
+                  Boolean(set.completedAt)
+              )
+              .sort(
+                (first, second) =>
+                  first.setIndex -
+                  second.setIndex
+              );
 
-      if (previousSet) {
-        return previousSet;
-      }
+          if (!sets.length) {
+            return null;
+          }
+
+          return {
+            workout,
+            sets,
+            performedAt:
+              workout.finishedAt ??
+              workout.startedAt ??
+              null,
+            time:
+              this.workoutTime(workout)
+          };
+        })
+        .filter(
+          (
+            value
+          ): value is {
+            workout: Workout;
+            sets: WorkoutSetInput[];
+            performedAt: string | null;
+            time: number;
+          } =>
+            value !== null
+        )
+        .sort(
+          (first, second) =>
+            second.time -
+            first.time
+        );
+
+    const latest =
+      histories[0];
+
+    if (!latest) {
+      return null;
     }
 
-    return null;
+    return {
+      workoutId:
+        latest.workout.workoutId,
+      performedAt:
+        latest.performedAt,
+      sets:
+        latest.sets
+    };
+  }
+
+
+  private workoutTime(
+    workout: Workout
+  ): number {
+    const rawDate =
+      workout.finishedAt ??
+      workout.startedAt;
+
+    if (!rawDate) {
+      return 0;
+    }
+
+    const time =
+      Date.parse(rawDate);
+
+    return Number.isFinite(time)
+      ? time
+      : 0;
   }
 
   getCurrentSet(
@@ -416,6 +514,69 @@ export class Train implements OnInit, OnDestroy {
         set.exerciseId === exerciseId &&
         set.setIndex === setIndex
     ) ?? null;
+  }
+
+
+  completedSetCount(
+    exercise: Exercise
+  ): number {
+    const workout =
+      this.activeWorkout();
+
+    if (!workout) {
+      return 0;
+    }
+
+    return workout.sets.filter(
+      set =>
+        set.exerciseId === exercise.exerciseId &&
+        Boolean(set.completedAt)
+    ).length;
+  }
+
+
+  exerciseProgressLabel(
+    exercise: Exercise
+  ): string {
+    return `${this.completedSetCount(exercise)} / ${exercise.sets}`;
+  }
+
+
+  isNextSet(
+    exercise: Exercise,
+    setIndex: number
+  ): boolean {
+    const session =
+      this.activeSession();
+
+    if (!session) {
+      return false;
+    }
+
+    for (const sessionExercise of session.exercises) {
+      for (
+        let index = 0;
+        index < sessionExercise.sets;
+        index += 1
+      ) {
+        if (
+          this.isSetCompleted(
+            sessionExercise.exerciseId,
+            index
+          )
+        ) {
+          continue;
+        }
+
+        return (
+          sessionExercise.exerciseId ===
+          exercise.exerciseId &&
+          index === setIndex
+        );
+      }
+    }
+
+    return false;
   }
 
   async sendMagicLink(event: Event): Promise<void> {

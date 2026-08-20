@@ -35,27 +35,42 @@
                   </h2>
 
                   @if (exercise.target) {
-                    <p class="exercise-target">
-                      Objetivo:
-                      {{ exercise.target }}
+                    <div
+                      class="exercise-target"
+                      aria-label="Objetivos del ejercicio"
+                    >
+                      <span>
+                        Reps objetivo
+                        <strong>
+                          {{ exercise.target }}
+                        </strong>
+                      </span>
 
                       @if (exercise.targetRir) {
-                        · RIR
-                        {{ exercise.targetRir.min }}
-                        -
-                        {{ exercise.targetRir.max }}
+                        <span>
+                          RIR objetivo
+                          <strong>
+                            {{ exercise.targetRir.min }}
+                            -
+                            {{ exercise.targetRir.max }}
+                          </strong>
+                        </span>
                       }
 
                       @if (exercise.restSeconds) {
-                        · Descanso
-                        {{ exercise.restSeconds }}s
+                        <span>
+                          Descanso
+                          <strong>
+                            {{ exercise.restSeconds }}s
+                          </strong>
+                        </span>
                       }
-                    </p>
+                    </div>
                   }
                 </div>
 
                 <span class="sets-badge">
-                  {{ exercise.sets }}
+                  {{ exerciseProgressLabel(exercise) }}
                   series
                 </span>
               </header>
@@ -73,6 +88,12 @@
                         $index
                       )
                     "
+                    [class.next-set]="
+                      isNextSet(
+                        exercise,
+                        $index
+                      )
+                    "
                   >
                     <div class="set-meta">
                       <div class="set-number">
@@ -83,6 +104,26 @@
                         <strong>
                           Serie {{ $index + 1 }}
                         </strong>
+
+                        <span class="set-state">
+                          @if (
+                            isSetCompleted(
+                              exercise.exerciseId,
+                              $index
+                            )
+                          ) {
+                            Completada
+                          } @else if (
+                            isNextSet(
+                              exercise,
+                              $index
+                            )
+                          ) {
+                            Siguiente
+                          } @else {
+                            Pendiente
+                          }
+                        </span>
 
                         @if (
                           getPreviousSet(
@@ -112,7 +153,15 @@
                           min="0"
                           step="0.5"
                           inputmode="decimal"
+                          enterkeyhint="next"
+                          autocomplete="off"
                           placeholder="0"
+                          [attr.aria-label]="
+                            'Peso en kg para ' +
+                            exercise.name +
+                            ', serie ' +
+                            ($index + 1)
+                          "
                           [value]="getCurrentSet(
                             exercise.exerciseId,
                             $index
@@ -134,7 +183,15 @@
                           min="0"
                           step="1"
                           inputmode="numeric"
+                          enterkeyhint="next"
+                          autocomplete="off"
                           placeholder="0"
+                          [attr.aria-label]="
+                            'Repeticiones realizadas para ' +
+                            exercise.name +
+                            ', serie ' +
+                            ($index + 1)
+                          "
                           [value]="getCurrentSet(
                             exercise.exerciseId,
                             $index
@@ -156,7 +213,15 @@
                           min="0"
                           step="0.5"
                           inputmode="decimal"
+                          enterkeyhint="done"
+                          autocomplete="off"
                           placeholder="0"
+                          [attr.aria-label]="
+                            'RIR realizado para ' +
+                            exercise.name +
+                            ', serie ' +
+                            ($index + 1)
+                          "
                           [value]="getCurrentSet(
                             exercise.exerciseId,
                             $index
@@ -179,6 +244,19 @@
                         $index
                       )"
                       [disabled]="workoutLoading()"
+                      [attr.aria-label]="
+                        (
+                          isSetCompleted(
+                            exercise.exerciseId,
+                            $index
+                          )
+                            ? 'Desmarcar serie completada de '
+                            : 'Completar serie de '
+                        ) +
+                        exercise.name +
+                        ', serie ' +
+                        ($index + 1)
+                      "
                     >
                       @if (
                         isSetCompleted(
@@ -186,9 +264,9 @@
                           $index
                         )
                       ) {
-                        Desmarcar serie
+                        Completada - desmarcar
                       } @else {
-                        Completar serie
+                        Completar
                       }
                     </button>
                   </section>
@@ -235,6 +313,7 @@
                   type="button"
                   class="secondary-button"
                   (click)="addRestTime(-30)"
+                  aria-label="Reducir descanso 30 segundos"
                 >
                   -30 s
                 </button>
@@ -243,6 +322,7 @@
                   type="button"
                   class="secondary-button"
                   (click)="addRestTime(30)"
+                  aria-label="Añadir 30 segundos de descanso"
                 >
                   +30 s
                 </button>
@@ -251,6 +331,7 @@
                   type="button"
                   class="secondary-button"
                   (click)="skipRestTimer()"
+                  aria-label="Saltar descanso"
                 >
                   Saltar
                 </button>

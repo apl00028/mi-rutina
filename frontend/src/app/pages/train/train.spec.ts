@@ -408,6 +408,105 @@ describe('Train first workout flow', () => {
   });
 
 
+  it('renders mobile-friendly set labels, progress, and reversible completion state', async () => {
+    const fixture =
+      await createLoadedTrain([
+        {
+          workoutId:
+            'workout-1',
+          routineId:
+            'routine-1',
+          sessionId:
+            'session-1',
+          status:
+            'in_progress',
+          sets: []
+        }
+      ]);
+
+    const component =
+      fixture.componentInstance;
+
+    let text =
+      (
+        fixture.nativeElement as HTMLElement
+      ).textContent ?? '';
+
+    expect(text).toContain(
+      'Reps objetivo'
+    );
+    expect(text).toContain(
+      'RIR objetivo'
+    );
+    expect(text).toContain(
+      '0 / 2 series'
+    );
+    expect(text).toContain(
+      'Siguiente'
+    );
+
+    const weightInput =
+      fixture
+        .nativeElement
+        .querySelector(
+          'input[aria-label="Peso en kg para Press banca con mancuernas, serie 1"]'
+        ) as HTMLInputElement | null;
+
+    expect(weightInput)
+      .toBeTruthy();
+    expect(
+      weightInput?.getAttribute(
+        'inputmode'
+      )
+    ).toBe('decimal');
+    expect(
+      weightInput?.getAttribute(
+        'enterkeyhint'
+      )
+    ).toBe('next');
+
+    const complete =
+      component.completeSet(
+        'dumbbell-bench-press',
+        0
+      );
+
+    await waitForHttpTick();
+
+    const save =
+      http.expectOne(
+        `${environment.apiUrl}/workouts/workout-1`
+      );
+
+    save.flush(save.request.body);
+
+    await complete;
+    fixture.detectChanges();
+
+    text =
+      (
+        fixture.nativeElement as HTMLElement
+      ).textContent ?? '';
+
+    expect(text).toContain(
+      '1 / 2 series'
+    );
+    expect(text).toContain(
+      'Completada - desmarcar'
+    );
+
+    const completedButton =
+      fixture
+        .nativeElement
+        .querySelector(
+          'button[aria-label="Desmarcar serie completada de Press banca con mancuernas, serie 1"]'
+        ) as HTMLButtonElement | null;
+
+    expect(completedButton)
+      .toBeTruthy();
+  });
+
+
   it('does not clear the active workout when finish persistence fails and allows retry', async () => {
     const fixture =
       await createLoadedTrain([

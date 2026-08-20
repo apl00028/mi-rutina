@@ -93,13 +93,23 @@ async def list_exercises(
 ) -> list[Exercise]:
     built_in_exercises = load_exercises()
 
+    custom_exercises: list[Exercise] = []
+    favorite_ids: set[str] = set()
+
     try:
         custom_exercises = await list_custom_exercise_models(user)
-        favorite_ids = await list_user_favorite_exercise_ids(user)
-    except (httpx.HTTPError, RuntimeError) as exc:
-        _raise_custom_exercises_http_error(exc)
+    except (httpx.HTTPError, RuntimeError):
+        pass
 
-    return _with_favorites(built_in_exercises + custom_exercises, favorite_ids)
+    try:
+        favorite_ids = await list_user_favorite_exercise_ids(user)
+    except (httpx.HTTPError, RuntimeError):
+        pass
+
+    return _with_favorites(
+        built_in_exercises + custom_exercises,
+        favorite_ids,
+    )
 
 
 @router.post(

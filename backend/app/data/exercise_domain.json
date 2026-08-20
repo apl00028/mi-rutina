@@ -1,0 +1,3704 @@
+{
+  "bench-press": {
+    "movement_pattern": "horizontal_push",
+    "movement_subpattern": "barbell_flat_press",
+    "aliases": [
+      "Press banca",
+      "Press con barra"
+    ],
+    "primary_muscles": [
+      "chest"
+    ],
+    "secondary_muscles": [
+      "triceps",
+      "anterior_deltoid"
+    ],
+    "required_equipment": [
+      "barbell",
+      "plates",
+      "bench",
+      "squat_rack"
+    ],
+    "difficulty": "intermediate",
+    "technical_complexity": 3,
+    "stability_demand": 2,
+    "balance_demand": 1,
+    "supported": true,
+    "closed_chain": false,
+    "unilateral": false,
+    "body_positions": [
+      "supine"
+    ],
+    "loading_types": [
+      "free_weight"
+    ],
+    "prolonged_supine": true,
+    "exclusion_flags": [],
+    "caution_flags": [],
+    "record_types": [
+      "weight_reps"
+    ]
+  },
+  "dumbbell-bench-press": {
+    "movement_pattern": "horizontal_push",
+    "movement_subpattern": "dumbbell_flat_press",
+    "aliases": [
+      "Press plano con mancuernas",
+      "Press mancuernas plano"
+    ],
+    "primary_muscles": [
+      "chest"
+    ],
+    "secondary_muscles": [
+      "triceps",
+      "anterior_deltoid"
+    ],
+    "required_equipment": [
+      "dumbbells",
+      "bench"
+    ],
+    "difficulty": "beginner",
+    "technical_complexity": 2,
+    "stability_demand": 2,
+    "balance_demand": 1,
+    "supported": true,
+    "closed_chain": false,
+    "unilateral": false,
+    "body_positions": [
+      "supine"
+    ],
+    "loading_types": [
+      "free_weight"
+    ],
+    "prolonged_supine": true,
+    "exclusion_flags": [],
+    "caution_flags": [],
+    "record_types": [
+      "weight_reps"
+    ]
+  },
+  "incline-barbell-press": {
+    "movement_pattern": "horizontal_push",
+    "movement_subpattern": "barbell_incline_press",
+    "aliases": [
+      "Press inclinado barra"
+    ],
+    "primary_muscles": [
+      "chest"
+    ],
+    "secondary_muscles": [
+      "triceps",
+      "anterior_deltoid"
+    ],
+    "required_equipment": [
+      "barbell",
+      "plates",
+      "adjustable_bench",
+      "squat_rack"
+    ],
+    "difficulty": "intermediate",
+    "technical_complexity": 3,
+    "stability_demand": 2,
+    "balance_demand": 1,
+    "supported": true,
+    "closed_chain": false,
+    "unilateral": false,
+    "body_positions": [
+      "incline_supine"
+    ],
+    "loading_types": [
+      "free_weight"
+    ],
+    "prolonged_supine": true,
+    "exclusion_flags": [],
+    "caution_flags": [],
+    "record_types": [
+      "weight_reps"
+    ]
+  },
+  "incline-db-press": {
+    "movement_pattern": "horizontal_push",
+    "movement_subpattern": "dumbbell_incline_press",
+    "aliases": [
+      "Press inclinado mancuernas"
+    ],
+    "primary_muscles": [
+      "chest"
+    ],
+    "secondary_muscles": [
+      "triceps",
+      "anterior_deltoid"
+    ],
+    "required_equipment": [
+      "dumbbells",
+      "adjustable_bench"
+    ],
+    "difficulty": "intermediate",
+    "technical_complexity": 2,
+    "stability_demand": 2,
+    "balance_demand": 1,
+    "supported": true,
+    "closed_chain": false,
+    "unilateral": false,
+    "body_positions": [
+      "incline_supine"
+    ],
+    "loading_types": [
+      "free_weight"
+    ],
+    "prolonged_supine": true,
+    "exclusion_flags": [],
+    "caution_flags": [],
+    "record_types": [
+      "weight_reps"
+    ]
+  },
+  "decline-bench-press": {
+    "movement_pattern": "horizontal_push",
+    "movement_subpattern": "barbell_decline_press",
+    "aliases": [
+      "Press declinado"
+    ],
+    "primary_muscles": [
+      "chest"
+    ],
+    "secondary_muscles": [
+      "triceps",
+      "anterior_deltoid"
+    ],
+    "required_equipment": [
+      "barbell",
+      "plates",
+      "decline_bench"
+    ],
+    "difficulty": "intermediate",
+    "technical_complexity": 3,
+    "stability_demand": 2,
+    "balance_demand": 1,
+    "supported": true,
+    "closed_chain": false,
+    "unilateral": false,
+    "body_positions": [
+      "decline_supine"
+    ],
+    "loading_types": [
+      "free_weight"
+    ],
+    "prolonged_supine": true,
+    "exclusion_flags": [],
+    "caution_flags": [],
+    "record_types": [
+      "weight_reps"
+    ]
+  },
+  "machine-chest-press": {
+    "movement_pattern": "horizontal_push",
+    "movement_subpattern": "machine_chest_press",
+    "aliases": [
+      "Press pecho máquina",
+      "Press en máquina"
+    ],
+    "primary_muscles": [
+      "chest"
+    ],
+    "secondary_muscles": [
+      "triceps",
+      "anterior_deltoid"
+    ],
+    "required_equipment": [
+      "chest_press_machine"
+    ],
+    "difficulty": "beginner",
+    "technical_complexity": 1,
+    "stability_demand": 1,
+    "balance_demand": 1,
+    "supported": true,
+    "closed_chain": false,
+    "unilateral": false,
+    "body_positions": [
+      "seated"
+    ],
+    "loading_types": [
+      "machine_stack"
+    ],
+    "prolonged_supine": false,
+    "exclusion_flags": [],
+    "caution_flags": [],
+    "record_types": [
+      "weight_reps"
+    ]
+  },
+  "cable-chest-fly": {
+    "movement_pattern": "horizontal_push",
+    "movement_subpattern": "cable_chest_fly",
+    "aliases": [
+      "Cruce de poleas",
+      "Aperturas con cable"
+    ],
+    "primary_muscles": [
+      "chest"
+    ],
+    "secondary_muscles": [
+      "anterior_deltoid"
+    ],
+    "required_equipment": [
+      "cable_machine"
+    ],
+    "difficulty": "intermediate",
+    "technical_complexity": 2,
+    "stability_demand": 2,
+    "balance_demand": 1,
+    "supported": false,
+    "closed_chain": false,
+    "unilateral": false,
+    "body_positions": [
+      "standing"
+    ],
+    "loading_types": [
+      "cable"
+    ],
+    "prolonged_supine": false,
+    "exclusion_flags": [],
+    "caution_flags": [],
+    "record_types": [
+      "weight_reps"
+    ]
+  },
+  "pec-deck-fly": {
+    "movement_pattern": "horizontal_push",
+    "movement_subpattern": "machine_chest_fly",
+    "aliases": [
+      "Peck deck",
+      "Contractora de pecho",
+      "Aperturas máquina"
+    ],
+    "primary_muscles": [
+      "chest"
+    ],
+    "secondary_muscles": [
+      "anterior_deltoid"
+    ],
+    "required_equipment": [
+      "pec_deck"
+    ],
+    "difficulty": "beginner",
+    "technical_complexity": 1,
+    "stability_demand": 1,
+    "balance_demand": 1,
+    "supported": true,
+    "closed_chain": false,
+    "unilateral": false,
+    "body_positions": [
+      "seated"
+    ],
+    "loading_types": [
+      "machine_stack"
+    ],
+    "prolonged_supine": false,
+    "exclusion_flags": [],
+    "caution_flags": [],
+    "record_types": [
+      "weight_reps"
+    ]
+  },
+  "dumbbell-fly": {
+    "movement_pattern": "horizontal_push",
+    "movement_subpattern": "dumbbell_chest_fly",
+    "aliases": [
+      "Aperturas mancuernas"
+    ],
+    "primary_muscles": [
+      "chest"
+    ],
+    "secondary_muscles": [
+      "anterior_deltoid"
+    ],
+    "required_equipment": [
+      "dumbbells",
+      "bench"
+    ],
+    "difficulty": "intermediate",
+    "technical_complexity": 2,
+    "stability_demand": 2,
+    "balance_demand": 1,
+    "supported": true,
+    "closed_chain": false,
+    "unilateral": false,
+    "body_positions": [
+      "supine"
+    ],
+    "loading_types": [
+      "free_weight"
+    ],
+    "prolonged_supine": true,
+    "exclusion_flags": [],
+    "caution_flags": [],
+    "record_types": [
+      "weight_reps"
+    ]
+  },
+  "push-up": {
+    "movement_pattern": "horizontal_push",
+    "movement_subpattern": "bodyweight_push_up",
+    "aliases": [
+      "Flexión de brazos",
+      "Lagartijas"
+    ],
+    "primary_muscles": [
+      "chest"
+    ],
+    "secondary_muscles": [
+      "triceps",
+      "anterior_deltoid",
+      "trunk"
+    ],
+    "required_equipment": [
+      "bodyweight"
+    ],
+    "difficulty": "beginner",
+    "technical_complexity": 1,
+    "stability_demand": 2,
+    "balance_demand": 1,
+    "supported": false,
+    "closed_chain": true,
+    "unilateral": false,
+    "body_positions": [
+      "prone"
+    ],
+    "loading_types": [
+      "bodyweight"
+    ],
+    "prolonged_supine": false,
+    "exclusion_flags": [],
+    "caution_flags": [],
+    "record_types": [
+      "bodyweight_reps"
+    ]
+  },
+  "chest-dip": {
+    "movement_pattern": "horizontal_push",
+    "movement_subpattern": "bodyweight_chest_dip",
+    "aliases": [
+      "Fondos de pecho",
+      "Fondos inclinados"
+    ],
+    "primary_muscles": [
+      "chest"
+    ],
+    "secondary_muscles": [
+      "triceps",
+      "anterior_deltoid"
+    ],
+    "required_equipment": [
+      "dip_station"
+    ],
+    "difficulty": "advanced",
+    "technical_complexity": 3,
+    "stability_demand": 3,
+    "balance_demand": 2,
+    "supported": false,
+    "closed_chain": true,
+    "unilateral": false,
+    "body_positions": [
+      "supported_hanging"
+    ],
+    "loading_types": [
+      "bodyweight"
+    ],
+    "prolonged_supine": false,
+    "exclusion_flags": [],
+    "caution_flags": [],
+    "record_types": [
+      "bodyweight_reps"
+    ]
+  },
+  "lat-pulldown": {
+    "movement_pattern": "vertical_pull",
+    "movement_subpattern": "wide_grip_lat_pulldown",
+    "aliases": [
+      "Jalón",
+      "Jalón polea"
+    ],
+    "primary_muscles": [
+      "latissimus_dorsi"
+    ],
+    "secondary_muscles": [
+      "biceps",
+      "upper_back"
+    ],
+    "required_equipment": [
+      "lat_pulldown"
+    ],
+    "difficulty": "beginner",
+    "technical_complexity": 1,
+    "stability_demand": 1,
+    "balance_demand": 1,
+    "supported": true,
+    "closed_chain": false,
+    "unilateral": false,
+    "body_positions": [
+      "seated"
+    ],
+    "loading_types": [
+      "machine_stack"
+    ],
+    "prolonged_supine": false,
+    "exclusion_flags": [],
+    "caution_flags": [],
+    "record_types": [
+      "weight_reps"
+    ]
+  },
+  "neutral-grip-lat-pulldown": {
+    "movement_pattern": "vertical_pull",
+    "movement_subpattern": "neutral_grip_lat_pulldown",
+    "aliases": [
+      "Jalón neutro",
+      "Jalón agarre neutro"
+    ],
+    "primary_muscles": [
+      "latissimus_dorsi"
+    ],
+    "secondary_muscles": [
+      "biceps",
+      "upper_back"
+    ],
+    "required_equipment": [
+      "lat_pulldown"
+    ],
+    "difficulty": "beginner",
+    "technical_complexity": 1,
+    "stability_demand": 1,
+    "balance_demand": 1,
+    "supported": true,
+    "closed_chain": false,
+    "unilateral": false,
+    "body_positions": [
+      "seated"
+    ],
+    "loading_types": [
+      "machine_stack"
+    ],
+    "prolonged_supine": false,
+    "exclusion_flags": [],
+    "caution_flags": [],
+    "record_types": [
+      "weight_reps"
+    ]
+  },
+  "pull-up": {
+    "movement_pattern": "vertical_pull",
+    "movement_subpattern": "pronated_pull_up",
+    "aliases": [
+      "Dominadas",
+      "Dominada prona"
+    ],
+    "primary_muscles": [
+      "latissimus_dorsi",
+      "upper_back"
+    ],
+    "secondary_muscles": [
+      "biceps",
+      "forearms"
+    ],
+    "required_equipment": [
+      "pull_up_bar"
+    ],
+    "difficulty": "advanced",
+    "technical_complexity": 3,
+    "stability_demand": 3,
+    "balance_demand": 2,
+    "supported": false,
+    "closed_chain": true,
+    "unilateral": false,
+    "body_positions": [
+      "hanging"
+    ],
+    "loading_types": [
+      "bodyweight"
+    ],
+    "prolonged_supine": false,
+    "exclusion_flags": [],
+    "caution_flags": [],
+    "record_types": [
+      "bodyweight_reps"
+    ]
+  },
+  "assisted-pull-up": {
+    "movement_pattern": "vertical_pull",
+    "movement_subpattern": "assisted_pull_up",
+    "aliases": [
+      "Dominada asistida",
+      "Dominadas en máquina asistida"
+    ],
+    "primary_muscles": [
+      "latissimus_dorsi",
+      "upper_back"
+    ],
+    "secondary_muscles": [
+      "biceps"
+    ],
+    "required_equipment": [
+      "assisted_pullup_dip_machine"
+    ],
+    "difficulty": "beginner",
+    "technical_complexity": 2,
+    "stability_demand": 2,
+    "balance_demand": 1,
+    "supported": true,
+    "closed_chain": false,
+    "unilateral": false,
+    "body_positions": [
+      "supported_hanging"
+    ],
+    "loading_types": [
+      "assisted"
+    ],
+    "prolonged_supine": false,
+    "exclusion_flags": [],
+    "caution_flags": [],
+    "record_types": [
+      "assisted_reps"
+    ]
+  },
+  "chin-up": {
+    "movement_pattern": "vertical_pull",
+    "movement_subpattern": "supinated_chin_up",
+    "aliases": [
+      "Dominada supina",
+      "Chin ups"
+    ],
+    "primary_muscles": [
+      "latissimus_dorsi"
+    ],
+    "secondary_muscles": [
+      "biceps",
+      "upper_back"
+    ],
+    "required_equipment": [
+      "pull_up_bar"
+    ],
+    "difficulty": "advanced",
+    "technical_complexity": 3,
+    "stability_demand": 3,
+    "balance_demand": 2,
+    "supported": false,
+    "closed_chain": true,
+    "unilateral": false,
+    "body_positions": [
+      "hanging"
+    ],
+    "loading_types": [
+      "bodyweight"
+    ],
+    "prolonged_supine": false,
+    "exclusion_flags": [],
+    "caution_flags": [],
+    "record_types": [
+      "bodyweight_reps"
+    ]
+  },
+  "barbell-row": {
+    "movement_pattern": "horizontal_pull",
+    "movement_subpattern": "barbell_bent_over_row",
+    "aliases": [
+      "Remo barra"
+    ],
+    "primary_muscles": [
+      "upper_back",
+      "latissimus_dorsi"
+    ],
+    "secondary_muscles": [
+      "biceps",
+      "posterior_deltoid"
+    ],
+    "required_equipment": [
+      "barbell",
+      "plates"
+    ],
+    "difficulty": "intermediate",
+    "technical_complexity": 3,
+    "stability_demand": 3,
+    "balance_demand": 1,
+    "supported": false,
+    "closed_chain": false,
+    "unilateral": false,
+    "body_positions": [
+      "bent_over"
+    ],
+    "loading_types": [
+      "free_weight"
+    ],
+    "prolonged_supine": false,
+    "exclusion_flags": [],
+    "caution_flags": [],
+    "record_types": [
+      "weight_reps"
+    ]
+  },
+  "seated-cable-row": {
+    "movement_pattern": "horizontal_pull",
+    "movement_subpattern": "seated_cable_row",
+    "aliases": [
+      "Remo en polea baja",
+      "Remo polea sentado"
+    ],
+    "primary_muscles": [
+      "upper_back",
+      "latissimus_dorsi"
+    ],
+    "secondary_muscles": [
+      "biceps",
+      "posterior_deltoid"
+    ],
+    "required_equipment": [
+      "seated_row"
+    ],
+    "difficulty": "beginner",
+    "technical_complexity": 1,
+    "stability_demand": 1,
+    "balance_demand": 1,
+    "supported": true,
+    "closed_chain": false,
+    "unilateral": false,
+    "body_positions": [
+      "seated"
+    ],
+    "loading_types": [
+      "machine_stack"
+    ],
+    "prolonged_supine": false,
+    "exclusion_flags": [],
+    "caution_flags": [],
+    "record_types": [
+      "weight_reps"
+    ]
+  },
+  "machine-row": {
+    "movement_pattern": "horizontal_pull",
+    "movement_subpattern": "machine_supported_row",
+    "aliases": [
+      "Remo máquina",
+      "Remo guiado"
+    ],
+    "primary_muscles": [
+      "upper_back",
+      "latissimus_dorsi"
+    ],
+    "secondary_muscles": [
+      "biceps",
+      "posterior_deltoid"
+    ],
+    "required_equipment": [
+      "row_machine"
+    ],
+    "difficulty": "beginner",
+    "technical_complexity": 1,
+    "stability_demand": 1,
+    "balance_demand": 1,
+    "supported": true,
+    "closed_chain": false,
+    "unilateral": false,
+    "body_positions": [
+      "seated"
+    ],
+    "loading_types": [
+      "machine_stack"
+    ],
+    "prolonged_supine": false,
+    "exclusion_flags": [],
+    "caution_flags": [],
+    "record_types": [
+      "weight_reps"
+    ]
+  },
+  "one-arm-dumbbell-row": {
+    "movement_pattern": "horizontal_pull",
+    "movement_subpattern": "single_arm_dumbbell_row",
+    "aliases": [
+      "Remo unilateral con mancuerna",
+      "Remo mancuerna"
+    ],
+    "primary_muscles": [
+      "latissimus_dorsi",
+      "upper_back"
+    ],
+    "secondary_muscles": [
+      "biceps",
+      "posterior_deltoid"
+    ],
+    "required_equipment": [
+      "dumbbells",
+      "bench"
+    ],
+    "difficulty": "beginner",
+    "technical_complexity": 2,
+    "stability_demand": 2,
+    "balance_demand": 1,
+    "supported": true,
+    "closed_chain": false,
+    "unilateral": true,
+    "body_positions": [
+      "supported_bent_over"
+    ],
+    "loading_types": [
+      "free_weight"
+    ],
+    "prolonged_supine": false,
+    "exclusion_flags": [],
+    "caution_flags": [],
+    "record_types": [
+      "weight_reps"
+    ]
+  },
+  "chest-supported-db-row": {
+    "movement_pattern": "horizontal_pull",
+    "movement_subpattern": "chest_supported_dumbbell_row",
+    "aliases": [
+      "Remo pecho apoyado",
+      "Remo inclinado con apoyo"
+    ],
+    "primary_muscles": [
+      "upper_back",
+      "latissimus_dorsi"
+    ],
+    "secondary_muscles": [
+      "biceps",
+      "posterior_deltoid"
+    ],
+    "required_equipment": [
+      "dumbbells",
+      "adjustable_bench"
+    ],
+    "difficulty": "beginner",
+    "technical_complexity": 1,
+    "stability_demand": 1,
+    "balance_demand": 1,
+    "supported": true,
+    "closed_chain": false,
+    "unilateral": false,
+    "body_positions": [
+      "incline_prone"
+    ],
+    "loading_types": [
+      "free_weight"
+    ],
+    "prolonged_supine": false,
+    "exclusion_flags": [],
+    "caution_flags": [],
+    "record_types": [
+      "weight_reps"
+    ]
+  },
+  "t-bar-row": {
+    "movement_pattern": "horizontal_pull",
+    "movement_subpattern": "t_bar_row",
+    "aliases": [
+      "Remo T",
+      "T bar row"
+    ],
+    "primary_muscles": [
+      "upper_back",
+      "latissimus_dorsi"
+    ],
+    "secondary_muscles": [
+      "biceps",
+      "posterior_deltoid"
+    ],
+    "required_equipment": [
+      "t_bar_row_machine"
+    ],
+    "difficulty": "intermediate",
+    "technical_complexity": 2,
+    "stability_demand": 2,
+    "balance_demand": 1,
+    "supported": false,
+    "closed_chain": false,
+    "unilateral": false,
+    "body_positions": [
+      "bent_over"
+    ],
+    "loading_types": [
+      "plate_loaded"
+    ],
+    "prolonged_supine": false,
+    "exclusion_flags": [],
+    "caution_flags": [],
+    "record_types": [
+      "weight_reps"
+    ]
+  },
+  "straight-arm-pulldown": {
+    "movement_pattern": "vertical_pull",
+    "movement_subpattern": "straight_arm_cable_pulldown",
+    "aliases": [
+      "Jalón brazos rectos",
+      "Pullover polea"
+    ],
+    "primary_muscles": [
+      "latissimus_dorsi"
+    ],
+    "secondary_muscles": [
+      "triceps",
+      "trunk"
+    ],
+    "required_equipment": [
+      "cable_machine"
+    ],
+    "difficulty": "beginner",
+    "technical_complexity": 2,
+    "stability_demand": 2,
+    "balance_demand": 1,
+    "supported": false,
+    "closed_chain": false,
+    "unilateral": false,
+    "body_positions": [
+      "standing"
+    ],
+    "loading_types": [
+      "cable"
+    ],
+    "prolonged_supine": false,
+    "exclusion_flags": [],
+    "caution_flags": [],
+    "record_types": [
+      "weight_reps"
+    ]
+  },
+  "face-pull": {
+    "movement_pattern": "shoulder_external_rotation",
+    "movement_subpattern": "cable_face_pull",
+    "aliases": [
+      "Tirón a la cara",
+      "Facepull"
+    ],
+    "primary_muscles": [
+      "posterior_deltoid",
+      "rotator_cuff"
+    ],
+    "secondary_muscles": [
+      "upper_back",
+      "lower_traps"
+    ],
+    "required_equipment": [
+      "cable_machine"
+    ],
+    "difficulty": "beginner",
+    "technical_complexity": 2,
+    "stability_demand": 2,
+    "balance_demand": 1,
+    "supported": false,
+    "closed_chain": false,
+    "unilateral": false,
+    "body_positions": [
+      "standing"
+    ],
+    "loading_types": [
+      "cable"
+    ],
+    "prolonged_supine": false,
+    "exclusion_flags": [],
+    "caution_flags": [],
+    "record_types": [
+      "weight_reps"
+    ]
+  },
+  "back-squat": {
+    "movement_pattern": "squat",
+    "movement_subpattern": "barbell_back_squat",
+    "aliases": [
+      "Sentadilla con barra"
+    ],
+    "primary_muscles": [
+      "quadriceps",
+      "glutes"
+    ],
+    "secondary_muscles": [
+      "hamstrings",
+      "trunk"
+    ],
+    "required_equipment": [
+      "barbell",
+      "plates",
+      "squat_rack"
+    ],
+    "difficulty": "intermediate",
+    "technical_complexity": 4,
+    "stability_demand": 4,
+    "balance_demand": 3,
+    "supported": false,
+    "closed_chain": true,
+    "unilateral": false,
+    "body_positions": [
+      "standing"
+    ],
+    "loading_types": [
+      "free_weight"
+    ],
+    "prolonged_supine": false,
+    "exclusion_flags": [],
+    "caution_flags": [],
+    "record_types": [
+      "weight_reps"
+    ]
+  },
+  "front-squat": {
+    "movement_pattern": "squat",
+    "movement_subpattern": "barbell_front_squat",
+    "aliases": [
+      "Sentadilla frontal con barra"
+    ],
+    "primary_muscles": [
+      "quadriceps",
+      "glutes"
+    ],
+    "secondary_muscles": [
+      "trunk",
+      "upper_back"
+    ],
+    "required_equipment": [
+      "barbell",
+      "plates",
+      "squat_rack"
+    ],
+    "difficulty": "advanced",
+    "technical_complexity": 4,
+    "stability_demand": 4,
+    "balance_demand": 3,
+    "supported": false,
+    "closed_chain": true,
+    "unilateral": false,
+    "body_positions": [
+      "standing"
+    ],
+    "loading_types": [
+      "free_weight"
+    ],
+    "prolonged_supine": false,
+    "exclusion_flags": [],
+    "caution_flags": [],
+    "record_types": [
+      "weight_reps"
+    ]
+  },
+  "goblet-squat": {
+    "movement_pattern": "squat",
+    "movement_subpattern": "goblet_squat",
+    "aliases": [
+      "Sentadilla copa",
+      "Goblet squat"
+    ],
+    "primary_muscles": [
+      "quadriceps",
+      "glutes"
+    ],
+    "secondary_muscles": [
+      "trunk"
+    ],
+    "required_equipment": [
+      "dumbbells"
+    ],
+    "difficulty": "beginner",
+    "technical_complexity": 1,
+    "stability_demand": 2,
+    "balance_demand": 2,
+    "supported": false,
+    "closed_chain": true,
+    "unilateral": false,
+    "body_positions": [
+      "standing"
+    ],
+    "loading_types": [
+      "free_weight"
+    ],
+    "prolonged_supine": false,
+    "exclusion_flags": [],
+    "caution_flags": [],
+    "record_types": [
+      "weight_reps"
+    ]
+  },
+  "smith-squat": {
+    "movement_pattern": "squat",
+    "movement_subpattern": "smith_machine_squat",
+    "aliases": [
+      "Sentadilla Smith",
+      "Sentadilla multipower"
+    ],
+    "primary_muscles": [
+      "quadriceps",
+      "glutes"
+    ],
+    "secondary_muscles": [
+      "hamstrings"
+    ],
+    "required_equipment": [
+      "smith_machine",
+      "plates"
+    ],
+    "difficulty": "beginner",
+    "technical_complexity": 2,
+    "stability_demand": 1,
+    "balance_demand": 1,
+    "supported": true,
+    "closed_chain": true,
+    "unilateral": false,
+    "body_positions": [
+      "standing"
+    ],
+    "loading_types": [
+      "guided_bar"
+    ],
+    "prolonged_supine": false,
+    "exclusion_flags": [],
+    "caution_flags": [],
+    "record_types": [
+      "weight_reps"
+    ]
+  },
+  "hack-squat": {
+    "movement_pattern": "knee_dominant",
+    "movement_subpattern": "machine_hack_squat",
+    "aliases": [
+      "Hack squat",
+      "Jaca"
+    ],
+    "primary_muscles": [
+      "quadriceps",
+      "glutes"
+    ],
+    "secondary_muscles": [
+      "hamstrings"
+    ],
+    "required_equipment": [
+      "hack_squat_machine"
+    ],
+    "difficulty": "beginner",
+    "technical_complexity": 1,
+    "stability_demand": 1,
+    "balance_demand": 1,
+    "supported": true,
+    "closed_chain": true,
+    "unilateral": false,
+    "body_positions": [
+      "supported_standing"
+    ],
+    "loading_types": [
+      "plate_loaded"
+    ],
+    "prolonged_supine": false,
+    "exclusion_flags": [],
+    "caution_flags": [],
+    "record_types": [
+      "weight_reps"
+    ]
+  },
+  "leg-press": {
+    "movement_pattern": "knee_dominant",
+    "movement_subpattern": "machine_leg_press",
+    "aliases": [
+      "Prensa"
+    ],
+    "primary_muscles": [
+      "quadriceps",
+      "glutes"
+    ],
+    "secondary_muscles": [
+      "hamstrings"
+    ],
+    "required_equipment": [
+      "leg_press"
+    ],
+    "difficulty": "beginner",
+    "technical_complexity": 1,
+    "stability_demand": 1,
+    "balance_demand": 1,
+    "supported": true,
+    "closed_chain": true,
+    "unilateral": false,
+    "body_positions": [
+      "seated"
+    ],
+    "loading_types": [
+      "machine_stack"
+    ],
+    "prolonged_supine": false,
+    "exclusion_flags": [],
+    "caution_flags": [],
+    "record_types": [
+      "weight_reps"
+    ]
+  },
+  "bulgarian-split-squat": {
+    "movement_pattern": "unilateral_lower_body",
+    "movement_subpattern": "rear_foot_elevated_split_squat",
+    "aliases": [
+      "Búlgara",
+      "Split squat búlgaro"
+    ],
+    "primary_muscles": [
+      "quadriceps",
+      "glutes"
+    ],
+    "secondary_muscles": [
+      "hamstrings",
+      "trunk"
+    ],
+    "required_equipment": [
+      "dumbbells",
+      "bench"
+    ],
+    "difficulty": "intermediate",
+    "technical_complexity": 3,
+    "stability_demand": 4,
+    "balance_demand": 4,
+    "supported": false,
+    "closed_chain": true,
+    "unilateral": true,
+    "body_positions": [
+      "standing"
+    ],
+    "loading_types": [
+      "free_weight"
+    ],
+    "prolonged_supine": false,
+    "exclusion_flags": [],
+    "caution_flags": [],
+    "record_types": [
+      "weight_reps"
+    ]
+  },
+  "reverse-lunge": {
+    "movement_pattern": "unilateral_lower_body",
+    "movement_subpattern": "reverse_lunge",
+    "aliases": [
+      "Zancada inversa",
+      "Lunge atrás"
+    ],
+    "primary_muscles": [
+      "quadriceps",
+      "glutes"
+    ],
+    "secondary_muscles": [
+      "hamstrings",
+      "trunk"
+    ],
+    "required_equipment": [
+      "dumbbells"
+    ],
+    "difficulty": "beginner",
+    "technical_complexity": 2,
+    "stability_demand": 3,
+    "balance_demand": 3,
+    "supported": false,
+    "closed_chain": true,
+    "unilateral": true,
+    "body_positions": [
+      "standing"
+    ],
+    "loading_types": [
+      "free_weight"
+    ],
+    "prolonged_supine": false,
+    "exclusion_flags": [],
+    "caution_flags": [],
+    "record_types": [
+      "weight_reps"
+    ]
+  },
+  "walking-lunge": {
+    "movement_pattern": "unilateral_lower_body",
+    "movement_subpattern": "walking_lunge",
+    "aliases": [
+      "Zancadas andando",
+      "Walking lunges"
+    ],
+    "primary_muscles": [
+      "quadriceps",
+      "glutes"
+    ],
+    "secondary_muscles": [
+      "hamstrings",
+      "calves",
+      "trunk"
+    ],
+    "required_equipment": [
+      "dumbbells"
+    ],
+    "difficulty": "intermediate",
+    "technical_complexity": 2,
+    "stability_demand": 4,
+    "balance_demand": 4,
+    "supported": false,
+    "closed_chain": true,
+    "unilateral": true,
+    "body_positions": [
+      "standing"
+    ],
+    "loading_types": [
+      "free_weight"
+    ],
+    "prolonged_supine": false,
+    "exclusion_flags": [],
+    "caution_flags": [],
+    "record_types": [
+      "weight_reps"
+    ]
+  },
+  "step-up": {
+    "movement_pattern": "unilateral_lower_body",
+    "movement_subpattern": "weighted_step_up",
+    "aliases": [
+      "Step up",
+      "Subida a banco"
+    ],
+    "primary_muscles": [
+      "quadriceps",
+      "glutes"
+    ],
+    "secondary_muscles": [
+      "hamstrings",
+      "calves"
+    ],
+    "required_equipment": [
+      "dumbbells",
+      "step"
+    ],
+    "difficulty": "beginner",
+    "technical_complexity": 2,
+    "stability_demand": 3,
+    "balance_demand": 3,
+    "supported": false,
+    "closed_chain": true,
+    "unilateral": true,
+    "body_positions": [
+      "standing"
+    ],
+    "loading_types": [
+      "free_weight"
+    ],
+    "prolonged_supine": false,
+    "exclusion_flags": [],
+    "caution_flags": [],
+    "record_types": [
+      "weight_reps"
+    ]
+  },
+  "leg-extension": {
+    "movement_pattern": "knee_extension",
+    "movement_subpattern": "machine_knee_extension",
+    "aliases": [
+      "Extensión de cuádriceps",
+      "Cuádriceps máquina"
+    ],
+    "primary_muscles": [
+      "quadriceps"
+    ],
+    "secondary_muscles": [],
+    "required_equipment": [
+      "leg_extension"
+    ],
+    "difficulty": "beginner",
+    "technical_complexity": 1,
+    "stability_demand": 1,
+    "balance_demand": 1,
+    "supported": true,
+    "closed_chain": false,
+    "unilateral": false,
+    "body_positions": [
+      "seated"
+    ],
+    "loading_types": [
+      "machine_stack"
+    ],
+    "prolonged_supine": false,
+    "exclusion_flags": [],
+    "caution_flags": [],
+    "record_types": [
+      "weight_reps"
+    ]
+  },
+  "hip-thrust": {
+    "movement_pattern": "hip_extension",
+    "movement_subpattern": "barbell_hip_thrust",
+    "aliases": [
+      "Empuje de cadera con barra",
+      "Hip thrust"
+    ],
+    "primary_muscles": [
+      "glutes"
+    ],
+    "secondary_muscles": [
+      "hamstrings",
+      "trunk"
+    ],
+    "required_equipment": [
+      "barbell",
+      "plates",
+      "bench"
+    ],
+    "difficulty": "intermediate",
+    "technical_complexity": 2,
+    "stability_demand": 2,
+    "balance_demand": 1,
+    "supported": true,
+    "closed_chain": false,
+    "unilateral": false,
+    "body_positions": [
+      "upper_back_supported"
+    ],
+    "loading_types": [
+      "free_weight"
+    ],
+    "prolonged_supine": false,
+    "exclusion_flags": [],
+    "caution_flags": [],
+    "record_types": [
+      "weight_reps"
+    ]
+  },
+  "machine-hip-thrust": {
+    "movement_pattern": "hip_extension",
+    "movement_subpattern": "machine_hip_thrust",
+    "aliases": [
+      "Empuje de cadera en máquina"
+    ],
+    "primary_muscles": [
+      "glutes"
+    ],
+    "secondary_muscles": [
+      "hamstrings"
+    ],
+    "required_equipment": [
+      "hip_thrust_machine"
+    ],
+    "difficulty": "beginner",
+    "technical_complexity": 1,
+    "stability_demand": 1,
+    "balance_demand": 1,
+    "supported": true,
+    "closed_chain": false,
+    "unilateral": false,
+    "body_positions": [
+      "upper_back_supported"
+    ],
+    "loading_types": [
+      "machine_stack"
+    ],
+    "prolonged_supine": false,
+    "exclusion_flags": [],
+    "caution_flags": [],
+    "record_types": [
+      "weight_reps"
+    ]
+  },
+  "glute-bridge": {
+    "movement_pattern": "hip_extension",
+    "movement_subpattern": "bodyweight_glute_bridge",
+    "aliases": [
+      "Puente de cadera",
+      "Glute bridge"
+    ],
+    "primary_muscles": [
+      "glutes"
+    ],
+    "secondary_muscles": [
+      "hamstrings",
+      "trunk"
+    ],
+    "required_equipment": [
+      "bodyweight",
+      "mat"
+    ],
+    "difficulty": "beginner",
+    "technical_complexity": 1,
+    "stability_demand": 1,
+    "balance_demand": 1,
+    "supported": true,
+    "closed_chain": true,
+    "unilateral": false,
+    "body_positions": [
+      "supine"
+    ],
+    "loading_types": [
+      "bodyweight"
+    ],
+    "prolonged_supine": true,
+    "exclusion_flags": [],
+    "caution_flags": [],
+    "record_types": [
+      "bodyweight_reps"
+    ]
+  },
+  "cable-kickback": {
+    "movement_pattern": "hip_extension",
+    "movement_subpattern": "standing_cable_hip_extension",
+    "aliases": [
+      "Patada de glúteo en polea",
+      "Kickback en polea"
+    ],
+    "primary_muscles": [
+      "glutes"
+    ],
+    "secondary_muscles": [
+      "hamstrings"
+    ],
+    "required_equipment": [
+      "cable_machine"
+    ],
+    "difficulty": "beginner",
+    "technical_complexity": 2,
+    "stability_demand": 3,
+    "balance_demand": 3,
+    "supported": false,
+    "closed_chain": false,
+    "unilateral": true,
+    "body_positions": [
+      "standing"
+    ],
+    "loading_types": [
+      "cable"
+    ],
+    "prolonged_supine": false,
+    "exclusion_flags": [],
+    "caution_flags": [],
+    "record_types": [
+      "weight_reps"
+    ]
+  },
+  "romanian-deadlift": {
+    "movement_pattern": "hip_hinge",
+    "movement_subpattern": "barbell_romanian_deadlift",
+    "aliases": [
+      "Peso muerto rumano con barra"
+    ],
+    "primary_muscles": [
+      "hamstrings",
+      "glutes"
+    ],
+    "secondary_muscles": [
+      "spinal_erectors",
+      "forearms"
+    ],
+    "required_equipment": [
+      "barbell",
+      "plates"
+    ],
+    "difficulty": "intermediate",
+    "technical_complexity": 3,
+    "stability_demand": 3,
+    "balance_demand": 2,
+    "supported": false,
+    "closed_chain": true,
+    "unilateral": false,
+    "body_positions": [
+      "standing"
+    ],
+    "loading_types": [
+      "free_weight"
+    ],
+    "prolonged_supine": false,
+    "exclusion_flags": [],
+    "caution_flags": [],
+    "record_types": [
+      "weight_reps"
+    ]
+  },
+  "db-romanian-deadlift": {
+    "movement_pattern": "hip_hinge",
+    "movement_subpattern": "dumbbell_romanian_deadlift",
+    "aliases": [
+      "Rumano con mancuernas",
+      "RDL mancuernas"
+    ],
+    "primary_muscles": [
+      "hamstrings",
+      "glutes"
+    ],
+    "secondary_muscles": [
+      "spinal_erectors",
+      "forearms"
+    ],
+    "required_equipment": [
+      "dumbbells"
+    ],
+    "difficulty": "beginner",
+    "technical_complexity": 2,
+    "stability_demand": 2,
+    "balance_demand": 2,
+    "supported": false,
+    "closed_chain": true,
+    "unilateral": false,
+    "body_positions": [
+      "standing"
+    ],
+    "loading_types": [
+      "free_weight"
+    ],
+    "prolonged_supine": false,
+    "exclusion_flags": [],
+    "caution_flags": [],
+    "record_types": [
+      "weight_reps"
+    ]
+  },
+  "conventional-deadlift": {
+    "movement_pattern": "hip_hinge",
+    "movement_subpattern": "barbell_conventional_deadlift",
+    "aliases": [
+      "Peso muerto",
+      "Deadlift convencional"
+    ],
+    "primary_muscles": [
+      "glutes",
+      "hamstrings",
+      "spinal_erectors"
+    ],
+    "secondary_muscles": [
+      "quadriceps",
+      "upper_back",
+      "forearms"
+    ],
+    "required_equipment": [
+      "barbell",
+      "plates"
+    ],
+    "difficulty": "advanced",
+    "technical_complexity": 5,
+    "stability_demand": 4,
+    "balance_demand": 2,
+    "supported": false,
+    "closed_chain": true,
+    "unilateral": false,
+    "body_positions": [
+      "standing"
+    ],
+    "loading_types": [
+      "free_weight"
+    ],
+    "prolonged_supine": false,
+    "exclusion_flags": [],
+    "caution_flags": [],
+    "record_types": [
+      "weight_reps"
+    ]
+  },
+  "trap-bar-deadlift": {
+    "movement_pattern": "hip_hinge",
+    "movement_subpattern": "trap_bar_deadlift",
+    "aliases": [
+      "Peso muerto trap bar",
+      "Peso muerto barra hexagonal"
+    ],
+    "primary_muscles": [
+      "glutes",
+      "quadriceps",
+      "hamstrings"
+    ],
+    "secondary_muscles": [
+      "spinal_erectors",
+      "forearms"
+    ],
+    "required_equipment": [
+      "trap_bar",
+      "plates"
+    ],
+    "difficulty": "intermediate",
+    "technical_complexity": 3,
+    "stability_demand": 3,
+    "balance_demand": 2,
+    "supported": false,
+    "closed_chain": true,
+    "unilateral": false,
+    "body_positions": [
+      "standing"
+    ],
+    "loading_types": [
+      "free_weight"
+    ],
+    "prolonged_supine": false,
+    "exclusion_flags": [],
+    "caution_flags": [],
+    "record_types": [
+      "weight_reps"
+    ]
+  },
+  "sumo-deadlift": {
+    "movement_pattern": "hip_hinge",
+    "movement_subpattern": "barbell_sumo_deadlift",
+    "aliases": [
+      "Peso muerto estilo sumo"
+    ],
+    "primary_muscles": [
+      "glutes",
+      "adductors",
+      "hamstrings"
+    ],
+    "secondary_muscles": [
+      "quadriceps",
+      "spinal_erectors"
+    ],
+    "required_equipment": [
+      "barbell",
+      "plates"
+    ],
+    "difficulty": "advanced",
+    "technical_complexity": 4,
+    "stability_demand": 4,
+    "balance_demand": 2,
+    "supported": false,
+    "closed_chain": true,
+    "unilateral": false,
+    "body_positions": [
+      "standing"
+    ],
+    "loading_types": [
+      "free_weight"
+    ],
+    "prolonged_supine": false,
+    "exclusion_flags": [],
+    "caution_flags": [],
+    "record_types": [
+      "weight_reps"
+    ]
+  },
+  "leg-curl": {
+    "movement_pattern": "knee_flexion",
+    "movement_subpattern": "seated_leg_curl",
+    "aliases": [
+      "Curl femoral",
+      "Curl femoral máquina"
+    ],
+    "primary_muscles": [
+      "hamstrings"
+    ],
+    "secondary_muscles": [
+      "calves"
+    ],
+    "required_equipment": [
+      "seated_leg_curl"
+    ],
+    "difficulty": "beginner",
+    "technical_complexity": 1,
+    "stability_demand": 1,
+    "balance_demand": 1,
+    "supported": true,
+    "closed_chain": false,
+    "unilateral": false,
+    "body_positions": [
+      "seated"
+    ],
+    "loading_types": [
+      "machine_stack"
+    ],
+    "prolonged_supine": false,
+    "exclusion_flags": [],
+    "caution_flags": [],
+    "record_types": [
+      "weight_reps"
+    ]
+  },
+  "lying-leg-curl": {
+    "movement_pattern": "knee_flexion",
+    "movement_subpattern": "lying_leg_curl",
+    "aliases": [
+      "Curl femoral acostado"
+    ],
+    "primary_muscles": [
+      "hamstrings"
+    ],
+    "secondary_muscles": [
+      "calves"
+    ],
+    "required_equipment": [
+      "lying_leg_curl"
+    ],
+    "difficulty": "beginner",
+    "technical_complexity": 1,
+    "stability_demand": 1,
+    "balance_demand": 1,
+    "supported": true,
+    "closed_chain": false,
+    "unilateral": false,
+    "body_positions": [
+      "prone"
+    ],
+    "loading_types": [
+      "machine_stack"
+    ],
+    "prolonged_supine": false,
+    "exclusion_flags": [],
+    "caution_flags": [],
+    "record_types": [
+      "weight_reps"
+    ]
+  },
+  "single-leg-curl": {
+    "movement_pattern": "knee_flexion",
+    "movement_subpattern": "single_leg_machine_curl",
+    "aliases": [
+      "Curl femoral a una pierna"
+    ],
+    "primary_muscles": [
+      "hamstrings"
+    ],
+    "secondary_muscles": [
+      "calves"
+    ],
+    "required_equipment": [
+      "seated_leg_curl"
+    ],
+    "difficulty": "beginner",
+    "technical_complexity": 1,
+    "stability_demand": 1,
+    "balance_demand": 1,
+    "supported": true,
+    "closed_chain": false,
+    "unilateral": true,
+    "body_positions": [
+      "seated"
+    ],
+    "loading_types": [
+      "machine_stack"
+    ],
+    "prolonged_supine": false,
+    "exclusion_flags": [],
+    "caution_flags": [],
+    "record_types": [
+      "weight_reps"
+    ]
+  },
+  "cable-pull-through": {
+    "movement_pattern": "hip_hinge",
+    "movement_subpattern": "cable_pull_through",
+    "aliases": [
+      "Pull through",
+      "Jalón de cadera en polea"
+    ],
+    "primary_muscles": [
+      "glutes",
+      "hamstrings"
+    ],
+    "secondary_muscles": [
+      "trunk"
+    ],
+    "required_equipment": [
+      "cable_machine"
+    ],
+    "difficulty": "beginner",
+    "technical_complexity": 2,
+    "stability_demand": 2,
+    "balance_demand": 2,
+    "supported": false,
+    "closed_chain": false,
+    "unilateral": false,
+    "body_positions": [
+      "standing"
+    ],
+    "loading_types": [
+      "cable"
+    ],
+    "prolonged_supine": false,
+    "exclusion_flags": [],
+    "caution_flags": [],
+    "record_types": [
+      "weight_reps"
+    ]
+  },
+  "machine-hip-abduction": {
+    "movement_pattern": "hip_abduction",
+    "movement_subpattern": "machine_hip_abduction",
+    "aliases": [
+      "Abductores en máquina",
+      "Máquina de abductores"
+    ],
+    "primary_muscles": [
+      "gluteus_medius",
+      "gluteus_minimus"
+    ],
+    "secondary_muscles": [
+      "glutes"
+    ],
+    "required_equipment": [
+      "hip_abduction_machine"
+    ],
+    "difficulty": "beginner",
+    "technical_complexity": 1,
+    "stability_demand": 1,
+    "balance_demand": 1,
+    "supported": true,
+    "closed_chain": false,
+    "unilateral": false,
+    "body_positions": [
+      "seated"
+    ],
+    "loading_types": [
+      "machine_stack"
+    ],
+    "prolonged_supine": false,
+    "exclusion_flags": [],
+    "caution_flags": [],
+    "record_types": [
+      "weight_reps"
+    ]
+  },
+  "cable-hip-abduction": {
+    "movement_pattern": "hip_abduction",
+    "movement_subpattern": "standing_cable_hip_abduction",
+    "aliases": [
+      "Abducción en polea",
+      "Patada lateral en polea"
+    ],
+    "primary_muscles": [
+      "gluteus_medius",
+      "gluteus_minimus"
+    ],
+    "secondary_muscles": [
+      "glutes"
+    ],
+    "required_equipment": [
+      "cable_machine"
+    ],
+    "difficulty": "intermediate",
+    "technical_complexity": 2,
+    "stability_demand": 3,
+    "balance_demand": 3,
+    "supported": false,
+    "closed_chain": false,
+    "unilateral": true,
+    "body_positions": [
+      "standing"
+    ],
+    "loading_types": [
+      "cable"
+    ],
+    "prolonged_supine": false,
+    "exclusion_flags": [],
+    "caution_flags": [],
+    "record_types": [
+      "weight_reps"
+    ]
+  },
+  "machine-hip-adduction": {
+    "movement_pattern": "hip_adduction",
+    "movement_subpattern": "machine_hip_adduction",
+    "aliases": [
+      "Aductores en máquina",
+      "Máquina de aductores"
+    ],
+    "primary_muscles": [
+      "adductors"
+    ],
+    "secondary_muscles": [
+      "gracilis"
+    ],
+    "required_equipment": [
+      "hip_adduction_machine"
+    ],
+    "difficulty": "beginner",
+    "technical_complexity": 1,
+    "stability_demand": 1,
+    "balance_demand": 1,
+    "supported": true,
+    "closed_chain": false,
+    "unilateral": false,
+    "body_positions": [
+      "seated"
+    ],
+    "loading_types": [
+      "machine_stack"
+    ],
+    "prolonged_supine": false,
+    "exclusion_flags": [],
+    "caution_flags": [],
+    "record_types": [
+      "weight_reps"
+    ]
+  },
+  "nordic-hamstring-curl": {
+    "movement_pattern": "knee_flexion",
+    "movement_subpattern": "nordic_hamstring_curl",
+    "aliases": [
+      "Curl nórdico",
+      "Nordic curl"
+    ],
+    "primary_muscles": [
+      "hamstrings"
+    ],
+    "secondary_muscles": [
+      "glutes",
+      "calves"
+    ],
+    "required_equipment": [
+      "nordic_bench"
+    ],
+    "difficulty": "advanced",
+    "technical_complexity": 3,
+    "stability_demand": 3,
+    "balance_demand": 1,
+    "supported": true,
+    "closed_chain": false,
+    "unilateral": false,
+    "body_positions": [
+      "kneeling"
+    ],
+    "loading_types": [
+      "bodyweight"
+    ],
+    "prolonged_supine": false,
+    "exclusion_flags": [],
+    "caution_flags": [],
+    "record_types": [
+      "bodyweight_reps"
+    ]
+  },
+  "overhead-press": {
+    "movement_pattern": "vertical_push",
+    "movement_subpattern": "standing_barbell_overhead_press",
+    "aliases": [
+      "Press militar con barra"
+    ],
+    "primary_muscles": [
+      "deltoids"
+    ],
+    "secondary_muscles": [
+      "triceps",
+      "upper_chest"
+    ],
+    "required_equipment": [
+      "barbell",
+      "plates"
+    ],
+    "difficulty": "intermediate",
+    "technical_complexity": 3,
+    "stability_demand": 3,
+    "balance_demand": 2,
+    "supported": false,
+    "closed_chain": false,
+    "unilateral": false,
+    "body_positions": [
+      "standing"
+    ],
+    "loading_types": [
+      "free_weight"
+    ],
+    "prolonged_supine": false,
+    "exclusion_flags": [],
+    "caution_flags": [],
+    "record_types": [
+      "weight_reps"
+    ]
+  },
+  "db-shoulder-press": {
+    "movement_pattern": "vertical_push",
+    "movement_subpattern": "seated_dumbbell_shoulder_press",
+    "aliases": [
+      "Press hombro mancuernas",
+      "Press sentado con mancuernas"
+    ],
+    "primary_muscles": [
+      "deltoids"
+    ],
+    "secondary_muscles": [
+      "triceps",
+      "upper_chest"
+    ],
+    "required_equipment": [
+      "dumbbells",
+      "adjustable_bench"
+    ],
+    "difficulty": "beginner",
+    "technical_complexity": 2,
+    "stability_demand": 2,
+    "balance_demand": 1,
+    "supported": true,
+    "closed_chain": false,
+    "unilateral": false,
+    "body_positions": [
+      "seated"
+    ],
+    "loading_types": [
+      "free_weight"
+    ],
+    "prolonged_supine": false,
+    "exclusion_flags": [],
+    "caution_flags": [],
+    "record_types": [
+      "weight_reps"
+    ]
+  },
+  "machine-shoulder-press": {
+    "movement_pattern": "vertical_push",
+    "movement_subpattern": "machine_shoulder_press",
+    "aliases": [
+      "Press hombro máquina"
+    ],
+    "primary_muscles": [
+      "deltoids"
+    ],
+    "secondary_muscles": [
+      "triceps"
+    ],
+    "required_equipment": [
+      "shoulder_press_machine"
+    ],
+    "difficulty": "beginner",
+    "technical_complexity": 1,
+    "stability_demand": 1,
+    "balance_demand": 1,
+    "supported": true,
+    "closed_chain": false,
+    "unilateral": false,
+    "body_positions": [
+      "seated"
+    ],
+    "loading_types": [
+      "machine_stack"
+    ],
+    "prolonged_supine": false,
+    "exclusion_flags": [],
+    "caution_flags": [],
+    "record_types": [
+      "weight_reps"
+    ]
+  },
+  "arnold-press": {
+    "movement_pattern": "vertical_push",
+    "movement_subpattern": "dumbbell_arnold_press",
+    "aliases": [
+      "Press Arnold con mancuernas"
+    ],
+    "primary_muscles": [
+      "deltoids"
+    ],
+    "secondary_muscles": [
+      "triceps",
+      "upper_chest"
+    ],
+    "required_equipment": [
+      "dumbbells",
+      "adjustable_bench"
+    ],
+    "difficulty": "intermediate",
+    "technical_complexity": 3,
+    "stability_demand": 2,
+    "balance_demand": 1,
+    "supported": true,
+    "closed_chain": false,
+    "unilateral": false,
+    "body_positions": [
+      "seated"
+    ],
+    "loading_types": [
+      "free_weight"
+    ],
+    "prolonged_supine": false,
+    "exclusion_flags": [],
+    "caution_flags": [],
+    "record_types": [
+      "weight_reps"
+    ]
+  },
+  "lateral-raise": {
+    "movement_pattern": "shoulder_abduction",
+    "movement_subpattern": "dumbbell_lateral_raise",
+    "aliases": [
+      "Elevación lateral"
+    ],
+    "primary_muscles": [
+      "lateral_deltoid"
+    ],
+    "secondary_muscles": [
+      "upper_traps"
+    ],
+    "required_equipment": [
+      "dumbbells"
+    ],
+    "difficulty": "beginner",
+    "technical_complexity": 1,
+    "stability_demand": 2,
+    "balance_demand": 1,
+    "supported": false,
+    "closed_chain": false,
+    "unilateral": false,
+    "body_positions": [
+      "standing"
+    ],
+    "loading_types": [
+      "free_weight"
+    ],
+    "prolonged_supine": false,
+    "exclusion_flags": [],
+    "caution_flags": [],
+    "record_types": [
+      "weight_reps"
+    ]
+  },
+  "cable-lateral-raise": {
+    "movement_pattern": "shoulder_abduction",
+    "movement_subpattern": "single_arm_cable_lateral_raise",
+    "aliases": [
+      "Elevaciones laterales en polea"
+    ],
+    "primary_muscles": [
+      "lateral_deltoid"
+    ],
+    "secondary_muscles": [
+      "upper_traps"
+    ],
+    "required_equipment": [
+      "cable_machine"
+    ],
+    "difficulty": "beginner",
+    "technical_complexity": 2,
+    "stability_demand": 2,
+    "balance_demand": 1,
+    "supported": false,
+    "closed_chain": false,
+    "unilateral": true,
+    "body_positions": [
+      "standing"
+    ],
+    "loading_types": [
+      "cable"
+    ],
+    "prolonged_supine": false,
+    "exclusion_flags": [],
+    "caution_flags": [],
+    "record_types": [
+      "weight_reps"
+    ]
+  },
+  "machine-lateral-raise": {
+    "movement_pattern": "shoulder_abduction",
+    "movement_subpattern": "machine_lateral_raise",
+    "aliases": [
+      "Laterales en máquina",
+      "Máquina de deltoide lateral"
+    ],
+    "primary_muscles": [
+      "lateral_deltoid"
+    ],
+    "secondary_muscles": [
+      "upper_traps"
+    ],
+    "required_equipment": [
+      "lateral_raise_machine"
+    ],
+    "difficulty": "beginner",
+    "technical_complexity": 1,
+    "stability_demand": 1,
+    "balance_demand": 1,
+    "supported": true,
+    "closed_chain": false,
+    "unilateral": false,
+    "body_positions": [
+      "seated"
+    ],
+    "loading_types": [
+      "machine_stack"
+    ],
+    "prolonged_supine": false,
+    "exclusion_flags": [],
+    "caution_flags": [],
+    "record_types": [
+      "weight_reps"
+    ]
+  },
+  "front-raise": {
+    "movement_pattern": "shoulder_flexion",
+    "movement_subpattern": "dumbbell_front_raise",
+    "aliases": [
+      "Elevaciones frontales"
+    ],
+    "primary_muscles": [
+      "anterior_deltoid"
+    ],
+    "secondary_muscles": [
+      "upper_chest"
+    ],
+    "required_equipment": [
+      "dumbbells"
+    ],
+    "difficulty": "beginner",
+    "technical_complexity": 1,
+    "stability_demand": 2,
+    "balance_demand": 1,
+    "supported": false,
+    "closed_chain": false,
+    "unilateral": false,
+    "body_positions": [
+      "standing"
+    ],
+    "loading_types": [
+      "free_weight"
+    ],
+    "prolonged_supine": false,
+    "exclusion_flags": [],
+    "caution_flags": [],
+    "record_types": [
+      "weight_reps"
+    ]
+  },
+  "rear-delt-fly": {
+    "movement_pattern": "horizontal_pull",
+    "movement_subpattern": "dumbbell_rear_delt_fly",
+    "aliases": [
+      "Aperturas posteriores",
+      "Elevación posterior"
+    ],
+    "primary_muscles": [
+      "posterior_deltoid"
+    ],
+    "secondary_muscles": [
+      "upper_back"
+    ],
+    "required_equipment": [
+      "dumbbells"
+    ],
+    "difficulty": "beginner",
+    "technical_complexity": 2,
+    "stability_demand": 2,
+    "balance_demand": 1,
+    "supported": false,
+    "closed_chain": false,
+    "unilateral": false,
+    "body_positions": [
+      "bent_over"
+    ],
+    "loading_types": [
+      "free_weight"
+    ],
+    "prolonged_supine": false,
+    "exclusion_flags": [],
+    "caution_flags": [],
+    "record_types": [
+      "weight_reps"
+    ]
+  },
+  "reverse-pec-deck": {
+    "movement_pattern": "horizontal_pull",
+    "movement_subpattern": "machine_reverse_fly",
+    "aliases": [
+      "Peck deck inverso",
+      "Reverse fly máquina"
+    ],
+    "primary_muscles": [
+      "posterior_deltoid"
+    ],
+    "secondary_muscles": [
+      "upper_back",
+      "rotator_cuff"
+    ],
+    "required_equipment": [
+      "pec_deck"
+    ],
+    "difficulty": "beginner",
+    "technical_complexity": 1,
+    "stability_demand": 1,
+    "balance_demand": 1,
+    "supported": true,
+    "closed_chain": false,
+    "unilateral": false,
+    "body_positions": [
+      "seated"
+    ],
+    "loading_types": [
+      "machine_stack"
+    ],
+    "prolonged_supine": false,
+    "exclusion_flags": [],
+    "caution_flags": [],
+    "record_types": [
+      "weight_reps"
+    ]
+  },
+  "upright-row": {
+    "movement_pattern": "shoulder_abduction",
+    "movement_subpattern": "barbell_upright_row",
+    "aliases": [
+      "Remo vertical",
+      "Upright row"
+    ],
+    "primary_muscles": [
+      "lateral_deltoid",
+      "upper_traps"
+    ],
+    "secondary_muscles": [
+      "biceps"
+    ],
+    "required_equipment": [
+      "barbell",
+      "plates"
+    ],
+    "difficulty": "intermediate",
+    "technical_complexity": 2,
+    "stability_demand": 2,
+    "balance_demand": 1,
+    "supported": false,
+    "closed_chain": false,
+    "unilateral": false,
+    "body_positions": [
+      "standing"
+    ],
+    "loading_types": [
+      "free_weight"
+    ],
+    "prolonged_supine": false,
+    "exclusion_flags": [],
+    "caution_flags": [],
+    "record_types": [
+      "weight_reps"
+    ]
+  },
+  "cable-external-rotation": {
+    "movement_pattern": "shoulder_external_rotation",
+    "movement_subpattern": "cable_external_rotation",
+    "aliases": [
+      "Rotación externa en polea"
+    ],
+    "primary_muscles": [
+      "rotator_cuff"
+    ],
+    "secondary_muscles": [
+      "posterior_deltoid"
+    ],
+    "required_equipment": [
+      "cable_machine"
+    ],
+    "difficulty": "beginner",
+    "technical_complexity": 2,
+    "stability_demand": 2,
+    "balance_demand": 1,
+    "supported": false,
+    "closed_chain": false,
+    "unilateral": true,
+    "body_positions": [
+      "standing"
+    ],
+    "loading_types": [
+      "cable"
+    ],
+    "prolonged_supine": false,
+    "exclusion_flags": [],
+    "caution_flags": [],
+    "record_types": [
+      "weight_reps"
+    ]
+  },
+  "biceps-curl": {
+    "movement_pattern": "elbow_flexion",
+    "movement_subpattern": "standing_dumbbell_curl",
+    "aliases": [
+      "Curl de bíceps",
+      "Curl bíceps"
+    ],
+    "primary_muscles": [
+      "biceps"
+    ],
+    "secondary_muscles": [
+      "forearms"
+    ],
+    "required_equipment": [
+      "dumbbells"
+    ],
+    "difficulty": "beginner",
+    "technical_complexity": 1,
+    "stability_demand": 2,
+    "balance_demand": 1,
+    "supported": false,
+    "closed_chain": false,
+    "unilateral": false,
+    "body_positions": [
+      "standing"
+    ],
+    "loading_types": [
+      "free_weight"
+    ],
+    "prolonged_supine": false,
+    "exclusion_flags": [],
+    "caution_flags": [],
+    "record_types": [
+      "weight_reps"
+    ]
+  },
+  "barbell-curl": {
+    "movement_pattern": "elbow_flexion",
+    "movement_subpattern": "barbell_biceps_curl",
+    "aliases": [
+      "Curl con barra",
+      "Curl barra recta"
+    ],
+    "primary_muscles": [
+      "biceps"
+    ],
+    "secondary_muscles": [
+      "forearms"
+    ],
+    "required_equipment": [
+      "barbell",
+      "plates"
+    ],
+    "difficulty": "beginner",
+    "technical_complexity": 1,
+    "stability_demand": 2,
+    "balance_demand": 1,
+    "supported": false,
+    "closed_chain": false,
+    "unilateral": false,
+    "body_positions": [
+      "standing"
+    ],
+    "loading_types": [
+      "free_weight"
+    ],
+    "prolonged_supine": false,
+    "exclusion_flags": [],
+    "caution_flags": [],
+    "record_types": [
+      "weight_reps"
+    ]
+  },
+  "ez-bar-curl": {
+    "movement_pattern": "elbow_flexion",
+    "movement_subpattern": "ez_bar_biceps_curl",
+    "aliases": [
+      "Curl barra Z",
+      "Curl barra EZ"
+    ],
+    "primary_muscles": [
+      "biceps"
+    ],
+    "secondary_muscles": [
+      "forearms"
+    ],
+    "required_equipment": [
+      "ez_bar",
+      "plates"
+    ],
+    "difficulty": "beginner",
+    "technical_complexity": 1,
+    "stability_demand": 2,
+    "balance_demand": 1,
+    "supported": false,
+    "closed_chain": false,
+    "unilateral": false,
+    "body_positions": [
+      "standing"
+    ],
+    "loading_types": [
+      "free_weight"
+    ],
+    "prolonged_supine": false,
+    "exclusion_flags": [],
+    "caution_flags": [],
+    "record_types": [
+      "weight_reps"
+    ]
+  },
+  "hammer-curl": {
+    "movement_pattern": "elbow_flexion",
+    "movement_subpattern": "dumbbell_hammer_curl",
+    "aliases": [
+      "Curl neutro",
+      "Martillo con mancuernas"
+    ],
+    "primary_muscles": [
+      "brachialis",
+      "biceps"
+    ],
+    "secondary_muscles": [
+      "forearms"
+    ],
+    "required_equipment": [
+      "dumbbells"
+    ],
+    "difficulty": "beginner",
+    "technical_complexity": 1,
+    "stability_demand": 2,
+    "balance_demand": 1,
+    "supported": false,
+    "closed_chain": false,
+    "unilateral": false,
+    "body_positions": [
+      "standing"
+    ],
+    "loading_types": [
+      "free_weight"
+    ],
+    "prolonged_supine": false,
+    "exclusion_flags": [],
+    "caution_flags": [],
+    "record_types": [
+      "weight_reps"
+    ]
+  },
+  "incline-db-curl": {
+    "movement_pattern": "elbow_flexion",
+    "movement_subpattern": "incline_dumbbell_curl",
+    "aliases": [
+      "Curl bíceps banco inclinado"
+    ],
+    "primary_muscles": [
+      "biceps"
+    ],
+    "secondary_muscles": [
+      "forearms"
+    ],
+    "required_equipment": [
+      "dumbbells",
+      "adjustable_bench"
+    ],
+    "difficulty": "beginner",
+    "technical_complexity": 2,
+    "stability_demand": 1,
+    "balance_demand": 1,
+    "supported": true,
+    "closed_chain": false,
+    "unilateral": false,
+    "body_positions": [
+      "incline_seated"
+    ],
+    "loading_types": [
+      "free_weight"
+    ],
+    "prolonged_supine": false,
+    "exclusion_flags": [],
+    "caution_flags": [],
+    "record_types": [
+      "weight_reps"
+    ]
+  },
+  "preacher-curl": {
+    "movement_pattern": "elbow_flexion",
+    "movement_subpattern": "preacher_curl",
+    "aliases": [
+      "Curl Scott",
+      "Predicador"
+    ],
+    "primary_muscles": [
+      "biceps"
+    ],
+    "secondary_muscles": [
+      "brachialis",
+      "forearms"
+    ],
+    "required_equipment": [
+      "ez_bar",
+      "plates",
+      "preacher_bench"
+    ],
+    "difficulty": "beginner",
+    "technical_complexity": 1,
+    "stability_demand": 1,
+    "balance_demand": 1,
+    "supported": true,
+    "closed_chain": false,
+    "unilateral": false,
+    "body_positions": [
+      "seated"
+    ],
+    "loading_types": [
+      "free_weight"
+    ],
+    "prolonged_supine": false,
+    "exclusion_flags": [],
+    "caution_flags": [],
+    "record_types": [
+      "weight_reps"
+    ]
+  },
+  "cable-curl": {
+    "movement_pattern": "elbow_flexion",
+    "movement_subpattern": "cable_biceps_curl",
+    "aliases": [
+      "Curl polea",
+      "Curl cable"
+    ],
+    "primary_muscles": [
+      "biceps"
+    ],
+    "secondary_muscles": [
+      "forearms"
+    ],
+    "required_equipment": [
+      "cable_machine"
+    ],
+    "difficulty": "beginner",
+    "technical_complexity": 1,
+    "stability_demand": 2,
+    "balance_demand": 1,
+    "supported": false,
+    "closed_chain": false,
+    "unilateral": false,
+    "body_positions": [
+      "standing"
+    ],
+    "loading_types": [
+      "cable"
+    ],
+    "prolonged_supine": false,
+    "exclusion_flags": [],
+    "caution_flags": [],
+    "record_types": [
+      "weight_reps"
+    ]
+  },
+  "concentration-curl": {
+    "movement_pattern": "elbow_flexion",
+    "movement_subpattern": "seated_concentration_curl",
+    "aliases": [
+      "Curl concentración"
+    ],
+    "primary_muscles": [
+      "biceps"
+    ],
+    "secondary_muscles": [
+      "forearms"
+    ],
+    "required_equipment": [
+      "dumbbells",
+      "bench"
+    ],
+    "difficulty": "beginner",
+    "technical_complexity": 1,
+    "stability_demand": 1,
+    "balance_demand": 1,
+    "supported": true,
+    "closed_chain": false,
+    "unilateral": true,
+    "body_positions": [
+      "seated"
+    ],
+    "loading_types": [
+      "free_weight"
+    ],
+    "prolonged_supine": false,
+    "exclusion_flags": [],
+    "caution_flags": [],
+    "record_types": [
+      "weight_reps"
+    ]
+  },
+  "triceps-pushdown": {
+    "movement_pattern": "elbow_extension",
+    "movement_subpattern": "straight_bar_pushdown",
+    "aliases": [
+      "Extensión de tríceps en polea",
+      "Tríceps polea"
+    ],
+    "primary_muscles": [
+      "triceps"
+    ],
+    "secondary_muscles": [],
+    "required_equipment": [
+      "cable_machine"
+    ],
+    "difficulty": "beginner",
+    "technical_complexity": 1,
+    "stability_demand": 2,
+    "balance_demand": 1,
+    "supported": false,
+    "closed_chain": false,
+    "unilateral": false,
+    "body_positions": [
+      "standing"
+    ],
+    "loading_types": [
+      "cable"
+    ],
+    "prolonged_supine": false,
+    "exclusion_flags": [],
+    "caution_flags": [],
+    "record_types": [
+      "weight_reps"
+    ]
+  },
+  "rope-pushdown": {
+    "movement_pattern": "elbow_extension",
+    "movement_subpattern": "rope_triceps_pushdown",
+    "aliases": [
+      "Tríceps cuerda",
+      "Pushdown con cuerda"
+    ],
+    "primary_muscles": [
+      "triceps"
+    ],
+    "secondary_muscles": [],
+    "required_equipment": [
+      "cable_machine"
+    ],
+    "difficulty": "beginner",
+    "technical_complexity": 1,
+    "stability_demand": 2,
+    "balance_demand": 1,
+    "supported": false,
+    "closed_chain": false,
+    "unilateral": false,
+    "body_positions": [
+      "standing"
+    ],
+    "loading_types": [
+      "cable"
+    ],
+    "prolonged_supine": false,
+    "exclusion_flags": [],
+    "caution_flags": [],
+    "record_types": [
+      "weight_reps"
+    ]
+  },
+  "overhead-cable-extension": {
+    "movement_pattern": "elbow_extension",
+    "movement_subpattern": "overhead_cable_triceps_extension",
+    "aliases": [
+      "Tríceps overhead en polea",
+      "Extensión francesa en polea"
+    ],
+    "primary_muscles": [
+      "triceps"
+    ],
+    "secondary_muscles": [
+      "trunk"
+    ],
+    "required_equipment": [
+      "cable_machine"
+    ],
+    "difficulty": "beginner",
+    "technical_complexity": 2,
+    "stability_demand": 2,
+    "balance_demand": 1,
+    "supported": false,
+    "closed_chain": false,
+    "unilateral": false,
+    "body_positions": [
+      "standing"
+    ],
+    "loading_types": [
+      "cable"
+    ],
+    "prolonged_supine": false,
+    "exclusion_flags": [],
+    "caution_flags": [],
+    "record_types": [
+      "weight_reps"
+    ]
+  },
+  "skull-crusher": {
+    "movement_pattern": "elbow_extension",
+    "movement_subpattern": "lying_ez_bar_triceps_extension",
+    "aliases": [
+      "Rompecráneos",
+      "Skull crusher",
+      "Press francés"
+    ],
+    "primary_muscles": [
+      "triceps"
+    ],
+    "secondary_muscles": [],
+    "required_equipment": [
+      "ez_bar",
+      "plates",
+      "bench"
+    ],
+    "difficulty": "intermediate",
+    "technical_complexity": 2,
+    "stability_demand": 2,
+    "balance_demand": 1,
+    "supported": true,
+    "closed_chain": false,
+    "unilateral": false,
+    "body_positions": [
+      "supine"
+    ],
+    "loading_types": [
+      "free_weight"
+    ],
+    "prolonged_supine": true,
+    "exclusion_flags": [],
+    "caution_flags": [],
+    "record_types": [
+      "weight_reps"
+    ]
+  },
+  "close-grip-bench-press": {
+    "movement_pattern": "horizontal_push",
+    "movement_subpattern": "close_grip_bench_press",
+    "aliases": [
+      "Press cerrado",
+      "Press banca cerrado"
+    ],
+    "primary_muscles": [
+      "triceps"
+    ],
+    "secondary_muscles": [
+      "chest",
+      "anterior_deltoid"
+    ],
+    "required_equipment": [
+      "barbell",
+      "plates",
+      "bench",
+      "squat_rack"
+    ],
+    "difficulty": "intermediate",
+    "technical_complexity": 3,
+    "stability_demand": 2,
+    "balance_demand": 1,
+    "supported": true,
+    "closed_chain": false,
+    "unilateral": false,
+    "body_positions": [
+      "supine"
+    ],
+    "loading_types": [
+      "free_weight"
+    ],
+    "prolonged_supine": true,
+    "exclusion_flags": [],
+    "caution_flags": [],
+    "record_types": [
+      "weight_reps"
+    ]
+  },
+  "triceps-dip": {
+    "movement_pattern": "elbow_extension",
+    "movement_subpattern": "bodyweight_triceps_dip",
+    "aliases": [
+      "Fondos de tríceps",
+      "Fondos verticales"
+    ],
+    "primary_muscles": [
+      "triceps"
+    ],
+    "secondary_muscles": [
+      "chest",
+      "anterior_deltoid"
+    ],
+    "required_equipment": [
+      "dip_station"
+    ],
+    "difficulty": "advanced",
+    "technical_complexity": 3,
+    "stability_demand": 3,
+    "balance_demand": 2,
+    "supported": false,
+    "closed_chain": true,
+    "unilateral": false,
+    "body_positions": [
+      "supported_hanging"
+    ],
+    "loading_types": [
+      "bodyweight"
+    ],
+    "prolonged_supine": false,
+    "exclusion_flags": [],
+    "caution_flags": [],
+    "record_types": [
+      "bodyweight_reps"
+    ]
+  },
+  "single-arm-cable-extension": {
+    "movement_pattern": "elbow_extension",
+    "movement_subpattern": "single_arm_cable_pushdown",
+    "aliases": [
+      "Tríceps unilateral en polea"
+    ],
+    "primary_muscles": [
+      "triceps"
+    ],
+    "secondary_muscles": [],
+    "required_equipment": [
+      "cable_machine"
+    ],
+    "difficulty": "beginner",
+    "technical_complexity": 1,
+    "stability_demand": 2,
+    "balance_demand": 1,
+    "supported": false,
+    "closed_chain": false,
+    "unilateral": true,
+    "body_positions": [
+      "standing"
+    ],
+    "loading_types": [
+      "cable"
+    ],
+    "prolonged_supine": false,
+    "exclusion_flags": [],
+    "caution_flags": [],
+    "record_types": [
+      "weight_reps"
+    ]
+  },
+  "db-overhead-triceps-extension": {
+    "movement_pattern": "elbow_extension",
+    "movement_subpattern": "dumbbell_overhead_triceps_extension",
+    "aliases": [
+      "Copa de tríceps",
+      "Extensión overhead con mancuerna"
+    ],
+    "primary_muscles": [
+      "triceps"
+    ],
+    "secondary_muscles": [
+      "trunk"
+    ],
+    "required_equipment": [
+      "dumbbells"
+    ],
+    "difficulty": "beginner",
+    "technical_complexity": 2,
+    "stability_demand": 2,
+    "balance_demand": 1,
+    "supported": false,
+    "closed_chain": false,
+    "unilateral": false,
+    "body_positions": [
+      "seated"
+    ],
+    "loading_types": [
+      "free_weight"
+    ],
+    "prolonged_supine": false,
+    "exclusion_flags": [],
+    "caution_flags": [],
+    "record_types": [
+      "weight_reps"
+    ]
+  },
+  "calf-raise": {
+    "movement_pattern": "calf_raise",
+    "movement_subpattern": "machine_calf_raise",
+    "aliases": [
+      "Gemelo máquina"
+    ],
+    "primary_muscles": [
+      "calves"
+    ],
+    "secondary_muscles": [],
+    "required_equipment": [
+      "calf_raise_machine"
+    ],
+    "difficulty": "beginner",
+    "technical_complexity": 1,
+    "stability_demand": 1,
+    "balance_demand": 1,
+    "supported": true,
+    "closed_chain": false,
+    "unilateral": false,
+    "body_positions": [
+      "standing"
+    ],
+    "loading_types": [
+      "machine_stack"
+    ],
+    "prolonged_supine": false,
+    "exclusion_flags": [],
+    "caution_flags": [],
+    "record_types": [
+      "weight_reps"
+    ]
+  },
+  "standing-calf-raise": {
+    "movement_pattern": "calf_raise",
+    "movement_subpattern": "standing_calf_raise",
+    "aliases": [
+      "Gemelos de pie"
+    ],
+    "primary_muscles": [
+      "calves"
+    ],
+    "secondary_muscles": [],
+    "required_equipment": [
+      "dumbbells",
+      "step"
+    ],
+    "difficulty": "beginner",
+    "technical_complexity": 1,
+    "stability_demand": 3,
+    "balance_demand": 3,
+    "supported": false,
+    "closed_chain": true,
+    "unilateral": false,
+    "body_positions": [
+      "standing"
+    ],
+    "loading_types": [
+      "free_weight"
+    ],
+    "prolonged_supine": false,
+    "exclusion_flags": [],
+    "caution_flags": [],
+    "record_types": [
+      "weight_reps"
+    ]
+  },
+  "seated-calf-raise": {
+    "movement_pattern": "calf_raise",
+    "movement_subpattern": "seated_calf_raise",
+    "aliases": [
+      "Gemelo sentado",
+      "Sóleo sentado"
+    ],
+    "primary_muscles": [
+      "calves"
+    ],
+    "secondary_muscles": [],
+    "required_equipment": [
+      "seated_calf_raise_machine"
+    ],
+    "difficulty": "beginner",
+    "technical_complexity": 1,
+    "stability_demand": 1,
+    "balance_demand": 1,
+    "supported": true,
+    "closed_chain": false,
+    "unilateral": false,
+    "body_positions": [
+      "seated"
+    ],
+    "loading_types": [
+      "machine_stack"
+    ],
+    "prolonged_supine": false,
+    "exclusion_flags": [],
+    "caution_flags": [],
+    "record_types": [
+      "weight_reps"
+    ]
+  },
+  "leg-press-calf-raise": {
+    "movement_pattern": "calf_raise",
+    "movement_subpattern": "leg_press_calf_raise",
+    "aliases": [
+      "Gemelos en prensa"
+    ],
+    "primary_muscles": [
+      "calves"
+    ],
+    "secondary_muscles": [],
+    "required_equipment": [
+      "leg_press"
+    ],
+    "difficulty": "beginner",
+    "technical_complexity": 1,
+    "stability_demand": 1,
+    "balance_demand": 1,
+    "supported": true,
+    "closed_chain": false,
+    "unilateral": false,
+    "body_positions": [
+      "seated"
+    ],
+    "loading_types": [
+      "machine_stack"
+    ],
+    "prolonged_supine": false,
+    "exclusion_flags": [],
+    "caution_flags": [],
+    "record_types": [
+      "weight_reps"
+    ]
+  },
+  "plank": {
+    "movement_pattern": "anti_extension_core",
+    "movement_subpattern": "forearm_plank",
+    "aliases": [
+      "Plancha frontal"
+    ],
+    "primary_muscles": [
+      "trunk"
+    ],
+    "secondary_muscles": [
+      "shoulders",
+      "glutes"
+    ],
+    "required_equipment": [
+      "bodyweight",
+      "mat"
+    ],
+    "difficulty": "beginner",
+    "technical_complexity": 1,
+    "stability_demand": 2,
+    "balance_demand": 1,
+    "supported": false,
+    "closed_chain": false,
+    "unilateral": false,
+    "body_positions": [
+      "prone"
+    ],
+    "loading_types": [
+      "bodyweight"
+    ],
+    "prolonged_supine": false,
+    "exclusion_flags": [],
+    "caution_flags": [],
+    "record_types": [
+      "duration"
+    ]
+  },
+  "side-plank": {
+    "movement_pattern": "lateral_core",
+    "movement_subpattern": "side_plank",
+    "aliases": [
+      "Plancha de lado"
+    ],
+    "primary_muscles": [
+      "obliques",
+      "trunk"
+    ],
+    "secondary_muscles": [
+      "gluteus_medius",
+      "shoulders"
+    ],
+    "required_equipment": [
+      "bodyweight",
+      "mat"
+    ],
+    "difficulty": "beginner",
+    "technical_complexity": 2,
+    "stability_demand": 3,
+    "balance_demand": 2,
+    "supported": false,
+    "closed_chain": false,
+    "unilateral": true,
+    "body_positions": [
+      "side_lying"
+    ],
+    "loading_types": [
+      "bodyweight"
+    ],
+    "prolonged_supine": false,
+    "exclusion_flags": [],
+    "caution_flags": [],
+    "record_types": [
+      "duration"
+    ]
+  },
+  "dead-bug": {
+    "movement_pattern": "anti_extension_core",
+    "movement_subpattern": "dead_bug",
+    "aliases": [
+      "Bicho muerto"
+    ],
+    "primary_muscles": [
+      "trunk"
+    ],
+    "secondary_muscles": [
+      "hip_flexors"
+    ],
+    "required_equipment": [
+      "bodyweight",
+      "mat"
+    ],
+    "difficulty": "beginner",
+    "technical_complexity": 2,
+    "stability_demand": 2,
+    "balance_demand": 1,
+    "supported": true,
+    "closed_chain": false,
+    "unilateral": false,
+    "body_positions": [
+      "supine"
+    ],
+    "loading_types": [
+      "bodyweight"
+    ],
+    "prolonged_supine": true,
+    "exclusion_flags": [],
+    "caution_flags": [],
+    "record_types": [
+      "guided_repetitions"
+    ]
+  },
+  "bird-dog": {
+    "movement_pattern": "anti_rotation_core",
+    "movement_subpattern": "quadruped_bird_dog",
+    "aliases": [
+      "Perro de caza",
+      "Extensión contralateral en cuadrupedia"
+    ],
+    "primary_muscles": [
+      "trunk"
+    ],
+    "secondary_muscles": [
+      "glutes",
+      "shoulders",
+      "spinal_erectors"
+    ],
+    "required_equipment": [
+      "bodyweight",
+      "mat"
+    ],
+    "difficulty": "beginner",
+    "technical_complexity": 2,
+    "stability_demand": 3,
+    "balance_demand": 2,
+    "supported": false,
+    "closed_chain": false,
+    "unilateral": false,
+    "body_positions": [
+      "quadruped"
+    ],
+    "loading_types": [
+      "bodyweight"
+    ],
+    "prolonged_supine": false,
+    "exclusion_flags": [],
+    "caution_flags": [],
+    "record_types": [
+      "guided_repetitions"
+    ]
+  },
+  "pallof-press": {
+    "movement_pattern": "anti_rotation_core",
+    "movement_subpattern": "standing_pallof_press",
+    "aliases": [
+      "Pallof press",
+      "Antirrotación en polea"
+    ],
+    "primary_muscles": [
+      "trunk",
+      "obliques"
+    ],
+    "secondary_muscles": [
+      "shoulders"
+    ],
+    "required_equipment": [
+      "cable_machine"
+    ],
+    "difficulty": "beginner",
+    "technical_complexity": 2,
+    "stability_demand": 3,
+    "balance_demand": 2,
+    "supported": false,
+    "closed_chain": false,
+    "unilateral": true,
+    "body_positions": [
+      "standing"
+    ],
+    "loading_types": [
+      "cable"
+    ],
+    "prolonged_supine": false,
+    "exclusion_flags": [],
+    "caution_flags": [],
+    "record_types": [
+      "weight_reps"
+    ]
+  },
+  "cable-crunch": {
+    "movement_pattern": "trunk_flexion",
+    "movement_subpattern": "kneeling_cable_crunch",
+    "aliases": [
+      "Encogimiento en polea"
+    ],
+    "primary_muscles": [
+      "rectus_abdominis"
+    ],
+    "secondary_muscles": [
+      "obliques"
+    ],
+    "required_equipment": [
+      "cable_machine",
+      "mat"
+    ],
+    "difficulty": "beginner",
+    "technical_complexity": 2,
+    "stability_demand": 2,
+    "balance_demand": 1,
+    "supported": true,
+    "closed_chain": false,
+    "unilateral": false,
+    "body_positions": [
+      "kneeling"
+    ],
+    "loading_types": [
+      "cable"
+    ],
+    "prolonged_supine": false,
+    "exclusion_flags": [],
+    "caution_flags": [],
+    "record_types": [
+      "weight_reps"
+    ]
+  },
+  "reverse-crunch": {
+    "movement_pattern": "trunk_flexion",
+    "movement_subpattern": "reverse_crunch",
+    "aliases": [
+      "Encogimiento inverso"
+    ],
+    "primary_muscles": [
+      "rectus_abdominis"
+    ],
+    "secondary_muscles": [
+      "obliques",
+      "hip_flexors"
+    ],
+    "required_equipment": [
+      "bodyweight",
+      "mat"
+    ],
+    "difficulty": "beginner",
+    "technical_complexity": 2,
+    "stability_demand": 2,
+    "balance_demand": 1,
+    "supported": true,
+    "closed_chain": false,
+    "unilateral": false,
+    "body_positions": [
+      "supine"
+    ],
+    "loading_types": [
+      "bodyweight"
+    ],
+    "prolonged_supine": true,
+    "exclusion_flags": [],
+    "caution_flags": [],
+    "record_types": [
+      "bodyweight_reps"
+    ]
+  },
+  "hanging-knee-raise": {
+    "movement_pattern": "hip_flexion_core",
+    "movement_subpattern": "hanging_knee_raise",
+    "aliases": [
+      "Rodillas al pecho colgado"
+    ],
+    "primary_muscles": [
+      "rectus_abdominis",
+      "hip_flexors"
+    ],
+    "secondary_muscles": [
+      "forearms",
+      "latissimus_dorsi"
+    ],
+    "required_equipment": [
+      "pull_up_bar"
+    ],
+    "difficulty": "intermediate",
+    "technical_complexity": 3,
+    "stability_demand": 4,
+    "balance_demand": 2,
+    "supported": false,
+    "closed_chain": false,
+    "unilateral": false,
+    "body_positions": [
+      "hanging"
+    ],
+    "loading_types": [
+      "bodyweight"
+    ],
+    "prolonged_supine": false,
+    "exclusion_flags": [],
+    "caution_flags": [],
+    "record_types": [
+      "bodyweight_reps"
+    ]
+  },
+  "ab-wheel-rollout": {
+    "movement_pattern": "anti_extension_core",
+    "movement_subpattern": "kneeling_ab_wheel_rollout",
+    "aliases": [
+      "Ab wheel",
+      "Rollout abdominal"
+    ],
+    "primary_muscles": [
+      "trunk"
+    ],
+    "secondary_muscles": [
+      "latissimus_dorsi",
+      "shoulders"
+    ],
+    "required_equipment": [
+      "ab_wheel",
+      "mat"
+    ],
+    "difficulty": "advanced",
+    "technical_complexity": 3,
+    "stability_demand": 4,
+    "balance_demand": 2,
+    "supported": false,
+    "closed_chain": true,
+    "unilateral": false,
+    "body_positions": [
+      "kneeling"
+    ],
+    "loading_types": [
+      "bodyweight"
+    ],
+    "prolonged_supine": false,
+    "exclusion_flags": [],
+    "caution_flags": [],
+    "record_types": [
+      "bodyweight_reps"
+    ]
+  },
+  "farmer-carry": {
+    "movement_pattern": "loaded_carry",
+    "movement_subpattern": "bilateral_farmer_carry",
+    "aliases": [
+      "Farmer walk",
+      "Caminata del granjero"
+    ],
+    "primary_muscles": [
+      "forearms",
+      "upper_traps",
+      "trunk"
+    ],
+    "secondary_muscles": [
+      "glutes",
+      "calves",
+      "shoulders"
+    ],
+    "required_equipment": [
+      "dumbbells"
+    ],
+    "difficulty": "beginner",
+    "technical_complexity": 1,
+    "stability_demand": 3,
+    "balance_demand": 3,
+    "supported": false,
+    "closed_chain": true,
+    "unilateral": false,
+    "body_positions": [
+      "walking"
+    ],
+    "loading_types": [
+      "free_weight"
+    ],
+    "prolonged_supine": false,
+    "exclusion_flags": [],
+    "caution_flags": [],
+    "record_types": [
+      "distance_time"
+    ]
+  },
+  "treadmill-walk": {
+    "movement_pattern": "locomotion",
+    "movement_subpattern": "treadmill_walking",
+    "aliases": [
+      "Andar en cinta",
+      "Cinta caminando"
+    ],
+    "primary_muscles": [
+      "cardiorespiratory"
+    ],
+    "secondary_muscles": [
+      "quadriceps",
+      "glutes",
+      "calves"
+    ],
+    "required_equipment": [
+      "treadmill"
+    ],
+    "difficulty": "beginner",
+    "technical_complexity": 1,
+    "stability_demand": 2,
+    "balance_demand": 2,
+    "supported": true,
+    "closed_chain": false,
+    "unilateral": false,
+    "body_positions": [
+      "walking"
+    ],
+    "loading_types": [
+      "cardio_machine"
+    ],
+    "prolonged_supine": false,
+    "exclusion_flags": [],
+    "caution_flags": [],
+    "record_types": [
+      "distance_time"
+    ]
+  },
+  "stationary-bike": {
+    "movement_pattern": "locomotion",
+    "movement_subpattern": "stationary_cycling",
+    "aliases": [
+      "Bici estática",
+      "Bicicleta indoor"
+    ],
+    "primary_muscles": [
+      "cardiorespiratory"
+    ],
+    "secondary_muscles": [
+      "quadriceps",
+      "glutes",
+      "calves"
+    ],
+    "required_equipment": [
+      "stationary_bike"
+    ],
+    "difficulty": "beginner",
+    "technical_complexity": 1,
+    "stability_demand": 1,
+    "balance_demand": 1,
+    "supported": true,
+    "closed_chain": false,
+    "unilateral": false,
+    "body_positions": [
+      "seated"
+    ],
+    "loading_types": [
+      "cardio_machine"
+    ],
+    "prolonged_supine": false,
+    "exclusion_flags": [],
+    "caution_flags": [],
+    "record_types": [
+      "distance_time"
+    ]
+  },
+  "elliptical": {
+    "movement_pattern": "locomotion",
+    "movement_subpattern": "elliptical_training",
+    "aliases": [
+      "Máquina elíptica"
+    ],
+    "primary_muscles": [
+      "cardiorespiratory"
+    ],
+    "secondary_muscles": [
+      "quadriceps",
+      "glutes",
+      "calves"
+    ],
+    "required_equipment": [
+      "elliptical"
+    ],
+    "difficulty": "beginner",
+    "technical_complexity": 1,
+    "stability_demand": 1,
+    "balance_demand": 1,
+    "supported": true,
+    "closed_chain": false,
+    "unilateral": false,
+    "body_positions": [
+      "standing"
+    ],
+    "loading_types": [
+      "cardio_machine"
+    ],
+    "prolonged_supine": false,
+    "exclusion_flags": [],
+    "caution_flags": [],
+    "record_types": [
+      "distance_time"
+    ]
+  },
+  "cat-cow": {
+    "movement_pattern": "spinal_mobility",
+    "movement_subpattern": "quadruped_cat_cow",
+    "aliases": [
+      "Cat cow",
+      "Gato vaca"
+    ],
+    "primary_muscles": [
+      "spinal_mobility"
+    ],
+    "secondary_muscles": [
+      "trunk"
+    ],
+    "required_equipment": [
+      "bodyweight",
+      "mat"
+    ],
+    "difficulty": "beginner",
+    "technical_complexity": 1,
+    "stability_demand": 1,
+    "balance_demand": 1,
+    "supported": true,
+    "closed_chain": false,
+    "unilateral": false,
+    "body_positions": [
+      "quadruped"
+    ],
+    "loading_types": [
+      "bodyweight"
+    ],
+    "prolonged_supine": false,
+    "exclusion_flags": [],
+    "caution_flags": [],
+    "record_types": [
+      "mobility_quality"
+    ]
+  },
+  "thoracic-rotation": {
+    "movement_pattern": "thoracic_rotation",
+    "movement_subpattern": "quadruped_thoracic_rotation",
+    "aliases": [
+      "Rotación torácica",
+      "Open book cuadrupedia"
+    ],
+    "primary_muscles": [
+      "thoracic_spine"
+    ],
+    "secondary_muscles": [
+      "shoulders",
+      "trunk"
+    ],
+    "required_equipment": [
+      "bodyweight",
+      "mat"
+    ],
+    "difficulty": "beginner",
+    "technical_complexity": 1,
+    "stability_demand": 2,
+    "balance_demand": 1,
+    "supported": true,
+    "closed_chain": false,
+    "unilateral": true,
+    "body_positions": [
+      "quadruped"
+    ],
+    "loading_types": [
+      "bodyweight"
+    ],
+    "prolonged_supine": false,
+    "exclusion_flags": [],
+    "caution_flags": [],
+    "record_types": [
+      "mobility_quality"
+    ]
+  },
+  "hip-flexor-stretch": {
+    "movement_pattern": "hip_flexor_mobility",
+    "movement_subpattern": "half_kneeling_hip_flexor_stretch",
+    "aliases": [
+      "Estiramiento psoas",
+      "Estiramiento flexor de cadera"
+    ],
+    "primary_muscles": [
+      "hip_flexors"
+    ],
+    "secondary_muscles": [
+      "quadriceps"
+    ],
+    "required_equipment": [
+      "bodyweight",
+      "mat"
+    ],
+    "difficulty": "beginner",
+    "technical_complexity": 1,
+    "stability_demand": 2,
+    "balance_demand": 1,
+    "supported": true,
+    "closed_chain": false,
+    "unilateral": true,
+    "body_positions": [
+      "half_kneeling"
+    ],
+    "loading_types": [
+      "bodyweight"
+    ],
+    "prolonged_supine": false,
+    "exclusion_flags": [],
+    "caution_flags": [],
+    "record_types": [
+      "mobility_quality"
+    ]
+  }
+}

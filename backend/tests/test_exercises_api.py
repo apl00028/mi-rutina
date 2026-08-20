@@ -109,7 +109,7 @@ def test_list_exercises_authenticated_marks_builtin_favorite(monkeypatch):
         for exercise in response.json()
     }
     assert exercises["bench-press"]["favorite"] is True
-    assert exercises["squat"]["favorite"] is False
+    assert exercises["back-squat"]["favorite"] is False
 
 
 def test_list_exercises_authenticated_appends_custom_exercise(monkeypatch):
@@ -232,10 +232,13 @@ def test_list_exercises_authenticated_marks_custom_favorite(monkeypatch):
     assert response.json()[-1]["favorite"] is True
 
 
-def test_list_exercises_supabase_failure_returns_controlled_error(monkeypatch):
+def test_list_exercises_custom_supabase_failure_returns_builtin_catalog(monkeypatch):
     from app.api.v1 import exercises as exercises_api
 
     async def fake_list_custom_exercise_models(user):
+        raise httpx.ConnectError("connection failed")
+
+    async def fake_list_user_favorite_exercise_ids(user):
         raise httpx.ConnectError("connection failed")
 
     app.dependency_overrides[require_user] = authenticated_user
@@ -243,6 +246,11 @@ def test_list_exercises_supabase_failure_returns_controlled_error(monkeypatch):
         exercises_api,
         "list_custom_exercise_models",
         fake_list_custom_exercise_models,
+    )
+    monkeypatch.setattr(
+        exercises_api,
+        "list_user_favorite_exercise_ids",
+        fake_list_user_favorite_exercise_ids,
     )
 
     try:
@@ -253,10 +261,14 @@ def test_list_exercises_supabase_failure_returns_controlled_error(monkeypatch):
     finally:
         app.dependency_overrides.pop(require_user, None)
 
-    assert response.status_code == 502
-    assert response.json() == {
-        "detail": "Custom exercises service is unavailable"
-    }
+    assert response.status_code == 200
+    assert response.json() == jsonable_encoder(
+        [
+            exercise.model_copy(update={"favorite": False})
+            for exercise in load_exercises()
+        ],
+        exclude_none=True,
+    )
 
 
 def test_get_exercise_by_id_requires_authentication():

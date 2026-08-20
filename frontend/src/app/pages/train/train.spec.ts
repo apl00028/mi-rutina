@@ -83,6 +83,7 @@ describe('Train first workout flow', () => {
 
   afterEach(() => {
     http.verify();
+    vi.useRealTimers();
     vi.restoreAllMocks();
   });
 
@@ -487,5 +488,307 @@ describe('Train first workout flow', () => {
     expect(
       component.activeSession()
     ).toBeNull();
+  });
+
+
+  it('debounces quick set edits into one autosave with the latest state', async () => {
+    const fixture =
+      await createLoadedTrain([
+        {
+          workoutId:
+            'workout-1',
+          routineId:
+            'routine-1',
+          sessionId:
+            'session-1',
+          status:
+            'in_progress',
+          sets: []
+        }
+      ]);
+
+    vi.useFakeTimers();
+
+    const component =
+      fixture.componentInstance;
+
+    component.updateSet(
+      'dumbbell-bench-press',
+      0,
+      'weight',
+      '40'
+    );
+    component.updateSet(
+      'dumbbell-bench-press',
+      0,
+      'reps',
+      '8'
+    );
+    component.updateSet(
+      'dumbbell-bench-press',
+      0,
+      'rir',
+      '2'
+    );
+
+    await vi.advanceTimersByTimeAsync(749);
+
+    http.expectNone(
+      `${environment.apiUrl}/workouts/workout-1`
+    );
+
+    await vi.advanceTimersByTimeAsync(1);
+
+    const request =
+      http.expectOne(
+        `${environment.apiUrl}/workouts/workout-1`
+      );
+
+    expect(request.request.method)
+      .toBe('PUT');
+    expect(request.request.body.sets)
+      .toMatchObject([
+        {
+          exerciseId:
+            'dumbbell-bench-press',
+          setIndex: 0,
+          weight: 40,
+          reps: 8,
+          rir: 2
+        }
+      ]);
+
+    request.flush(
+      request.request.body
+    );
+
+    await vi.runOnlyPendingTimersAsync();
+
+    expect(
+      component.autosaveStatus()
+    ).toBe('saved');
+  });
+
+
+  it('keeps in-memory data after autosave failure and retries on the next change', async () => {
+    const fixture =
+      await createLoadedTrain([
+        {
+          workoutId:
+            'workout-1',
+          routineId:
+            'routine-1',
+          sessionId:
+            'session-1',
+          status:
+            'in_progress',
+          sets: []
+        }
+      ]);
+
+    vi.useFakeTimers();
+
+    const component =
+      fixture.componentInstance;
+
+    component.updateSet(
+      'dumbbell-bench-press',
+      0,
+      'weight',
+      '42'
+    );
+
+    await vi.advanceTimersByTimeAsync(750);
+
+    const failed =
+      http.expectOne(
+        `${environment.apiUrl}/workouts/workout-1`
+      );
+
+    failed.flush(
+      {
+        detail:
+          'temporary failure'
+      },
+      {
+        status: 502,
+        statusText: 'Bad Gateway'
+      }
+    );
+
+    await vi.runOnlyPendingTimersAsync();
+
+    expect(
+      component.getCurrentSet(
+        'dumbbell-bench-press',
+        0
+      )?.weight
+    ).toBe(42);
+    expect(
+      component.autosaveStatus()
+    ).toBe('error');
+
+    component.updateSet(
+      'dumbbell-bench-press',
+      0,
+      'reps',
+      '9'
+    );
+
+    await vi.advanceTimersByTimeAsync(750);
+
+    const retry =
+      http.expectOne(
+        `${environment.apiUrl}/workouts/workout-1`
+      );
+
+    expect(
+      retry.request.body.sets[0]
+    ).toMatchObject({
+      weight: 42,
+      reps: 9
+    });
+
+    retry.flush(
+      retry.request.body
+    );
+
+    await vi.runOnlyPendingTimersAsync();
+
+    expect(
+      component.autosaveStatus()
+    ).toBe('saved');
+  });
+
+
+  it('finishing waits for an in-flight autosave and persists the latest finished state once', async () => {
+    const fixture =
+      await createLoadedTrain([
+        {
+          workoutId:
+            'workout-1',
+          routineId:
+            'routine-1',
+          sessionId:
+            'session-1',
+          status:
+            'in_progress',
+          sets: []
+        }
+      ]);
+
+    vi.useFakeTimers();
+
+    const component =
+      fixture.componentInstance;
+
+    component.updateSet(
+      'dumbbell-bench-press',
+      0,
+      'weight',
+      '40'
+    );
+
+    await vi.advanceTimersByTimeAsync(750);
+
+    const autosave =
+      http.expectOne(
+        `${environment.apiUrl}/workouts/workout-1`
+      );
+
+    component.updateSet(
+      'dumbbell-bench-press',
+      0,
+      'weight',
+      '45'
+    );
+
+    const finish =
+      component.finishWorkout();
+
+    autosave.flush(
+      autosave.request.body
+    );
+
+    await vi.runOnlyPendingTimersAsync();
+
+    const finalSave =
+      http.expectOne(
+        `${environment.apiUrl}/workouts/workout-1`
+      );
+
+    expect(finalSave.request.body.status)
+      .toBe('finished');
+    expect(
+      finalSave.request.body.sets[0]
+        .weight
+    ).toBe(45);
+
+    finalSave.flush(
+      finalSave.request.body
+    );
+
+    await finish;
+    await vi.advanceTimersByTimeAsync(1000);
+
+    http.expectNone(
+      `${environment.apiUrl}/workouts/workout-1`
+    );
+    expect(
+      component.activeWorkout()
+    ).toBeNull();
+  });
+
+
+  it('flushes dirty state on destroy and cleans the pending debounce timer', async () => {
+    const fixture =
+      await createLoadedTrain([
+        {
+          workoutId:
+            'workout-1',
+          routineId:
+            'routine-1',
+          sessionId:
+            'session-1',
+          status:
+            'in_progress',
+          sets: []
+        }
+      ]);
+
+    vi.useFakeTimers();
+
+    fixture
+      .componentInstance
+      .updateSet(
+        'dumbbell-bench-press',
+        0,
+        'weight',
+        '40'
+      );
+
+    fixture.destroy();
+
+    await vi.advanceTimersByTimeAsync(0);
+
+    const destroySave =
+      http.expectOne(
+        `${environment.apiUrl}/workouts/workout-1`
+      );
+
+    expect(
+      destroySave.request.body.sets[0]
+        .weight
+    ).toBe(40);
+
+    destroySave.flush(
+      destroySave.request.body
+    );
+
+    await vi.advanceTimersByTimeAsync(1000);
+
+    http.expectNone(
+      `${environment.apiUrl}/workouts/workout-1`
+    );
   });
 });

@@ -51,13 +51,6 @@ interface Workout {
   sets: WorkoutSetInput[];
 }
 
-@Component({
-  selector: 'app-train',
-  standalone: true,
-  imports: [CommonModule],
-  templateUrl: './train.html',
-  styleUrl: './train.scss'
-})
 type AutosaveStatus =
   | 'idle'
   | 'saving'
@@ -65,6 +58,13 @@ type AutosaveStatus =
   | 'error';
 
 
+@Component({
+  selector: 'app-train',
+  standalone: true,
+  imports: [CommonModule],
+  templateUrl: './train.html',
+  styleUrl: './train.scss'
+})
 export class Train implements OnInit, OnDestroy {
   routine = signal<Routine | null>(null);
   loading = signal(true);

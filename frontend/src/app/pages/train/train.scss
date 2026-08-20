@@ -414,6 +414,7 @@ button:disabled {
   z-index: 20;
 
   display: flex;
+  align-items: center;
   justify-content: flex-end;
 
   gap: 10px;
@@ -433,6 +434,15 @@ button:disabled {
   box-shadow:
     0 10px 30px
     rgb(0 0 0 / 8%);
+}
+
+.autosave-status {
+  margin-right: auto;
+
+  color: #6b7280;
+
+  font-size: 0.78rem;
+  font-weight: 650;
 }
 
 .workout-id {
@@ -547,6 +557,7 @@ button:disabled {
 
     display: grid;
     grid-template-columns:
+      minmax(0, 1fr)
       minmax(0, 0.8fr)
       minmax(0, 1.2fr);
   }

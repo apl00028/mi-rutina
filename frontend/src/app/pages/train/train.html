@@ -205,6 +205,59 @@
         }
 
         <footer class="workout-actions">
+          @if (restTimer(); as timer) {
+            <section
+              class="rest-timer"
+              [class.finished]="timer.finished"
+            >
+              <div>
+                <span>
+                  {{
+                    timer.finished
+                      ? 'Descanso terminado'
+                      : 'Descanso'
+                  }}
+                </span>
+
+                <strong>
+                  {{ restTimerLabel() }}
+                </strong>
+
+                <small>
+                  {{ timer.exerciseName }}
+                  · serie
+                  {{ timer.setIndex + 1 }}
+                </small>
+              </div>
+
+              <div class="rest-timer-actions">
+                <button
+                  type="button"
+                  class="secondary-button"
+                  (click)="addRestTime(-30)"
+                >
+                  -30 s
+                </button>
+
+                <button
+                  type="button"
+                  class="secondary-button"
+                  (click)="addRestTime(30)"
+                >
+                  +30 s
+                </button>
+
+                <button
+                  type="button"
+                  class="secondary-button"
+                  (click)="skipRestTimer()"
+                >
+                  Saltar
+                </button>
+              </div>
+            </section>
+          }
+
           <div class="autosave-status">
             @if (autosaveStatus() === 'saving') {
               Guardando...

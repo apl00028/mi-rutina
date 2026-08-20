@@ -134,6 +134,12 @@ describe('Train first workout flow', () => {
   }
 
 
+  async function flushPromises() {
+    await Promise.resolve();
+    await Promise.resolve();
+  }
+
+
   async function createLoadedTrain(
     workouts: any[] = []
   ) {
@@ -786,6 +792,488 @@ describe('Train first workout flow', () => {
     );
 
     await vi.advanceTimersByTimeAsync(1000);
+
+    http.expectNone(
+      `${environment.apiUrl}/workouts/workout-1`
+    );
+  });
+
+
+  it('starts a rest timer from the completed exercise rest seconds', async () => {
+    const fixture =
+      await createLoadedTrain([
+        {
+          workoutId:
+            'workout-1',
+          routineId:
+            'routine-1',
+          sessionId:
+            'session-1',
+          status:
+            'in_progress',
+          sets: []
+        }
+      ]);
+
+    vi.useFakeTimers();
+    vi.setSystemTime(
+      new Date(
+        '2026-08-20T15:00:00Z'
+      )
+    );
+
+    const component =
+      fixture.componentInstance;
+
+    const complete =
+      component.completeSet(
+        'dumbbell-bench-press',
+        0
+      );
+
+    expect(
+      component.restTimerLabel()
+    ).toBe('02:00');
+    expect(
+      component.restTimer()
+        ?.exerciseName
+    ).toBe(
+      'Press banca con mancuernas'
+    );
+
+    await waitForHttpTick();
+
+    const save =
+      http.expectOne(
+        `${environment.apiUrl}/workouts/workout-1`
+      );
+
+    save.flush(save.request.body);
+
+    await complete;
+
+    await vi.advanceTimersByTimeAsync(
+      30_000
+    );
+
+    expect(
+      component.restTimerLabel()
+    ).toBe('01:30');
+
+    http.expectNone(
+      `${environment.apiUrl}/workouts/workout-1`
+    );
+  });
+
+
+  it('does not start a rest timer for zero or missing rest', async () => {
+    const fixture =
+      await createLoadedTrain([
+        {
+          workoutId:
+            'workout-1',
+          routineId:
+            'routine-1',
+          sessionId:
+            'session-1',
+          status:
+            'in_progress',
+          sets: []
+        }
+      ]);
+
+    vi.useFakeTimers();
+
+    const component =
+      fixture.componentInstance;
+
+    const session =
+      component.activeSession()!;
+
+    component.activeSession.set({
+      ...session,
+      exercises:
+        session.exercises.map(
+          exercise => ({
+            ...exercise,
+            restSeconds: 0
+          })
+        )
+    });
+
+    const complete =
+      component.completeSet(
+        'dumbbell-bench-press',
+        0
+      );
+
+    expect(
+      component.restTimer()
+    ).toBeNull();
+
+    await waitForHttpTick();
+
+    const save =
+      http.expectOne(
+        `${environment.apiUrl}/workouts/workout-1`
+      );
+
+    save.flush(save.request.body);
+
+    await complete;
+  });
+
+
+  it('replaces the active rest timer when another set is completed', async () => {
+    const fixture =
+      await createLoadedTrain([
+        {
+          workoutId:
+            'workout-1',
+          routineId:
+            'routine-1',
+          sessionId:
+            'session-1',
+          status:
+            'in_progress',
+          sets: []
+        }
+      ]);
+
+    vi.useFakeTimers();
+    vi.setSystemTime(
+      new Date(
+        '2026-08-20T15:00:00Z'
+      )
+    );
+
+    const component =
+      fixture.componentInstance;
+
+    const session =
+      component.activeSession()!;
+
+    component.activeSession.set({
+      ...session,
+      exercises: [
+        ...session.exercises,
+        {
+          exerciseId:
+            'seated-row',
+          name:
+            'Remo sentado',
+          sets: 1,
+          target:
+            '10-12',
+          restSeconds:
+            60
+        }
+      ]
+    });
+
+    let complete =
+      component.completeSet(
+        'dumbbell-bench-press',
+        0
+      );
+
+    await waitForHttpTick();
+
+    let save =
+      http.expectOne(
+        `${environment.apiUrl}/workouts/workout-1`
+      );
+
+    save.flush(save.request.body);
+
+    await complete;
+
+    expect(
+      component.restTimerLabel()
+    ).toBe('02:00');
+
+    await vi.advanceTimersByTimeAsync(
+      10_000
+    );
+
+    complete =
+      component.completeSet(
+        'seated-row',
+        0
+      );
+
+    await waitForHttpTick();
+
+    save =
+      http.expectOne(
+        `${environment.apiUrl}/workouts/workout-1`
+      );
+
+    save.flush(save.request.body);
+
+    await complete;
+
+    expect(
+      component.restTimer()
+        ?.exerciseId
+    ).toBe('seated-row');
+    expect(
+      component.restTimerLabel()
+    ).toBe('01:00');
+  });
+
+
+  it('supports adding, reducing, and skipping rest time without saving', async () => {
+    const fixture =
+      await createLoadedTrain([
+        {
+          workoutId:
+            'workout-1',
+          routineId:
+            'routine-1',
+          sessionId:
+            'session-1',
+          status:
+            'in_progress',
+          sets: []
+        }
+      ]);
+
+    vi.useFakeTimers();
+    vi.setSystemTime(
+      new Date(
+        '2026-08-20T15:00:00Z'
+      )
+    );
+
+    const component =
+      fixture.componentInstance;
+
+    const complete =
+      component.completeSet(
+        'dumbbell-bench-press',
+        0
+      );
+
+    await waitForHttpTick();
+
+    const save =
+      http.expectOne(
+        `${environment.apiUrl}/workouts/workout-1`
+      );
+
+    save.flush(save.request.body);
+
+    await complete;
+
+    component.addRestTime(30);
+
+    expect(
+      component.restTimerLabel()
+    ).toBe('02:30');
+
+    component.addRestTime(-30);
+    component.addRestTime(-300);
+
+    expect(
+      component.restTimerLabel()
+    ).toBe('00:00');
+
+    component.skipRestTimer();
+
+    expect(
+      component.restTimer()
+        ?.finished
+    ).toBe(true);
+
+    http.expectNone(
+      `${environment.apiUrl}/workouts/workout-1`
+    );
+  });
+
+
+  it('marks rest as finished at zero and clears the interval', async () => {
+    const fixture =
+      await createLoadedTrain([
+        {
+          workoutId:
+            'workout-1',
+          routineId:
+            'routine-1',
+          sessionId:
+            'session-1',
+          status:
+            'in_progress',
+          sets: []
+        }
+      ]);
+
+    vi.useFakeTimers();
+    vi.setSystemTime(
+      new Date(
+        '2026-08-20T15:00:00Z'
+      )
+    );
+
+    const component =
+      fixture.componentInstance;
+
+    const complete =
+      component.completeSet(
+        'dumbbell-bench-press',
+        0
+      );
+
+    await waitForHttpTick();
+
+    const save =
+      http.expectOne(
+        `${environment.apiUrl}/workouts/workout-1`
+      );
+
+    save.flush(save.request.body);
+
+    await complete;
+
+    await vi.advanceTimersByTimeAsync(
+      120_000
+    );
+
+    expect(
+      component.restTimerLabel()
+    ).toBe('00:00');
+    expect(
+      component.restTimer()
+        ?.finished
+    ).toBe(true);
+
+    await vi.advanceTimersByTimeAsync(
+      2_000
+    );
+
+    http.expectNone(
+      `${environment.apiUrl}/workouts/workout-1`
+    );
+  });
+
+
+  it('clears the rest timer when finishing the workout', async () => {
+    const fixture =
+      await createLoadedTrain([
+        {
+          workoutId:
+            'workout-1',
+          routineId:
+            'routine-1',
+          sessionId:
+            'session-1',
+          status:
+            'in_progress',
+          sets: []
+        }
+      ]);
+
+    vi.useFakeTimers();
+
+    const component =
+      fixture.componentInstance;
+
+    const complete =
+      component.completeSet(
+        'dumbbell-bench-press',
+        0
+      );
+
+    await waitForHttpTick();
+
+    let save =
+      http.expectOne(
+        `${environment.apiUrl}/workouts/workout-1`
+      );
+
+    save.flush(save.request.body);
+
+    await complete;
+
+    expect(
+      component.restTimer()
+    ).toBeTruthy();
+
+    const finish =
+      component.finishWorkout();
+
+    await waitForHttpTick();
+
+    save =
+      http.expectOne(
+        `${environment.apiUrl}/workouts/workout-1`
+      );
+
+    save.flush(save.request.body);
+
+    await finish;
+
+    expect(
+      component.restTimer()
+    ).toBeNull();
+
+    await vi.advanceTimersByTimeAsync(
+      2_000
+    );
+
+    http.expectNone(
+      `${environment.apiUrl}/workouts/workout-1`
+    );
+  });
+
+
+  it('cleans the rest timer on destroy', async () => {
+    const fixture =
+      await createLoadedTrain([
+        {
+          workoutId:
+            'workout-1',
+          routineId:
+            'routine-1',
+          sessionId:
+            'session-1',
+          status:
+            'in_progress',
+          sets: []
+        }
+      ]);
+
+    vi.useFakeTimers();
+
+    const component =
+      fixture.componentInstance;
+
+    const complete =
+      component.completeSet(
+        'dumbbell-bench-press',
+        0
+      );
+
+    await waitForHttpTick();
+
+    const save =
+      http.expectOne(
+        `${environment.apiUrl}/workouts/workout-1`
+      );
+
+    save.flush(save.request.body);
+
+    await complete;
+
+    expect(
+      component.restTimer()
+    ).toBeTruthy();
+
+    fixture.destroy();
+
+    await vi.advanceTimersByTimeAsync(
+      2_000
+    );
 
     http.expectNone(
       `${environment.apiUrl}/workouts/workout-1`

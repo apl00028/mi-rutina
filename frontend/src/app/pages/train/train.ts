@@ -51,6 +51,15 @@ interface Workout {
   sets: WorkoutSetInput[];
 }
 
+interface RestTimerState {
+  exerciseId: string;
+  setIndex: number;
+  exerciseName: string;
+  endsAt: number;
+  remainingSeconds: number;
+  finished: boolean;
+}
+
 type AutosaveStatus =
   | 'idle'
   | 'saving'
@@ -78,6 +87,8 @@ export class Train implements OnInit, OnDestroy {
   workoutError = signal<string | null>(null);
   autosaveStatus =
     signal<AutosaveStatus>('idle');
+  restTimer =
+    signal<RestTimerState | null>(null);
 
   email = signal('');
   loginLoading = signal(false);
@@ -88,6 +99,8 @@ export class Train implements OnInit, OnDestroy {
 
   private autosaveTimer:
     ReturnType<typeof setTimeout> | null = null;
+  private restTimerInterval:
+    ReturnType<typeof setInterval> | null = null;
 
   private currentSave:
     Promise<void> | null = null;
@@ -112,6 +125,7 @@ export class Train implements OnInit, OnDestroy {
 
   ngOnDestroy(): void {
     this.destroyed = true;
+    this.clearRestTimer();
 
     if (this.autosaveTimer) {
       clearTimeout(this.autosaveTimer);
@@ -299,6 +313,62 @@ export class Train implements OnInit, OnDestroy {
 
     this.activeWorkout.set(active);
     this.activeSession.set(session);
+  }
+
+
+  restTimerLabel(): string {
+    const timer =
+      this.restTimer();
+
+    if (!timer) {
+      return '';
+    }
+
+    return this.formatRestTime(
+      timer.remainingSeconds
+    );
+  }
+
+
+  private formatRestTime(
+    seconds: number
+  ): string {
+    const safeSeconds =
+      Math.max(
+        0,
+        Math.ceil(seconds)
+      );
+
+    const minutes =
+      Math.floor(safeSeconds / 60);
+
+    const remaining =
+      safeSeconds % 60;
+
+    return [
+      minutes,
+      remaining
+    ]
+      .map(value =>
+        String(value).padStart(2, '0')
+      )
+      .join(':');
+  }
+
+
+  private findSessionExercise(
+    exerciseId: string
+  ): Exercise | null {
+    return (
+      this
+        .activeSession()
+        ?.exercises
+        .find(
+          exercise =>
+            exercise.exerciseId === exerciseId
+        ) ??
+      null
+    );
   }
 
   getPreviousSet(
@@ -554,7 +624,12 @@ export class Train implements OnInit, OnDestroy {
 
     let sets: WorkoutSetInput[];
 
+    let shouldStartRestTimer = false;
+
     if (existing) {
+      shouldStartRestTimer =
+        !existing.completedAt;
+
       sets = workout.sets.map(set =>
         set.exerciseId === exerciseId &&
         set.setIndex === setIndex
@@ -568,6 +643,8 @@ export class Train implements OnInit, OnDestroy {
       );
 
     } else {
+      shouldStartRestTimer = true;
+
       sets = [
         ...workout.sets,
         {
@@ -585,7 +662,182 @@ export class Train implements OnInit, OnDestroy {
     });
     this.workoutEditVersion += 1;
 
+    if (shouldStartRestTimer) {
+      this.startRestTimerForSet(
+        exerciseId,
+        setIndex
+      );
+    }
+
     await this.saveWorkout();
+  }
+
+
+  private startRestTimerForSet(
+    exerciseId: string,
+    setIndex: number
+  ): void {
+    const exercise =
+      this.findSessionExercise(
+        exerciseId
+      );
+
+    const restSeconds =
+      Number(exercise?.restSeconds);
+
+    this.clearRestTimer();
+
+    if (
+      !exercise ||
+      !Number.isFinite(restSeconds) ||
+      restSeconds <= 0
+    ) {
+      return;
+    }
+
+    const duration =
+      Math.floor(restSeconds);
+
+    this.restTimer.set({
+      exerciseId,
+      setIndex,
+      exerciseName:
+        exercise.name,
+      endsAt:
+        Date.now() + duration * 1000,
+      remainingSeconds:
+        duration,
+      finished:
+        false
+    });
+
+    this.restTimerInterval =
+      setInterval(
+        () => this.reconcileRestTimer(),
+        250
+      );
+
+    this.reconcileRestTimer();
+  }
+
+
+  private reconcileRestTimer(): void {
+    const timer =
+      this.restTimer();
+
+    if (!timer) {
+      this.clearRestTimer();
+      return;
+    }
+
+    const remainingSeconds =
+      Math.max(
+        0,
+        Math.ceil(
+          (timer.endsAt - Date.now()) / 1000
+        )
+      );
+
+    if (remainingSeconds <= 0) {
+      this.restTimer.set({
+        ...timer,
+        remainingSeconds: 0,
+        finished: true
+      });
+      this.clearRestTimerInterval();
+      return;
+    }
+
+    if (
+      remainingSeconds !==
+      timer.remainingSeconds
+    ) {
+      this.restTimer.set({
+        ...timer,
+        remainingSeconds,
+        finished: false
+      });
+    }
+  }
+
+
+  addRestTime(
+    seconds: number
+  ): void {
+    const timer =
+      this.restTimer();
+
+    if (!timer) {
+      return;
+    }
+
+    const nextEndsAt =
+      Math.max(
+        Date.now(),
+        timer.endsAt + seconds * 1000
+      );
+
+    this.restTimer.set({
+      ...timer,
+      endsAt:
+        nextEndsAt,
+      remainingSeconds:
+        Math.max(
+          0,
+          Math.ceil(
+            (nextEndsAt - Date.now()) / 1000
+          )
+        ),
+      finished:
+        nextEndsAt <= Date.now()
+    });
+
+    if (
+      nextEndsAt > Date.now() &&
+      !this.restTimerInterval
+    ) {
+      this.restTimerInterval =
+        setInterval(
+          () => this.reconcileRestTimer(),
+          250
+        );
+    }
+  }
+
+
+  skipRestTimer(): void {
+    const timer =
+      this.restTimer();
+
+    if (!timer) {
+      return;
+    }
+
+    this.restTimer.set({
+      ...timer,
+      endsAt:
+        Date.now(),
+      remainingSeconds: 0,
+      finished: true
+    });
+
+    this.clearRestTimerInterval();
+  }
+
+
+  private clearRestTimerInterval(): void {
+    if (!this.restTimerInterval) {
+      return;
+    }
+
+    clearInterval(this.restTimerInterval);
+    this.restTimerInterval = null;
+  }
+
+
+  private clearRestTimer(): void {
+    this.clearRestTimerInterval();
+    this.restTimer.set(null);
   }
 
   isSetCompleted(
@@ -880,6 +1132,8 @@ export class Train implements OnInit, OnDestroy {
     if (this.workoutLoading()) {
       return;
     }
+
+    this.clearRestTimer();
 
     this.cancelAutosaveTimer();
     this.finishingWorkout = true;

@@ -146,6 +146,22 @@ test("home: Ver sesion presenta el plan completo y la referencia sin iniciarlo",
   }
 });
 
+test("home: el modal Ver sesion usa panel opaco y deja la transparencia en el backdrop",()=>{
+  const previewSource=sourceBetween(
+    "function renderHomeSessionPreview(",
+    "function renderHomeWeeklyGoal("
+  );
+  const panelRule=(stylesSource.match(/\.home-session-preview\{([^}]*)\}/)||[])[1]||"";
+  const backdropRule=(stylesSource.match(/\.home-session-preview::backdrop\{([^}]*)\}/)||[])[1]||"";
+  assert.match(previewSource,/<dialog id="homeSessionPreview" class="home-session-preview"/);
+  assert.doesNotMatch(previewSource,/home-session-preview(?:[^"])*(?:disabled|skipped|omitted)/);
+  assert.doesNotMatch(panelRule,/opacity\s*:\s*(?:0?\.\d+|0)\b/);
+  assert.match(panelRule,/background:var\(--surface,#fff\)/);
+  assert.doesNotMatch(panelRule,/background:var\(--card\)/);
+  assert.match(backdropRule,/background:rgba\(/);
+  assert.match(stylesSource,/\.routine-hub-exercise\.is-skipped,\.routine-hub-exercise\.is-disabled,\.routine-hub-exercise\.is-omitted\{opacity:\.55\}/);
+});
+
 test("home: las acciones se ordenan comenzar, ver y cambiar; la vista solo abre y cierra",()=>{
   const api=models();
   const html=api.renderHomeNextSession(api.nextSessionModel({
@@ -457,6 +473,7 @@ test("sync: snapshot diagnostico remoto sigue siendo legible en modo solo lectur
     SELECTED_SESSION_ID_KEY:"gymos:selectedSessionId",
     CANONICAL_ROUTINE_KEY:"gymos:routine:canonical",
     getCanonicalRoutine:()=>JSON.parse(values.get("gymos:routine:canonical")),
+    getHistory:()=>JSON.parse(values.get("gymos:history")),
     currentRoutineOwnerOrNull:()=>"user-a",
     getLastSyncAt:()=>null,
     getSupabaseClient:()=>({

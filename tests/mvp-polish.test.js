@@ -120,7 +120,7 @@ test("I4 sincronización captura propietario, bloquea dobles ejecuciones y reval
     appSource.indexOf("async function syncNow"),
     appSource.indexOf("async function autoSync")
   );
-  assert.match(sync,/if\(state\.syncInProgress\) return/);
+  assert.match(sync,/if\(state\.syncInProgress\)\{[\s\S]*addSyncAudit\("sync_trace","busy",\{branch:"busy"\}\);[\s\S]*return/);
   assert.match(sync,/const ownerId=currentRoutineOwnerOrNull\(\)/);
   assert.match(sync,/const userId=state\.syncUser\.id/);
   assert.ok((sync.match(/assertOwner\(\)/g)||[]).length>=7);

@@ -322,7 +322,7 @@ test("25. rutina e historial mantienen igualdad serializada exacta",()=>{
 });
 
 test("integración carga el módulo antes de app y lo cachea",()=>{
-  assert.ok(indexSource.indexOf("routine-proposals.js")<indexSource.indexOf("app.js"));
+  assert.ok(indexSource.indexOf("routine-proposals.js")<indexSource.indexOf("app.js?v="));
   assert.match(serviceWorkerSource,/routine-proposals\.js/);
 });
 

@@ -1,0 +1,491 @@
+/**
+ * @vitest-environment jsdom
+ */
+
+import {
+  signal
+} from '@angular/core';
+import {
+  TestBed
+} from '@angular/core/testing';
+import {
+  HttpTestingController,
+  provideHttpClientTesting
+} from '@angular/common/http/testing';
+import {
+  provideHttpClient
+} from '@angular/common/http';
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi
+} from 'vitest';
+
+import {
+  environment
+} from '../../../environments/environment';
+import {
+  AuthService
+} from '../../core/auth.service';
+import {
+  Train
+} from './train';
+
+
+describe('Train first workout flow', () => {
+  let http:
+    HttpTestingController;
+
+  beforeEach(async () => {
+    await TestBed.configureTestingModule({
+      imports: [
+        Train
+      ],
+      providers: [
+        provideHttpClient(),
+        provideHttpClientTesting(),
+        {
+          provide: AuthService,
+          useValue: {
+            user:
+              signal({
+                email:
+                  'test@example.com'
+              }),
+            getAccessToken:
+              vi.fn()
+                .mockResolvedValue(
+                  'access-token'
+                ),
+            signInWithMagicLink:
+              vi.fn()
+          }
+        }
+      ]
+    }).compileComponents();
+
+    http =
+      TestBed.inject(
+        HttpTestingController
+      );
+
+    vi.spyOn(
+      crypto,
+      'randomUUID'
+    ).mockReturnValue(
+      '00000000-0000-4000-8000-000000000001'
+    );
+  });
+
+
+  afterEach(() => {
+    http.verify();
+    vi.restoreAllMocks();
+  });
+
+
+  function routine() {
+    return {
+      routineId:
+        'routine-1',
+      schemaVersion:
+        '4.2',
+      revision: 1,
+      sessions: [
+        {
+          sessionId:
+            'session-1',
+          label:
+            'Sesión 1',
+          name:
+            'Torso',
+          exercises: [
+            {
+              exerciseId:
+                'dumbbell-bench-press',
+              name:
+                'Press banca con mancuernas',
+              sets: 2,
+              target:
+                '6-10',
+              targetRir: {
+                min: 1,
+                max: 3
+              },
+              restSeconds:
+                120
+            }
+          ]
+        }
+      ]
+    };
+  }
+
+
+  async function waitForHttpTick() {
+    await new Promise(
+      resolve =>
+        setTimeout(resolve, 0)
+    );
+  }
+
+
+  async function createLoadedTrain(
+    workouts: any[] = []
+  ) {
+    const fixture =
+      TestBed.createComponent(
+        Train
+      );
+
+    fixture.detectChanges();
+
+    await waitForHttpTick();
+
+    http
+      .expectOne(
+        `${environment.apiUrl}/routines/active`
+      )
+      .flush(routine());
+
+    await waitForHttpTick();
+
+    http
+      .expectOne(
+        `${environment.apiUrl}/workouts`
+      )
+      .flush(workouts);
+
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    return fixture;
+  }
+
+
+  it('renders the first training screen with active routine and no history', async () => {
+    const fixture =
+      await createLoadedTrain();
+
+    const text =
+      (
+        fixture.nativeElement as HTMLElement
+      ).textContent ?? '';
+
+    expect(text).toContain(
+      'Elige tu sesión'
+    );
+    expect(text).toContain(
+      'Press banca con mancuernas'
+    );
+    expect(text).toContain('6-10');
+    expect(text).toContain('120s');
+    expect(text).not.toContain(
+      'Última vez'
+    );
+    expect(text).not.toContain(
+      'undefined'
+    );
+    expect(text).not.toContain('NaN');
+  });
+
+
+  it('shows a stable empty state when there is no active routine', async () => {
+    const fixture =
+      TestBed.createComponent(
+        Train
+      );
+
+    fixture.detectChanges();
+
+    await waitForHttpTick();
+
+    http
+      .expectOne(
+        `${environment.apiUrl}/routines/active`
+      )
+      .flush(
+        {
+          detail:
+            'Active routine not found'
+        },
+        {
+          status: 404,
+          statusText: 'Not Found'
+        }
+      );
+
+    await waitForHttpTick();
+
+    http
+      .expectOne(
+        `${environment.apiUrl}/workouts`
+      )
+      .flush([]);
+
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect(
+      fixture.componentInstance.error()
+    ).toContain(
+      'rutina activa'
+    );
+  });
+
+
+  it('starts a workout once and blocks a second start while pending', async () => {
+    const fixture =
+      await createLoadedTrain();
+
+    const component =
+      fixture.componentInstance;
+
+    const session =
+      component.routine()!.sessions[0];
+
+    const first =
+      component.startWorkout(session);
+    const second =
+      component.startWorkout(session);
+
+    await waitForHttpTick();
+
+    const request =
+      http.expectOne(
+        `${environment.apiUrl}/workouts`
+      );
+
+    http.expectNone(
+      `${environment.apiUrl}/workouts`
+    );
+
+    expect(request.request.method)
+      .toBe('POST');
+    expect(request.request.body)
+      .toMatchObject({
+        routineId:
+          'routine-1',
+        sessionId:
+          'session-1',
+        status:
+          'in_progress',
+        sets: []
+      });
+
+    request.flush({
+      ...request.request.body,
+      startedAt:
+        '2026-08-20T15:00:00Z'
+    });
+
+    await Promise.all([
+      first,
+      second
+    ]);
+
+    expect(
+      component.activeWorkout()
+        ?.workoutId
+    ).toBe(
+      '00000000-0000-4000-8000-000000000001'
+    );
+  });
+
+
+  it('records, persists, and can unmark a completed set', async () => {
+    const fixture =
+      await createLoadedTrain([
+        {
+          workoutId:
+            'workout-1',
+          routineId:
+            'routine-1',
+          sessionId:
+            'session-1',
+          status:
+            'in_progress',
+          sets: []
+        }
+      ]);
+
+    const component =
+      fixture.componentInstance;
+
+    expect(
+      component.activeWorkout()
+    ).toBeTruthy();
+
+    component.updateSet(
+      'dumbbell-bench-press',
+      0,
+      'weight',
+      '0'
+    );
+    component.updateSet(
+      'dumbbell-bench-press',
+      0,
+      'reps',
+      '8'
+    );
+    component.updateSet(
+      'dumbbell-bench-press',
+      0,
+      'rir',
+      '2.5'
+    );
+    component.updateSet(
+      'dumbbell-bench-press',
+      0,
+      'weight',
+      '-1'
+    );
+
+    expect(
+      component.getCurrentSet(
+        'dumbbell-bench-press',
+        0
+      )?.weight
+    ).toBe(0);
+
+    const complete =
+      component.completeSet(
+        'dumbbell-bench-press',
+        0
+      );
+
+    await waitForHttpTick();
+
+    const save =
+      http.expectOne(
+        `${environment.apiUrl}/workouts/workout-1`
+      );
+
+    expect(save.request.method)
+      .toBe('PUT');
+    expect(
+      save.request.body.sets[0]
+        .completedAt
+    ).toBeTruthy();
+
+    save.flush(save.request.body);
+
+    await complete;
+
+    const unmark =
+      component.completeSet(
+        'dumbbell-bench-press',
+        0
+      );
+
+    await waitForHttpTick();
+
+    const unmarkSave =
+      http.expectOne(
+        `${environment.apiUrl}/workouts/workout-1`
+      );
+
+    expect(
+      unmarkSave.request.body.sets[0]
+        .completedAt
+    ).toBeNull();
+
+    unmarkSave.flush(
+      unmarkSave.request.body
+    );
+
+    await unmark;
+  });
+
+
+  it('does not clear the active workout when finish persistence fails and allows retry', async () => {
+    const fixture =
+      await createLoadedTrain([
+        {
+          workoutId:
+            'workout-1',
+          routineId:
+            'routine-1',
+          sessionId:
+            'session-1',
+          status:
+            'in_progress',
+          sets: []
+        }
+      ]);
+
+    const component =
+      fixture.componentInstance;
+
+    const first =
+      component.finishWorkout();
+    const second =
+      component.finishWorkout();
+
+    await waitForHttpTick();
+
+    const failed =
+      http.expectOne(
+        `${environment.apiUrl}/workouts/workout-1`
+      );
+
+    http.expectNone(
+      `${environment.apiUrl}/workouts/workout-1`
+    );
+
+    expect(failed.request.body.status)
+      .toBe('finished');
+
+    failed.flush(
+      {
+        detail:
+          'Workouts service is unavailable'
+      },
+      {
+        status: 502,
+        statusText: 'Bad Gateway'
+      }
+    );
+
+    await Promise.all([
+      first,
+      second
+    ]);
+
+    expect(
+      component.activeWorkout()
+        ?.status
+    ).toBe('in_progress');
+    expect(
+      component.workoutError()
+    ).toBe(
+      'Workouts service is unavailable'
+    );
+
+    const retry =
+      component.finishWorkout();
+
+    await waitForHttpTick();
+
+    const saved =
+      http.expectOne(
+        `${environment.apiUrl}/workouts/workout-1`
+      );
+
+    saved.flush(
+      saved.request.body
+    );
+
+    await retry;
+
+    expect(
+      component.activeWorkout()
+    ).toBeNull();
+    expect(
+      component.activeSession()
+    ).toBeNull();
+  });
+});

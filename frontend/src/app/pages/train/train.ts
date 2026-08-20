@@ -1,4 +1,4 @@
-import { Component, OnInit, signal } from '@angular/core';
+import { Component, OnDestroy, OnInit, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { HttpClient, HttpHeaders } from '@angular/common/http';
 import { environment } from '../../../environments/environment';
@@ -9,6 +9,11 @@ interface Exercise {
   name: string;
   sets: number;
   target?: string;
+  targetRir?: {
+    min: number;
+    max: number;
+  } | null;
+  restSeconds?: number | null;
 }
 
 interface RoutineSession {
@@ -53,7 +58,14 @@ interface Workout {
   templateUrl: './train.html',
   styleUrl: './train.scss'
 })
-export class Train implements OnInit {
+type AutosaveStatus =
+  | 'idle'
+  | 'saving'
+  | 'saved'
+  | 'error';
+
+
+export class Train implements OnInit, OnDestroy {
   routine = signal<Routine | null>(null);
   loading = signal(true);
   error = signal<string | null>(null);
@@ -64,12 +76,27 @@ export class Train implements OnInit {
 
   workoutLoading = signal(false);
   workoutError = signal<string | null>(null);
+  autosaveStatus =
+    signal<AutosaveStatus>('idle');
 
   email = signal('');
   loginLoading = signal(false);
   loginMessage = signal<string | null>(null);
 
   private readonly apiUrl = environment.apiUrl;
+  private readonly autosaveDelayMs = 750;
+
+  private autosaveTimer:
+    ReturnType<typeof setTimeout> | null = null;
+
+  private currentSave:
+    Promise<void> | null = null;
+
+  private saveQueued = false;
+  private workoutEditVersion = 0;
+  private persistedEditVersion = 0;
+  private finishingWorkout = false;
+  private destroyed = false;
 
   constructor(
     private http: HttpClient,
@@ -80,6 +107,29 @@ export class Train implements OnInit {
     await this.loadRoutine();
     await this.loadWorkoutHistory();
     this.restoreActiveWorkout();
+  }
+
+
+  ngOnDestroy(): void {
+    this.destroyed = true;
+
+    if (this.autosaveTimer) {
+      clearTimeout(this.autosaveTimer);
+      this.autosaveTimer = null;
+    }
+
+    const workout = this.activeWorkout();
+
+    if (
+      workout?.status === 'in_progress' &&
+      this.workoutEditVersion >
+      this.persistedEditVersion &&
+      !this.currentSave
+    ) {
+      void this.saveLatestWorkout({
+        showLoading: false
+      });
+    }
   }
 
   async loadRoutine(): Promise<void> {
@@ -110,9 +160,27 @@ export class Train implements OnInit {
           });
       });
 
-      this.routine.set(routine);
+      const normalized =
+        this.normalizeRoutine(routine);
+
+      if (!normalized) {
+        this.error.set(
+          'La rutina activa no tiene sesiones disponibles.'
+        );
+        this.routine.set(null);
+        return;
+      }
+
+      this.routine.set(normalized);
 
     } catch (err: any) {
+      if (err?.status === 404) {
+        this.error.set(
+          'Todavía no tienes una rutina activa. Completa el onboarding o activa una rutina antes de entrenar.'
+        );
+        return;
+      }
+
       this.error.set(
         err?.error?.detail ??
         err?.message ??
@@ -121,6 +189,55 @@ export class Train implements OnInit {
     } finally {
       this.loading.set(false);
     }
+  }
+
+
+  private normalizeRoutine(
+    value: Routine | null
+  ): Routine | null {
+    if (
+      !value ||
+      !Array.isArray(value.sessions)
+    ) {
+      return null;
+    }
+
+    const sessions =
+      value.sessions
+        .filter(
+          session =>
+            typeof session?.sessionId === 'string' &&
+            session.sessionId.trim() &&
+            Array.isArray(session.exercises)
+        )
+        .map(
+          session => ({
+            ...session,
+            exercises:
+              session.exercises.filter(
+                exercise =>
+                  typeof exercise?.exerciseId === 'string' &&
+                  exercise.exerciseId.trim() &&
+                  typeof exercise?.name === 'string' &&
+                  exercise.name.trim() &&
+                  Number.isInteger(exercise.sets) &&
+                  exercise.sets > 0
+              )
+          })
+        )
+        .filter(
+          session =>
+            session.exercises.length > 0
+        );
+
+    if (!sessions.length) {
+      return null;
+    }
+
+    return {
+      ...value,
+      sessions
+    };
   }
 
   async loadWorkoutHistory(): Promise<void> {
@@ -269,6 +386,10 @@ export class Train implements OnInit {
       return;
     }
 
+    if (this.workoutLoading()) {
+      return;
+    }
+
     if (this.activeWorkout()) {
       this.workoutError.set(
         'Ya tienes un entrenamiento en curso.'
@@ -313,6 +434,9 @@ export class Train implements OnInit {
 
       this.activeWorkout.set(created);
       this.activeSession.set(session);
+      this.workoutEditVersion = 0;
+      this.persistedEditVersion = 0;
+      this.autosaveStatus.set('saved');
 
       this.workoutHistory.set([
         created,
@@ -343,7 +467,19 @@ export class Train implements OnInit {
     }
 
     const numericValue =
-      value === '' ? null : Number(value);
+      value === ''
+        ? null
+        : Number(value);
+
+    if (
+      numericValue !== null &&
+      (
+        Number.isNaN(numericValue) ||
+        numericValue < 0
+      )
+    ) {
+      return;
+    }
 
     const existing = workout.sets.find(
       set =>
@@ -391,6 +527,9 @@ export class Train implements OnInit {
       ...workout,
       sets
     });
+
+    this.workoutEditVersion += 1;
+    this.scheduleAutosave();
   }
 
   async completeSet(
@@ -400,6 +539,10 @@ export class Train implements OnInit {
     const workout = this.activeWorkout();
 
     if (!workout) {
+      return;
+    }
+
+    if (this.workoutLoading()) {
       return;
     }
 
@@ -417,7 +560,9 @@ export class Train implements OnInit {
         set.setIndex === setIndex
           ? {
               ...set,
-              completedAt: new Date().toISOString()
+              completedAt: set.completedAt
+                ? null
+                : new Date().toISOString()
             }
           : set
       );
@@ -438,6 +583,7 @@ export class Train implements OnInit {
       ...workout,
       sets
     });
+    this.workoutEditVersion += 1;
 
     await this.saveWorkout();
   }
@@ -467,7 +613,35 @@ export class Train implements OnInit {
       return;
     }
 
-    this.workoutLoading.set(true);
+    this.cancelAutosaveTimer();
+
+    try {
+      await this.saveLatestWorkout({
+        showLoading: true
+      });
+
+    } catch (err: any) {
+      this.workoutError.set(
+        err?.error?.detail ??
+        err?.message ??
+        'No se pudo guardar el entrenamiento.'
+      );
+    }
+  }
+
+
+  private async persistWorkout(
+    workout: Workout,
+    options: {
+      showLoading: boolean;
+    } = {
+      showLoading: true
+    }
+  ): Promise<Workout> {
+    if (options.showLoading) {
+      this.workoutLoading.set(true);
+    }
+
     this.workoutError.set(null);
 
     try {
@@ -481,7 +655,7 @@ export class Train implements OnInit {
         Authorization: `Bearer ${token}`
       });
 
-      const saved = await new Promise<Workout>((resolve, reject) => {
+      return await new Promise<Workout>((resolve, reject) => {
         this.http
           .put<Workout>(
             `${this.apiUrl}/workouts/${workout.workoutId}`,
@@ -494,25 +668,206 @@ export class Train implements OnInit {
           });
       });
 
-      this.activeWorkout.set(saved);
+    } finally {
+      if (options.showLoading) {
+        this.workoutLoading.set(false);
+      }
+    }
+  }
 
+
+  private cloneWorkout(
+    workout: Workout
+  ): Workout {
+    return JSON.parse(
+      JSON.stringify(workout)
+    ) as Workout;
+  }
+
+
+  private updateWorkoutHistory(
+    workout: Workout
+  ): void {
+    const current =
+      this.workoutHistory();
+
+    if (
+      current.some(
+        item =>
+          item.workoutId === workout.workoutId
+      )
+    ) {
       this.workoutHistory.set(
-        this.workoutHistory().map(item =>
-          item.workoutId === saved.workoutId
-            ? saved
+        current.map(item =>
+          item.workoutId === workout.workoutId
+            ? workout
             : item
         )
       );
-
-    } catch (err: any) {
-      this.workoutError.set(
-        err?.error?.detail ??
-        err?.message ??
-        'No se pudo guardar el entrenamiento.'
-      );
-    } finally {
-      this.workoutLoading.set(false);
+      return;
     }
+
+    this.workoutHistory.set([
+      workout,
+      ...current
+    ]);
+  }
+
+
+  private scheduleAutosave(): void {
+    if (this.destroyed) {
+      return;
+    }
+
+    const workout =
+      this.activeWorkout();
+
+    if (
+      !workout ||
+      workout.status !== 'in_progress' ||
+      this.finishingWorkout
+    ) {
+      return;
+    }
+
+    this.autosaveStatus.set('idle');
+
+    if (this.autosaveTimer) {
+      clearTimeout(this.autosaveTimer);
+    }
+
+    this.autosaveTimer =
+      setTimeout(
+        () => {
+          this.autosaveTimer = null;
+          void this.runAutosave();
+        },
+        this.autosaveDelayMs
+      );
+  }
+
+
+  private cancelAutosaveTimer(): void {
+    if (!this.autosaveTimer) {
+      return;
+    }
+
+    clearTimeout(this.autosaveTimer);
+    this.autosaveTimer = null;
+  }
+
+
+  private async runAutosave():
+    Promise<void> {
+
+    if (
+      this.destroyed ||
+      this.finishingWorkout
+    ) {
+      return;
+    }
+
+    if (this.currentSave) {
+      this.saveQueued = true;
+      return;
+    }
+
+    try {
+      await this.saveLatestWorkout({
+        showLoading: false
+      });
+
+    } catch {
+      // Autosave errors are surfaced through autosaveStatus/workoutError.
+    }
+  }
+
+
+  private async saveLatestWorkout(
+    options: {
+      showLoading: boolean;
+    }
+  ): Promise<void> {
+
+    while (this.currentSave) {
+      this.saveQueued = true;
+
+      try {
+        await this.currentSave;
+      } catch {
+        // The latest state is still attempted below.
+      }
+    }
+
+    const workout =
+      this.activeWorkout();
+
+    if (!workout) {
+      return;
+    }
+
+    const snapshot =
+      this.cloneWorkout(workout);
+
+    const snapshotVersion =
+      this.workoutEditVersion;
+
+    this.saveQueued = false;
+    this.autosaveStatus.set('saving');
+
+    const save =
+      this.persistWorkout(
+        snapshot,
+        options
+      )
+        .then(saved => {
+          const current =
+            this.activeWorkout();
+
+          if (
+            current &&
+            current.workoutId === saved.workoutId &&
+            !this.finishingWorkout &&
+            this.workoutEditVersion === snapshotVersion
+          ) {
+            this.activeWorkout.set(saved);
+            this.persistedEditVersion =
+              snapshotVersion;
+          }
+
+          this.updateWorkoutHistory(saved);
+
+          if (
+            this.workoutEditVersion === snapshotVersion
+          ) {
+            this.autosaveStatus.set('saved');
+          }
+        })
+        .catch(error => {
+          if (
+            this.workoutEditVersion === snapshotVersion
+          ) {
+            this.autosaveStatus.set('error');
+          }
+
+          throw error;
+        })
+        .finally(() => {
+          this.currentSave = null;
+
+          if (
+            this.saveQueued &&
+            !this.destroyed &&
+            !this.finishingWorkout
+          ) {
+            this.saveQueued = false;
+            void this.runAutosave();
+          }
+        });
+
+    this.currentSave = save;
+
+    await save;
   }
 
   async finishWorkout(): Promise<void> {
@@ -522,25 +877,60 @@ export class Train implements OnInit {
       return;
     }
 
+    if (this.workoutLoading()) {
+      return;
+    }
+
+    this.cancelAutosaveTimer();
+    this.finishingWorkout = true;
+
+    if (this.currentSave) {
+      try {
+        await this.currentSave;
+      } catch {
+        // Finalization below persists the current in-memory workout.
+      }
+    }
+
+    const currentWorkout =
+      this.activeWorkout();
+
+    if (!currentWorkout) {
+      this.finishingWorkout = false;
+      return;
+    }
+
     const finishedWorkout: Workout = {
-      ...workout,
+      ...currentWorkout,
       status: 'finished',
       finishedAt: new Date().toISOString()
     };
 
-    this.activeWorkout.set(finishedWorkout);
+    try {
+      const saved =
+        await this.persistWorkout(
+          finishedWorkout,
+          {
+            showLoading: true
+          }
+        );
 
-    await this.saveWorkout();
+      this.updateWorkoutHistory(saved);
+      this.persistedEditVersion =
+        this.workoutEditVersion;
+      this.autosaveStatus.set('saved');
 
-    this.workoutHistory.set(
-      this.workoutHistory().map(item =>
-        item.workoutId === finishedWorkout.workoutId
-          ? finishedWorkout
-          : item
-      )
-    );
+      this.activeWorkout.set(null);
+      this.activeSession.set(null);
 
-    this.activeWorkout.set(null);
-    this.activeSession.set(null);
+    } catch (err: any) {
+      this.workoutError.set(
+        err?.error?.detail ??
+        err?.message ??
+        'No se pudo finalizar el entrenamiento.'
+      );
+    } finally {
+      this.finishingWorkout = false;
+    }
   }
 }

@@ -10,6 +10,23 @@ from app.repositories.workouts import (
     replace_workout,
 )
 
+
+USER_ID_FIELDS = {
+    "user_id",
+    "userId",
+}
+
+
+def _strip_client_user_fields(
+    payload: dict[str, Any],
+) -> dict[str, Any]:
+    return {
+        key: value
+        for key, value in payload.items()
+        if key not in USER_ID_FIELDS
+    }
+
+
 async def delete_user_workout(
     user: AuthenticatedUser,
     workout_id: str,
@@ -22,7 +39,9 @@ def workout_row_to_model(row: dict[str, Any]) -> Workout:
     if not isinstance(data, dict):
         raise RuntimeError("Unexpected Supabase response.")
 
-    payload = dict(data)
+    payload = _strip_client_user_fields(
+        dict(data)
+    )
     payload.setdefault("workoutId", row.get("id"))
     payload.setdefault("startedAt", row.get("created_at"))
 
@@ -30,7 +49,11 @@ def workout_row_to_model(row: dict[str, Any]) -> Workout:
 
 
 def workout_to_storage_payload(workout: Workout) -> dict[str, Any]:
-    return workout.model_dump(exclude_none=True)
+    return _strip_client_user_fields(
+        workout.model_dump(
+            exclude_none=True
+        )
+    )
 
 
 async def list_user_workouts(

@@ -115,6 +115,24 @@ def test_routine_to_storage_payload_excludes_row_timestamps():
     }
 
 
+def test_routine_payload_strips_client_user_fields():
+    row = routine_row()
+    row["data"]["user_id"] = "attacker-user"
+    row["data"]["userId"] = "attacker-user"
+
+    routine = service.routine_row_to_model(row)
+    payload = service.routine_to_storage_payload(routine)
+
+    assert "user_id" not in routine.model_dump(
+        exclude_none=True
+    )
+    assert "userId" not in routine.model_dump(
+        exclude_none=True
+    )
+    assert "user_id" not in payload
+    assert "userId" not in payload
+
+
 def test_create_user_routine_maps_created_row(monkeypatch):
     captured = {}
 

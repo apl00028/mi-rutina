@@ -13,13 +13,31 @@ from app.repositories.routines import (
 )
 
 
+USER_ID_FIELDS = {
+    "user_id",
+    "userId",
+}
+
+
+def _strip_client_user_fields(
+    payload: dict[str, Any],
+) -> dict[str, Any]:
+    return {
+        key: value
+        for key, value in payload.items()
+        if key not in USER_ID_FIELDS
+    }
+
+
 def routine_row_to_model(row: dict[str, Any]) -> Routine:
     data = row.get("data")
 
     if not isinstance(data, dict):
         raise RuntimeError("Unexpected Supabase response.")
 
-    payload = dict(data)
+    payload = _strip_client_user_fields(
+        dict(data)
+    )
     payload.setdefault("routineId", row.get("id"))
     payload.setdefault("createdAt", row.get("created_at"))
     payload.setdefault("updatedAt", row.get("updated_at"))
@@ -28,7 +46,15 @@ def routine_row_to_model(row: dict[str, Any]) -> Routine:
 
 
 def routine_to_storage_payload(routine: Routine) -> dict[str, Any]:
-    return routine.model_dump(exclude_none=True, exclude={"createdAt", "updatedAt"})
+    return _strip_client_user_fields(
+        routine.model_dump(
+            exclude_none=True,
+            exclude={
+                "createdAt",
+                "updatedAt",
+            },
+        )
+    )
 
 
 async def list_user_routines(

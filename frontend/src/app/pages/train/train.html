@@ -38,6 +38,18 @@
                     <p class="exercise-target">
                       Objetivo:
                       {{ exercise.target }}
+
+                      @if (exercise.targetRir) {
+                        · RIR
+                        {{ exercise.targetRir.min }}
+                        -
+                        {{ exercise.targetRir.max }}
+                      }
+
+                      @if (exercise.restSeconds) {
+                        · Descanso
+                        {{ exercise.restSeconds }}s
+                      }
                     </p>
                   }
                 </div>
@@ -166,10 +178,7 @@
                         exercise.exerciseId,
                         $index
                       )"
-                      [disabled]="isSetCompleted(
-                        exercise.exerciseId,
-                        $index
-                      )"
+                      [disabled]="workoutLoading()"
                     >
                       @if (
                         isSetCompleted(
@@ -177,7 +186,7 @@
                           $index
                         )
                       ) {
-                        ✓ Serie completada
+                        Desmarcar serie
                       } @else {
                         Completar serie
                       }
@@ -196,6 +205,16 @@
         }
 
         <footer class="workout-actions">
+          <div class="autosave-status">
+            @if (autosaveStatus() === 'saving') {
+              Guardando...
+            } @else if (autosaveStatus() === 'saved') {
+              Guardado
+            } @else if (autosaveStatus() === 'error') {
+              Error al guardar
+            }
+          </div>
+
           <button
             type="button"
             class="secondary-button"
@@ -295,6 +314,11 @@
                       @if (exercise.target) {
                         <span>
                           {{ exercise.target }}
+
+                          @if (exercise.restSeconds) {
+                            ·
+                            {{ exercise.restSeconds }}s
+                          }
                         </span>
                       }
                     </div>

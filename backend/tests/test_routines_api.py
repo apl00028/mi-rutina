@@ -469,6 +469,33 @@ def test_replace_foreign_routine_returns_same_404(monkeypatch):
     assert response.json() == {"detail": "Routine not found"}
 
 
+def test_delete_foreign_routine_returns_same_404(monkeypatch):
+    from app.api.v1 import routines as routines_api
+
+    async def fake_delete_user_routine(user, routine_id):
+        assert user.id == "user-123"
+        assert routine_id == "routine-foreign"
+        return False
+
+    app.dependency_overrides[require_user] = authenticated_user
+    monkeypatch.setattr(
+        routines_api,
+        "delete_user_routine",
+        fake_delete_user_routine,
+    )
+
+    try:
+        response = client.delete(
+            "/api/v1/routines/routine-foreign",
+            headers={"Authorization": "Bearer token-123"},
+        )
+    finally:
+        app.dependency_overrides.pop(require_user, None)
+
+    assert response.status_code == 404
+    assert response.json() == {"detail": "Routine not found"}
+
+
 def test_create_routine_rejects_invalid_body():
     app.dependency_overrides[require_user] = authenticated_user
 
@@ -487,3 +514,120 @@ def test_create_routine_rejects_invalid_body():
         app.dependency_overrides.pop(require_user, None)
 
     assert response.status_code == 422
+
+def test_generate_routine_returns_proposal():
+    app.dependency_overrides[
+        require_user
+    ] = authenticated_user
+
+    payload = {
+        "profile": {
+            "primary_goal": "muscle_gain",
+            "experience_level": "intermediate",
+            "weekly_availability": 4,
+            "session_duration_min": 60,
+            "training_location": "commercial_gym",
+            "available_equipment": [
+                "barbell",
+                "plates",
+                "bench",
+                "squat_rack",
+                "dumbbells",
+                "cable_machine",
+                "lat_pulldown_machine",
+                "seated_row_machine",
+                "chest_press_machine",
+                "shoulder_press_machine",
+                "leg_press",
+                "leg_extension",
+                "seated_leg_curl",
+                "lying_leg_curl",
+                "calf_raise_machine",
+                "mat",
+                "bodyweight",
+            ],
+        }
+    }
+
+    try:
+        response = client.post(
+            "/api/v1/routines/generate",
+            json=payload,
+            headers={
+                "Authorization":
+                "Bearer token-123"
+            },
+        )
+    finally:
+        app.dependency_overrides.pop(
+            require_user,
+            None,
+        )
+
+    assert response.status_code == 200
+
+    data = response.json()
+
+    assert (
+        data["structure_id"]
+        == "upper_lower_four"
+    )
+    assert data["structure_label"] == (
+        "Torso / Pierna"
+    )
+
+    assert len(data["sessions"]) == 4
+
+    assert [
+        session["focus"]
+        for session in data["sessions"]
+    ] == [
+        "upper",
+        "lower",
+        "upper",
+        "lower",
+    ]
+
+    exercises = [
+        exercise
+        for session in data["sessions"]
+        for exercise in session["exercises"]
+    ]
+
+    assert exercises
+
+    plank = next(
+        exercise
+        for exercise in exercises
+        if exercise["exercise_id"]
+        == "plank"
+    )
+
+    assert plank["record_type"] == "duration"
+    assert "s" in plank["target"]
+    assert "target_rir" not in plank
+
+
+def test_generate_routine_requires_authentication():
+    response = client.post(
+        "/api/v1/routines/generate",
+        json={
+            "profile": {
+                "primary_goal": "muscle_gain",
+                "experience_level": (
+                    "intermediate"
+                ),
+                "weekly_availability": 4,
+                "session_duration_min": 60,
+                "training_location": (
+                    "commercial_gym"
+                ),
+                "available_equipment": [],
+            }
+        },
+    )
+
+    assert response.status_code == 401
+    assert response.json() == {
+        "detail": "Missing bearer token"
+    }

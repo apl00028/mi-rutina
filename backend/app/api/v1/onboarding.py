@@ -347,9 +347,8 @@ def _ensure_usable_routine(
                     ),
                 )
 
-            exercise_id = (
-                exercise.get("exerciseId")
-                or exercise.get("id")
+            exercise_id = exercise.get(
+                "exerciseId"
             )
 
             if (
@@ -358,6 +357,33 @@ def _ensure_usable_routine(
                     str,
                 )
                 or not exercise_id.strip()
+            ):
+                raise HTTPException(
+                    status_code=(
+                        status
+                        .HTTP_422_UNPROCESSABLE_ENTITY
+                    ),
+                    detail=(
+                        "Could not generate "
+                        "a usable routine"
+                    ),
+                )
+
+            legacy_id = exercise.get(
+                "id"
+            )
+
+            if (
+                legacy_id is not None
+                and (
+                    not isinstance(
+                        legacy_id,
+                        str,
+                    )
+                    or not legacy_id.strip()
+                    or legacy_id.strip()
+                    != exercise_id.strip()
+                )
             ):
                 raise HTTPException(
                     status_code=(

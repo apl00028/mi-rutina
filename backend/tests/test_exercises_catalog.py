@@ -1,4 +1,4 @@
-from app.services.exercises import DATA_FILE, get_exercise_by_id, load_exercises
+from app.domains.exercises.service import DATA_FILE, get_exercise_by_id, load_exercises
 
 
 def test_exercise_catalog_has_100_unique_ids():

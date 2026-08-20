@@ -3,10 +3,10 @@ from inspect import signature
 
 import httpx
 
-from auth import AuthenticatedUser
-from auth import require_user
-from app.api.v1 import analytics as analytics_api
-from app.models.training_analytics import (
+from app.core.auth import AuthenticatedUser
+from app.core.auth import require_user
+from app.domains.analytics import router as analytics_api
+from app.domains.analytics.models import (
     TrainingAnalyticsResponse,
     TrainingAnalyticsSummary,
 )

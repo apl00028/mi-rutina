@@ -1,8 +1,8 @@
 import asyncio
 
-from auth import AuthenticatedUser
-from app.models.custom_exercise import CustomExerciseCreate
-from app.repositories import custom_exercises as repository
+from app.core.auth import AuthenticatedUser
+from app.domains.exercises.schemas import CustomExerciseCreate
+from app.domains.exercises import custom_repository as repository
 
 
 def test_create_custom_exercise_posts_expected_payload(monkeypatch):

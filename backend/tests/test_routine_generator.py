@@ -1,7 +1,7 @@
-from app.models.training_profile import (
+from app.domains.routines.profile_models import (
     TrainingProfileInput,
 )
-from app.services.routine_generator import (
+from app.domains.routines.generator import (
     choose_weekly_structure,
     generate_routine,
     session_slots,

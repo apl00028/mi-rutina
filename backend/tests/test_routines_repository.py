@@ -1,7 +1,7 @@
 import asyncio
 
-from auth import AuthenticatedUser
-from app.repositories import routines as repository
+from app.core.auth import AuthenticatedUser
+from app.domains.routines import repository
 
 
 def test_list_routines_filters_authenticated_user(monkeypatch):

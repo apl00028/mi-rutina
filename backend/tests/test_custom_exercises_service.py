@@ -1,8 +1,8 @@
 import asyncio
 
-from auth import AuthenticatedUser
-from app.models.custom_exercise import CustomExerciseCreate, CustomExerciseUpdate
-from app.services import custom_exercises as service
+from app.core.auth import AuthenticatedUser
+from app.domains.exercises.schemas import CustomExerciseCreate, CustomExerciseUpdate
+from app.domains.exercises import custom_service as service
 
 
 def test_register_custom_exercise_maps_repository_row(monkeypatch):

@@ -1,8 +1,8 @@
 from asyncio import run
 from datetime import UTC, datetime
 
-from auth import AuthenticatedUser
-from app.services import training_analytics as service
+from app.core.auth import AuthenticatedUser
+from app.domains.analytics import service
 
 
 def user(user_id="user-123"):

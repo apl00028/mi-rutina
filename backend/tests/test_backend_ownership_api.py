@@ -3,10 +3,10 @@ import asyncio
 import pytest
 from fastapi import HTTPException
 
-from auth import AuthenticatedUser
-from app.models.exercise import Exercise
-from app.models.routine import Routine
-from app.models.workout import Workout
+from app.core.auth import AuthenticatedUser
+from app.domains.exercises.models import Exercise
+from app.domains.routines.models import Routine
+from app.domains.workouts.models import Workout
 
 
 def _user(user_id: str) -> AuthenticatedUser:
@@ -57,7 +57,7 @@ def _custom_exercise(exercise_id: str) -> Exercise:
 
 
 def test_routine_ownership_blocks_cross_user_access(monkeypatch):
-    from app.api.v1 import routines as routines_api
+    from app.domains.routines import router as routines_api
 
     owners: dict[str, str] = {}
 
@@ -160,7 +160,7 @@ def test_routine_ownership_blocks_cross_user_access(monkeypatch):
 
 
 def test_workout_ownership_blocks_cross_user_access(monkeypatch):
-    from app.api.v1 import workouts as workouts_api
+    from app.domains.workouts import router as workouts_api
 
     owners: dict[str, str] = {}
 
@@ -267,7 +267,7 @@ def test_workout_ownership_blocks_cross_user_access(monkeypatch):
 
 
 def test_custom_exercise_and_favorite_ownership(monkeypatch):
-    from app.api.v1 import exercises as exercises_api
+    from app.domains.exercises import router as exercises_api
 
     custom_id = "custom-11111111-2222-3333-4444-555555555555"
     owners = {custom_id: "user-a"}

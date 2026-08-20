@@ -1,6 +1,6 @@
 from fastapi.testclient import TestClient
 
-from auth import (
+from app.core.auth import (
     AuthenticatedUser,
     authenticate_user,
 )
@@ -28,7 +28,7 @@ def test_me_requires_authentication():
 
 
 def test_me_returns_authenticated_identity(monkeypatch):
-    from app.api.v1 import me as me_api
+    from app.domains.account import router as me_api
 
     async def fake_get_gymos_access(user):
         assert user.id == "user-123"
@@ -88,7 +88,7 @@ def test_me_returns_authenticated_identity(monkeypatch):
 
 
 def test_me_rejects_invalid_token(monkeypatch):
-    import auth
+    import app.core.auth as auth
 
     monkeypatch.setenv(
         "SUPABASE_URL",

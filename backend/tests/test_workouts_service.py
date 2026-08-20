@@ -1,4 +1,4 @@
-from app.services import workouts as service
+from app.domains.workouts import service
 
 
 def workout_row():

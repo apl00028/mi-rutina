@@ -1,17 +1,17 @@
 from fastapi import APIRouter
 
-from .admin import router as admin_router
-from .analytics import (
+from app.domains.admin.router import router as admin_router
+from app.domains.analytics.router import (
     router as analytics_router,
 )
-from .exercises import router as exercises_router
-from .health import router as health_router
-from .me import router as me_router
-from .routines import router as routines_router
-from app.api.v1.workouts import (
+from app.domains.exercises.router import router as exercises_router
+from app.domains.health.router import router as health_router
+from app.domains.account.router import router as account_router
+from app.domains.routines.router import router as routines_router
+from app.domains.workouts.router import (
     router as workouts_router,
 )
-from .onboarding import (
+from app.domains.onboarding.router import (
     router as onboarding_router,
 )
 
@@ -25,7 +25,7 @@ router.include_router(
 )
 
 router.include_router(
-    me_router
+    account_router
 )
 
 router.include_router(

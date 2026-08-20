@@ -26,9 +26,22 @@ uvicorn main:app --reload --port 8080
 
 7. En el modo desarrollador de GymOS configura la URL pública del backend.
 
+## Estructura
+
+- `main.py`: arranque FastAPI, CORS, `/health` runtime y montaje de routers.
+- `app/core/`: autenticación y limitación de peticiones.
+- `app/api/v1/router.py`: agregador estable de rutas versionadas.
+- `app/domains/`: módulos por dominio con routers, servicios, repositorios y
+  modelos propios.
+
+Los endpoints legacy usados por la experiencia estática (`app.js`,
+`workout-analysis.js`, `index.html` y `service-worker.js`) siguen activos y se
+mantienen fuera del prefijo `/api/v1` cuando el frontend actual los consume así.
+
 ## Endpoints
 
 - `GET /health`: estado público, sin secretos.
+- `GET /api/v1/health`: estado público versionado.
 - `GET /ai/status`: proveedor, modelo y comprobación de conexión; requiere sesión.
 - `POST /workout-analysis`: redacción opcional sobre el análisis estructurado;
   requiere sesión y aplica límites por usuario.

@@ -1,7 +1,7 @@
 from fastapi.testclient import TestClient
 
-from auth import AuthenticatedUser, require_user
-from app.models.routine import Routine
+from app.core.auth import AuthenticatedUser, require_user
+from app.domains.routines.models import Routine
 from main import app
 
 
@@ -95,7 +95,7 @@ def usable_routine():
 
 
 def test_complete_onboarding_persists_usable_routine_once(monkeypatch):
-    from app.api.v1 import onboarding as onboarding_api
+    from app.domains.onboarding import router as onboarding_api
 
     persisted = []
 
@@ -146,7 +146,7 @@ def test_complete_onboarding_persists_usable_routine_once(monkeypatch):
 
 
 def test_complete_onboarding_rejects_empty_generated_sessions(monkeypatch):
-    from app.api.v1 import onboarding as onboarding_api
+    from app.domains.onboarding import router as onboarding_api
 
     async def fake_persist(user, profile, routine):
         raise AssertionError(
@@ -208,7 +208,7 @@ def test_complete_onboarding_rejects_empty_generated_sessions(monkeypatch):
 
 
 def test_complete_onboarding_rejects_malformed_exercise(monkeypatch):
-    from app.api.v1 import onboarding as onboarding_api
+    from app.domains.onboarding import router as onboarding_api
 
     async def fake_persist(user, profile, routine):
         raise AssertionError(

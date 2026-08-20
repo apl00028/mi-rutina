@@ -1,7 +1,7 @@
 import asyncio
 
-from auth import AuthenticatedUser
-from app.services import routines as service
+from app.core.auth import AuthenticatedUser
+from app.domains.routines import service
 
 
 def routine_row():

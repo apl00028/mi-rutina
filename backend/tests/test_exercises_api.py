@@ -2,8 +2,8 @@ import httpx
 from fastapi.testclient import TestClient
 from fastapi.encoders import jsonable_encoder
 
-from auth import AuthenticatedUser, require_user
-from app.services.exercises import load_exercises
+from app.core.auth import AuthenticatedUser, require_user
+from app.domains.exercises.service import load_exercises
 from main import app
 
 
@@ -31,7 +31,7 @@ def test_list_exercises_requires_authentication():
 
 
 def test_list_exercises_authenticated_without_custom_returns_100_items(monkeypatch):
-    from app.api.v1 import exercises as exercises_api
+    from app.domains.exercises import router as exercises_api
 
     async def fake_list_custom_exercise_models(user):
         assert user.id == "user-123"
@@ -73,7 +73,7 @@ def test_list_exercises_authenticated_without_custom_returns_100_items(monkeypat
 
 
 def test_list_exercises_authenticated_marks_builtin_favorite(monkeypatch):
-    from app.api.v1 import exercises as exercises_api
+    from app.domains.exercises import router as exercises_api
 
     async def fake_list_custom_exercise_models(user):
         return []
@@ -113,8 +113,8 @@ def test_list_exercises_authenticated_marks_builtin_favorite(monkeypatch):
 
 
 def test_list_exercises_authenticated_appends_custom_exercise(monkeypatch):
-    from app.api.v1 import exercises as exercises_api
-    from app.models.exercise import Exercise
+    from app.domains.exercises import router as exercises_api
+    from app.domains.exercises.models import Exercise
 
     custom_uuid = "11111111-2222-3333-4444-555555555555"
 
@@ -182,8 +182,8 @@ def test_list_exercises_authenticated_appends_custom_exercise(monkeypatch):
 
 
 def test_list_exercises_authenticated_marks_custom_favorite(monkeypatch):
-    from app.api.v1 import exercises as exercises_api
-    from app.models.exercise import Exercise
+    from app.domains.exercises import router as exercises_api
+    from app.domains.exercises.models import Exercise
 
     custom_uuid = "11111111-2222-3333-4444-555555555555"
 
@@ -233,7 +233,7 @@ def test_list_exercises_authenticated_marks_custom_favorite(monkeypatch):
 
 
 def test_list_exercises_custom_supabase_failure_returns_builtin_catalog(monkeypatch):
-    from app.api.v1 import exercises as exercises_api
+    from app.domains.exercises import router as exercises_api
 
     async def fake_list_custom_exercise_models(user):
         raise httpx.ConnectError("connection failed")
@@ -279,7 +279,7 @@ def test_get_exercise_by_id_requires_authentication():
 
 
 def test_get_builtin_exercise_by_id_authenticated(monkeypatch):
-    from app.api.v1 import exercises as exercises_api
+    from app.domains.exercises import router as exercises_api
 
     app.dependency_overrides[require_user] = authenticated_user
     monkeypatch.setattr(
@@ -311,8 +311,8 @@ def test_get_builtin_exercise_by_id_authenticated(monkeypatch):
 
 
 def test_get_custom_exercise_by_id_authenticated(monkeypatch):
-    from app.api.v1 import exercises as exercises_api
-    from app.models.exercise import Exercise
+    from app.domains.exercises import router as exercises_api
+    from app.domains.exercises.models import Exercise
 
     custom_uuid = "11111111-2222-3333-4444-555555555555"
 
@@ -379,7 +379,7 @@ def test_get_custom_exercise_by_id_authenticated(monkeypatch):
 
 
 def test_get_missing_custom_exercise_returns_404(monkeypatch):
-    from app.api.v1 import exercises as exercises_api
+    from app.domains.exercises import router as exercises_api
 
     async def fake_get_custom_exercise_model_by_id(user, exercise_id):
         return None
@@ -409,7 +409,7 @@ def test_get_missing_custom_exercise_returns_404(monkeypatch):
 
 
 def test_get_other_user_custom_exercise_returns_same_404(monkeypatch):
-    from app.api.v1 import exercises as exercises_api
+    from app.domains.exercises import router as exercises_api
 
     async def fake_get_custom_exercise_model_by_id(user, exercise_id):
         return None
@@ -439,8 +439,8 @@ def test_get_other_user_custom_exercise_returns_same_404(monkeypatch):
 
 
 def test_get_custom_exercise_invalid_uuid_returns_404_without_supabase(monkeypatch):
-    from app.repositories import custom_exercises as custom_exercises_repository
-    from app.api.v1 import exercises as exercises_api
+    from app.domains.exercises import custom_repository as custom_exercises_repository
+    from app.domains.exercises import router as exercises_api
 
     class FakeClient:
         def __init__(self, timeout):
@@ -472,7 +472,7 @@ def test_get_custom_exercise_invalid_uuid_returns_404_without_supabase(monkeypat
 
 
 def test_get_custom_exercise_supabase_failure_returns_controlled_error(monkeypatch):
-    from app.api.v1 import exercises as exercises_api
+    from app.domains.exercises import router as exercises_api
 
     async def fake_get_custom_exercise_model_by_id(user, exercise_id):
         raise httpx.HTTPStatusError(
@@ -503,7 +503,7 @@ def test_get_custom_exercise_supabase_failure_returns_controlled_error(monkeypat
 
 
 def test_unknown_exercise_returns_404(monkeypatch):
-    from app.api.v1 import exercises as exercises_api
+    from app.domains.exercises import router as exercises_api
 
     app.dependency_overrides[require_user] = authenticated_user
     monkeypatch.setattr(
@@ -525,8 +525,8 @@ def test_unknown_exercise_returns_404(monkeypatch):
 
 
 def test_patch_custom_exercise_updates_own_custom(monkeypatch):
-    from app.api.v1 import exercises as exercises_api
-    from app.models.exercise import Exercise
+    from app.domains.exercises import router as exercises_api
+    from app.domains.exercises.models import Exercise
 
     captured = {}
     custom_uuid = "11111111-2222-3333-4444-555555555555"
@@ -592,7 +592,7 @@ def test_patch_custom_exercise_updates_own_custom(monkeypatch):
 
 
 def test_patch_builtin_exercise_returns_404(monkeypatch):
-    from app.api.v1 import exercises as exercises_api
+    from app.domains.exercises import router as exercises_api
 
     async def fake_update_custom_exercise_model(user, exercise_id, payload):
         raise AssertionError("Built-ins must not be patched through Supabase")
@@ -618,7 +618,7 @@ def test_patch_builtin_exercise_returns_404(monkeypatch):
 
 
 def test_patch_missing_custom_exercise_returns_404(monkeypatch):
-    from app.api.v1 import exercises as exercises_api
+    from app.domains.exercises import router as exercises_api
 
     async def fake_update_custom_exercise_model(user, exercise_id, payload):
         return None
@@ -644,7 +644,7 @@ def test_patch_missing_custom_exercise_returns_404(monkeypatch):
 
 
 def test_patch_other_user_custom_exercise_returns_same_404(monkeypatch):
-    from app.api.v1 import exercises as exercises_api
+    from app.domains.exercises import router as exercises_api
 
     async def fake_update_custom_exercise_model(user, exercise_id, payload):
         return None
@@ -670,7 +670,7 @@ def test_patch_other_user_custom_exercise_returns_same_404(monkeypatch):
 
 
 def test_patch_invalid_custom_uuid_returns_404_without_supabase(monkeypatch):
-    from app.repositories import custom_exercises as custom_exercises_repository
+    from app.domains.exercises import custom_repository as custom_exercises_repository
 
     class FakeClient:
         def __init__(self, timeout):
@@ -708,7 +708,7 @@ def test_patch_exercise_requires_authentication():
 
 
 def test_patch_custom_exercise_supabase_failure_returns_controlled_error(monkeypatch):
-    from app.api.v1 import exercises as exercises_api
+    from app.domains.exercises import router as exercises_api
 
     async def fake_update_custom_exercise_model(user, exercise_id, payload):
         raise httpx.HTTPStatusError(
@@ -790,7 +790,7 @@ def test_patch_custom_exercise_rejects_null_values():
 
 
 def test_delete_custom_exercise_removes_own_custom(monkeypatch):
-    from app.api.v1 import exercises as exercises_api
+    from app.domains.exercises import router as exercises_api
 
     captured = {}
     custom_uuid = "11111111-2222-3333-4444-555555555555"
@@ -824,7 +824,7 @@ def test_delete_custom_exercise_removes_own_custom(monkeypatch):
 
 
 def test_delete_builtin_exercise_returns_404(monkeypatch):
-    from app.api.v1 import exercises as exercises_api
+    from app.domains.exercises import router as exercises_api
 
     async def fake_remove_custom_exercise(user, exercise_id):
         raise AssertionError("Built-ins must not be deleted through Supabase")
@@ -849,7 +849,7 @@ def test_delete_builtin_exercise_returns_404(monkeypatch):
 
 
 def test_delete_missing_custom_exercise_returns_404(monkeypatch):
-    from app.api.v1 import exercises as exercises_api
+    from app.domains.exercises import router as exercises_api
 
     async def fake_remove_custom_exercise(user, exercise_id):
         return False
@@ -874,7 +874,7 @@ def test_delete_missing_custom_exercise_returns_404(monkeypatch):
 
 
 def test_delete_other_user_custom_exercise_returns_same_404(monkeypatch):
-    from app.api.v1 import exercises as exercises_api
+    from app.domains.exercises import router as exercises_api
 
     async def fake_remove_custom_exercise(user, exercise_id):
         return False
@@ -899,7 +899,7 @@ def test_delete_other_user_custom_exercise_returns_same_404(monkeypatch):
 
 
 def test_delete_invalid_custom_uuid_returns_404_without_supabase(monkeypatch):
-    from app.repositories import custom_exercises as custom_exercises_repository
+    from app.domains.exercises import custom_repository as custom_exercises_repository
 
     class FakeClient:
         def __init__(self, timeout):
@@ -935,7 +935,7 @@ def test_delete_exercise_requires_authentication():
 
 
 def test_delete_custom_exercise_supabase_failure_returns_controlled_error(monkeypatch):
-    from app.api.v1 import exercises as exercises_api
+    from app.domains.exercises import router as exercises_api
 
     async def fake_remove_custom_exercise(user, exercise_id):
         raise httpx.HTTPStatusError(
@@ -966,7 +966,7 @@ def test_delete_custom_exercise_supabase_failure_returns_controlled_error(monkey
 
 
 def test_put_builtin_favorite_succeeds(monkeypatch):
-    from app.api.v1 import exercises as exercises_api
+    from app.domains.exercises import router as exercises_api
 
     captured = {}
 
@@ -999,8 +999,8 @@ def test_put_builtin_favorite_succeeds(monkeypatch):
 
 
 def test_put_custom_favorite_succeeds(monkeypatch):
-    from app.api.v1 import exercises as exercises_api
-    from app.models.exercise import Exercise
+    from app.domains.exercises import router as exercises_api
+    from app.domains.exercises.models import Exercise
 
     custom_uuid = "11111111-2222-3333-4444-555555555555"
     captured = {}
@@ -1055,7 +1055,7 @@ def test_put_custom_favorite_succeeds(monkeypatch):
 
 
 def test_put_custom_favorite_other_user_returns_404(monkeypatch):
-    from app.api.v1 import exercises as exercises_api
+    from app.domains.exercises import router as exercises_api
 
     async def fake_get_custom_exercise_model_by_id(user, exercise_id):
         return None
@@ -1088,7 +1088,7 @@ def test_put_custom_favorite_other_user_returns_404(monkeypatch):
 
 
 def test_put_favorite_unknown_exercise_returns_404(monkeypatch):
-    from app.api.v1 import exercises as exercises_api
+    from app.domains.exercises import router as exercises_api
 
     async def fake_mark_exercise_favorite(user, exercise_id):
         raise AssertionError("Unknown exercise must not be favorited")
@@ -1113,7 +1113,7 @@ def test_put_favorite_unknown_exercise_returns_404(monkeypatch):
 
 
 def test_put_favorite_repeated_is_idempotent(monkeypatch):
-    from app.api.v1 import exercises as exercises_api
+    from app.domains.exercises import router as exercises_api
 
     calls = []
 
@@ -1150,7 +1150,7 @@ def test_put_favorite_repeated_is_idempotent(monkeypatch):
 
 
 def test_delete_favorite_succeeds(monkeypatch):
-    from app.api.v1 import exercises as exercises_api
+    from app.domains.exercises import router as exercises_api
 
     captured = {}
 
@@ -1183,7 +1183,7 @@ def test_delete_favorite_succeeds(monkeypatch):
 
 
 def test_delete_favorite_repeated_is_idempotent(monkeypatch):
-    from app.api.v1 import exercises as exercises_api
+    from app.domains.exercises import router as exercises_api
 
     calls = []
 
@@ -1227,7 +1227,7 @@ def test_favorite_requires_authentication():
 
 
 def test_put_favorite_supabase_failure_returns_controlled_error(monkeypatch):
-    from app.api.v1 import exercises as exercises_api
+    from app.domains.exercises import router as exercises_api
 
     async def fake_mark_exercise_favorite(user, exercise_id):
         raise httpx.HTTPStatusError(
@@ -1401,8 +1401,8 @@ def test_create_custom_exercise_requires_authentication():
 
 
 def test_create_custom_exercise_returns_created_exercise(monkeypatch):
-    from auth import AuthenticatedUser, require_user
-    from app.api.v1 import exercises as exercises_api
+    from app.core.auth import AuthenticatedUser, require_user
+    from app.domains.exercises import router as exercises_api
 
     async def fake_user():
         return AuthenticatedUser(

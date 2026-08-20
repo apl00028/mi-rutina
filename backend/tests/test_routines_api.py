@@ -1,8 +1,8 @@
 import httpx
 from fastapi.testclient import TestClient
 
-from auth import AuthenticatedUser, require_user
-from app.models.routine import Routine
+from app.core.auth import AuthenticatedUser, require_user
+from app.domains.routines.models import Routine
 from main import app
 
 
@@ -72,7 +72,7 @@ def routine_payload(routine_id="routine-1", revision=1):
 
 
 def test_list_routines_returns_user_routines(monkeypatch):
-    from app.api.v1 import routines as routines_api
+    from app.domains.routines import router as routines_api
 
     async def fake_list_user_routines(user):
         assert user.id == "user-123"
@@ -123,7 +123,7 @@ def test_list_routines_returns_user_routines(monkeypatch):
 
 
 def test_list_routines_without_routines_returns_empty_list(monkeypatch):
-    from app.api.v1 import routines as routines_api
+    from app.domains.routines import router as routines_api
 
     async def fake_list_user_routines(user):
         return []
@@ -148,7 +148,7 @@ def test_list_routines_without_routines_returns_empty_list(monkeypatch):
 
 
 def test_get_routine_returns_user_routine(monkeypatch):
-    from app.api.v1 import routines as routines_api
+    from app.domains.routines import router as routines_api
 
     async def fake_get_user_routine_by_id(user, routine_id):
         assert user.id == "user-123"
@@ -175,7 +175,7 @@ def test_get_routine_returns_user_routine(monkeypatch):
 
 
 def test_get_foreign_routine_returns_404(monkeypatch):
-    from app.api.v1 import routines as routines_api
+    from app.domains.routines import router as routines_api
 
     async def fake_get_user_routine_by_id(user, routine_id):
         return None
@@ -200,7 +200,7 @@ def test_get_foreign_routine_returns_404(monkeypatch):
 
 
 def test_get_missing_routine_returns_same_404(monkeypatch):
-    from app.api.v1 import routines as routines_api
+    from app.domains.routines import router as routines_api
 
     async def fake_get_user_routine_by_id(user, routine_id):
         return None
@@ -232,7 +232,7 @@ def test_list_routines_requires_authentication():
 
 
 def test_routines_supabase_error_returns_502(monkeypatch):
-    from app.api.v1 import routines as routines_api
+    from app.domains.routines import router as routines_api
 
     async def fake_list_user_routines(user):
         raise httpx.ConnectError("connection failed")
@@ -257,7 +257,7 @@ def test_routines_supabase_error_returns_502(monkeypatch):
 
 
 def test_create_routine_returns_201(monkeypatch):
-    from app.api.v1 import routines as routines_api
+    from app.domains.routines import router as routines_api
 
     captured = {}
 
@@ -291,7 +291,7 @@ def test_create_routine_returns_201(monkeypatch):
 
 
 def test_create_routine_rejects_duplicate_with_409(monkeypatch):
-    from app.api.v1 import routines as routines_api
+    from app.domains.routines import router as routines_api
 
     async def fake_create_user_routine(user, routine):
         raise httpx.HTTPStatusError(
@@ -328,7 +328,7 @@ def test_create_routine_requires_authentication():
 
 
 def test_create_routine_supabase_error_returns_502(monkeypatch):
-    from app.api.v1 import routines as routines_api
+    from app.domains.routines import router as routines_api
 
     async def fake_create_user_routine(user, routine):
         raise httpx.ConnectError("connection failed")
@@ -354,7 +354,7 @@ def test_create_routine_supabase_error_returns_502(monkeypatch):
 
 
 def test_replace_routine_returns_200(monkeypatch):
-    from app.api.v1 import routines as routines_api
+    from app.domains.routines import router as routines_api
 
     captured = {}
 
@@ -392,7 +392,7 @@ def test_replace_routine_returns_200(monkeypatch):
 
 
 def test_replace_routine_rejects_url_body_mismatch(monkeypatch):
-    from app.api.v1 import routines as routines_api
+    from app.domains.routines import router as routines_api
 
     async def fake_replace_user_routine(user, routine_id, routine):
         raise AssertionError("Mismatched IDs must not reach service")
@@ -418,7 +418,7 @@ def test_replace_routine_rejects_url_body_mismatch(monkeypatch):
 
 
 def test_replace_missing_routine_returns_404(monkeypatch):
-    from app.api.v1 import routines as routines_api
+    from app.domains.routines import router as routines_api
 
     async def fake_replace_user_routine(user, routine_id, routine):
         return None
@@ -444,7 +444,7 @@ def test_replace_missing_routine_returns_404(monkeypatch):
 
 
 def test_replace_foreign_routine_returns_same_404(monkeypatch):
-    from app.api.v1 import routines as routines_api
+    from app.domains.routines import router as routines_api
 
     async def fake_replace_user_routine(user, routine_id, routine):
         return None
@@ -470,7 +470,7 @@ def test_replace_foreign_routine_returns_same_404(monkeypatch):
 
 
 def test_delete_foreign_routine_returns_same_404(monkeypatch):
-    from app.api.v1 import routines as routines_api
+    from app.domains.routines import router as routines_api
 
     async def fake_delete_user_routine(user, routine_id):
         assert user.id == "user-123"

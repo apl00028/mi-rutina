@@ -1,7 +1,7 @@
 from fastapi.testclient import TestClient
 
-from auth import AuthenticatedUser, require_user
-from app.models.workout import Workout
+from app.core.auth import AuthenticatedUser, require_user
+from app.domains.workouts.models import Workout
 from main import app
 
 
@@ -48,7 +48,7 @@ def test_workouts_require_authentication():
 
 
 def test_user_can_read_own_workout(monkeypatch):
-    from app.api.v1 import workouts as workouts_api
+    from app.domains.workouts import router as workouts_api
 
     async def fake_get_user_workout_by_id(
         user,
@@ -86,7 +86,7 @@ def test_user_can_read_own_workout(monkeypatch):
 
 
 def test_foreign_workout_read_returns_404(monkeypatch):
-    from app.api.v1 import workouts as workouts_api
+    from app.domains.workouts import router as workouts_api
 
     async def fake_get_user_workout_by_id(
         user,
@@ -126,7 +126,7 @@ def test_foreign_workout_read_returns_404(monkeypatch):
 
 
 def test_foreign_workout_update_returns_404(monkeypatch):
-    from app.api.v1 import workouts as workouts_api
+    from app.domains.workouts import router as workouts_api
 
     async def fake_replace_user_workout(
         user,
@@ -171,7 +171,7 @@ def test_foreign_workout_update_returns_404(monkeypatch):
 
 
 def test_foreign_workout_delete_returns_404(monkeypatch):
-    from app.api.v1 import workouts as workouts_api
+    from app.domains.workouts import router as workouts_api
 
     async def fake_delete_user_workout(
         user,

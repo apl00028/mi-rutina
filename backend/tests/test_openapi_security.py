@@ -86,7 +86,7 @@ def test_openapi_marks_authenticated_operations_as_protected():
 def test_openapi_leaves_public_operations_unprotected():
     schema = openapi_schema()
 
-    assert_public(schema, "/health", "get")
+    assert "/health" not in schema["paths"]
     assert_public(schema, "/api/v1/health", "get")
     assert_public(
         schema,

@@ -1,4 +1,4 @@
-from app.services.exercise_catalog import (
+from app.domains.exercises.catalog_service import (
     compatible_exercises_by_pattern,
     exercises_by_pattern,
     load_exercise_catalog,

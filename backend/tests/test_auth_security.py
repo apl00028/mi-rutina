@@ -4,8 +4,8 @@ import pytest
 from fastapi import HTTPException
 from fastapi.security import HTTPAuthorizationCredentials
 
-import auth
-from auth import authenticate_user
+import app.core.auth as auth
+from app.core.auth import authenticate_user
 
 
 def test_authenticate_user_without_token_keeps_existing_error():

@@ -1,4 +1,4 @@
-@if (isLoginPage()) {
+@if (isStandalonePage()) {
   <router-outlet />
 } @else {
   <div
@@ -160,6 +160,16 @@
                 >
                   Mi cuenta
                 </button>
+
+                @if (isAdmin()) {
+                  <a
+                    class="user-dropdown-link"
+                    routerLink="/admin/access"
+                    (click)="closeUserMenu()"
+                  >
+                    Solicitudes de acceso
+                  </a>
+                }
 
                 <button
                   type="button"

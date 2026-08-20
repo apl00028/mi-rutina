@@ -17,113 +17,353 @@ class AuthenticatedUser:
     role: str | None = None
 
 
-async def require_user(
-    authorization: str | None = Header(default=None),
-) -> AuthenticatedUser:
-    if not authorization or not authorization.lower().startswith("bearer "):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Missing bearer token",
-        )
+@dataclass(frozen=True)
+class GymOSAccess:
+    user_id: str
+    email: str | None
+    status: str
+    plan: str | None
+    role: str | None
+    expires_at: str | None
 
-    supabase_url = os.getenv("SUPABASE_URL", "").rstrip("/")
-    publishable_key = os.getenv("SUPABASE_PUBLISHABLE_KEY", "")
+
+def _supabase_config() -> tuple[str, str]:
+    supabase_url = os.getenv(
+        "SUPABASE_URL",
+        "",
+    ).rstrip("/")
+
+    publishable_key = os.getenv(
+        "SUPABASE_PUBLISHABLE_KEY",
+        "",
+    )
 
     if not supabase_url or not publishable_key:
         raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Authentication service is not configured",
+            status_code=(
+                status.HTTP_503_SERVICE_UNAVAILABLE
+            ),
+            detail=(
+                "Authentication service "
+                "is not configured"
+            ),
         )
 
-    token = authorization.split(" ", 1)[1].strip()
+    return (
+        supabase_url,
+        publishable_key,
+    )
+
+
+def _extract_bearer_token(
+    authorization: str | None,
+) -> str:
+    if (
+        not authorization
+        or not authorization
+        .lower()
+        .startswith("bearer ")
+    ):
+        raise HTTPException(
+            status_code=(
+                status.HTTP_401_UNAUTHORIZED
+            ),
+            detail="Missing bearer token",
+        )
+
+    token = authorization.split(
+        " ",
+        1,
+    )[1].strip()
+
+    if not token:
+        raise HTTPException(
+            status_code=(
+                status.HTTP_401_UNAUTHORIZED
+            ),
+            detail="Missing bearer token",
+        )
+
+    return token
+
+
+async def authenticate_user(
+    authorization: str | None = Header(
+        default=None
+    ),
+) -> AuthenticatedUser:
+    """
+    Validate only the Supabase identity.
+
+    This dependency intentionally does NOT
+    require the GymOS account to be active.
+
+    It is suitable for:
+    - /me
+    - pending-access screens
+    - onboarding/access bootstrap flows
+    """
+
+    (
+        supabase_url,
+        publishable_key,
+    ) = _supabase_config()
+
+    token = _extract_bearer_token(
+        authorization
+    )
 
     headers = {
-        "Authorization": f"Bearer {token}",
-        "apikey": publishable_key,
+        "Authorization":
+            f"Bearer {token}",
+        "apikey":
+            publishable_key,
     }
 
-    async with httpx.AsyncClient(timeout=10.0) as client:
-        # 1. Comprobar que el token pertenece a un usuario real de Supabase.
-        user_response = await client.get(
-            f"{supabase_url}/auth/v1/user",
-            headers=headers,
-        )
-
-        if user_response.status_code != 200:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid or expired access token",
+    try:
+        async with httpx.AsyncClient(
+            timeout=10.0
+        ) as client:
+            user_response = await client.get(
+                f"{supabase_url}/auth/v1/user",
+                headers=headers,
             )
 
-        user_payload = user_response.json()
-        user_id = user_payload.get("id")
-
-        if not user_id:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid user payload",
-            )
-
-        # 2. Comprobar autorización de GymOS.
-        access_response = await client.get(
-            f"{supabase_url}/rest/v1/gymos_users",
-            headers=headers,
-            params={
-                "user_id": f"eq.{user_id}",
-                "select": "user_id,email,status,plan,role,expires_at",
-                "limit": "1",
-            },
-        )
-
-    if access_response.status_code != 200:
+    except httpx.HTTPError as exc:
         raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="GymOS authorization service is unavailable",
-        )
+            status_code=(
+                status.HTTP_503_SERVICE_UNAVAILABLE
+            ),
+            detail=(
+                "Authentication service "
+                "is unavailable"
+            ),
+        ) from exc
 
-    rows = access_response.json()
-
-    if not rows:
+    if user_response.status_code != 200:
         raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="GymOS access is not authorized",
+            status_code=(
+                status.HTTP_401_UNAUTHORIZED
+            ),
+            detail=(
+                "Invalid or expired access token"
+            ),
         )
 
-    access = rows[0]
+    user_payload = user_response.json()
 
-    # 3. Debe estar explícitamente activo.
-    if access.get("status") != "active":
+    user_id = user_payload.get("id")
+
+    if not user_id:
         raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="GymOS account is not active",
+            status_code=(
+                status.HTTP_401_UNAUTHORIZED
+            ),
+            detail="Invalid user payload",
         )
-
-    # 4. Si tiene fecha de expiración, comprobarla.
-    expires_at = access.get("expires_at")
-
-    if expires_at:
-        try:
-            expires = datetime.fromisoformat(
-                expires_at.replace("Z", "+00:00")
-            )
-
-            if expires <= datetime.now(timezone.utc):
-                raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN,
-                    detail="GymOS access has expired",
-                )
-        except HTTPException:
-            raise
-        except (TypeError, ValueError):
-            raise HTTPException(
-                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail="Invalid GymOS authorization configuration",
-            )
 
     return AuthenticatedUser(
         id=user_id,
-        email=user_payload.get("email"),
+        email=user_payload.get(
+            "email"
+        ),
         access_token=token,
-        plan=access.get("plan"),
-        role=access.get("role"),
+    )
+
+
+async def get_gymos_access(
+    user: AuthenticatedUser,
+) -> GymOSAccess | None:
+    """
+    Read the authenticated user's GymOS
+    authorization record.
+
+    Returns None when the user has not yet
+    been registered in gymos_users.
+    """
+
+    (
+        supabase_url,
+        publishable_key,
+    ) = _supabase_config()
+
+    if not user.access_token:
+        raise HTTPException(
+            status_code=(
+                status.HTTP_401_UNAUTHORIZED
+            ),
+            detail="Missing access token",
+        )
+
+    headers = {
+        "Authorization":
+            f"Bearer {user.access_token}",
+        "apikey":
+            publishable_key,
+    }
+
+    try:
+        async with httpx.AsyncClient(
+            timeout=10.0
+        ) as client:
+            response = await client.get(
+                (
+                    f"{supabase_url}"
+                    "/rest/v1/gymos_users"
+                ),
+                headers=headers,
+                params={
+                    "user_id":
+                        f"eq.{user.id}",
+                    "select": (
+                        "user_id,"
+                        "email,"
+                        "status,"
+                        "plan,"
+                        "role,"
+                        "expires_at"
+                    ),
+                    "limit":
+                        "1",
+                },
+            )
+
+    except httpx.HTTPError as exc:
+        raise HTTPException(
+            status_code=(
+                status.HTTP_503_SERVICE_UNAVAILABLE
+            ),
+            detail=(
+                "GymOS authorization "
+                "service is unavailable"
+            ),
+        ) from exc
+
+    if response.status_code != 200:
+        raise HTTPException(
+            status_code=(
+                status.HTTP_503_SERVICE_UNAVAILABLE
+            ),
+            detail=(
+                "GymOS authorization "
+                "service is unavailable"
+            ),
+        )
+
+    rows = response.json()
+
+    if not rows:
+        return None
+
+    access = rows[0]
+
+    return GymOSAccess(
+        user_id=access[
+            "user_id"
+        ],
+        email=access.get(
+            "email"
+        ),
+        status=access.get(
+            "status",
+            "pending",
+        ),
+        plan=access.get(
+            "plan"
+        ),
+        role=access.get(
+            "role"
+        ),
+        expires_at=access.get(
+            "expires_at"
+        ),
+    )
+
+
+def _validate_active_access(
+    access: GymOSAccess,
+) -> None:
+    if access.status != "active":
+        raise HTTPException(
+            status_code=(
+                status.HTTP_403_FORBIDDEN
+            ),
+            detail=(
+                "GymOS account is not active"
+            ),
+        )
+
+    if not access.expires_at:
+        return
+
+    try:
+        expires = datetime.fromisoformat(
+            access.expires_at.replace(
+                "Z",
+                "+00:00",
+            )
+        )
+
+    except (
+        TypeError,
+        ValueError,
+    ) as exc:
+        raise HTTPException(
+            status_code=(
+                status.HTTP_503_SERVICE_UNAVAILABLE
+            ),
+            detail=(
+                "Invalid GymOS "
+                "authorization configuration"
+            ),
+        ) from exc
+
+    if expires <= datetime.now(
+        timezone.utc
+    ):
+        raise HTTPException(
+            status_code=(
+                status.HTTP_403_FORBIDDEN
+            ),
+            detail=(
+                "GymOS access has expired"
+            ),
+        )
+
+
+async def require_user(
+    authorization: str | None = Header(
+        default=None
+    ),
+) -> AuthenticatedUser:
+    identity = await authenticate_user(
+        authorization
+    )
+
+    access = await get_gymos_access(
+        identity
+    )
+
+    if access is None:
+        raise HTTPException(
+            status_code=(
+                status.HTTP_403_FORBIDDEN
+            ),
+            detail=(
+                "GymOS access is not authorized"
+            ),
+        )
+
+    _validate_active_access(
+        access
+    )
+
+    return AuthenticatedUser(
+        id=identity.id,
+        email=identity.email,
+        access_token=(
+            identity.access_token
+        ),
+        plan=access.plan,
+        role=access.role,
     )

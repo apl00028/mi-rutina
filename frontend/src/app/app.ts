@@ -11,9 +11,15 @@ import {
   RouterOutlet
 } from '@angular/router';
 
-import { filter } from 'rxjs';
+import {
+  filter
+} from 'rxjs';
 
-import { AuthService } from './core/auth.service';
+import {
+  AuthService,
+  GymOSMe
+} from './core/auth.service';
+
 
 @Component({
   selector: 'app-root',
@@ -27,15 +33,22 @@ import { AuthService } from './core/auth.service';
   styleUrl: './app.scss'
 })
 export class App {
+
   sidebarExpanded = signal(
     localStorage.getItem(
       'gymos-sidebar-expanded'
     ) !== 'false'
   );
 
-  userMenuOpen = signal(false);
+  userMenuOpen =
+    signal(false);
 
-  isLoginPage = signal(false);
+  isStandalonePage =
+    signal(false);
+
+  gymosMe =
+    signal<GymOSMe | null>(null);
+
 
   constructor(
     public auth: AuthService,
@@ -43,30 +56,77 @@ export class App {
   ) {
     this.syncRouteState();
 
+    void this.loadGymOSUser();
+
     this.router.events
       .pipe(
         filter(
-          event => event instanceof NavigationEnd
+          event =>
+            event instanceof
+            NavigationEnd
         )
       )
       .subscribe(() => {
         this.syncRouteState();
+
+        void this.loadGymOSUser();
       });
   }
 
-  private syncRouteState(): void {
-    const url = this.router.url;
 
-    this.isLoginPage.set(
-      url === '/login' ||
-      url.startsWith('/login?') ||
-      url.startsWith('/login#')
+  private syncRouteState(): void {
+    const path =
+      this.router.url
+        .split('?')[0]
+        .split('#')[0];
+
+    this.isStandalonePage.set(
+      path === '/login' ||
+      path === '/access-pending' ||
+      path === '/onboarding'
     );
 
-    if (this.isLoginPage()) {
+    if (
+      this.isStandalonePage()
+    ) {
       this.userMenuOpen.set(false);
     }
   }
+
+
+  private async loadGymOSUser():
+    Promise<void> {
+
+    const session =
+      await this.auth.waitForSession();
+
+    if (!session) {
+      this.gymosMe.set(null);
+      return;
+    }
+
+    try {
+      const me =
+        await this.auth.getMe();
+
+      this.gymosMe.set(me);
+
+    } catch {
+      this.gymosMe.set(null);
+    }
+  }
+
+
+  isAdmin(): boolean {
+    const me =
+      this.gymosMe();
+
+    return (
+      me?.access_status === 'active' &&
+      me?.role === 'admin'
+    );
+  }
+
 
   toggleSidebar(): void {
     const next =
@@ -80,19 +140,23 @@ export class App {
     );
   }
 
+
   toggleUserMenu(): void {
     this.userMenuOpen.update(
       current => !current
     );
   }
 
+
   closeUserMenu(): void {
     this.userMenuOpen.set(false);
   }
 
+
   async signOut(): Promise<void> {
     await this.auth.signOut();
 
+    this.gymosMe.set(null);
     this.userMenuOpen.set(false);
 
     await this.router.navigateByUrl(
@@ -100,21 +164,30 @@ export class App {
     );
   }
 
+
   userDisplayName(): string {
-    const user = this.auth.user();
+    const user =
+      this.auth.user();
 
     if (!user) {
       return 'Usuario';
     }
 
     return (
-      user.user_metadata?.['full_name'] ??
-      user.user_metadata?.['name'] ??
-      user.user_metadata?.['display_name'] ??
+      user.user_metadata?.[
+        'full_name'
+      ] ??
+      user.user_metadata?.[
+        'name'
+      ] ??
+      user.user_metadata?.[
+        'display_name'
+      ] ??
       user.email?.split('@')[0] ??
       'Usuario'
     );
   }
+
 
   userInitial(): string {
     return this.userDisplayName()

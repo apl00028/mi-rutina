@@ -1,31 +1,99 @@
 import { Routes } from '@angular/router';
 
-import { authGuard } from './core/auth.guard';
+import {
+  adminGuard
+} from './core/admin.guard';
 
-import { Login } from './pages/login/login';
-import { Home } from './pages/home/home';
-import { Train } from './pages/train/train';
-import { Routines } from './pages/routines/routines';
+import {
+  authGuard
+} from './core/auth.guard';
+
+import {
+  accessGuard
+} from './core/access.guard';
+
 
 export const routes: Routes = [
   {
     path: 'login',
-    component: Login
+    loadComponent: () =>
+      import(
+        './pages/login/login'
+      ).then(
+        module => module.Login
+      )
+  },
+  {
+    path: 'access-pending',
+    loadComponent: () =>
+      import(
+        './pages/access-pending/access-pending'
+      ).then(
+        module => module.AccessPending
+      ),
+    canActivate: [
+      authGuard
+    ]
+  },
+  {
+    path: 'onboarding',
+    loadComponent: () =>
+      import(
+        './pages/onboarding/onboarding'
+      ).then(
+        module => module.Onboarding
+      ),
+    canActivate: [
+      accessGuard
+    ]
+  },
+  {
+  path: 'admin/access',
+  loadComponent: () =>
+    import(
+      './pages/admin-access/admin-access'
+    ).then(
+      m => m.AdminAccess
+    ),
+  canActivate: [
+    adminGuard
+  ]
   },
   {
     path: '',
-    component: Home,
-    canActivate: [authGuard]
+    loadComponent: () =>
+      import(
+        './pages/home/home'
+      ).then(
+        module => module.Home
+      ),
+    canActivate: [
+      accessGuard
+    ]
   },
   {
     path: 'entrenar',
-    component: Train,
-    canActivate: [authGuard]
+    loadComponent: () =>
+      import(
+        './pages/train/train'
+      ).then(
+        module => module.Train
+      ),
+    canActivate: [
+      accessGuard
+    ]
   },
   {
     path: 'rutinas',
-    component: Routines,
-    canActivate: [authGuard]
+    loadComponent: () =>
+      import(
+        './pages/routines/routines'
+      ).then(
+        module => module.Routines
+      ),
+    canActivate: [
+      accessGuard
+    ]
   },
   {
     path: '**',

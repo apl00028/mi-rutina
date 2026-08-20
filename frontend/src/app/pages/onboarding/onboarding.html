@@ -1,0 +1,1217 @@
+<main class="onboarding-page">
+  <section class="onboarding-card">
+
+    <header class="brand">
+      <div class="brand-mark">
+        G
+      </div>
+
+      <div class="brand-copy">
+        <strong>GymOS</strong>
+        <span>Training, simplified.</span>
+      </div>
+    </header>
+
+
+    <section class="welcome">
+      <span class="eyebrow">
+        Tu entrenamiento empieza aquí
+      </span>
+
+      <h1>
+        Bienvenido a GymOS
+      </h1>
+
+      <h2>
+        Tu entrenamiento empieza con
+        un plan hecho para ti.
+      </h2>
+
+      <p>
+        Cuéntanos un poco sobre ti y prepararemos
+        una primera rutina adaptada a tus objetivos,
+        experiencia y disponibilidad.
+      </p>
+
+      <span class="time-hint">
+        Solo te llevará un par de minutos.
+      </span>
+    </section>
+
+    @if (!proposal()) {
+
+      <div class="onboarding-progress">
+
+        <div class="progress-track">
+          <div
+            class="progress-value"
+            [style.width.%]="
+              (currentStep() / totalSteps) * 100
+            "
+          ></div>
+        </div>
+
+        <div class="progress-steps">
+
+          <button
+            type="button"
+            [class.active]="currentStep() === 1"
+            [class.completed]="currentStep() > 1"
+            (click)="goToStep(1)"
+          >
+            <span>1</span>
+            <strong>Sobre ti</strong>
+          </button>
+
+          <button
+            type="button"
+            [class.active]="currentStep() === 2"
+            [class.completed]="currentStep() > 2"
+            (click)="goToStep(2)"
+          >
+            <span>2</span>
+            <strong>Objetivo</strong>
+          </button>
+
+          <button
+            type="button"
+            [class.active]="currentStep() === 3"
+            [class.completed]="currentStep() > 3"
+            (click)="goToStep(3)"
+          >
+            <span>3</span>
+            <strong>Entrenamiento</strong>
+          </button>
+
+          <button
+            type="button"
+            [class.active]="currentStep() === 4"
+            (click)="goToStep(4)"
+          >
+            <span>4</span>
+            <strong>Preferencias</strong>
+          </button>
+
+        </div>
+
+      </div>
+
+
+      <section class="form-section">
+
+      <!-- =================================================
+           01 · SOBRE TI
+           ================================================= -->
+
+      @if (currentStep() === 1) {
+        <div class="wizard-step">
+
+      <div class="onboarding-section">
+
+        <div class="section-heading">
+          <span class="step-number">
+            01
+          </span>
+
+          <div>
+            <strong>
+              Sobre ti
+            </strong>
+
+            <span>
+              Empecemos con algunos datos básicos.
+            </span>
+          </div>
+        </div>
+
+
+        <label>
+          <span class="field-label">
+            ¿Cómo te llamas?
+          </span>
+
+          <input
+            type="text"
+            autocomplete="given-name"
+            placeholder="Tu nombre"
+            [ngModel]="displayName()"
+            (ngModelChange)="
+              displayName.set($event)
+            "
+          />
+        </label>
+
+
+        <div class="field-grid">
+
+          <label>
+            <span class="field-label">
+              Edad
+            </span>
+
+            <input
+              type="number"
+              min="14"
+              max="100"
+              inputmode="numeric"
+              placeholder="30"
+              [ngModel]="age()"
+              (ngModelChange)="
+                age.set(
+                  $event === ''
+                    ? null
+                    : +$event
+                )
+              "
+            />
+          </label>
+
+
+          <label>
+            <span class="field-label">
+              Sexo
+            </span>
+
+            <select
+              [ngModel]="sex()"
+              (ngModelChange)="
+                sex.set($event)
+              "
+            >
+              <option
+                value=""
+                disabled
+              >
+                Selecciona
+              </option>
+
+              <option value="male">
+                Hombre
+              </option>
+
+              <option value="female">
+                Mujer
+              </option>
+
+              <option value="prefer_not_to_say">
+                Prefiero no indicarlo
+              </option>
+            </select>
+          </label>
+
+        </div>
+
+
+        <div class="field-grid">
+
+          <label>
+            <span class="field-label">
+              Altura
+            </span>
+
+            <div class="input-unit">
+              <input
+                type="number"
+                min="120"
+                max="230"
+                inputmode="numeric"
+                placeholder="175"
+                [ngModel]="heightCm()"
+                (ngModelChange)="
+                  heightCm.set(
+                    $event === ''
+                      ? null
+                      : +$event
+                  )
+                "
+              />
+
+              <span>
+                cm
+              </span>
+            </div>
+          </label>
+
+
+          <label>
+            <span class="field-label">
+              Peso actual
+            </span>
+
+            <div class="input-unit">
+              <input
+                type="number"
+                min="30"
+                max="300"
+                step="0.1"
+                inputmode="decimal"
+                placeholder="75"
+                [ngModel]="weightKg()"
+                (ngModelChange)="
+                  weightKg.set(
+                    $event === ''
+                      ? null
+                      : +$event
+                  )
+                "
+              />
+
+              <span>
+                kg
+              </span>
+            </div>
+          </label>
+
+        </div>
+
+      </div>
+
+        </div>
+      }
+
+
+      <!-- =================================================
+           02 · OBJETIVO Y MOTIVACIÓN
+           ================================================= -->
+
+      @if (currentStep() === 2) {
+        <div class="wizard-step">
+
+      <div class="onboarding-section">
+
+        <div class="section-heading">
+          <span class="step-number">
+            02
+          </span>
+
+          <div>
+            <strong>
+              Tu objetivo
+            </strong>
+
+            <span>
+              Cuéntanos qué quieres conseguir.
+            </span>
+          </div>
+        </div>
+
+
+        <label>
+          <span class="field-label">
+            Objetivo principal
+          </span>
+
+          <select
+            [ngModel]="primaryGoal()"
+            (ngModelChange)="
+              primaryGoal.set($event)
+            "
+          >
+            <option value="muscle_gain">
+              Ganar masa muscular
+            </option>
+
+            <option value="strength_gain">
+              Ganar fuerza
+            </option>
+
+            <option value="return_to_training">
+              Volver a entrenar
+            </option>
+
+            <option value="maintenance">
+              Mantenimiento
+            </option>
+
+            <option value="general_health">
+              Salud general
+            </option>
+
+            <option value="fat_loss">
+              Pérdida de grasa
+            </option>
+          </select>
+        </label>
+
+
+        <div class="motivation-field">
+
+          <div class="motivation-heading">
+            <span class="field-label">
+              ¿Qué te motiva a entrenar?
+            </span>
+
+            <span>
+              Elige hasta 2
+            </span>
+          </div>
+
+
+          <div class="motivation-options">
+
+            @for (
+              motivation of motivationOptions;
+              track motivation.value
+            ) {
+              <button
+                type="button"
+                class="motivation-option"
+                [class.selected]="
+                  motivationSelected(
+                    motivation.value
+                  )
+                "
+                (click)="
+                  toggleMotivation(
+                    motivation.value
+                  )
+                "
+              >
+                {{ motivation.label }}
+              </button>
+            }
+
+          </div>
+
+        </div>
+
+      </div>
+
+
+      <!-- =================================================
+           03 · EXPERIENCIA
+           ================================================= -->
+
+      <div class="onboarding-section">
+
+        <div class="section-heading">
+          <span class="step-number">
+            03
+          </span>
+
+          <div>
+            <strong>
+              Tu experiencia
+            </strong>
+
+            <span>
+              Ajustaremos el punto de partida a tu nivel.
+            </span>
+          </div>
+        </div>
+
+
+        <label>
+          <span class="field-label">
+            Experiencia entrenando con pesas
+          </span>
+
+          <select
+            [ngModel]="experienceLevel()"
+            (ngModelChange)="
+              experienceLevel.set($event)
+            "
+          >
+            <option value="beginner">
+              Principiante
+            </option>
+
+            <option value="returning">
+              Retomando después de un parón
+            </option>
+
+            <option value="intermediate">
+              Intermedio
+            </option>
+
+            <option value="advanced">
+              Avanzado
+            </option>
+          </select>
+        </label>
+
+      </div>
+
+        </div>
+      }
+
+
+      <!-- =================================================
+           04 · DISPONIBILIDAD
+           ================================================= -->
+
+      @if (currentStep() === 3) {
+        <div class="wizard-step">
+
+      <div class="onboarding-section">
+
+        <div class="section-heading">
+          <span class="step-number">
+            04
+          </span>
+
+          <div>
+            <strong>
+              Tu disponibilidad
+            </strong>
+
+            <span>
+              Construiremos una rutina que encaje en tu semana.
+            </span>
+          </div>
+        </div>
+
+
+        <div class="field-grid">
+
+          <label>
+            <span class="field-label">
+              Días por semana
+            </span>
+
+            <select
+              [ngModel]="weeklyAvailability()"
+              (ngModelChange)="
+                weeklyAvailability.set(+$event)
+              "
+            >
+              <option [ngValue]="2">
+                2 días
+              </option>
+
+              <option [ngValue]="3">
+                3 días
+              </option>
+
+              <option [ngValue]="4">
+                4 días
+              </option>
+
+              <option [ngValue]="5">
+                5 días
+              </option>
+
+              <option [ngValue]="6">
+                6 días
+              </option>
+            </select>
+          </label>
+
+
+          <label>
+            <span class="field-label">
+              Duración aproximada
+            </span>
+
+            <select
+              [ngModel]="sessionDurationMin()"
+              (ngModelChange)="
+                sessionDurationMin.set(+$event)
+              "
+            >
+              <option [ngValue]="30">
+                30 min
+              </option>
+
+              <option [ngValue]="45">
+                45 min
+              </option>
+
+              <option [ngValue]="60">
+                60 min
+              </option>
+
+              <option [ngValue]="75">
+                75 min
+              </option>
+
+              <option [ngValue]="90">
+                90 min
+              </option>
+            </select>
+          </label>
+
+        </div>
+
+      </div>
+
+
+      <!-- =================================================
+           05 · LUGAR DE ENTRENAMIENTO
+           ================================================= -->
+
+      <div class="onboarding-section">
+
+        <div class="section-heading">
+          <span class="step-number">
+            05
+          </span>
+
+          <div>
+            <strong>
+              Dónde entrenas
+            </strong>
+
+            <span>
+              Solo utilizaremos ejercicios compatibles con tu equipamiento.
+            </span>
+          </div>
+        </div>
+
+
+        <label>
+          <span class="field-label">
+            Lugar de entrenamiento
+          </span>
+
+          <select
+            [ngModel]="trainingLocation()"
+            (ngModelChange)="
+              trainingLocation.set($event)
+            "
+          >
+            <option value="commercial_gym">
+              Gimnasio completo
+            </option>
+
+            <option value="limited_gym">
+              Gimnasio con equipamiento limitado
+            </option>
+
+            <option value="home">
+              Entrenamiento en casa
+            </option>
+          </select>
+        </label>
+
+      </div>
+
+<!-- =================================================
+     06 · LIMITACIONES
+     ================================================= -->
+
+<div class="onboarding-section">
+
+  <div class="section-heading">
+    <span class="step-number">
+      06
+    </span>
+
+    <div>
+      <strong>
+        Entrena con seguridad
+      </strong>
+
+      <span>
+        Tendremos en cuenta cualquier molestia
+        al seleccionar tus ejercicios.
+      </span>
+    </div>
+  </div>
+
+
+  <div class="limitation-question">
+
+    <span class="field-label">
+      ¿Tienes actualmente alguna lesión,
+      dolor o molestia?
+    </span>
+
+    <div class="choice-options">
+
+      <button
+        type="button"
+        class="choice-option"
+        [class.selected]="
+          !hasLimitations()
+        "
+        (click)="
+          setHasLimitations(false)
+        "
+      >
+        No
+      </button>
+
+      <button
+        type="button"
+        class="choice-option"
+        [class.selected]="
+          hasLimitations()
+        "
+        (click)="
+          setHasLimitations(true)
+        "
+      >
+        Sí
+      </button>
+
+    </div>
+
+  </div>
+
+
+  @if (hasLimitations()) {
+
+    <div class="limitation-details">
+
+      <div class="motivation-field">
+
+        <div class="motivation-heading">
+          <span class="field-label">
+            ¿Dónde tienes molestias?
+          </span>
+
+          <span>
+            Puedes elegir varias
+          </span>
+        </div>
+
+
+        <div class="motivation-options">
+
+          @for (
+            area of painAreaOptions;
+            track area.value
+          ) {
+            <button
+              type="button"
+              class="motivation-option"
+              [class.selected]="
+                painAreaSelected(
+                  area.value
+                )
+              "
+              (click)="
+                togglePainArea(
+                  area.value
+                )
+              "
+            >
+              {{ area.label }}
+            </button>
+          }
+
+        </div>
+
+      </div>
+
+
+      <label>
+        <span class="field-label">
+          ¿Hay algún movimiento que te moleste
+          o debas evitar?
+        </span>
+
+        <textarea
+          rows="3"
+          maxlength="500"
+          placeholder="Ej. Me molesta el hombro al hacer press por encima de la cabeza."
+          [ngModel]="limitationNotes()"
+          (ngModelChange)="
+            limitationNotes.set($event)
+          "
+        ></textarea>
+
+        <span class="field-help">
+          Opcional. No utilizaremos esta información
+          para realizar diagnósticos médicos.
+        </span>
+      </label>
+
+    </div>
+
+  }
+
+</div>
+
+        </div>
+      }
+<!-- =================================================
+     07 · PREFERENCIAS
+     ================================================= -->
+
+@if (currentStep() === 4) {
+  <div class="wizard-step">
+
+<div class="onboarding-section">
+
+  <div class="section-heading">
+    <span class="step-number">
+      07
+    </span>
+
+    <div>
+      <strong>
+        Tus preferencias
+      </strong>
+
+      <span>
+        Podemos adaptar la rutina a los ejercicios
+        que prefieres hacer o evitar.
+      </span>
+    </div>
+  </div>
+
+
+  @if (exerciseCatalogLoading()) {
+    <div class="catalog-message">
+      Cargando catálogo de ejercicios...
+    </div>
+  }
+
+
+  @if (exerciseCatalogError()) {
+    <div class="catalog-message">
+      {{ exerciseCatalogError() }}
+    </div>
+  }
+
+
+  @if (!exerciseCatalogLoading()) {
+
+    <div class="exercise-preference-block">
+
+      <div class="preference-heading">
+        <div>
+          <span class="field-label">
+            ¿Hay ejercicios que prefieras evitar?
+          </span>
+
+          <span class="field-help">
+            Opcional
+          </span>
+        </div>
+      </div>
+
+
+      <div class="exercise-search">
+
+        <input
+          type="text"
+          autocomplete="off"
+          placeholder="Busca un ejercicio..."
+          [ngModel]="avoidExerciseSearch()"
+          (ngModelChange)="
+            avoidExerciseSearch.set($event)
+          "
+        />
+
+
+        @if (
+          avoidSearchResults().length
+        ) {
+          <div class="exercise-results">
+
+            @for (
+              exercise of avoidSearchResults();
+              track exercise.id
+            ) {
+              <button
+                type="button"
+                class="exercise-result"
+                (click)="
+                  addAvoidedExercise(
+                    exercise
+                  )
+                "
+              >
+                <div>
+                  <strong>
+                    {{ exercise.name }}
+                  </strong>
+
+                  @if (exercise.muscle) {
+                    <span>
+                      {{ exercise.muscle }}
+                    </span>
+                  }
+                </div>
+
+                <span class="result-action">
+                  Evitar
+                </span>
+              </button>
+            }
+
+          </div>
+        }
+
+      </div>
+
+
+      @if (
+        avoidedExerciseIds().length
+      ) {
+        <div class="selected-exercises">
+
+          @for (
+            id of avoidedExerciseIds();
+            track id
+          ) {
+            <button
+              type="button"
+              class="selected-exercise avoided"
+              (click)="
+                removeAvoidedExercise(id)
+              "
+            >
+              <span>
+                {{ exerciseName(id) }}
+              </span>
+
+              <span aria-hidden="true">
+                ×
+              </span>
+            </button>
+          }
+
+        </div>
+      }
+
+    </div>
+
+
+    <div class="exercise-preference-block">
+
+      <div class="preference-heading">
+
+        <div>
+          <span class="field-label">
+            ¿Qué ejercicios te gusta hacer?
+          </span>
+
+          <span class="field-help">
+            Opcional · hasta 5
+          </span>
+        </div>
+
+      </div>
+
+
+      <div class="exercise-search">
+
+        <input
+          type="text"
+          autocomplete="off"
+          placeholder="Busca un ejercicio..."
+          [ngModel]="preferredExerciseSearch()"
+          (ngModelChange)="
+            preferredExerciseSearch.set($event)
+          "
+        />
+
+
+        @if (
+          preferredSearchResults().length
+        ) {
+          <div class="exercise-results">
+
+            @for (
+              exercise of preferredSearchResults();
+              track exercise.id
+            ) {
+              <button
+                type="button"
+                class="exercise-result"
+                (click)="
+                  addPreferredExercise(
+                    exercise
+                  )
+                "
+              >
+                <div>
+                  <strong>
+                    {{ exercise.name }}
+                  </strong>
+
+                  @if (exercise.muscle) {
+                    <span>
+                      {{ exercise.muscle }}
+                    </span>
+                  }
+                </div>
+
+                <span class="result-action">
+                  Añadir
+                </span>
+              </button>
+            }
+
+          </div>
+        }
+
+      </div>
+
+
+      @if (
+        preferredExerciseIds().length
+      ) {
+        <div class="selected-exercises">
+
+          @for (
+            id of preferredExerciseIds();
+            track id
+          ) {
+            <button
+              type="button"
+              class="selected-exercise preferred"
+              (click)="
+                removePreferredExercise(id)
+              "
+            >
+              <span>
+                {{ exerciseName(id) }}
+              </span>
+
+              <span aria-hidden="true">
+                ×
+              </span>
+            </button>
+          }
+
+        </div>
+      }
+
+    </div>
+
+  }
+
+</div>
+  </div>
+}
+      <!-- =================================================
+           ACTION
+           ================================================= -->
+
+      @if (error()) {
+        <div class="error">
+          {{ error() }}
+        </div>
+      }
+
+
+      <div class="wizard-actions">
+
+        @if (currentStep() > 1) {
+          <button
+            type="button"
+            class="secondary-button"
+            (click)="previousStep()"
+          >
+            ← Atrás
+          </button>
+        } @else {
+          <div></div>
+        }
+
+
+        @if (currentStep() < totalSteps) {
+          <button
+            type="button"
+            class="create-button"
+            (click)="nextStep()"
+          >
+            <span>
+              Continuar
+            </span>
+
+            <span class="button-arrow">
+              →
+            </span>
+          </button>
+        } @else {
+          <button
+            type="button"
+            class="create-button"
+            (click)="generate()"
+            [disabled]="loading()"
+          >
+            @if (loading()) {
+              <span class="button-loading">
+                Preparando tu rutina...
+              </span>
+            } @else {
+              <span>
+                Crear mi rutina
+              </span>
+
+              <span class="button-arrow">
+                →
+              </span>
+            }
+          </button>
+        }
+
+      </div>
+
+
+      <p class="form-footer">
+        Podrás modificar estas preferencias más adelante
+        desde tu perfil de GymOS.
+      </p>
+
+      </section>
+
+    }
+
+
+    <!-- ===================================================
+         GENERATED PROPOSAL
+         =================================================== -->
+
+    @if (proposal(); as routine) {
+      <section class="proposal">
+
+        <div class="proposal-header">
+          <span class="proposal-badge">
+            Propuesta preparada
+          </span>
+
+          <h2>
+            {{ routine.structure_label }}
+          </h2>
+
+          <p>
+            Esta es tu primera propuesta de entrenamiento.
+          </p>
+        </div>
+
+
+        <div class="sessions">
+
+          @for (
+            session of routine.sessions;
+            track session.session_id
+          ) {
+            <article class="session">
+
+              <header>
+                <span>
+                  Sesión
+                </span>
+
+                <h3>
+                  {{ session.name }}
+                </h3>
+
+                <p>
+                  {{ focusLabel(session.focus) }}
+                </p>
+              </header>
+
+
+              <ul>
+
+                @for (
+                  exercise of session.exercises;
+                  track exercise.exercise_id
+                ) {
+                  <li>
+
+                    <div class="exercise-main">
+                      <strong>
+                        {{ exercise.name }}
+                      </strong>
+
+                      <span>
+                        {{ exercise.sets }}
+                        ×
+                        {{ exercise.target }}
+
+                        @if (
+                          exercise.target_rir
+                        ) {
+                          · RIR
+                          {{ exercise.target_rir }}
+                        }
+                      </span>
+                    </div>
+
+
+                    <div class="exercise-meta">
+                      Descanso
+                      {{ exercise.rest_seconds }}s
+                    </div>
+
+                  </li>
+                }
+
+              </ul>
+
+            </article>
+          }
+
+        </div>
+
+
+        @if (routine.warnings.length) {
+          <div class="warnings">
+
+            <strong>
+              A tener en cuenta
+            </strong>
+
+            <ul>
+              @for (
+                warning of routine.warnings;
+                track warning
+              ) {
+                <li>
+                  {{ warning }}
+                </li>
+              }
+            </ul>
+
+          </div>
+        }
+
+        <div class="proposal-actions">
+
+  <div class="proposal-ready">
+
+    <strong>
+      ¿Todo listo?
+    </strong>
+
+    <span>
+      Guardaremos esta rutina como tu primera
+      rutina activa en GymOS.
+    </span>
+
+  </div>
+
+
+    @if (completeError()) {
+      <div class="error">
+        {{ completeError() }}
+      </div>
+    }
+
+
+    <button
+      type="button"
+      class="create-button"
+      [disabled]="completing()"
+      (click)="completeOnboarding()"
+    >
+      @if (completing()) {
+        <span>
+          Preparando GymOS...
+        </span>
+      } @else {
+        <span>
+          Confirmar y empezar
+        </span>
+
+        <span class="button-arrow">
+          →
+        </span>
+      }
+    </button>
+
+  </div>
+
+      </section>
+    }
+  </section>
+</main>

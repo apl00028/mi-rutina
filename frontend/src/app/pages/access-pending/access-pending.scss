@@ -1,0 +1,599 @@
+:host {
+  display: block;
+  min-height: 100vh;
+
+  font-family:
+    Inter,
+    ui-sans-serif,
+    system-ui,
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    sans-serif;
+
+  color: #0f172a;
+}
+
+
+/* =========================================================
+   PAGE
+   ========================================================= */
+
+.access-page {
+  min-height: 100vh;
+
+  display: grid;
+  place-items: center;
+
+  box-sizing: border-box;
+  padding: 32px 20px;
+
+  background:
+    radial-gradient(
+      circle at 50% -10%,
+      #ffffff 0%,
+      #f8fafc 40%,
+      #f1f5f9 100%
+    );
+}
+
+
+/* =========================================================
+   CARD
+   ========================================================= */
+
+.access-card {
+  position: relative;
+
+  width: min(100%, 420px);
+  min-height: 620px;
+
+  display: flex;
+  flex-direction: column;
+
+  box-sizing: border-box;
+  padding: 32px;
+
+  border: 1px solid #e2e8f0;
+  border-radius: 18px;
+
+  background: #ffffff;
+
+  box-shadow:
+    0 24px 60px rgba(15, 23, 42, 0.07),
+    0 2px 8px rgba(15, 23, 42, 0.025);
+}
+
+
+/* =========================================================
+   LANGUAGE SWITCH
+   ========================================================= */
+
+.language-switch {
+  position: absolute;
+  top: 26px;
+  right: 26px;
+
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+
+  padding: 3px;
+
+  border: 1px solid #e2e8f0;
+  border-radius: 9px;
+
+  background: #f8fafc;
+}
+
+.language-switch button {
+  min-width: 34px;
+  height: 28px;
+
+  padding: 0 8px;
+
+  border: 0;
+  border-radius: 6px;
+
+  appearance: none;
+  -webkit-appearance: none;
+
+  background: transparent;
+  color: #64748b;
+
+  font: inherit;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: 0.03em;
+
+  cursor: pointer;
+
+  transition:
+    background 120ms ease,
+    color 120ms ease,
+    box-shadow 120ms ease;
+}
+
+.language-switch button:hover {
+  color: #0f172a;
+}
+
+.language-switch button.active {
+  background: #ffffff;
+  color: #0f172a;
+
+  box-shadow:
+    0 1px 3px rgba(15, 23, 42, 0.12),
+    0 0 0 1px rgba(15, 23, 42, 0.03);
+}
+
+.language-switch button:focus-visible {
+  outline: 2px solid rgba(59, 130, 246, 0.25);
+  outline-offset: 1px;
+}
+
+
+/* =========================================================
+   BRAND
+   ========================================================= */
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+
+  margin-bottom: 38px;
+  padding-right: 84px;
+}
+
+.brand-mark {
+  width: 44px;
+  height: 44px;
+
+  display: grid;
+  place-items: center;
+
+  flex: 0 0 auto;
+
+  border-radius: 12px;
+
+  background: #0f172a;
+  color: #ffffff;
+
+  font-size: 16px;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.brand > div:last-child {
+  display: grid;
+  gap: 3px;
+}
+
+.brand strong {
+  color: #0f172a;
+
+  font-size: 19px;
+  font-weight: 760;
+  line-height: 1.1;
+  letter-spacing: -0.035em;
+}
+
+.brand span {
+  color: #64748b;
+
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.4;
+}
+
+
+/* =========================================================
+   STATUS BADGE
+   ========================================================= */
+
+.status-badge {
+  width: fit-content;
+
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+
+  margin-bottom: 17px;
+  padding: 6px 9px;
+
+  border-radius: 999px;
+
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: 0.02em;
+}
+
+.status-badge > span {
+  width: 6px;
+  height: 6px;
+
+  flex: 0 0 auto;
+
+  border-radius: 50%;
+}
+
+.status-badge.pending {
+  border: 1px solid #f8d88a;
+
+  background: #fffbeb;
+  color: #92400e;
+}
+
+.status-badge.pending > span {
+  background: #d97706;
+}
+
+.status-badge.suspended {
+  border: 1px solid #fecaca;
+
+  background: #fef2f2;
+  color: #b42318;
+}
+
+.status-badge.suspended > span {
+  background: #dc2626;
+}
+
+
+/* =========================================================
+   INTRO
+   ========================================================= */
+
+.intro {
+  margin-bottom: 25px;
+}
+
+.intro h1 {
+  min-height: 58px;
+  max-width: 340px;
+
+  display: flex;
+  align-items: flex-start;
+
+  margin: 0;
+
+  color: #0f172a;
+
+  font-size: 26px;
+  font-weight: 740;
+  line-height: 1.12;
+  letter-spacing: -0.038em;
+}
+
+.intro p {
+  min-height: 64px;
+
+  margin: 11px 0 0;
+
+  color: #64748b;
+
+  font-size: 13px;
+  font-weight: 450;
+  line-height: 1.65;
+}
+
+
+/* =========================================================
+   ACCOUNT DETAILS
+   ========================================================= */
+
+.account-panel {
+  margin-bottom: 19px;
+
+  overflow: hidden;
+
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+
+  background: #f8fafc;
+}
+
+.account-row {
+  min-height: 46px;
+
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  gap: 20px;
+
+  box-sizing: border-box;
+  padding: 0 14px;
+}
+
+.account-row + .account-row {
+  border-top: 1px solid #e8edf3;
+}
+
+.account-label {
+  flex: 0 0 auto;
+
+  color: #64748b;
+
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.account-row strong {
+  min-width: 0;
+
+  overflow: hidden;
+
+  color: #334155;
+
+  font-size: 11px;
+  font-weight: 650;
+
+  text-align: right;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.account-status {
+  color: #92400e !important;
+}
+
+
+/* =========================================================
+   STATUS MESSAGE
+   ========================================================= */
+
+.status-message {
+  margin: 0 0 19px;
+  padding: 12px 13px;
+
+  border: 1px solid #dbe5ef;
+  border-radius: 9px;
+
+  background: #f8fafc;
+  color: #475569;
+
+  font-size: 11px;
+  font-weight: 550;
+  line-height: 1.55;
+}
+
+
+/* =========================================================
+   ERROR
+   ========================================================= */
+
+.error-message {
+  margin-bottom: 14px;
+  padding: 11px 12px;
+
+  border: 1px solid #fecaca;
+  border-radius: 9px;
+
+  background: #fef2f2;
+  color: #b42318;
+
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.5;
+}
+
+
+/* =========================================================
+   PRIMARY ACTION
+   ========================================================= */
+
+.primary-action {
+  width: 100%;
+  min-height: 48px;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  border: 1px solid #0f172a;
+  border-radius: 10px;
+
+  background: #0f172a;
+  color: #ffffff;
+
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+
+  cursor: pointer;
+
+  box-shadow:
+    0 6px 14px rgba(15, 23, 42, 0.12);
+
+  transition:
+    background 130ms ease,
+    border-color 130ms ease,
+    box-shadow 130ms ease,
+    transform 130ms ease;
+}
+
+.primary-action:hover:not(:disabled) {
+  border-color: #1e293b;
+  background: #1e293b;
+
+  transform: translateY(-1px);
+
+  box-shadow:
+    0 8px 18px rgba(15, 23, 42, 0.15);
+}
+
+.primary-action:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.primary-action:focus-visible {
+  outline: 3px solid rgba(59, 130, 246, 0.18);
+  outline-offset: 2px;
+}
+
+.primary-action:disabled {
+  cursor: default;
+
+  opacity: 0.55;
+
+  transform: none;
+  box-shadow: none;
+}
+
+
+/* =========================================================
+   SIGN OUT
+   ========================================================= */
+
+.sign-out {
+  width: 100%;
+
+  margin-top: 9px;
+  padding: 9px;
+
+  border: 0;
+
+  background: transparent;
+  color: #64748b;
+
+  font: inherit;
+  font-size: 11px;
+  font-weight: 600;
+
+  cursor: pointer;
+
+  transition:
+    color 120ms ease,
+    background 120ms ease;
+}
+
+.sign-out:hover {
+  color: #0f172a;
+}
+
+
+/* =========================================================
+   FOOTER
+   ========================================================= */
+
+footer {
+  min-height: 32px;
+
+  margin-top: auto;
+  padding-top: 16px;
+
+  border-top: 1px solid #edf1f5;
+
+  color: #94a3b8;
+
+  font-size: 10px;
+  font-weight: 500;
+  line-height: 1.55;
+
+  text-align: center;
+}
+
+
+/* =========================================================
+   MOBILE
+   ========================================================= */
+
+@media (max-width: 560px) {
+  .access-page {
+    align-items: start;
+
+    padding:
+      max(18px, env(safe-area-inset-top))
+      16px
+      max(18px, env(safe-area-inset-bottom));
+  }
+
+  .access-card {
+    width: 100%;
+    min-height: auto;
+
+    margin-top: 16px;
+    padding: 24px 21px;
+
+    border-radius: 16px;
+  }
+
+  .language-switch {
+    top: 20px;
+    right: 20px;
+  }
+
+  .language-switch button {
+    min-width: 32px;
+    height: 27px;
+  }
+
+  .brand {
+    margin-bottom: 33px;
+    padding-right: 78px;
+  }
+
+  .brand-mark {
+    width: 42px;
+    height: 42px;
+
+    border-radius: 11px;
+  }
+
+  .brand strong {
+    font-size: 18px;
+  }
+
+  .intro h1 {
+    min-height: 54px;
+    max-width: 300px;
+
+    font-size: 24px;
+  }
+
+  .intro p {
+    min-height: 62px;
+
+    font-size: 12px;
+  }
+
+  .account-row {
+    min-height: 45px;
+  }
+
+  .primary-action {
+    min-height: 49px;
+  }
+}
+
+
+/* =========================================================
+   VERY SMALL DEVICES
+   ========================================================= */
+
+@media (max-width: 370px) {
+  .access-card {
+    padding: 22px 18px;
+  }
+
+  .language-switch {
+    top: 18px;
+    right: 18px;
+  }
+
+  .brand {
+    padding-right: 72px;
+  }
+
+  .intro h1 {
+    font-size: 23px;
+  }
+
+  .account-row {
+    gap: 12px;
+  }
+}

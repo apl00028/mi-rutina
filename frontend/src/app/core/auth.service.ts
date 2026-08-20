@@ -1,10 +1,39 @@
 import { Injectable, signal } from '@angular/core';
 import {
+  HttpClient,
+  HttpErrorResponse,
+  HttpHeaders
+} from '@angular/common/http';
+import {
+  firstValueFrom
+} from 'rxjs';
+
+import {
   createClient,
   Session,
   SupabaseClient,
   User
 } from '@supabase/supabase-js';
+
+import { environment } from '../../environments/environment';
+
+
+export interface GymOSMe {
+  user_id: string;
+  email: string | null;
+  access_status:
+    | 'unregistered'
+    | 'pending'
+    | 'active'
+    | 'suspended';
+
+  plan: string | null;
+  role: string | null;
+  expires_at: string | null;
+
+  onboarding_completed: boolean;
+}
+
 
 @Injectable({
   providedIn: 'root'
@@ -16,25 +45,36 @@ export class AuthService {
   private readonly supabaseKey =
     'sb_publishable_rBZ-_xeoTl5Dy18DwV4-GA_dB_89ieS';
 
-  private readonly client: SupabaseClient = createClient(
-    this.supabaseUrl,
-    this.supabaseKey,
-    {
-      auth: {
-        persistSession: true,
-        autoRefreshToken: true,
-        detectSessionInUrl: true
+  private readonly apiUrl =
+    environment.apiUrl;
+
+  private readonly client: SupabaseClient =
+    createClient(
+      this.supabaseUrl,
+      this.supabaseKey,
+      {
+        auth: {
+          persistSession: true,
+          autoRefreshToken: true,
+          detectSessionInUrl: true
+        }
       }
-    }
-  );
+    );
 
   session = signal<Session | null>(null);
   user = signal<User | null>(null);
+  me = signal<GymOSMe | null>(null);
   loading = signal(true);
 
-  constructor() {
+  private meRequest:
+    Promise<GymOSMe> | null = null;
+
+  constructor(
+    private http: HttpClient
+  ) {
     this.initialize();
   }
+
 
   private async initialize(): Promise<void> {
     try {
@@ -59,6 +99,11 @@ export class AuthService {
           this.user.set(
             session?.user ?? null
           );
+
+          if (!session) {
+            this.me.set(null);
+            this.meRequest = null;
+          }
         }
       );
     } finally {
@@ -66,7 +111,9 @@ export class AuthService {
     }
   }
 
-  async waitForSession(): Promise<Session | null> {
+
+  async waitForSession():
+    Promise<Session | null> {
     while (this.loading()) {
       await new Promise(resolve =>
         setTimeout(resolve, 25)
@@ -76,18 +123,19 @@ export class AuthService {
     return this.session();
   }
 
+
   async signInWithMagicLink(
     email: string
   ): Promise<void> {
     const redirectTo =
-      window.location.origin;
+      `${window.location.origin}/login`;
 
     const { error } =
       await this.client.auth.signInWithOtp({
         email,
         options: {
           emailRedirectTo: redirectTo,
-          shouldCreateUser: false
+          shouldCreateUser: true
         }
       });
 
@@ -95,6 +143,7 @@ export class AuthService {
       throw error;
     }
   }
+
 
   async signOut(): Promise<void> {
     const { error } =
@@ -106,7 +155,10 @@ export class AuthService {
 
     this.session.set(null);
     this.user.set(null);
+    this.me.set(null);
+    this.meRequest = null;
   }
+
 
   async getAccessToken():
     Promise<string | null> {
@@ -122,21 +174,166 @@ export class AuthService {
       null
     );
   }
-async signInWithGoogle(): Promise<void> {
-  const redirectTo =
-    `${window.location.origin}/login?oauth=google`;
 
-  const { error } =
-    await this.client.auth.signInWithOAuth({
-      provider: 'google',
-      options: {
-        redirectTo
-      }
+
+  private async getAuthHeaders():
+    Promise<HttpHeaders> {
+    const token =
+      await this.getAccessToken();
+
+    if (!token) {
+      throw new Error(
+        'Necesitas iniciar sesión.'
+      );
+    }
+
+    return new HttpHeaders({
+      Authorization:
+        `Bearer ${token}`
     });
-
-  if (error) {
-    throw error;
   }
-}
 
+
+  isAuthFailure(error: unknown): boolean {
+    return (
+      error instanceof HttpErrorResponse &&
+      (
+        error.status === 401 ||
+        error.status === 403
+      )
+    );
+  }
+
+
+  private async clearInvalidSession():
+    Promise<void> {
+    try {
+      await this.client.auth.signOut({
+        scope: 'local'
+      });
+    } catch {
+      // Local auth state is still cleared below.
+    }
+
+    this.session.set(null);
+    this.user.set(null);
+    this.me.set(null);
+    this.meRequest = null;
+  }
+
+
+  private async requestWithAuth<T>(
+    request: (
+      headers: HttpHeaders
+    ) => Promise<T>
+  ): Promise<T> {
+    const headers =
+      await this.getAuthHeaders();
+
+    try {
+      return await request(headers);
+    } catch (error) {
+      if (this.isAuthFailure(error)) {
+        await this.clearInvalidSession();
+      }
+
+      throw error;
+    }
+  }
+
+
+  async getMe(
+    forceRefresh = false
+  ): Promise<GymOSMe> {
+    if (
+      !forceRefresh &&
+      this.me()
+    ) {
+      return this.me() as GymOSMe;
+    }
+
+    if (
+      !forceRefresh &&
+      this.meRequest
+    ) {
+      return this.meRequest;
+    }
+
+    this.meRequest =
+      this.requestWithAuth(
+        async headers =>
+          await firstValueFrom(
+            this.http.get<GymOSMe>(
+              `${this.apiUrl}/me`,
+              { headers }
+            )
+          )
+      );
+
+    try {
+      const me =
+        await this.meRequest;
+
+      this.me.set(me);
+
+      return me;
+    } finally {
+      this.meRequest = null;
+    }
+  }
+
+
+  async bootstrapMe():
+    Promise<GymOSMe> {
+    const me =
+      await this.requestWithAuth(
+        async headers =>
+          await firstValueFrom(
+            this.http.post<GymOSMe>(
+              `${this.apiUrl}/me/bootstrap`,
+              {},
+              { headers }
+            )
+          )
+      );
+
+    this.me.set(me);
+
+    return me;
+  }
+
+
+  async resolveAccess():
+    Promise<GymOSMe> {
+    const me =
+      await this.getMe(true);
+
+    if (
+      me.access_status ===
+      'unregistered'
+    ) {
+      return await this.bootstrapMe();
+    }
+
+    return me;
+  }
+
+
+  async signInWithGoogle():
+    Promise<void> {
+    const redirectTo =
+      `${window.location.origin}/login?oauth=google`;
+
+    const { error } =
+      await this.client.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo
+        }
+      });
+
+    if (error) {
+      throw error;
+    }
+  }
 }

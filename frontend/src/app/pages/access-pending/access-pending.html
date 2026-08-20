@@ -1,0 +1,217 @@
+<main class="access-page">
+  <section class="access-card">
+
+    <div class="language-switch">
+      <button
+        type="button"
+        [class.active]="language() === 'es'"
+        (click)="setLanguage('es')"
+      >
+        ES
+      </button>
+
+      <button
+        type="button"
+        [class.active]="language() === 'en'"
+        (click)="setLanguage('en')"
+      >
+        EN
+      </button>
+    </div>
+
+
+    <header class="brand">
+      <div class="brand-mark">
+        G
+      </div>
+
+      <div>
+        <strong>
+          GymOS
+        </strong>
+
+        <span>
+          {{
+            language() === 'es'
+              ? 'Entrena mejor. Sin complicaciones.'
+              : 'Training, simplified.'
+          }}
+        </span>
+      </div>
+    </header>
+
+
+    @if (
+      me()?.access_status === 'suspended'
+    ) {
+
+      <div class="status-badge suspended">
+        <span></span>
+
+        {{
+          language() === 'es'
+            ? 'Acceso suspendido'
+            : 'Access suspended'
+        }}
+      </div>
+
+      <div class="intro">
+        <h1>
+          {{
+            language() === 'es'
+              ? 'Tu cuenta no está activa'
+              : 'Your account is not active'
+          }}
+        </h1>
+
+        <p>
+          {{
+            language() === 'es'
+              ? 'El acceso asociado a esta cuenta está actualmente suspendido.'
+              : 'Access associated with this account is currently suspended.'
+          }}
+        </p>
+      </div>
+
+    } @else {
+
+      <div class="status-badge pending">
+        <span></span>
+
+        {{
+          language() === 'es'
+            ? 'Pendiente de aprobación'
+            : 'Pending approval'
+        }}
+      </div>
+
+      <div class="intro">
+        <h1>
+          {{
+            language() === 'es'
+              ? 'Estamos revisando tu acceso'
+              : 'We are reviewing your access'
+          }}
+        </h1>
+
+        <p>
+          {{
+            language() === 'es'
+              ? 'Tu cuenta se ha creado correctamente. GymOS utiliza acceso controlado y tu solicitud está pendiente de aprobación.'
+              : 'Your account has been created successfully. GymOS uses controlled access and your request is pending approval.'
+          }}
+        </p>
+      </div>
+
+    }
+
+
+    <div class="account-panel">
+
+      <div class="account-row">
+        <span class="account-label">
+          {{
+            language() === 'es'
+              ? 'Cuenta'
+              : 'Account'
+          }}
+        </span>
+
+        <strong>
+          {{
+            me()?.email ??
+            auth.user()?.email ??
+            '—'
+          }}
+        </strong>
+      </div>
+
+
+      <div class="account-row">
+        <span class="account-label">
+          {{
+            language() === 'es'
+              ? 'Estado'
+              : 'Status'
+          }}
+        </span>
+
+        <strong class="account-status">
+          {{
+            me()?.access_status === 'suspended'
+              ? (
+                  language() === 'es'
+                    ? 'Suspendido'
+                    : 'Suspended'
+                )
+              : (
+                  language() === 'es'
+                    ? 'Pendiente'
+                    : 'Pending'
+                )
+          }}
+        </strong>
+      </div>
+
+    </div>
+
+
+    @if (error()) {
+      <div class="error-message">
+        {{ error() }}
+      </div>
+    }
+
+
+    @if (statusMessage()) {
+      <div class="status-message">
+        {{ statusMessage() }}
+      </div>
+    }
+
+
+    <button
+      type="button"
+      class="primary-action"
+      [disabled]="checking()"
+      (click)="checkStatus()"
+    >
+      @if (checking()) {
+        {{
+          language() === 'es'
+            ? 'Actualizando...'
+            : 'Refreshing...'
+        }}
+      } @else {
+        {{
+          language() === 'es'
+            ? 'Actualizar estado'
+            : 'Refresh status'
+        }}
+      }
+    </button>
+
+
+    <button
+      type="button"
+      class="sign-out"
+      (click)="signOut()"
+    >
+      {{
+        language() === 'es'
+          ? 'Cerrar sesión'
+          : 'Sign out'
+      }}
+    </button>
+
+
+    <footer>
+      {{
+        language() === 'es'
+          ? 'Cuando tu acceso sea aprobado podrás continuar directamente a GymOS.'
+          : 'Once your access is approved, you will be able to continue directly to GymOS.'
+      }}
+    </footer>
+
+  </section>
+</main>

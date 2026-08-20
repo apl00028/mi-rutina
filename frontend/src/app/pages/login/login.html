@@ -1,34 +1,73 @@
 <main class="login-page">
   <section class="login-card">
-    <div class="login-brand">
+
+    <div class="language-switch">
+      <button
+        type="button"
+        [class.active]="language() === 'es'"
+        (click)="setLanguage('es')"
+      >
+        ES
+      </button>
+
+      <span>/</span>
+
+      <button
+        type="button"
+        [class.active]="language() === 'en'"
+        (click)="setLanguage('en')"
+      >
+        EN
+      </button>
+    </div>
+
+    <header class="brand-header">
       <div class="brand-mark">
         G
       </div>
 
       <div>
         <h1>GymOS</h1>
-        <p>Tu sistema de entrenamiento.</p>
-      </div>
-    </div>
 
-    <div class="login-heading">
+        <p>
+          {{
+            language() === 'es'
+              ? 'Entrena mejor. Sin complicaciones.'
+              : 'Training, simplified.'
+          }}
+        </p>
+      </div>
+    </header>
+
+    <div class="login-intro">
       <span class="eyebrow">
-        Acceso a GymOS
+        {{
+          language() === 'es'
+            ? 'ACCESO'
+            : 'ACCESS'
+        }}
       </span>
 
       <h2>
-        Bienvenido de nuevo
+        {{
+          language() === 'es'
+            ? 'Bienvenido de nuevo'
+            : 'Welcome back'
+        }}
       </h2>
 
       <p>
-        Accede a tu espacio para gestionar tus rutinas,
-        entrenamientos y progreso.
+        {{
+          language() === 'es'
+            ? 'Accede a tus rutinas, historial de entrenamiento y progreso.'
+            : 'Sign in to access your routines, training history and progress.'
+        }}
       </p>
     </div>
 
     <button
-      type="button"
       class="google-button"
+      type="button"
       (click)="signInWithGoogle()"
       [disabled]="googleLoading()"
     >
@@ -38,73 +77,92 @@
 
       {{
         googleLoading()
-          ? 'Conectando...'
-          : 'Continuar con Google'
+          ? (
+              language() === 'es'
+                ? 'Conectando...'
+                : 'Connecting...'
+            )
+          : (
+              language() === 'es'
+                ? 'Continuar con Google'
+                : 'Continue with Google'
+            )
       }}
     </button>
 
-    <div class="separator">
+    <div class="divider">
       <span></span>
-      <small>o</small>
+
+      <small>
+        {{
+          language() === 'es'
+            ? 'o'
+            : 'or'
+        }}
+      </small>
+
       <span></span>
     </div>
 
     <form
-      class="login-form"
+      class="email-form"
       (submit)="sendMagicLink($event)"
     >
       <label>
         Email
-
-        <input
-          type="email"
-          autocomplete="email"
-          placeholder="nombre@email.com"
-          [value]="email()"
-          (input)="email.set(
-            $any($event.target).value
-          )"
-          required
-        />
       </label>
 
+      <input
+        type="email"
+        autocomplete="email"
+        placeholder="you@example.com"
+        [value]="email()"
+        (input)="
+          email.set(
+            $any($event.target).value
+          )
+        "
+      />
+
       <button
-        type="submit"
         class="primary-button"
+        type="submit"
         [disabled]="loading()"
       >
         {{
           loading()
-            ? 'Enviando...'
-            : 'Enviar enlace de acceso'
+            ? (
+                language() === 'es'
+                  ? 'Enviando...'
+                  : 'Sending...'
+              )
+            : (
+                language() === 'es'
+                  ? 'Enviar enlace de acceso'
+                  : 'Send sign-in link'
+              )
         }}
       </button>
     </form>
 
     @if (message()) {
-      <p class="success-message">
+      <div class="status success">
         {{ message() }}
-      </p>
+      </div>
     }
 
     @if (error()) {
-      <p class="error-message">
+      <div class="status error">
         {{ error() }}
-      </p>
+      </div>
     }
 
-    <div class="access-footer">
-      <span>
-        ¿No tienes acceso?
-      </span>
-
-      <button
-        type="button"
-        class="request-access-button"
-        (click)="requestAccess()"
-      >
-        Solicitar acceso
-      </button>
-    </div>
+    <footer class="access-note">
+      {{
+        language() === 'es'
+          ? '¿Eres nuevo en GymOS? Tras identificarte, tu cuenta quedará pendiente de aprobación.'
+          : 'New to GymOS? After signing in, your account will be submitted for approval.'
+      }}
+    </footer>
   </section>
 </main>

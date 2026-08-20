@@ -1,0 +1,165 @@
+<section class="admin-page">
+
+  <header class="page-header">
+    <div>
+      <span class="eyebrow">
+        Administración
+      </span>
+
+      <h1>
+        Solicitudes de acceso
+      </h1>
+
+      <p>
+        Revisa las nuevas solicitudes
+        antes de conceder acceso a GymOS.
+      </p>
+    </div>
+
+    <button
+      type="button"
+      class="refresh-button"
+      [disabled]="loading()"
+      (click)="loadRequests()"
+    >
+      {{
+        loading()
+          ? 'Actualizando...'
+          : 'Actualizar'
+      }}
+    </button>
+  </header>
+
+
+  @if (feedback()) {
+    <div class="feedback-message">
+      {{ feedback() }}
+    </div>
+  }
+
+
+  @if (error()) {
+    <div class="error-message">
+      {{ error() }}
+    </div>
+  }
+
+
+  @if (loading()) {
+
+    <div class="state-card">
+      Cargando solicitudes...
+    </div>
+
+  } @else if (
+    requests().length === 0
+  ) {
+
+    <div class="empty-state">
+      <div class="empty-icon">
+        ✓
+      </div>
+
+      <h2>
+        Todo al día
+      </h2>
+
+      <p>
+        No hay solicitudes de acceso
+        pendientes.
+      </p>
+    </div>
+
+  } @else {
+
+    <div class="request-list">
+
+      @for (
+        request of requests();
+        track request.user_id
+      ) {
+
+        <article class="request-card">
+
+          <div class="request-main">
+
+            <div class="request-avatar">
+              {{
+                (
+                  request.email ??
+                  '?'
+                )
+                  .charAt(0)
+                  .toUpperCase()
+              }}
+            </div>
+
+            <div class="request-details">
+              <strong>
+                {{
+                  request.email ??
+                  'Sin email'
+                }}
+              </strong>
+
+              <span>
+                Solicitud recibida
+                {{
+                  formatDate(
+                    request.created_at
+                  )
+                }}
+              </span>
+            </div>
+
+          </div>
+
+
+          <div class="request-status">
+            <span></span>
+            Pendiente
+          </div>
+
+
+          <div class="request-actions">
+
+            <button
+              type="button"
+              class="reject-button"
+              [disabled]="
+                processingUserId()
+              "
+              (click)="reject(request)"
+            >
+              Rechazar
+            </button>
+
+            <button
+              type="button"
+              class="approve-button"
+              [disabled]="
+                processingUserId()
+              "
+              (click)="approve(request)"
+            >
+              @if (
+                processingUserId()
+                  === request.user_id
+              ) {
+                Procesando...
+              } @else {
+                Aprobar acceso
+              }
+            </button>
+
+          </div>
+
+        </article>
+
+      }
+
+    </div>
+
+  }
+
+</section>

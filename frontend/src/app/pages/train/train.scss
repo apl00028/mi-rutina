@@ -436,6 +436,74 @@ button:disabled {
     rgb(0 0 0 / 8%);
 }
 
+.rest-timer {
+  min-width: min(100%, 360px);
+
+  display: flex;
+  align-items: center;
+  gap: 12px;
+
+  margin-right: auto;
+  padding: 10px 12px;
+
+  border: 1px solid #dbeafe;
+  border-radius: 12px;
+
+  background: #eff6ff;
+  color: #1e3a8a;
+}
+
+.rest-timer.finished {
+  border-color: #bbf7d0;
+
+  background: #f0fdf4;
+  color: #166534;
+}
+
+.rest-timer > div:first-child {
+  min-width: 0;
+
+  display: grid;
+  gap: 2px;
+}
+
+.rest-timer span,
+.rest-timer small {
+  font-size: 0.72rem;
+  font-weight: 750;
+}
+
+.rest-timer small {
+  overflow: hidden;
+
+  color: currentColor;
+  opacity: 0.72;
+
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rest-timer strong {
+  font-size: 1.25rem;
+  font-weight: 850;
+  line-height: 1;
+}
+
+.rest-timer-actions {
+  display: flex;
+  gap: 6px;
+
+  margin-left: auto;
+}
+
+.rest-timer-actions .secondary-button {
+  min-height: 34px;
+
+  padding: 6px 9px;
+
+  font-size: 0.78rem;
+}
+
 .autosave-status {
   margin-right: auto;
 
@@ -557,9 +625,28 @@ button:disabled {
 
     display: grid;
     grid-template-columns:
-      minmax(0, 1fr)
       minmax(0, 0.8fr)
       minmax(0, 1.2fr);
+  }
+
+  .rest-timer,
+  .autosave-status {
+    grid-column: 1 / -1;
+
+    width: 100%;
+    margin-right: 0;
+  }
+
+  .rest-timer {
+    display: grid;
+  }
+
+  .rest-timer-actions {
+    display: grid;
+    grid-template-columns:
+      repeat(3, minmax(0, 1fr));
+
+    margin-left: 0;
   }
 
   .workout-actions button {

@@ -841,7 +841,7 @@ describe('Train first workout flow', () => {
       'Press banca con mancuernas'
     );
 
-    await waitForHttpTick();
+    await flushPromises();
 
     const save =
       http.expectOne(
@@ -892,16 +892,26 @@ describe('Train first workout flow', () => {
 
     component.activeSession.set({
       ...session,
-      exercises:
-        session.exercises.map(
+      exercises: [
+        ...session.exercises.map(
           exercise => ({
             ...exercise,
             restSeconds: 0
           })
-        )
+        ),
+        {
+          exerciseId:
+            'plank',
+          name:
+            'Plancha',
+          sets: 1,
+          target:
+            '30s'
+        }
+      ]
     });
 
-    const complete =
+    let complete =
       component.completeSet(
         'dumbbell-bench-press',
         0
@@ -911,9 +921,30 @@ describe('Train first workout flow', () => {
       component.restTimer()
     ).toBeNull();
 
-    await waitForHttpTick();
+    await flushPromises();
 
-    const save =
+    let save =
+      http.expectOne(
+        `${environment.apiUrl}/workouts/workout-1`
+      );
+
+    save.flush(save.request.body);
+
+    await complete;
+
+    complete =
+      component.completeSet(
+        'plank',
+        0
+      );
+
+    expect(
+      component.restTimer()
+    ).toBeNull();
+
+    await flushPromises();
+
+    save =
       http.expectOne(
         `${environment.apiUrl}/workouts/workout-1`
       );
@@ -977,7 +1008,7 @@ describe('Train first workout flow', () => {
         0
       );
 
-    await waitForHttpTick();
+    await flushPromises();
 
     let save =
       http.expectOne(
@@ -1002,7 +1033,7 @@ describe('Train first workout flow', () => {
         0
       );
 
-    await waitForHttpTick();
+    await flushPromises();
 
     save =
       http.expectOne(
@@ -1055,7 +1086,7 @@ describe('Train first workout flow', () => {
         0
       );
 
-    await waitForHttpTick();
+    await flushPromises();
 
     const save =
       http.expectOne(
@@ -1124,7 +1155,7 @@ describe('Train first workout flow', () => {
         0
       );
 
-    await waitForHttpTick();
+    await flushPromises();
 
     const save =
       http.expectOne(
@@ -1184,7 +1215,7 @@ describe('Train first workout flow', () => {
         0
       );
 
-    await waitForHttpTick();
+    await flushPromises();
 
     let save =
       http.expectOne(
@@ -1202,7 +1233,7 @@ describe('Train first workout flow', () => {
     const finish =
       component.finishWorkout();
 
-    await waitForHttpTick();
+    await flushPromises();
 
     save =
       http.expectOne(
@@ -1254,7 +1285,7 @@ describe('Train first workout flow', () => {
         0
       );
 
-    await waitForHttpTick();
+    await flushPromises();
 
     const save =
       http.expectOne(

@@ -965,7 +965,7 @@ function importRoutineProposalSyncData(payload,{ownerId=null,mark=false}={}){
   const result=window.GymOSRoutineProposals.mergeProposalRecords(
     getRoutineProposalRecords(normalizedOwner),
     payload.routineProposals,
-    {ownerId:normalizedOwner,activeProposalId:preferredId}
+    {ownerId:normalizedOwner,activeProposalId:preferredId,adoptRemoteRecords:mark===false}
   );
   const mergedRequestedValid=requestedId&&result.records.some(record=>
     record.proposal.proposalId===requestedId&&record.lifecycle.status==="pending_review"
@@ -4592,7 +4592,7 @@ function applySyncPayload(payload,{recoveryCanonicalReplacement=false}={}){
   if(Array.isArray(payload.healthEntries)) saveHealthEntries(payload.healthEntries);
   if(Array.isArray(payload.healthImports)) saveHealthImports(payload.healthImports);
   if(Array.isArray(payload.recoveryEntries)) window.GymOSRecovery?.mergeRecoveryEntries?.(payload.recoveryEntries,false);
-  if(Array.isArray(payload.recoveryCheckins)) window.GymOSRecovery?.mergeCheckins?.(payload.recoveryCheckins,false);
+  if(Array.isArray(payload.recoveryCheckins)) window.GymOSRecovery?.mergeCheckins?.(payload.recoveryCheckins,false,{canonicalRemote:true});
   if(Array.isArray(payload.workoutAnalyses)) window.GymOSWorkoutAnalysis?.mergeAnalyses?.(payload.workoutAnalyses,false);
   if(payload.appPreferences) saveAppPreferences(payload.appPreferences);
   if(typeof payload.ai_messages_enabled==="boolean"){
@@ -4724,39 +4724,32 @@ function addSyncAudit(action,status,details={}){
   items.push({id:`audit-${Date.now().toString(36)}`,createdAt:new Date().toISOString(),action,status,details});
   localStorage.setItem(SYNC_AUDIT_KEY,JSON.stringify(items.slice(-100)));
 }
-function lastSyncTraceEntry({includeButtonResult=true}={}){
-  return [...getSyncAudit()].reverse().find(entry=>
-    entry.action==="sync_trace"&&(includeButtonResult||entry.status!=="account_button_result")
-  )||null;
-}
-function syncTraceBranchLabel(entry){
-  return entry?.details?.branch||entry?.details?.condition||entry?.status||"Sin trazas";
-}
-function lastSyncTraceBranch(){
-  return syncTraceBranchLabel(lastSyncTraceEntry());
-}
-function lastInternalSyncTraceBranch(){
-  return syncTraceBranchLabel(lastSyncTraceEntry({includeButtonResult:false}));
-}
-function lastAccountSyncButtonTrace(){
-  return [...getSyncAudit()].reverse().find(entry=>
-    entry.action==="sync_trace"&&entry.status==="account_button_result"
-  )||null;
-}
-function accountSyncButtonDiagnosticValue(key){
-  const details=lastAccountSyncButtonTrace()?.details||{};
-  if(key==="direction") return details.result?.direction||"Sin resultado";
-  if(key==="before") return details.lastSyncAtBefore||"";
-  if(key==="after") return details.lastSyncAtAfter||"";
-  return "";
-}
 function isHealthyManualSyncResult(result){
   return ["none","download","upload"].includes(result?.direction);
+}
+function finalizeSuccessfulSync({revision,checksum,auditStatus,auditDetails={}}){
+  setLocalRevision(revision);
+  setLastRemoteRevision(revision);
+  setSyncBaseRevision(revision);
+  markSyncProtocolCurrent();
+  localStorage.removeItem("gymos:syncPending");
+  if(checksum) localStorage.setItem("gymos:lastSyncHash",checksum);
+  localStorage.setItem("gymos:lastSyncAt",new Date().toISOString());
+  state.syncStatus="synced";
+  state.syncIssue=null;
+  state.syncDiagnosticLastError=null;
+  addSyncAudit("sync",auditStatus,auditDetails);
+  updateSyncIndicators();
+  if(typeof markWorkoutProgressSynced==="function") markWorkoutProgressSynced();
+  if(typeof invalidateRecoveryDerivedState==="function"){
+    invalidateRecoveryDerivedState({reason:"sync_completed",renderCurrent:true});
+  }
 }
 function syncAuditFingerprintSummary({
   remote=null,remoteRevision=null,localRevision=null,lastRemoteRevision=null,
   syncBaseRevision=null,hasPendingChanges=null,checksumComparison=null,
-  localFunctionalChecksum=null,baseFunctionalChecksum=null,condition=null
+  localFunctionalChecksum=null,baseFunctionalChecksum=null,condition=null,
+  functionalProjectionDiff=null
 }={}){
   const remoteFunctional=checksumComparison?.remoteFunctionalChecksum||
     remoteFunctionalChecksum(remote)||null;
@@ -4779,7 +4772,8 @@ function syncAuditFingerprintSummary({
       local:checksumComparison?.localFunctionalChecksum||localFunctionalChecksum||null,
       remote:remoteFunctional,
       base:inferredBaseFunctional
-    }
+    },
+    functionalProjectionDiff
   };
 }
 function simpleChecksum(value){
@@ -4845,6 +4839,99 @@ function functionalSyncProjection(payload){
 }
 function functionalSyncChecksum(payload){
   return simpleChecksum(functionalSyncProjection(payload));
+}
+function functionalDiffValueType(value,exists=true){
+  if(!exists) return "absent";
+  if(value===null) return "null";
+  if(value===undefined) return "undefined";
+  if(Array.isArray(value)) return "array";
+  return typeof value;
+}
+function functionalDiffValueHash(value,exists=true){
+  if(!exists) return null;
+  const type=functionalDiffValueType(value,exists);
+  const normalized=type==="undefined"?"__undefined__":normalizeFunctionalSyncValue(value);
+  return simpleChecksum({type,value:normalized});
+}
+function functionalDiffValueSummary(value,exists=true){
+  const type=functionalDiffValueType(value,exists);
+  const summary={exists,type,hash:functionalDiffValueHash(value,exists)};
+  if(Array.isArray(value)) summary.length=value.length;
+  else if(value&&typeof value==="object") summary.keys=Object.keys(value).length;
+  return summary;
+}
+function functionalDiffPath(parent,key){
+  if(typeof key==="number") return `${parent||"$"}[${key}]`;
+  const safe=/^[A-Za-z_$][\w$]*$/.test(String(key))?String(key):JSON.stringify(String(key));
+  return parent&&parent!=="$"?`${parent}.${safe}`:safe;
+}
+function sameFunctionalDiffValue(left,leftExists,right,rightExists){
+  if(leftExists!==rightExists) return false;
+  if(functionalDiffValueType(left,leftExists)!==functionalDiffValueType(right,rightExists)) return false;
+  return functionalDiffValueHash(left,leftExists)===functionalDiffValueHash(right,rightExists);
+}
+function collectFunctionalProjectionDiffs(localValue,remoteValue,path,diffs,limit){
+  if(diffs.length>=limit) return;
+  const localExists=arguments.length>=1;
+  const remoteExists=arguments.length>=2;
+  if(sameFunctionalDiffValue(localValue,localExists,remoteValue,remoteExists)) return;
+  const localType=functionalDiffValueType(localValue,localExists);
+  const remoteType=functionalDiffValueType(remoteValue,remoteExists);
+  const currentPath=path||"$";
+  if(localType!==remoteType||!["object","array"].includes(localType)){
+    diffs.push({
+      path:currentPath,
+      local:functionalDiffValueSummary(localValue,localExists),
+      remote:functionalDiffValueSummary(remoteValue,remoteExists)
+    });
+    return;
+  }
+  if(localType==="array"){
+    const length=Math.max(localValue.length,remoteValue.length);
+    for(let index=0;index<length&&diffs.length<limit;index++){
+      const hasLocal=index<localValue.length;
+      const hasRemote=index<remoteValue.length;
+      if(hasLocal&&hasRemote){
+        collectFunctionalProjectionDiffs(
+          localValue[index],remoteValue[index],functionalDiffPath(currentPath,index),diffs,limit
+        );
+      }else{
+        diffs.push({
+          path:functionalDiffPath(currentPath,index),
+          local:functionalDiffValueSummary(hasLocal?localValue[index]:undefined,hasLocal),
+          remote:functionalDiffValueSummary(hasRemote?remoteValue[index]:undefined,hasRemote)
+        });
+      }
+    }
+    return;
+  }
+  const keys=new Set([...Object.keys(localValue||{}),...Object.keys(remoteValue||{})]);
+  for(const key of Array.from(keys).sort()){
+    if(diffs.length>=limit) break;
+    const hasLocal=Object.prototype.hasOwnProperty.call(localValue,key);
+    const hasRemote=Object.prototype.hasOwnProperty.call(remoteValue,key);
+    if(hasLocal&&hasRemote){
+      collectFunctionalProjectionDiffs(localValue[key],remoteValue[key],functionalDiffPath(currentPath,key),diffs,limit);
+    }else{
+      diffs.push({
+        path:functionalDiffPath(currentPath,key),
+        local:functionalDiffValueSummary(hasLocal?localValue[key]:undefined,hasLocal),
+        remote:functionalDiffValueSummary(hasRemote?remoteValue[key]:undefined,hasRemote)
+      });
+    }
+  }
+}
+function functionalSyncProjectionDiffSummary(localPayload,remotePayload,{limit=40}={}){
+  const localProjection=functionalSyncProjection(localPayload);
+  const remoteProjection=functionalSyncProjection(remotePayload);
+  const diffPaths=[];
+  collectFunctionalProjectionDiffs(localProjection,remoteProjection,"$",diffPaths,limit);
+  return {
+    localHash:functionalSyncChecksum(localPayload),
+    remoteHash:functionalSyncChecksum(remotePayload),
+    diffPaths,
+    truncated:diffPaths.length>=limit
+  };
 }
 function storedValueHash(key){
   const raw=localStorage.getItem(key);
@@ -5038,9 +5125,16 @@ function syncSecurityState(){
 }
 async function chooseConflictResolution(remote){
   const mode=getSyncConflictPreference();
-  if(mode==="remote") return "remote";
-  if(mode==="local") return "local";
-  return confirm("Hay cambios tanto en este dispositivo como en la nube.\n\nAceptar: usar la nube.\nCancelar: mantener este dispositivo.")?"remote":"local";
+  const stored=localStorage.getItem("gymos:syncConflictMode")||"";
+  let result=null;
+  if(mode==="remote") result="remote";
+  else if(mode==="local") result="local";
+  else result=confirm("Hay cambios tanto en este dispositivo como en la nube.\n\nAceptar: usar la nube.\nCancelar: mantener este dispositivo.")?"remote":"local";
+  addSyncAudit("sync_trace","choose_conflict_resolution",{
+    branch:"choose_conflict_resolution",called:true,conflictPolicyStored:stored,mode,result,
+    remoteRevision:Number(remote?.revision||0)||null
+  });
+  return result;
 }
 
 const ACCOUNT_AVATAR_OPTIONS=[
@@ -5927,7 +6021,10 @@ async function syncNow(options={}){
       remote,remoteRevision,localRevision,lastRemoteRevision:lastRemote,
       syncBaseRevision,hasPendingChanges,checksumComparison,localFunctionalChecksum,
       condition:extra?.condition||null,
-      baseFunctionalChecksum:extra?.baseFunctionalChecksum||null
+      baseFunctionalChecksum:extra?.baseFunctionalChecksum||null,
+      functionalProjectionDiff:remote
+        ?functionalSyncProjectionDiffSummary(localPayload,remote.payload)
+        :null
     });
     addSyncAudit("sync_trace","checksum_comparison",checksumAudit({
       condition:"checksum_comparison"
@@ -5960,16 +6057,59 @@ async function syncNow(options={}){
         remoteFunctionalChecksum:checksumComparison.remoteFunctionalChecksum
       });
       const kind=legacyDiverged||unsafeDownload?"legacy_sync_conflict":"sync_conflict";
+      const conflictCondition=sameRevisionDiverged?"sameRevisionDiverged"
+        :pendingBaseDiverged?"pendingBaseDiverged"
+          :legacyDiverged?"legacyDiverged"
+            :unsafeDownload?"unsafeDownload"
+              :localAheadWithoutPending?"localAheadWithoutPending"
+                :"conflict";
       addSyncAudit("sync_trace","conflict",checksumAudit({
-        condition:sameRevisionDiverged?"sameRevisionDiverged"
-          :pendingBaseDiverged?"pendingBaseDiverged"
-            :legacyDiverged?"legacyDiverged"
-              :unsafeDownload?"unsafeDownload"
-                :localAheadWithoutPending?"localAheadWithoutPending"
-                  :"conflict"
+        condition:conflictCondition
       }));
+      const resolution=await chooseConflictResolution(remote);
+      addSyncAudit("sync_trace","conflict_resolution",checksumAudit({
+        condition:`${conflictCondition}_${resolution}`
+      }));
+      if(resolution==="remote"){
+        applySyncPayload(remote.payload||{});
+        diagnosticLog("payload remoto aplicado",{result:"ok",remoteRevision,reason:"conflict_remote_resolution"});
+        const postApplyPayload=buildSyncPayload();
+        const postApplyFunctionalChecksum=functionalSyncChecksum(postApplyPayload);
+        addSyncAudit("sync_trace","conflict_remote_applied",syncAuditFingerprintSummary({
+          remote,remoteRevision,localRevision:remoteRevision,lastRemoteRevision:remoteRevision,
+          syncBaseRevision:remoteRevision,hasPendingChanges:false,
+          localFunctionalChecksum:postApplyFunctionalChecksum,
+          condition:"conflict_remote_applied",
+          baseFunctionalChecksum:remoteFunctionalChecksum(remote),
+          functionalProjectionDiff:functionalSyncProjectionDiffSummary(postApplyPayload,remote.payload)
+        }));
+        finalizeSuccessfulSync({
+          revision:remoteRevision,
+          checksum:remote.checksum||simpleChecksum(postApplyPayload),
+          auditStatus:"downloaded",
+          auditDetails:{revision:remoteRevision,resolvedConflict:true,resolution:"remote"}
+        });
+        return {direction:"download",revision:remoteRevision,resolvedConflict:true,resolution:"remote"};
+      }
+      if(resolution==="local"){
+        const candidateRevision=remoteRevision+1;
+        const envelope=buildSyncEnvelope(remoteRevision,candidateRevision);
+        await writeSyncEnvelopeWithCas(client,userId,envelope,remoteRevision,true,remote?.checksum||null);
+        assertOwner();
+        finalizeSuccessfulSync({
+          revision:envelope.revision,
+          checksum:envelope.checksum,
+          auditStatus:"uploaded",
+          auditDetails:{revision:envelope.revision,resolvedConflict:true,resolution:"local"}
+        });
+        return {direction:"upload",revision:envelope.revision,resolvedConflict:true,resolution:"local"};
+      }
+      addSyncAudit("sync_trace","conflict_return",{
+        branch:"conflict_return",returnSite:`divergence_${conflictCondition}_${resolution}`
+      });
       return setSyncConflictState(kind,{
-        remoteRevision,localRevision,lastRemote,syncBaseRevision
+        remoteRevision,localRevision,lastRemote,syncBaseRevision,
+        returnSite:`divergence_${conflictCondition}_${resolution}`
       });
     }else if(remote && remoteRevision>localRevision && !hasPendingChanges && remoteIsCurrent && localIsCurrent && !options.forceUpload){
       addSyncAudit("sync_trace","download",checksumAudit({condition:"remote_newer_download"}));
@@ -6012,7 +6152,10 @@ async function syncNow(options={}){
     if(remote&&baseRevision!==remoteRevision&&!options.forceUpload){
       diagnosticLog("decisión",{decision:"conflict",reason:"cas_base_mismatch",remoteRevision,baseRevision});
       addSyncAudit("sync_trace","conflict",checksumAudit({condition:"cas_base_mismatch"}));
-      return setSyncConflictState("sync_conflict",{remoteRevision,baseRevision});
+      addSyncAudit("sync_trace","conflict_return",{
+        branch:"conflict_return",returnSite:"cas_base_mismatch"
+      });
+      return setSyncConflictState("sync_conflict",{remoteRevision,baseRevision,returnSite:"cas_base_mismatch"});
     }
     const candidateRevision=baseRevision+1;
     const envelope=buildSyncEnvelope(baseRevision,candidateRevision);
@@ -6093,11 +6236,6 @@ function updateSyncIndicators(){
   document.querySelectorAll("[data-sync-dot]").forEach(el=>el.className=`sync-dot ${state.syncStatus}`);
   document.querySelectorAll("[data-sync-description]").forEach(el=>el.textContent=syncStatusDescription());
   document.querySelectorAll("[data-last-sync]").forEach(el=>el.textContent=formatSyncDate(getLastSyncAt()));
-  document.querySelectorAll("[data-sync-diagnostic-last-sync]").forEach(el=>el.textContent=localStorage.getItem("gymos:lastSyncAt")||"");
-  document.querySelectorAll("[data-sync-diagnostic-internal-branch]").forEach(el=>el.textContent=lastInternalSyncTraceBranch());
-  document.querySelectorAll("[data-sync-diagnostic-button-result]").forEach(el=>el.textContent=accountSyncButtonDiagnosticValue("direction"));
-  document.querySelectorAll("[data-sync-diagnostic-before]").forEach(el=>el.textContent=accountSyncButtonDiagnosticValue("before"));
-  document.querySelectorAll("[data-sync-diagnostic-after]").forEach(el=>el.textContent=accountSyncButtonDiagnosticValue("after"));
   document.querySelectorAll(".shell-sync-trigger").forEach(el=>{
     el.classList.remove(
       "local","synced","connected","configured","pending","syncing","offline",
@@ -16334,11 +16472,6 @@ function renderAccount(){
             <article class="ok"><span>✓</span><div><strong>Última revisión remota</strong><small>${getLastRemoteRevision()}</small></div></article>
           </div>
           <label><span>Cuando haya conflicto</span><select id="syncConflictPreference"><option value="ask" ${getSyncConflictPreference()==="ask"?"selected":""}>Preguntarme</option><option value="local" ${getSyncConflictPreference()==="local"?"selected":""}>Mantener este dispositivo</option><option value="remote" ${getSyncConflictPreference()==="remote"?"selected":""}>Usar la nube</option></select></label>
-          <p class="subtle">Diagnóstico lastSyncAt: <span data-sync-diagnostic-last-sync>${esc(localStorage.getItem("gymos:lastSyncAt")||"")}</span></p>
-          <p class="subtle">Última rama interna sync: <span data-sync-diagnostic-internal-branch>${esc(lastInternalSyncTraceBranch())}</span></p>
-          <p class="subtle">Resultado botón: <span data-sync-diagnostic-button-result>${esc(accountSyncButtonDiagnosticValue("direction"))}</span></p>
-          <p class="subtle">lastSyncAt before: <span data-sync-diagnostic-before>${esc(accountSyncButtonDiagnosticValue("before"))}</span></p>
-          <p class="subtle">lastSyncAt after: <span data-sync-diagnostic-after>${esc(accountSyncButtonDiagnosticValue("after"))}</span></p>
           <button id="exportSyncAudit" class="secondary full">Exportar registro de sincronización</button>
         </section>
 
@@ -16662,7 +16795,13 @@ function renderAccount(){
           branch:"account_button_result",
           lastSyncAtBefore,
           lastSyncAtAfter,
-          result:{direction:result?.direction||null}
+          result:{
+            direction:result?.direction||null,
+            resolution:result?.resolution||null,
+            resolvedConflict:Boolean(result?.resolvedConflict),
+            returnSite:result?.details?.returnSite||state.syncIssue?.details?.returnSite||null
+          },
+          conflictPolicyStored:localStorage.getItem("gymos:syncConflictMode")||""
         });
         updateSyncIndicators();
         if(!isHealthyManualSyncResult(result)){

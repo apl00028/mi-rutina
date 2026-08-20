@@ -477,7 +477,7 @@
     if(!found) throw new Error("Proposal not found.");
     return normalizeRecords(next,normalizedOwner);
   }
-  function mergeProposalRecords(current,incoming,{ownerId,activeProposalId=null}){
+  function mergeProposalRecords(current,incoming,{ownerId,activeProposalId=null,adoptRemoteRecords=false}){
     const normalizedOwner=normalizeOwnerId(ownerId);
     const base=normalizeRecords(current,normalizedOwner,{activeProposalId});
     const byId=new Map(base.map(record=>[record.proposal.proposalId,record]));
@@ -503,7 +503,9 @@
         incidents.push({code:"proposal_id_conflict",proposalId:id});
         return;
       }
-      if(text(record.lifecycle.updatedAt)>text(existing.lifecycle.updatedAt)){
+      if(adoptRemoteRecords){
+        byId.set(id,record);
+      }else if(text(record.lifecycle.updatedAt)>text(existing.lifecycle.updatedAt)){
         byId.set(id,{
           ...record,
           proposal:clone(existing.proposal),

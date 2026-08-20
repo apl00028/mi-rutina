@@ -308,7 +308,8 @@ function loadAccountDomHarness({syncDirection="none",syncUpdatesLastSyncAt=true}
   const elements=new Map();
   let lastSyncElements=[];
   const values=new Map([
-    ["gymos:lastSyncAt","2026-08-16T08:12:00.000Z"]
+    ["gymos:lastSyncAt","2026-08-16T08:12:00.000Z"],
+    ["gymos:syncConflictMode","ask"]
   ]);
   const downloads=[];
   const toasts=[];
@@ -383,27 +384,11 @@ function loadAccountDomHarness({syncDirection="none",syncUpdatesLastSyncAt=true}
     isEmailConfirmed:()=>true,
     getLocalRevision:()=>964,
     getLastRemoteRevision:()=>964,
-    getSyncConflictPreference:()=>"ask",
-    setSyncConflictPreference(){},
+    getSyncConflictPreference:()=>values.get("gymos:syncConflictMode")||"ask",
+    setSyncConflictPreference:value=>values.set("gymos:syncConflictMode",String(value)),
     syncSecurityState:()=>({configured:true}),
     getSyncAudit:()=>audits,
     addSyncAudit:(action,status,details={})=>audits.push({action,status,details}),
-    lastSyncTraceEntry:({includeButtonResult=true}={})=>[...audits].reverse().find(entry=>
-      entry.action==="sync_trace"&&(includeButtonResult||entry.status!=="account_button_result")
-    )||null,
-    syncTraceBranchLabel:entry=>entry?.details?.branch||entry?.details?.condition||entry?.status||"Sin trazas",
-    lastSyncTraceBranch:()=>context.syncTraceBranchLabel(context.lastSyncTraceEntry()),
-    lastInternalSyncTraceBranch:()=>context.syncTraceBranchLabel(context.lastSyncTraceEntry({includeButtonResult:false})),
-    lastAccountSyncButtonTrace:()=>[...audits].reverse().find(entry=>
-      entry.action==="sync_trace"&&entry.status==="account_button_result"
-    )||null,
-    accountSyncButtonDiagnosticValue:key=>{
-      const details=context.lastAccountSyncButtonTrace()?.details||{};
-      if(key==="direction") return details.result?.direction||"Sin resultado";
-      if(key==="before") return details.lastSyncAtBefore||"";
-      if(key==="after") return details.lastSyncAtAfter||"";
-      return "";
-    },
     isHealthyManualSyncResult:result=>["none","download","upload"].includes(result?.direction),
     getLastSyncAt:()=>values.get("gymos:lastSyncAt")||"",
     formatSyncDate:value=>`FMT:${value}`,
@@ -420,7 +405,36 @@ function loadAccountDomHarness({syncDirection="none",syncUpdatesLastSyncAt=true}
         "application/json"
       );
     },
+    applySyncPayload:payload=>{
+      context.applyCalls=(context.applyCalls||[]).concat([payload]);
+    },
+    chooseConflictResolution:async remote=>{
+      const mode=context.getSyncConflictPreference();
+      const result=mode==="remote"?"remote":mode==="local"?"local":"local";
+      context.addSyncAudit("sync_trace","choose_conflict_resolution",{
+        branch:"choose_conflict_resolution",called:true,
+        conflictPolicyStored:values.get("gymos:syncConflictMode")||"",mode,result,
+        remoteRevision:Number(remote?.revision||0)||null
+      });
+      return result;
+    },
     syncNow:async()=>{
+      if(syncDirection==="sameRevisionDiverged"){
+        const remote={revision:964,payload:{source:"remote-canonical"},checksum:"remote-full"};
+        context.addSyncAudit("sync_trace","conflict",{
+          branch:"sameRevisionDiverged",functionalChecksum:{local:"442683aa",remote:"82f91eba",base:"82f91eba"}
+        });
+        const resolution=await context.chooseConflictResolution(remote);
+        context.addSyncAudit("sync_trace","conflict_resolution",{branch:`sameRevisionDiverged_${resolution}`});
+        if(resolution==="remote"){
+          context.applySyncPayload(remote.payload);
+          context.addSyncAudit("sync_trace","conflict_remote_applied",{branch:"conflict_remote_applied"});
+          if(syncUpdatesLastSyncAt) values.set("gymos:lastSyncAt","2026-08-16T10:30:00.000Z");
+          return {direction:"download",revision:964,resolvedConflict:true,resolution:"remote"};
+        }
+        context.addSyncAudit("sync_trace","conflict_return",{branch:"conflict_return",returnSite:`divergence_sameRevisionDiverged_${resolution}`});
+        return {direction:"conflict",revision:964,details:{returnSite:`divergence_sameRevisionDiverged_${resolution}`}};
+      }
       context.addSyncAudit("sync_trace",syncDirection==="none"?"none_synced":syncDirection,{branch:syncDirection==="none"?"same_revision_equivalent":syncDirection});
       if(syncUpdatesLastSyncAt) values.set("gymos:lastSyncAt","2026-08-16T10:30:00.000Z");
       return {direction:syncDirection,revision:964};
@@ -455,6 +469,7 @@ function loadAccountDomHarness({syncDirection="none",syncUpdatesLastSyncAt=true}
   context.renderAccount();
   return {
     context,elements,downloads,toasts,messages,values,app,audits,
+    get applyCalls(){return context.applyCalls||[];},
     lastSyncElements:()=>lastSyncElements
   };
 }
@@ -480,11 +495,6 @@ test("Cuenta enlaza los botones reales de audit, backup y sync sin cruzar export
   await harness.elements.get("accountSyncNow").onclick();
   assert.equal(harness.values.get("gymos:lastSyncAt"),"2026-08-16T10:30:00.000Z");
   assert.match(harness.app.innerHTML,/Última sincronización: <span data-last-sync>FMT:2026-08-16T10:30:00\.000Z<\/span>/);
-  assert.match(harness.app.innerHTML,/Diagnóstico lastSyncAt: <span data-sync-diagnostic-last-sync>2026-08-16T10:30:00\.000Z<\/span>/);
-  assert.match(harness.app.innerHTML,/Última rama interna sync: <span data-sync-diagnostic-internal-branch>same_revision_equivalent<\/span>/);
-  assert.match(harness.app.innerHTML,/Resultado botón: <span data-sync-diagnostic-button-result>none<\/span>/);
-  assert.match(harness.app.innerHTML,/lastSyncAt before: <span data-sync-diagnostic-before>2026-08-16T08:12:00\.000Z<\/span>/);
-  assert.match(harness.app.innerHTML,/lastSyncAt after: <span data-sync-diagnostic-after>2026-08-16T10:30:00\.000Z<\/span>/);
   assert.equal(harness.toasts.at(-1),"Sincronización completada");
   assert.deepEqual(
     harness.audits.filter(entry=>entry.action==="sync_trace").map(entry=>entry.status),
@@ -498,6 +508,26 @@ test("Cuenta enlaza los botones reales de audit, backup y sync sin cruzar export
 });
 
 
+
+
+
+test("Cuenta selector Usar la nube + botón real resuelve sameRevisionDiverged como download",async()=>{
+  const harness=loadAccountDomHarness({syncDirection:"sameRevisionDiverged"});
+  const selector=harness.elements.get("syncConflictPreference");
+  selector.value="remote";
+  selector.onchange({target:selector});
+
+  await harness.elements.get("accountSyncNow").onclick();
+
+  assert.equal(harness.values.get("gymos:syncConflictMode"),"remote");
+  assert.equal(harness.applyCalls.length,1);
+  assert.deepEqual(harness.applyCalls[0],{source:"remote-canonical"});
+  assert.equal(harness.audits.find(entry=>entry.status==="choose_conflict_resolution").details.result,"remote");
+  assert.equal(harness.audits.at(-1).details.result.direction,"download");
+  assert.equal(harness.audits.at(-1).details.result.resolution,"remote");
+  assert.equal(harness.toasts.at(-1),"Sincronización completada");
+  assert.equal(harness.messages.length,0);
+});
 
 test("Cuenta no muestra completada si el botón recibe un resultado no sano",async()=>{
   for(const direction of ["busy","diagnostic_mode","conflict"]){

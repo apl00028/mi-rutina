@@ -183,6 +183,39 @@ test("11. sincronización repetida es idempotente",()=>{
   assert.equal(JSON.stringify(second),JSON.stringify(first));
   assert.match(appSource,/routineProposals:getRoutineProposalRecords\(\)/);
   assert.match(appSource,/importRoutineProposalSyncData\(payload,\{mark:false\}\)/);
+  assert.match(appSource,/adoptRemoteRecords:mark===false/);
+});
+
+
+
+test("sync import adopta baseline y comparison remotos para el mismo proposalId",()=>{
+  const api=loadApi();
+  const local=store(api,[],proposal("proposal-sync"),{timestamp:T1}).records[0];
+  const remote=plain(local);
+  remote.baseline={
+    ...remote.baseline,
+    routineCapturedAt:T2,
+    routineHash:"remote-routine-hash"
+  };
+  remote.comparison={
+    ...remote.comparison,
+    baselineHash:"remote-routine-hash",
+    generatedAt:T2,
+    changes:[{type:"exercise_changed",afterHash:"remote-after-hash"}]
+  };
+  remote.lifecycle={...remote.lifecycle,updatedAt:T2};
+
+  const adopted=plain(api.mergeProposalRecords([local],[remote],{
+    ownerId:OWNER_A,activeProposalId:remote.proposal.proposalId,adoptRemoteRecords:true
+  }));
+  assert.deepEqual(adopted.records[0].baseline,remote.baseline);
+  assert.deepEqual(adopted.records[0].comparison,remote.comparison);
+
+  const localMerge=plain(api.mergeProposalRecords([local],[remote],{
+    ownerId:OWNER_A,activeProposalId:remote.proposal.proposalId
+  }));
+  assert.deepEqual(localMerge.records[0].baseline,local.baseline);
+  assert.deepEqual(localMerge.records[0].comparison,local.comparison);
 });
 
 test("12. diff sin cambios",()=>{

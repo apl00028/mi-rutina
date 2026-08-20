@@ -473,7 +473,7 @@ test("sync: snapshot diagnostico remoto sigue siendo legible en modo solo lectur
     SELECTED_SESSION_ID_KEY:"gymos:selectedSessionId",
     CANONICAL_ROUTINE_KEY:"gymos:routine:canonical",
     getCanonicalRoutine:()=>JSON.parse(values.get("gymos:routine:canonical")),
-    getHistory:()=>JSON.parse(values.get("gymos:history")),
+    getHistory:()=>JSON.parse(values.get("gymos:history")||"[]"),
     currentRoutineOwnerOrNull:()=>"user-a",
     getLastSyncAt:()=>null,
     getSupabaseClient:()=>({

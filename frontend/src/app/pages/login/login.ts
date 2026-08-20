@@ -213,4 +213,15 @@ export class Login {
       language
     );
   }
+
+
+  requestAccess(): void {
+    this.message.set(
+      this.language() === 'es'
+        ? 'El acceso a GymOS está actualmente disponible mediante invitación.'
+        : 'GymOS access is currently invitation-only.'
+    );
+
+    this.error.set(null);
+  }
 }

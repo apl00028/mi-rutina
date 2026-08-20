@@ -840,6 +840,7 @@ test("sync rechaza canónico inválido y detecta conflicto de identidades",()=>{
   assert.match(source,/function applySyncPayload\(payload,\{recoveryCanonicalReplacement=false\}=\{\}\)/);
   assert.match(source,/invalid_remote_canonical/);
   assert.match(source,/canonicalSyncDecision/);
+  assert.match(source,/mergeCheckins\?\.\(payload\.recoveryCheckins,false,\{canonicalRemote:true\}\)/);
   assert.match(source,/local_legacy_shadow_conflict/);
   assert.match(source,/remoteMetadata\?\.ownerId===ownerId/);
 });

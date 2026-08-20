@@ -116,6 +116,7 @@
         type="email"
         autocomplete="email"
         placeholder="you@example.com"
+        required
         [value]="email()"
         (input)="
           email.set(
@@ -158,11 +159,25 @@
     }
 
     <footer class="access-note">
-      {{
-        language() === 'es'
-          ? '¿Eres nuevo en GymOS? Tras identificarte, tu cuenta quedará pendiente de aprobación.'
-          : 'New to GymOS? After signing in, your account will be submitted for approval.'
-      }}
+      <span>
+        {{
+          language() === 'es'
+            ? '¿Eres nuevo en GymOS? Tras identificarte, tu cuenta quedará pendiente de aprobación.'
+            : 'New to GymOS? After signing in, your account will be submitted for approval.'
+        }}
+      </span>
+
+      <button
+        type="button"
+        class="request-access-button"
+        (click)="requestAccess()"
+      >
+        {{
+          language() === 'es'
+            ? 'Solicitar acceso'
+            : 'Request access'
+        }}
+      </button>
     </footer>
   </section>
 </main>

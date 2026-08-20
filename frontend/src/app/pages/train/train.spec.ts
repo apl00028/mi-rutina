@@ -173,6 +173,91 @@ describe('Train first workout flow', () => {
   }
 
 
+  function pageText(
+    fixture: {
+      nativeElement: HTMLElement;
+    }
+  ): string {
+    return (
+      (
+        fixture.nativeElement as HTMLElement
+      ).textContent ?? ''
+    ).replace(/\s+/g, ' ');
+  }
+
+
+  function activeWorkout() {
+    return {
+      workoutId:
+        'active-workout',
+      routineId:
+        'routine-1',
+      sessionId:
+        'session-1',
+      status:
+        'in_progress',
+      sets: []
+    };
+  }
+
+
+  function finishedWorkout(
+    sets: any[],
+    options: {
+      workoutId?: string;
+      status?: 'finished' | 'in_progress';
+      finishedAt?: string;
+    } = {}
+  ) {
+    return {
+      workoutId:
+        options.workoutId ??
+        'finished-history',
+      routineId:
+        'routine-1',
+      sessionId:
+        'session-1',
+      status:
+        options.status ??
+        'finished',
+      finishedAt:
+        options.finishedAt ??
+        '2026-08-18T18:00:00Z',
+      sets
+    };
+  }
+
+
+  function historySet(
+    setIndex: number,
+    values: {
+      exerciseId?: string;
+      weight?: number | null;
+      reps?: number | null;
+      rir?: number | null;
+      completedAt?: string | null;
+    }
+  ) {
+    return {
+      setId:
+        `history-set-${setIndex}`,
+      exerciseId:
+        values.exerciseId ??
+        'dumbbell-bench-press',
+      setIndex,
+      weight:
+        values.weight,
+      reps:
+        values.reps,
+      rir:
+        values.rir,
+      completedAt:
+        values.completedAt ??
+        '2026-08-18T18:10:00Z'
+    };
+  }
+
+
   it('renders the first training screen with active routine and no history', async () => {
     const fixture =
       await createLoadedTrain();
@@ -504,6 +589,588 @@ describe('Train first workout flow', () => {
 
     expect(completedButton)
       .toBeTruthy();
+  });
+
+
+  it('renders the latest finished exercise history by exercise id', async () => {
+    const fixture =
+      await createLoadedTrain([
+        {
+          workoutId:
+            'active-workout',
+          routineId:
+            'routine-1',
+          sessionId:
+            'session-1',
+          status:
+            'in_progress',
+          finishedAt:
+            '2026-08-20T18:00:00Z',
+          sets: [
+            {
+              setId:
+                'active-set',
+              exerciseId:
+                'dumbbell-bench-press',
+              setIndex: 0,
+              weight: 100,
+              reps: 1,
+              completedAt:
+                '2026-08-20T18:10:00Z'
+            }
+          ]
+        },
+        {
+          workoutId:
+            'older-finished',
+          routineId:
+            'routine-1',
+          sessionId:
+            'session-1',
+          status:
+            'finished',
+          finishedAt:
+            '2026-08-10T18:00:00Z',
+          sets: [
+            {
+              setId:
+                'old-set',
+              exerciseId:
+                'dumbbell-bench-press',
+              setIndex: 0,
+              weight: 75,
+              reps: 8,
+              rir: 2,
+              completedAt:
+                '2026-08-10T18:10:00Z'
+            }
+          ]
+        },
+        {
+          workoutId:
+            'latest-finished',
+          routineId:
+            'routine-1',
+          sessionId:
+            'session-1',
+          status:
+            'finished',
+          finishedAt:
+            '2026-08-18T18:00:00Z',
+          sets: [
+            {
+              setId:
+                'latest-set-1',
+              exerciseId:
+                'dumbbell-bench-press',
+              setIndex: 0,
+              weight: 82.5,
+              reps: 8,
+              rir: 2,
+              completedAt:
+                '2026-08-18T18:10:00Z'
+            },
+            {
+              setId:
+                'latest-set-2',
+              exerciseId:
+                'dumbbell-bench-press',
+              setIndex: 1,
+              weight: 82.5,
+              reps: 7,
+              rir: 3,
+              completedAt:
+                '2026-08-18T18:15:00Z'
+            },
+            {
+              setId:
+                'similar-name',
+              exerciseId:
+                'barbell-bench-press',
+              setIndex: 0,
+              weight: 120,
+              reps: 5,
+              completedAt:
+                '2026-08-18T18:20:00Z'
+            }
+          ]
+        }
+      ]);
+
+    const component =
+      fixture.componentInstance;
+
+    expect(
+      component.getPreviousExerciseHistory(
+        'dumbbell-bench-press'
+      )?.workoutId
+    ).toBe('latest-finished');
+    expect(
+      component.previousExerciseSummary(
+        'dumbbell-bench-press'
+      )
+    ).toBe(
+      '82.5 kg × 8 @2 · 82.5 kg × 7 @3'
+    );
+
+    const text =
+      pageText(fixture);
+
+    expect(text).toContain(
+      'Última vez'
+    );
+    expect(text).toContain(
+      '82.5 kg × 8 @2 · 82.5 kg × 7 @3'
+    );
+    expect(text).not.toContain(
+      '100 kg × 1'
+    );
+    expect(text).not.toContain(
+      '120 kg × 5'
+    );
+  });
+
+
+  it('ignores in-progress workouts and exercises that only share a name', async () => {
+    const fixture =
+      await createLoadedTrain([
+        {
+          workoutId:
+            'active-workout',
+          routineId:
+            'routine-1',
+          sessionId:
+            'session-1',
+          status:
+            'in_progress',
+          sets: []
+        },
+        {
+          workoutId:
+            'unfinished-history',
+          routineId:
+            'routine-1',
+          sessionId:
+            'session-1',
+          status:
+            'in_progress',
+          finishedAt:
+            '2026-08-19T18:00:00Z',
+          sets: [
+            {
+              setId:
+                'unfinished-set',
+              exerciseId:
+                'dumbbell-bench-press',
+              setIndex: 0,
+              weight: 90,
+              reps: 10,
+              completedAt:
+                '2026-08-19T18:10:00Z'
+            }
+          ]
+        },
+        {
+          workoutId:
+            'similar-name-only',
+          routineId:
+            'routine-1',
+          sessionId:
+            'session-1',
+          status:
+            'finished',
+          finishedAt:
+            '2026-08-18T18:00:00Z',
+          sets: [
+            {
+              setId:
+                'similar-set',
+              exerciseId:
+                'barbell-bench-press',
+              setIndex: 0,
+              weight: 100,
+              reps: 6,
+              completedAt:
+                '2026-08-18T18:10:00Z'
+            }
+          ]
+        }
+      ]);
+
+    const component =
+      fixture.componentInstance;
+
+    expect(
+      component.getPreviousExerciseHistory(
+        'dumbbell-bench-press'
+      )
+    ).toBeNull();
+
+    const session =
+      component.activeSession()!;
+
+    component.activeSession.set({
+      ...session,
+      exercises: [
+        {
+          ...session.exercises[0],
+          exerciseId:
+            'barbell-bench-press'
+        }
+      ]
+    });
+    fixture.detectChanges();
+
+    expect(
+      component.getPreviousExerciseHistory(
+        'barbell-bench-press'
+      )?.workoutId
+    ).toBe('similar-name-only');
+    expect(
+      pageText(fixture)
+    ).toContain('100 kg × 6');
+  });
+
+
+  it('handles different set counts and invalid historical data safely', async () => {
+    const fixture =
+      await createLoadedTrain([
+        {
+          workoutId:
+            'active-workout',
+          routineId:
+            'routine-1',
+          sessionId:
+            'session-1',
+          status:
+            'in_progress',
+          sets: []
+        },
+        {
+          workoutId:
+            'invalid-history',
+          routineId:
+            'routine-1',
+          sessionId:
+            'session-1',
+          status:
+            'finished',
+          finishedAt:
+            '2026-08-19T18:00:00Z',
+          sets: [
+            {
+              setId:
+                'invalid-set',
+              exerciseId:
+                'dumbbell-bench-press',
+              setIndex: 0,
+              completedAt:
+                '2026-08-19T18:10:00Z'
+            }
+          ]
+        },
+        {
+          workoutId:
+            'valid-history',
+          routineId:
+            'routine-1',
+          sessionId:
+            'session-1',
+          status:
+            'finished',
+          finishedAt:
+            '2026-08-18T18:00:00Z',
+          sets: [
+            {
+              setId:
+                'set-1',
+              exerciseId:
+                'dumbbell-bench-press',
+              setIndex: 0,
+              weight: 70,
+              reps: 10,
+              completedAt:
+                '2026-08-18T18:10:00Z'
+            },
+            {
+              setId:
+                'set-2',
+              exerciseId:
+                'dumbbell-bench-press',
+              setIndex: 1,
+              weight: 70,
+              reps: 8,
+              completedAt:
+                '2026-08-18T18:15:00Z'
+            },
+            {
+              setId:
+                'extra-set',
+              exerciseId:
+                'dumbbell-bench-press',
+              setIndex: 2,
+              weight: 65,
+              reps: 8,
+              completedAt:
+                '2026-08-18T18:20:00Z'
+            }
+          ]
+        }
+      ]);
+
+    const component =
+      fixture.componentInstance;
+
+    expect(
+      component.getPreviousSet(
+        'dumbbell-bench-press',
+        0
+      )?.weight
+    ).toBe(70);
+    expect(
+      component.getPreviousSet(
+        'dumbbell-bench-press',
+        2
+      )?.weight
+    ).toBe(65);
+
+    const text =
+      pageText(fixture);
+
+    expect(text).toContain(
+      '70 kg × 10 · 70 kg × 8 · 65 kg × 8'
+    );
+    expect(text).not.toContain(
+      'undefined'
+    );
+    expect(text).not.toContain('NaN');
+  });
+
+
+  it('reuses only the previous weight for the matching set', async () => {
+    const fixture =
+      await createLoadedTrain([
+        {
+          workoutId:
+            'active-workout',
+          routineId:
+            'routine-1',
+          sessionId:
+            'session-1',
+          status:
+            'in_progress',
+          sets: []
+        },
+        {
+          workoutId:
+            'finished-history',
+          routineId:
+            'routine-1',
+          sessionId:
+            'session-1',
+          status:
+            'finished',
+          finishedAt:
+            '2026-08-18T18:00:00Z',
+          sets: [
+            {
+              setId:
+                'history-set',
+              exerciseId:
+                'dumbbell-bench-press',
+              setIndex: 0,
+              weight: 80,
+              reps: 8,
+              rir: 2,
+              completedAt:
+                '2026-08-18T18:10:00Z'
+            }
+          ]
+        }
+      ]);
+
+    vi.useFakeTimers();
+
+    const component =
+      fixture.componentInstance;
+
+    component.usePreviousWeight(
+      'dumbbell-bench-press',
+      0
+    );
+
+    const currentSet =
+      component.getCurrentSet(
+        'dumbbell-bench-press',
+        0
+      );
+
+    expect(currentSet?.weight)
+      .toBe(80);
+    expect(currentSet?.reps)
+      .toBeNull();
+    expect(currentSet?.rir)
+      .toBeNull();
+    expect(currentSet?.completedAt)
+      .toBeUndefined();
+
+    await vi.advanceTimersByTimeAsync(750);
+
+    const save =
+      http.expectOne(
+        `${environment.apiUrl}/workouts/active-workout`
+      );
+
+    expect(
+      save.request.body.sets[0]
+    ).toMatchObject({
+      exerciseId:
+        'dumbbell-bench-press',
+      setIndex: 0,
+      weight: 80,
+      reps: null,
+      rir: null
+    });
+    expect(
+      save.request.body.sets[0]
+        .completedAt
+    ).toBeUndefined();
+
+    save.flush(save.request.body);
+
+    await vi.runOnlyPendingTimersAsync();
+  });
+
+
+  it('shows only mathematically clear basic progress after completing the exercise', async () => {
+    const fixture =
+      await createLoadedTrain([
+        {
+          workoutId:
+            'active-workout',
+          routineId:
+            'routine-1',
+          sessionId:
+            'session-1',
+          status:
+            'in_progress',
+          sets: []
+        },
+        {
+          workoutId:
+            'finished-history',
+          routineId:
+            'routine-1',
+          sessionId:
+            'session-1',
+          status:
+            'finished',
+          finishedAt:
+            '2026-08-18T18:00:00Z',
+          sets: [
+            {
+              setId:
+                'history-set-1',
+              exerciseId:
+                'dumbbell-bench-press',
+              setIndex: 0,
+              weight: 80,
+              reps: 8,
+              completedAt:
+                '2026-08-18T18:10:00Z'
+            },
+            {
+              setId:
+                'history-set-2',
+              exerciseId:
+                'dumbbell-bench-press',
+              setIndex: 1,
+              weight: 80,
+              reps: 8,
+              completedAt:
+                '2026-08-18T18:15:00Z'
+            }
+          ]
+        }
+      ]);
+
+    const component =
+      fixture.componentInstance;
+
+    expect(
+      component.exerciseProgressSignal(
+        component.activeSession()!.exercises[0]
+      )
+    ).toBe('');
+
+    component.updateSet(
+      'dumbbell-bench-press',
+      0,
+      'weight',
+      '80'
+    );
+    component.updateSet(
+      'dumbbell-bench-press',
+      0,
+      'reps',
+      '9'
+    );
+    component.updateSet(
+      'dumbbell-bench-press',
+      1,
+      'weight',
+      '80'
+    );
+    component.updateSet(
+      'dumbbell-bench-press',
+      1,
+      'reps',
+      '8'
+    );
+
+    let complete =
+      component.completeSet(
+        'dumbbell-bench-press',
+        0
+      );
+
+    await waitForHttpTick();
+
+    let save =
+      http.expectOne(
+        `${environment.apiUrl}/workouts/active-workout`
+      );
+
+    save.flush(save.request.body);
+
+    await complete;
+
+    complete =
+      component.completeSet(
+        'dumbbell-bench-press',
+        1
+      );
+
+    await waitForHttpTick();
+
+    save =
+      http.expectOne(
+        `${environment.apiUrl}/workouts/active-workout`
+      );
+
+    save.flush(save.request.body);
+
+    await complete;
+    fixture.detectChanges();
+
+    expect(
+      component.exerciseProgressSignal(
+        component.activeSession()!.exercises[0]
+      )
+    ).toBe('Más volumen');
+    expect(
+      pageText(fixture)
+    ).toContain('Más volumen');
   });
 
 

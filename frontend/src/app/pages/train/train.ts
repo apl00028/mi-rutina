@@ -73,6 +73,25 @@ interface ExerciseProgressMetrics {
   bestSet: WorkoutSetInput | null;
 }
 
+type ProgressionCategory =
+  | 'increase_load'
+  | 'increase_reps'
+  | 'maintain'
+  | 'consider_reduce'
+  | 'insufficient_data';
+
+interface ProgressionRecommendation {
+  category: ProgressionCategory;
+  title: string;
+  reason: string;
+}
+
+interface RepTarget {
+  min: number;
+  max: number;
+  isRange: boolean;
+}
+
 type AutosaveStatus =
   | 'idle'
   | 'saving'
@@ -422,7 +441,20 @@ export class Train implements OnInit, OnDestroy {
               .filter(
                 set =>
                   set.exerciseId === exerciseId &&
-                  Boolean(set.completedAt)
+                  Boolean(set.completedAt) &&
+                  Number.isInteger(set.setIndex) &&
+                  (
+                    (
+                      set.weight !== null &&
+                      set.weight !== undefined &&
+                      Number.isFinite(set.weight)
+                    ) ||
+                    (
+                      set.reps !== null &&
+                      set.reps !== undefined &&
+                      Number.isFinite(set.reps)
+                    )
+                  )
               )
               .sort(
                 (first, second) =>
@@ -497,6 +529,557 @@ export class Train implements OnInit, OnDestroy {
     return Number.isFinite(time)
       ? time
       : 0;
+  }
+
+
+  previousExerciseSummary(
+    exerciseId: string
+  ): string {
+    const history =
+      this.getPreviousExerciseHistory(
+        exerciseId
+      );
+
+    if (!history) {
+      return '';
+    }
+
+    return history.sets
+      .map(set =>
+        this.formatHistoricalSet(set)
+      )
+      .filter(Boolean)
+      .join(' · ');
+  }
+
+
+  previousSetWeightLabel(
+    exerciseId: string,
+    setIndex: number
+  ): string {
+    const previousSet =
+      this.getPreviousSet(
+        exerciseId,
+        setIndex
+      );
+
+    if (
+      previousSet?.weight === null ||
+      previousSet?.weight === undefined ||
+      !Number.isFinite(previousSet.weight)
+    ) {
+      return '';
+    }
+
+    return `${previousSet.weight} kg`;
+  }
+
+
+  usePreviousWeight(
+    exerciseId: string,
+    setIndex: number
+  ): void {
+    const previousSet =
+      this.getPreviousSet(
+        exerciseId,
+        setIndex
+      );
+
+    if (
+      previousSet?.weight === null ||
+      previousSet?.weight === undefined ||
+      !Number.isFinite(previousSet.weight)
+    ) {
+      return;
+    }
+
+    this.updateSet(
+      exerciseId,
+      setIndex,
+      'weight',
+      String(previousSet.weight)
+    );
+  }
+
+
+  exerciseProgressSignal(
+    exercise: Exercise
+  ): string {
+    if (
+      this.completedSetCount(exercise) <
+      exercise.sets
+    ) {
+      return '';
+    }
+
+    const previous =
+      this.getPreviousExerciseHistory(
+        exercise.exerciseId
+      );
+
+    if (!previous) {
+      return '';
+    }
+
+    const currentMetrics =
+      this.exerciseMetrics(
+        this.currentCompletedSets(
+          exercise.exerciseId
+        )
+      );
+    const previousMetrics =
+      this.exerciseMetrics(
+        previous.sets
+      );
+
+    if (
+      currentMetrics.maxWeight !== null &&
+      previousMetrics.maxWeight !== null &&
+      currentMetrics.maxWeight >
+      previousMetrics.maxWeight
+    ) {
+      return 'Mejor carga';
+    }
+
+    if (
+      currentMetrics.volume !== null &&
+      previousMetrics.volume !== null &&
+      currentMetrics.volume >
+      previousMetrics.volume
+    ) {
+      return 'Más volumen';
+    }
+
+    if (
+      currentMetrics.totalReps !== null &&
+      previousMetrics.totalReps !== null &&
+      currentMetrics.totalReps >
+      previousMetrics.totalReps
+    ) {
+      const diff =
+        currentMetrics.totalReps -
+        previousMetrics.totalReps;
+
+      return `+${diff} rep${diff === 1 ? '' : 's'}`;
+    }
+
+    if (
+      currentMetrics.maxWeight !== null &&
+      previousMetrics.maxWeight !== null &&
+      currentMetrics.totalReps !== null &&
+      previousMetrics.totalReps !== null &&
+      currentMetrics.maxWeight ===
+      previousMetrics.maxWeight &&
+      currentMetrics.totalReps ===
+      previousMetrics.totalReps
+    ) {
+      return 'Similar';
+    }
+
+    return '';
+  }
+
+
+  progressionRecommendation(
+    exercise: Exercise
+  ): ProgressionRecommendation | null {
+    const target =
+      this.parseRepTarget(
+        exercise.target
+      );
+
+    if (
+      !target ||
+      !target.isRange ||
+      !exercise.targetRir
+    ) {
+      return null;
+    }
+
+    const history =
+      this.getPreviousExerciseHistory(
+        exercise.exerciseId
+      );
+
+    if (!history) {
+      return null;
+    }
+
+    const comparableSets =
+      history.sets
+        .filter(
+          set =>
+            set.setIndex < exercise.sets &&
+            set.reps !== null &&
+            set.reps !== undefined &&
+            Number.isFinite(set.reps)
+        );
+
+    const validSets =
+      comparableSets.filter(
+        set =>
+          set.rir !== null &&
+          set.rir !== undefined &&
+          Number.isFinite(set.rir)
+      );
+
+    const minimumEvidence =
+      exercise.sets > 1
+        ? 2
+        : 1;
+
+    if (
+      validSets.length < minimumEvidence ||
+      validSets.length !== comparableSets.length
+    ) {
+      return null;
+    }
+
+    const reps =
+      validSets.map(set => set.reps ?? 0);
+    const rirs =
+      validSets.map(set => set.rir ?? 0);
+    const weights =
+      validSets.map(set => set.weight);
+
+    const allWeightsPositive =
+      weights.every(
+        weight =>
+          weight !== null &&
+          weight !== undefined &&
+          Number.isFinite(weight) &&
+          weight > 0
+      );
+
+    const allAtTop =
+      reps.every(
+        value =>
+          value >= target.max
+      );
+    const allInsideRange =
+      reps.every(
+        value =>
+          value >= target.min
+      );
+    const anyBelowRange =
+      reps.some(
+        value =>
+          value < target.min
+      );
+    const allRirEnough =
+      rirs.every(
+        value =>
+          value >= exercise.targetRir!.min
+      );
+    const anyRirTooLow =
+      rirs.some(
+        value =>
+          value < exercise.targetRir!.min ||
+          value <= 1
+      );
+    const pronouncedDrop =
+      Math.max(...reps) -
+      Math.min(...reps) >=
+      4;
+
+    if (
+      allAtTop &&
+      allRirEnough &&
+      !pronouncedDrop &&
+      allWeightsPositive
+    ) {
+      return {
+        category:
+          'increase_load',
+        title:
+          'Podrías subir ligeramente la carga',
+        reason:
+          `La última vez completaste el rango ${target.min}-${target.max} con RIR suficiente.`
+      };
+    }
+
+    if (
+      anyBelowRange &&
+      anyRirTooLow
+    ) {
+      return {
+        category:
+          'consider_reduce',
+        title:
+          'Mantén o baja un poco la carga',
+        reason:
+          `La última vez quedaste por debajo del rango ${target.min}-${target.max} y cerca del fallo.`
+      };
+    }
+
+    if (
+      allInsideRange &&
+      allRirEnough &&
+      !allAtTop &&
+      !pronouncedDrop
+    ) {
+      return {
+        category:
+          'increase_reps',
+        title:
+          'Intenta una repetición más',
+        reason:
+          `La última vez entraste en el rango ${target.min}-${target.max} sin agotar el RIR objetivo.`
+      };
+    }
+
+    if (
+      allAtTop &&
+      allRirEnough &&
+      !allWeightsPositive
+    ) {
+      return {
+        category:
+          'increase_reps',
+        title:
+          'Progresa sin subir kg',
+        reason:
+          'La última vez llegaste a la parte alta del rango, pero GymOS no tiene una carga comparable para este ejercicio.'
+      };
+    }
+
+    return {
+      category:
+        'maintain',
+      title:
+        'Mantén la carga',
+      reason:
+        pronouncedDrop
+          ? 'La última vez hubo una caída clara entre series; consolida antes de subir.'
+          : 'La última vez no hubo evidencia suficiente para subir de forma conservadora.'
+    };
+  }
+
+
+  progressionRecommendationText(
+    exercise: Exercise
+  ): string {
+    const recommendation =
+      this.progressionRecommendation(
+        exercise
+      );
+
+    if (!recommendation) {
+      return '';
+    }
+
+    return `${recommendation.title}. ${recommendation.reason}`;
+  }
+
+
+  private parseRepTarget(
+    target: string | undefined
+  ): RepTarget | null {
+    if (!target) {
+      return null;
+    }
+
+    const values =
+      target
+        .match(/\d+(?:[.,]\d+)?/g)
+        ?.map(value =>
+          Number(
+            value.replace(',', '.')
+          )
+        )
+        .filter(Number.isFinite) ??
+      [];
+
+    if (!values.length) {
+      return null;
+    }
+
+    const min =
+      values[0];
+    const max =
+      values.length > 1
+        ? values[1]
+        : values[0];
+
+    if (
+      min <= 0 ||
+      max < min
+    ) {
+      return null;
+    }
+
+    return {
+      min,
+      max,
+      isRange:
+        min !== max
+    };
+  }
+
+
+  private formatHistoricalSet(
+    set: WorkoutSetInput
+  ): string {
+    const parts: string[] = [];
+
+    if (
+      set.weight !== null &&
+      set.weight !== undefined &&
+      Number.isFinite(set.weight)
+    ) {
+      parts.push(`${set.weight} kg`);
+    }
+
+    if (
+      set.reps !== null &&
+      set.reps !== undefined &&
+      Number.isFinite(set.reps)
+    ) {
+      if (parts.length) {
+        parts.push(`× ${set.reps}`);
+      } else {
+        parts.push(`${set.reps} reps`);
+      }
+    }
+
+    if (
+      set.rir !== null &&
+      set.rir !== undefined &&
+      Number.isFinite(set.rir)
+    ) {
+      parts.push(`@${set.rir}`);
+    }
+
+    return parts.join(' ');
+  }
+
+
+  private currentCompletedSets(
+    exerciseId: string
+  ): WorkoutSetInput[] {
+    const workout =
+      this.activeWorkout();
+
+    if (!workout) {
+      return [];
+    }
+
+    return workout.sets
+      .filter(
+        set =>
+          set.exerciseId === exerciseId &&
+          Boolean(set.completedAt)
+      )
+      .sort(
+        (first, second) =>
+          first.setIndex -
+          second.setIndex
+      );
+  }
+
+
+  private exerciseMetrics(
+    sets: WorkoutSetInput[]
+  ): ExerciseProgressMetrics {
+    const validWeights =
+      sets
+        .map(set => set.weight)
+        .filter(
+          (
+            value
+          ): value is number =>
+            value !== null &&
+            value !== undefined &&
+            Number.isFinite(value)
+        );
+
+    const validReps =
+      sets
+        .map(set => set.reps)
+        .filter(
+          (
+            value
+          ): value is number =>
+            value !== null &&
+            value !== undefined &&
+            Number.isFinite(value)
+        );
+
+    const weightedSets =
+      sets.filter(
+        set =>
+          set.weight !== null &&
+          set.weight !== undefined &&
+          Number.isFinite(set.weight) &&
+          set.weight > 0 &&
+          set.reps !== null &&
+          set.reps !== undefined &&
+          Number.isFinite(set.reps) &&
+          set.reps > 0
+      );
+
+    const volume =
+      weightedSets.length === sets.length &&
+      weightedSets.length > 0
+        ? weightedSets.reduce(
+            (total, set) =>
+              total +
+              (set.weight ?? 0) *
+              (set.reps ?? 0),
+            0
+          )
+        : null;
+
+    return {
+      maxWeight:
+        validWeights.length
+          ? Math.max(...validWeights)
+          : null,
+      totalReps:
+        validReps.length
+          ? validReps.reduce(
+              (total, value) =>
+                total + value,
+              0
+            )
+          : null,
+      volume,
+      bestSet:
+        this.bestSet(sets)
+    };
+  }
+
+
+  private bestSet(
+    sets: WorkoutSetInput[]
+  ): WorkoutSetInput | null {
+    return sets.reduce<WorkoutSetInput | null>(
+      (best, set) => {
+        if (!best) {
+          return set;
+        }
+
+        const setWeight =
+          set.weight ?? -1;
+        const bestWeight =
+          best.weight ?? -1;
+
+        if (setWeight > bestWeight) {
+          return set;
+        }
+
+        if (
+          setWeight === bestWeight &&
+          (set.reps ?? -1) >
+          (best.reps ?? -1)
+        ) {
+          return set;
+        }
+
+        return best;
+      },
+      null
+    );
   }
 
   getCurrentSet(

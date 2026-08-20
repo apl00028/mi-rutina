@@ -75,6 +75,64 @@
                 </span>
               </header>
 
+              @if (
+                getPreviousExerciseHistory(
+                  exercise.exerciseId
+                );
+                as previousExercise
+              ) {
+                <section class="previous-exercise">
+                  <span>
+                    Última vez
+                  </span>
+
+                  <p>
+                    {{
+                      previousExerciseSummary(
+                        exercise.exerciseId
+                      )
+                    }}
+                  </p>
+
+                  @if (
+                    exerciseProgressSignal(exercise)
+                  ) {
+                    <strong>
+                      {{
+                        exerciseProgressSignal(
+                          exercise
+                        )
+                      }}
+                    </strong>
+                  }
+
+                  @if (
+                    progressionRecommendation(
+                      exercise
+                    );
+                    as recommendation
+                  ) {
+                    <div class="progression-suggestion">
+                      <span>
+                        Sugerencia
+                      </span>
+
+                      <p>
+                        {{
+                          recommendation.title
+                        }}
+                      </p>
+
+                      <small>
+                        {{
+                          recommendation.reason
+                        }}
+                      </small>
+                    </div>
+                  }
+                </section>
+              }
+
               <div class="sets-list">
                 @for (
                   setNumber of [].constructor(exercise.sets);
@@ -134,11 +192,12 @@
                         ) {
                           <p class="previous-set">
                             Última vez:
-                            {{ previousSet.weight ?? '—' }} kg
-                            ×
-                            {{ previousSet.reps ?? '—' }}
-                            · RIR
-                            {{ previousSet.rir ?? '—' }}
+                            {{
+                              previousSetWeightLabel(
+                                exercise.exerciseId,
+                                $index
+                              ) || 'registro previo'
+                            }}
                           </p>
                         }
                       </div>
@@ -235,6 +294,35 @@
                         />
                       </label>
                     </div>
+
+                    @if (
+                      previousSetWeightLabel(
+                        exercise.exerciseId,
+                        $index
+                      )
+                    ) {
+                      <button
+                        type="button"
+                        class="secondary-button reuse-weight-button"
+                        (click)="usePreviousWeight(
+                          exercise.exerciseId,
+                          $index
+                        )"
+                        [attr.aria-label]="
+                          'Usar carga anterior de ' +
+                          previousSetWeightLabel(
+                            exercise.exerciseId,
+                            $index
+                          ) +
+                          ' para ' +
+                          exercise.name +
+                          ', serie ' +
+                          ($index + 1)
+                        "
+                      >
+                        Usar carga anterior
+                      </button>
+                    }
 
                     <button
                       type="button"

@@ -290,12 +290,77 @@ button:disabled {
   display: grid;
 }
 
+.previous-exercise {
+  display: grid;
+  gap: 4px;
+
+  padding: 12px 20px;
+
+  border-bottom: 1px solid #f3f4f6;
+
+  background: #fbfdff;
+}
+
+.previous-exercise span {
+  color: #6b7280;
+
+  font-size: 0.72rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.previous-exercise p {
+  margin: 0;
+
+  color: #374151;
+
+  font-size: 0.9rem;
+  font-weight: 650;
+}
+
+.previous-exercise strong {
+  color: #166534;
+
+  font-size: 0.74rem;
+}
+
+.progression-suggestion {
+  display: grid;
+  gap: 2px;
+
+  margin-top: 6px;
+  padding: 8px 10px;
+
+  border: 1px solid #e0e7ff;
+  border-radius: 10px;
+
+  background: #eef2ff;
+}
+
+.progression-suggestion p,
+.progression-suggestion small {
+  margin: 0;
+}
+
+.progression-suggestion p {
+  color: #312e81;
+
+  font-size: 0.86rem;
+}
+
+.progression-suggestion small {
+  color: #4338ca;
+
+  font-size: 0.76rem;
+}
+
 .set-row {
   display: grid;
 
   grid-template-columns:
     minmax(180px, 1fr)
     minmax(270px, 1.2fr)
+    130px
     150px;
 
   align-items: center;
@@ -459,6 +524,14 @@ button:disabled {
 
 .complete-set-button:not(:disabled):hover {
   background: #f9fafb;
+}
+
+.reuse-weight-button {
+  width: 100%;
+
+  color: #1e3a8a;
+
+  font-size: 0.78rem;
 }
 
 .completed .complete-set-button {
@@ -717,6 +790,15 @@ button:disabled {
     min-height: 50px;
 
     font-size: 0.98rem;
+  }
+
+  .reuse-weight-button {
+    min-height: 46px;
+  }
+
+  .previous-exercise {
+    padding:
+      12px 16px;
   }
 
   .workout-actions {

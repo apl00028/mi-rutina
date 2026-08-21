@@ -114,6 +114,18 @@ interface ExerciseAnalyticsItem {
   maxWeight?: number | null;
   bestSet?: string | null;
   bestE1rm?: number | null;
+  firstE1rm?: number | null;
+  lastE1rm?: number | null;
+  e1rmChange?: number | null;
+  e1rmChangePercent?: number | null;
+  trend?:
+    | 'improving'
+    | 'stable'
+    | 'declining'
+    | 'insufficient_data';
+  trendExposures?: number;
+  plateau?: boolean;
+  signal?: string | null;
   totalVolume?: number | null;
   lastMark?: string | null;
 }
@@ -124,6 +136,8 @@ interface ExerciseProgressPoint {
   maxWeight?: number | null;
   bestE1rm?: number | null;
   bestReps?: number | null;
+  totalReps?: number | null;
+  validSets?: number;
   rir?: number | null;
 }
 
@@ -141,6 +155,14 @@ interface TrainingAnalyticsResponse {
   muscleGroups: MuscleGroupAnalyticsItem[];
   exercises: ExerciseAnalyticsItem[];
   progress: ExerciseProgressSeries[];
+}
+
+interface ChartPoint {
+  workoutId: string;
+  x: number;
+  y: number;
+  label: string;
+  value: number;
 }
 
 @Component({
@@ -366,6 +388,261 @@ export class Routines implements OnInit {
             item.exerciseId === exerciseId
         ) ?? null
     );
+  }
+
+  selectedExerciseAnalytics():
+    ExerciseAnalyticsItem | null {
+    const exerciseId =
+      this.selectedAnalyticsExerciseId();
+
+    if (!exerciseId) {
+      return null;
+    }
+
+    return (
+      this.trainingAnalytics()
+        ?.exercises
+        .find(
+          item =>
+            item.exerciseId === exerciseId
+        ) ?? null
+    );
+  }
+
+  comparableProgressPoints():
+    ExerciseProgressPoint[] {
+    return (
+      this.selectedProgress()
+        ?.points
+        .filter(
+          point =>
+            point.bestE1rm !== null &&
+            point.bestE1rm !== undefined &&
+            Number.isFinite(point.bestE1rm)
+        ) ?? []
+    );
+  }
+
+  hasComparableStrengthMetric(): boolean {
+    return (
+      this.comparableProgressPoints()
+        .length > 0
+    );
+  }
+
+  trendLabel(
+    trend:
+      ExerciseAnalyticsItem['trend'] | undefined
+  ): string {
+    switch (trend) {
+      case 'improving':
+        return 'Mejorando';
+      case 'stable':
+        return 'Estable';
+      case 'declining':
+        return 'En descenso';
+      default:
+        return 'Sin datos suficientes';
+    }
+  }
+
+  trendGroupTitle(
+    trend:
+      ExerciseAnalyticsItem['trend']
+  ): string {
+    switch (trend) {
+      case 'improving':
+        return 'Mejorando';
+      case 'stable':
+        return 'Estables';
+      case 'declining':
+        return 'En descenso';
+      default:
+        return 'Sin datos suficientes';
+    }
+  }
+
+  exercisesByTrend(
+    trend:
+      ExerciseAnalyticsItem['trend']
+  ): ExerciseAnalyticsItem[] {
+    return (
+      this.trainingAnalytics()
+        ?.exercises
+        .filter(
+          exercise =>
+            (
+              exercise.trend ??
+              'insufficient_data'
+            ) === trend
+        )
+        .slice(0, 4) ?? []
+    );
+  }
+
+  trendGroups(): {
+    key: ExerciseAnalyticsItem['trend'];
+    title: string;
+    exercises: ExerciseAnalyticsItem[];
+  }[] {
+    return [
+      'improving',
+      'stable',
+      'declining',
+      'insufficient_data'
+    ].map(key => ({
+      key: key as ExerciseAnalyticsItem['trend'],
+      title:
+        this.trendGroupTitle(
+          key as ExerciseAnalyticsItem['trend']
+        ),
+      exercises:
+        this.exercisesByTrend(
+          key as ExerciseAnalyticsItem['trend']
+        )
+    }));
+  }
+
+  formatSignedKg(
+    value: number | null | undefined
+  ): string {
+    if (
+      value === null ||
+      value === undefined ||
+      !Number.isFinite(value)
+    ) {
+      return 'No aplicable';
+    }
+
+    const prefix =
+      value > 0
+        ? '+'
+        : '';
+
+    return `${prefix}${this.formatKg(value)}`;
+  }
+
+  formatSignedPercent(
+    value: number | null | undefined
+  ): string {
+    if (
+      value === null ||
+      value === undefined ||
+      !Number.isFinite(value)
+    ) {
+      return '';
+    }
+
+    const prefix =
+      value > 0
+        ? '+'
+        : '';
+
+    return `${prefix}${new Intl.NumberFormat(
+      'es-ES',
+      {
+        maximumFractionDigits: 1
+      }
+    ).format(value)}%`;
+  }
+
+  formatE1rmChange(
+    exercise:
+      ExerciseAnalyticsItem | null
+  ): string {
+    if (!exercise) {
+      return 'No aplicable';
+    }
+
+    const percent =
+      this.formatSignedPercent(
+        exercise.e1rmChangePercent
+      );
+
+    return [
+      this.formatSignedKg(
+        exercise.e1rmChange
+      ),
+      percent
+        ? `(${percent})`
+        : ''
+    ]
+      .filter(Boolean)
+      .join(' ');
+  }
+
+  formatE1rmRange(
+    exercise:
+      ExerciseAnalyticsItem | null
+  ): string {
+    if (
+      !exercise ||
+      exercise.firstE1rm === null ||
+      exercise.firstE1rm === undefined ||
+      exercise.lastE1rm === null ||
+      exercise.lastE1rm === undefined
+    ) {
+      return 'No aplicable';
+    }
+
+    return `${this.formatKg(
+      exercise.firstE1rm
+    )} -> ${this.formatKg(
+      exercise.lastE1rm
+    )}`;
+  }
+
+  chartPoints(): ChartPoint[] {
+    const points =
+      this.comparableProgressPoints();
+
+    if (!points.length) {
+      return [];
+    }
+
+    const values =
+      points.map(
+        point => point.bestE1rm ?? 0
+      );
+    const min =
+      Math.min(...values);
+    const max =
+      Math.max(...values);
+    const range =
+      Math.max(max - min, 1);
+
+    return points.map(
+      (point, index) => ({
+        workoutId:
+          point.workoutId,
+        x:
+          points.length === 1
+            ? 50
+            : 8 +
+              (index /
+                (points.length - 1)) *
+                84,
+        y:
+          88 -
+          ((point.bestE1rm ?? min) - min) /
+            range *
+            72,
+        label:
+          this.formatDate(point.date),
+        value:
+          point.bestE1rm ?? 0
+      })
+    );
+  }
+
+  chartPolyline(): string {
+    return this
+      .chartPoints()
+      .map(
+        point =>
+          `${point.x.toFixed(2)},${point.y.toFixed(2)}`
+      )
+      .join(' ');
   }
 
   selectAnalyticsExercise(

@@ -306,6 +306,37 @@ describe('Train first workout flow', () => {
   }
 
 
+  function trendWorkout(
+    workoutId: string,
+    finishedAt: string,
+    values: {
+      weight?: number | null;
+      reps?: number | null;
+      rir?: number | null;
+      exerciseId?: string;
+    }
+  ) {
+    return finishedWorkout(
+      [
+        historySet(0, {
+          ...values,
+          completedAt:
+            finishedAt
+        }),
+        historySet(1, {
+          ...values,
+          completedAt:
+            finishedAt
+        })
+      ],
+      {
+        workoutId,
+        finishedAt
+      }
+    );
+  }
+
+
   it('renders the first training screen with active routine and no history', async () => {
     const fixture =
       await createLoadedTrain();
@@ -1520,6 +1551,438 @@ describe('Train first workout flow', () => {
     expect(
       JSON.stringify(
         component.activeWorkout()
+      )
+    ).toBe(before);
+    http.expectNone(
+      `${environment.apiUrl}/workouts/active-workout`
+    );
+  });
+
+
+  it('calculates Epley e1RM only for externally loaded sets', async () => {
+    const fixture =
+      await createLoadedTrain([
+        activeWorkout()
+      ]);
+    const component =
+      fixture.componentInstance;
+    const exercise =
+      component.activeSession()!.exercises[0];
+
+    expect(
+      component.estimatedOneRepMax(
+        exercise,
+        historySet(0, {
+          weight: 90,
+          reps: 10
+        })
+      )
+    ).toBe(120);
+
+    expect(
+      component.estimatedOneRepMax(
+        {
+          ...exercise,
+          recordTypes:
+            ['duration']
+        },
+        historySet(0, {
+          weight: 90,
+          reps: 10
+        })
+      )
+    ).toBeNull();
+
+    expect(
+      component.estimatedOneRepMax(
+        {
+          ...exercise,
+          recordTypes:
+            ['bodyweight_reps']
+        },
+        historySet(0, {
+          weight: 90,
+          reps: 10
+        })
+      )
+    ).toBeNull();
+
+    expect(
+      component.estimatedOneRepMax(
+        exercise,
+        historySet(0, {
+          weight: 0,
+          reps: 10
+        })
+      )
+    ).toBeNull();
+  });
+
+
+  it('uses the best e1RM per finished execution and the latest 3-5 exposures', async () => {
+    const fixture =
+      await createLoadedTrain([
+        activeWorkout(),
+        trendWorkout(
+          'ignored-old',
+          '2026-08-10T18:00:00Z',
+          {
+            weight: 200,
+            reps: 10,
+            rir: 2
+          }
+        ),
+        trendWorkout(
+          'w1',
+          '2026-08-11T18:00:00Z',
+          {
+            weight: 80,
+            reps: 8,
+            rir: 2
+          }
+        ),
+        finishedWorkout(
+          [
+            historySet(0, {
+              weight: 82,
+              reps: 8,
+              rir: 2,
+              completedAt:
+                '2026-08-12T18:00:00Z'
+            }),
+            historySet(1, {
+              weight: 90,
+              reps: 10,
+              rir: 2,
+              completedAt:
+                '2026-08-12T18:00:00Z'
+            })
+          ],
+          {
+            workoutId:
+              'w2',
+            finishedAt:
+              '2026-08-12T18:00:00Z'
+          }
+        ),
+        trendWorkout(
+          'w3',
+          '2026-08-13T18:00:00Z',
+          {
+            weight: 92,
+            reps: 10,
+            rir: 2
+          }
+        ),
+        trendWorkout(
+          'w4',
+          '2026-08-14T18:00:00Z',
+          {
+            weight: 94,
+            reps: 10,
+            rir: 2
+          }
+        ),
+        trendWorkout(
+          'w5',
+          '2026-08-15T18:00:00Z',
+          {
+            weight: 96,
+            reps: 10,
+            rir: 2
+          }
+        )
+      ]);
+
+    const trend =
+      fixture
+        .componentInstance
+        .exerciseRecentTrend(
+          fixture
+            .componentInstance
+            .activeSession()!
+            .exercises[0]
+        );
+
+    expect(
+      trend.exposures
+    ).toBe(5);
+    expect(
+      trend.status
+    ).toBe('improving');
+    expect(
+      trend.e1rmValues.map(value =>
+        Math.round(value)
+      )
+    ).toEqual([
+      101,
+      120,
+      123,
+      125,
+      128
+    ]);
+  });
+
+
+  it('classifies stable and ignores tiny e1RM noise', async () => {
+    const fixture =
+      await createLoadedTrain([
+        activeWorkout(),
+        trendWorkout(
+          'w1',
+          '2026-08-11T18:00:00Z',
+          {
+            weight: 90,
+            reps: 10,
+            rir: 2
+          }
+        ),
+        trendWorkout(
+          'w2',
+          '2026-08-12T18:00:00Z',
+          {
+            weight: 90.5,
+            reps: 10,
+            rir: 2
+          }
+        ),
+        trendWorkout(
+          'w3',
+          '2026-08-13T18:00:00Z',
+          {
+            weight: 91,
+            reps: 10,
+            rir: 2
+          }
+        )
+      ]);
+
+    const trend =
+      fixture
+        .componentInstance
+        .exerciseRecentTrend(
+          fixture
+            .componentInstance
+            .activeSession()!
+            .exercises[0]
+        );
+
+    expect(
+      trend.status
+    ).toBe('stable');
+  });
+
+
+  it('classifies declining when recent performance falls with low RIR', async () => {
+    const fixture =
+      await createLoadedTrain([
+        activeWorkout(),
+        trendWorkout(
+          'w1',
+          '2026-08-11T18:00:00Z',
+          {
+            weight: 90,
+            reps: 10,
+            rir: 3
+          }
+        ),
+        trendWorkout(
+          'w2',
+          '2026-08-12T18:00:00Z',
+          {
+            weight: 87.5,
+            reps: 8,
+            rir: 1
+          }
+        ),
+        trendWorkout(
+          'w3',
+          '2026-08-13T18:00:00Z',
+          {
+            weight: 85,
+            reps: 7,
+            rir: 0
+          }
+        )
+      ]);
+
+    const trend =
+      fixture
+        .componentInstance
+        .exerciseRecentTrend(
+          fixture
+            .componentInstance
+            .activeSession()!
+            .exercises[0]
+        );
+
+    expect(
+      trend.status
+    ).toBe('declining');
+  });
+
+
+  it('does not force declining from one isolated bad session among good exposures', async () => {
+    const fixture =
+      await createLoadedTrain([
+        activeWorkout(),
+        trendWorkout(
+          'w1',
+          '2026-08-11T18:00:00Z',
+          {
+            weight: 90,
+            reps: 10,
+            rir: 2
+          }
+        ),
+        trendWorkout(
+          'bad-day',
+          '2026-08-12T18:00:00Z',
+          {
+            weight: 80,
+            reps: 6,
+            rir: 0
+          }
+        ),
+        trendWorkout(
+          'w3',
+          '2026-08-13T18:00:00Z',
+          {
+            weight: 91,
+            reps: 10,
+            rir: 2
+          }
+        ),
+        trendWorkout(
+          'w4',
+          '2026-08-14T18:00:00Z',
+          {
+            weight: 92,
+            reps: 10,
+            rir: 2
+          }
+        )
+      ]);
+
+    const trend =
+      fixture
+        .componentInstance
+        .exerciseRecentTrend(
+          fixture
+            .componentInstance
+            .activeSession()!
+            .exercises[0]
+        );
+
+    expect(
+      trend.status
+    ).toBe('improving');
+  });
+
+
+  it('modulates load progression when the recent trend is declining', async () => {
+    const fixture =
+      await createLoadedTrain([
+        activeWorkout(),
+        trendWorkout(
+          'w1',
+          '2026-08-11T18:00:00Z',
+          {
+            weight: 100,
+            reps: 10,
+            rir: 3
+          }
+        ),
+        trendWorkout(
+          'w2',
+          '2026-08-12T18:00:00Z',
+          {
+            weight: 90,
+            reps: 7,
+            rir: 0
+          }
+        ),
+        trendWorkout(
+          'w3',
+          '2026-08-13T18:00:00Z',
+          {
+            weight: 80,
+            reps: 10,
+            rir: 2
+          }
+        )
+      ]);
+
+    const recommendation =
+      fixture
+        .componentInstance
+        .progressionRecommendation(
+          fixture
+            .componentInstance
+            .activeSession()!
+            .exercises[0]
+        );
+
+    expect(
+      recommendation?.category
+    ).toBe('consider_reduce');
+  });
+
+
+  it('shows compact trend copy without autosaving', async () => {
+    const fixture =
+      await createLoadedTrain([
+        activeWorkout(),
+        trendWorkout(
+          'w1',
+          '2026-08-11T18:00:00Z',
+          {
+            weight: 90,
+            reps: 10,
+            rir: 2
+          }
+        ),
+        trendWorkout(
+          'w2',
+          '2026-08-12T18:00:00Z',
+          {
+            weight: 92,
+            reps: 10,
+            rir: 2
+          }
+        ),
+        trendWorkout(
+          'w3',
+          '2026-08-13T18:00:00Z',
+          {
+            weight: 94,
+            reps: 10,
+            rir: 2
+          }
+        )
+      ]);
+    const before =
+      JSON.stringify(
+        fixture
+          .componentInstance
+          .activeWorkout()
+      );
+
+    fixture.detectChanges();
+
+    expect(
+      pageText(fixture)
+    ).toContain(
+      'Tendencia · Mejorando'
+    );
+    expect(
+      pageText(fixture)
+    ).toContain('e1RM');
+    expect(
+      JSON.stringify(
+        fixture
+          .componentInstance
+          .activeWorkout()
       )
     ).toBe(before);
     http.expectNone(

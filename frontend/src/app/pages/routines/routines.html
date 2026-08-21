@@ -416,6 +416,8 @@
             <span>Series</span>
             <span>Peso máximo</span>
             <span>Mejor serie</span>
+            <span>Tendencia</span>
+            <span>Cambio e1RM</span>
             <span>Volumen</span>
             <span>Última marca</span>
           </div>
@@ -451,6 +453,12 @@
                 {{ exercise.bestSet ?? 'No aplicable' }}
               </span>
               <span>
+                {{ trendLabel(exercise.trend) }}
+              </span>
+              <span>
+                {{ formatE1rmChange(exercise) }}
+              </span>
+              <span>
                 {{
                   formatVolume(
                     exercise.totalVolume
@@ -468,6 +476,71 @@
           No hay ejercicios completados en este período.
         </div>
       }
+    </section>
+
+    <section class="analysis-section">
+      <div class="analysis-section-header">
+        <div>
+          <h3>Estado por ejercicio</h3>
+
+          <p>
+            Agrupa el rendimiento reciente sin convertirlo
+            en recomendaciones de entrenamiento.
+          </p>
+        </div>
+      </div>
+
+      <div class="trend-groups">
+        @for (
+          group of trendGroups();
+          track group.key
+        ) {
+          <section class="trend-group">
+            <h4>{{ group.title }}</h4>
+
+            @if (group.exercises.length) {
+              @for (
+                exercise of group.exercises;
+                track exercise.exerciseId
+              ) {
+                <button
+                  type="button"
+                  class="trend-exercise"
+                  (click)="selectedAnalyticsExerciseId.set(
+                    exercise.exerciseId
+                  )"
+                >
+                  <span>
+                    {{ exercise.name }}
+                  </span>
+
+                  <strong>
+                    {{
+                      formatE1rmChange(
+                        exercise
+                      )
+                    }}
+                  </strong>
+
+                  <small>
+                    {{
+                      formatInteger(
+                        exercise.trendExposures
+                      )
+                    }}
+                    exposiciones
+                    @if (exercise.plateau) {
+                      · plateau
+                    }
+                  </small>
+                </button>
+              }
+            } @else {
+              <p>Sin ejercicios en este grupo.</p>
+            }
+          </section>
+        }
+      </div>
     </section>
 
     <section class="analysis-section">
@@ -503,12 +576,124 @@
           </label>
 
           @if (selectedProgress()) {
+            <div class="selected-trend-summary">
+              <div>
+                <span>Tendencia</span>
+                <strong>
+                  {{
+                    trendLabel(
+                      selectedExerciseAnalytics()
+                        ?.trend
+                    )
+                  }}
+                </strong>
+              </div>
+
+              <div>
+                <span>e1RM actual</span>
+                <strong>
+                  {{
+                    formatKg(
+                      selectedExerciseAnalytics()
+                        ?.lastE1rm
+                    )
+                  }}
+                </strong>
+              </div>
+
+              <div>
+                <span>Cambio reciente</span>
+                <strong>
+                  {{
+                    formatE1rmChange(
+                      selectedExerciseAnalytics()
+                    )
+                  }}
+                </strong>
+              </div>
+
+              <div>
+                <span>Exposiciones</span>
+                <strong>
+                  {{
+                    formatInteger(
+                      selectedExerciseAnalytics()
+                        ?.trendExposures
+                    )
+                  }}
+                </strong>
+              </div>
+            </div>
+
+            @if (
+              selectedExerciseAnalytics()?.signal
+            ) {
+              <p class="analysis-signal">
+                {{
+                  selectedExerciseAnalytics()
+                    ?.signal
+                }}
+              </p>
+            }
+
+            @if (hasComparableStrengthMetric()) {
+              <div class="e1rm-chart">
+                <div class="chart-header">
+                  <span>1RM estimado</span>
+                  <strong>
+                    {{
+                      formatE1rmRange(
+                        selectedExerciseAnalytics()
+                      )
+                    }}
+                  </strong>
+                </div>
+
+                <svg
+                  viewBox="0 0 100 100"
+                  role="img"
+                  aria-label="Curva de 1RM estimado"
+                  preserveAspectRatio="none"
+                >
+                  <polyline
+                    [attr.points]="chartPolyline()"
+                  />
+
+                  @for (
+                    point of chartPoints();
+                    track point.workoutId
+                  ) {
+                    <circle
+                      [attr.cx]="point.x"
+                      [attr.cy]="point.y"
+                      r="1.8"
+                    />
+                  }
+                </svg>
+
+                <div class="chart-axis">
+                  @for (
+                    point of chartPoints();
+                    track point.workoutId
+                  ) {
+                    <span>{{ point.label }}</span>
+                  }
+                </div>
+              </div>
+            } @else {
+              <div class="analysis-placeholder">
+                Sin métrica de fuerza comparable.
+              </div>
+            }
+
             <div class="analysis-table">
               <div class="analysis-table-row analysis-table-head">
                 <span>Fecha</span>
                 <span>Peso máximo</span>
                 <span>Mejor e1RM</span>
                 <span>Reps mejor serie</span>
+                <span>Reps totales</span>
+                <span>Series válidas</span>
                 <span>RIR</span>
               </div>
 
@@ -530,6 +715,20 @@
                     {{
                       formatInteger(
                         point.bestReps
+                      )
+                    }}
+                  </span>
+                  <span>
+                    {{
+                      formatInteger(
+                        point.totalReps
+                      )
+                    }}
+                  </span>
+                  <span>
+                    {{
+                      formatInteger(
+                        point.validSets
                       )
                     }}
                   </span>

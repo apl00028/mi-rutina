@@ -10,6 +10,13 @@ TrainingAnalyticsPeriod = Literal[
     "all",
 ]
 
+ExerciseTrendStatus = Literal[
+    "improving",
+    "stable",
+    "declining",
+    "insufficient_data",
+]
+
 
 class TrainingAnalyticsSummary(BaseModel):
     workouts: int = 0
@@ -34,6 +41,14 @@ class ExerciseAnalyticsItem(BaseModel):
     maxWeight: float | None = None
     bestSet: str | None = None
     bestE1rm: float | None = None
+    firstE1rm: float | None = None
+    lastE1rm: float | None = None
+    e1rmChange: float | None = None
+    e1rmChangePercent: float | None = None
+    trend: ExerciseTrendStatus = "insufficient_data"
+    trendExposures: int = 0
+    plateau: bool = False
+    signal: str | None = None
     totalVolume: float | None = None
     lastMark: str | None = None
 
@@ -44,6 +59,8 @@ class ExerciseProgressPoint(BaseModel):
     maxWeight: float | None = None
     bestE1rm: float | None = None
     bestReps: int | None = None
+    totalReps: int | None = None
+    validSets: int = 0
     rir: float | None = None
 
 

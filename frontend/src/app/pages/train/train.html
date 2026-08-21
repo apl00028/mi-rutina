@@ -94,6 +94,14 @@
                     }}
                   </p>
 
+                  <p class="exercise-trend">
+                    {{
+                      exerciseTrendSummary(
+                        exercise
+                      )
+                    }}
+                  </p>
+
                   @if (
                     exerciseProgressSignal(exercise)
                   ) {

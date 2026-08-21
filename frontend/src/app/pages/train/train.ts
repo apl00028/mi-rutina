@@ -97,6 +97,33 @@ interface ExerciseProgressMetrics {
   bestSet: WorkoutSetInput | null;
 }
 
+type RecentTrendStatus =
+  | 'improving'
+  | 'stable'
+  | 'declining'
+  | 'insufficient_data';
+
+interface ExerciseExecutionPerformance {
+  workoutId: string;
+  performedAt: string | null;
+  time: number;
+  sets: WorkoutSetInput[];
+  totalReps: number;
+  averageRir: number | null;
+  bestE1rm: number | null;
+  belowRangeSets: number;
+  closeToFailureSets: number;
+  pronouncedDrop: boolean;
+}
+
+interface ExerciseRecentTrend {
+  status: RecentTrendStatus;
+  exposures: number;
+  executions: ExerciseExecutionPerformance[];
+  e1rmValues: number[];
+  e1rmChange: number | null;
+}
+
 type ProgressionCategory =
   | 'increase_load'
   | 'increase_reps'
@@ -115,6 +142,9 @@ interface RepTarget {
   max: number;
   isRange: boolean;
 }
+
+const E1RM_TREND_TOLERANCE_RATIO = 0.015;
+const REPS_TREND_TOLERANCE = 1;
 
 type AutosaveStatus =
   | 'idle'
@@ -753,6 +783,35 @@ export class Train implements OnInit, OnDestroy {
   getPreviousExerciseHistory(
     exerciseId: string
   ): ExerciseHistory | null {
+    const latest =
+      this
+        .getRecentExerciseHistories(
+          exerciseId
+        )[0];
+
+    if (!latest) {
+      return null;
+    }
+
+    return {
+      workoutId:
+        latest.workout.workoutId,
+      performedAt:
+        latest.performedAt,
+      sets:
+        latest.sets
+    };
+  }
+
+
+  private getRecentExerciseHistories(
+    exerciseId: string
+  ): {
+    workout: Workout;
+    sets: WorkoutSetInput[];
+    performedAt: string | null;
+    time: number;
+  }[] {
     const currentWorkoutId =
       this.activeWorkout()?.workoutId;
 
@@ -831,21 +890,7 @@ export class Train implements OnInit, OnDestroy {
             first.time
         );
 
-    const latest =
-      histories[0];
-
-    if (!latest) {
-      return null;
-    }
-
-    return {
-      workoutId:
-        latest.workout.workoutId,
-      performedAt:
-        latest.performedAt,
-      sets:
-        latest.sets
-    };
+    return histories;
   }
 
 
@@ -1078,6 +1123,16 @@ export class Train implements OnInit, OnDestroy {
       validSets.map(set => set.rir ?? 0);
     const weights =
       validSets.map(set => set.weight);
+    const trend =
+      this.exerciseRecentTrend(
+        exercise
+      );
+    const trendDeclining =
+      trend.status === 'declining';
+    const trendStableOrBetter =
+      trend.status === 'stable' ||
+      trend.status === 'improving' ||
+      trend.status === 'insufficient_data';
 
     const allWeightsPositive =
       weights.every(
@@ -1123,7 +1178,8 @@ export class Train implements OnInit, OnDestroy {
       allAtTop &&
       allRirEnough &&
       !pronouncedDrop &&
-      allWeightsPositive
+      allWeightsPositive &&
+      !trendDeclining
     ) {
       return {
         category:
@@ -1136,8 +1192,11 @@ export class Train implements OnInit, OnDestroy {
     }
 
     if (
-      anyBelowRange &&
-      anyRirTooLow
+      (
+        anyBelowRange &&
+        anyRirTooLow
+      ) ||
+      trendDeclining
     ) {
       return {
         category:
@@ -1145,7 +1204,9 @@ export class Train implements OnInit, OnDestroy {
         title:
           'Mantén o baja un poco la carga',
         reason:
-          `La última vez quedaste por debajo del rango ${target.min}-${target.max} y cerca del fallo.`
+          trendDeclining
+            ? 'La tendencia reciente cae; consolida antes de progresar.'
+            : `La última vez quedaste por debajo del rango ${target.min}-${target.max} y cerca del fallo.`
       };
     }
 
@@ -1153,7 +1214,8 @@ export class Train implements OnInit, OnDestroy {
       allInsideRange &&
       allRirEnough &&
       !allAtTop &&
-      !pronouncedDrop
+      !pronouncedDrop &&
+      trendStableOrBetter
     ) {
       return {
         category:
@@ -1186,7 +1248,10 @@ export class Train implements OnInit, OnDestroy {
       title:
         'Mantén la carga',
       reason:
-        pronouncedDrop
+        trend.status !== 'insufficient_data' &&
+        trend.status !== 'stable'
+          ? 'Hay señales mixtas en la tendencia reciente; repite condiciones comparables.'
+          : pronouncedDrop
           ? 'La última vez hubo una caída clara entre series; consolida antes de subir.'
           : 'La última vez no hubo evidencia suficiente para subir de forma conservadora.'
     };
@@ -1206,6 +1271,95 @@ export class Train implements OnInit, OnDestroy {
     }
 
     return `${recommendation.title}. ${recommendation.reason}`;
+  }
+
+
+  exerciseRecentTrend(
+    exercise: Exercise
+  ): ExerciseRecentTrend {
+    const target =
+      this.parseRepTarget(
+        exercise.target
+      );
+    const executions =
+      this
+        .getRecentExerciseHistories(
+          exercise.exerciseId
+        )
+        .slice(0, 5)
+        .reverse()
+        .map(history =>
+          this.executionPerformance(
+            exercise,
+            history,
+            target
+          )
+        );
+    const e1rmValues =
+      executions
+        .map(item => item.bestE1rm)
+        .filter(
+          (
+            value
+          ): value is number =>
+            value !== null
+        );
+
+    if (executions.length < 3) {
+      return {
+        status:
+          'insufficient_data',
+        exposures:
+          executions.length,
+        executions,
+        e1rmValues,
+        e1rmChange:
+          null
+      };
+    }
+
+    return this.classifyRecentTrend(
+      executions
+    );
+  }
+
+
+  exerciseTrendSummary(
+    exercise: Exercise
+  ): string {
+    const trend =
+      this.exerciseRecentTrend(
+        exercise
+      );
+
+    if (
+      trend.status ===
+      'insufficient_data'
+    ) {
+      return 'Sin tendencia suficiente';
+    }
+
+    const labels:
+      Record<RecentTrendStatus, string> = {
+        improving:
+          'Mejorando',
+        stable:
+          'Estable',
+        declining:
+          'Bajando',
+        insufficient_data:
+          'Sin tendencia suficiente'
+      };
+    const e1rmText =
+      trend.e1rmValues.length >= 3
+        ? ` · e1RM: ${trend.e1rmValues
+            .map(value =>
+              `${this.formatDecimal(value)} kg`
+            )
+            .join(' -> ')}`
+        : '';
+
+    return `Tendencia · ${labels[trend.status]}${e1rmText}`;
   }
 
 
@@ -1251,6 +1405,278 @@ export class Train implements OnInit, OnDestroy {
       isRange:
         min !== max
     };
+  }
+
+
+  private executionPerformance(
+    exercise: Exercise,
+    history: {
+      workout: Workout;
+      sets: WorkoutSetInput[];
+      performedAt: string | null;
+      time: number;
+    },
+    target: RepTarget | null
+  ): ExerciseExecutionPerformance {
+    const comparableSets =
+      history.sets.filter(
+        set =>
+          set.reps !== null &&
+          set.reps !== undefined &&
+          Number.isFinite(set.reps)
+      );
+    const reps =
+      comparableSets.map(
+        set => set.reps ?? 0
+      );
+    const rirs =
+      comparableSets
+        .map(set => set.rir)
+        .filter(
+          (
+            value
+          ): value is number =>
+            value !== null &&
+            value !== undefined &&
+            Number.isFinite(value)
+        );
+    const e1rms =
+      comparableSets
+        .map(set =>
+          this.estimatedOneRepMax(
+            exercise,
+            set
+          )
+        )
+        .filter(
+          (
+            value
+          ): value is number =>
+            value !== null
+        );
+    const belowRangeSets =
+      target
+        ? reps.filter(
+            value =>
+              value < target.min
+          ).length
+        : 0;
+    const closeToFailureSets =
+      comparableSets.filter(
+        set =>
+          set.rir !== null &&
+          set.rir !== undefined &&
+          Number.isFinite(set.rir) &&
+          set.rir <= 1
+      ).length;
+
+    return {
+      workoutId:
+        history.workout.workoutId,
+      performedAt:
+        history.performedAt,
+      time:
+        history.time,
+      sets:
+        history.sets,
+      totalReps:
+        reps.reduce(
+          (sum, value) => sum + value,
+          0
+        ),
+      averageRir:
+        rirs.length
+          ? rirs.reduce(
+              (sum, value) => sum + value,
+              0
+            ) / rirs.length
+          : null,
+      bestE1rm:
+        e1rms.length
+          ? Math.max(...e1rms)
+          : null,
+      belowRangeSets,
+      closeToFailureSets,
+      pronouncedDrop:
+        reps.length > 1 &&
+        Math.max(...reps) -
+        Math.min(...reps) >= 4
+    };
+  }
+
+
+  estimatedOneRepMax(
+    exercise: Exercise,
+    set: WorkoutSetInput
+  ): number | null {
+    if (
+      !this.isExternallyLoadedExercise(
+        exercise
+      ) ||
+      set.weight === null ||
+      set.weight === undefined ||
+      set.reps === null ||
+      set.reps === undefined ||
+      !Number.isFinite(set.weight) ||
+      !Number.isFinite(set.reps) ||
+      set.weight <= 0 ||
+      set.reps <= 0
+    ) {
+      return null;
+    }
+
+    // Epley estimate: e1RM = weight * (1 + reps / 30).
+    return set.weight * (1 + set.reps / 30);
+  }
+
+
+  private isExternallyLoadedExercise(
+    exercise: Exercise
+  ): boolean {
+    const recordTypes =
+      this.exerciseRecordTypes(exercise);
+
+    if (!recordTypes.length) {
+      return true;
+    }
+
+    return (
+      recordTypes.includes(
+        'weight_reps'
+      ) &&
+      !recordTypes.includes(
+        'duration'
+      ) &&
+      !recordTypes.includes(
+        'bodyweight_reps'
+      )
+    );
+  }
+
+
+  private classifyRecentTrend(
+    executions: ExerciseExecutionPerformance[]
+  ): ExerciseRecentTrend {
+    const e1rmValues =
+      executions
+        .map(item => item.bestE1rm)
+        .filter(
+          (
+            value
+          ): value is number =>
+            value !== null
+        );
+    const first =
+      executions[0];
+    const last =
+      executions[
+        executions.length - 1
+      ];
+    const firstE1rm =
+      e1rmValues[0] ?? null;
+    const lastE1rm =
+      e1rmValues[
+        e1rmValues.length - 1
+      ] ?? null;
+    const e1rmChange =
+      firstE1rm !== null &&
+      lastE1rm !== null
+        ? lastE1rm - firstE1rm
+        : null;
+    const enoughE1rm =
+      e1rmValues.length >= 3;
+    const e1rmTolerance =
+      firstE1rm !== null
+        ? Math.max(
+            firstE1rm *
+              E1RM_TREND_TOLERANCE_RATIO,
+            1
+          )
+        : 0;
+    const repsChange =
+      last.totalReps - first.totalReps;
+    const rirChange =
+      first.averageRir !== null &&
+      last.averageRir !== null
+        ? last.averageRir -
+          first.averageRir
+        : null;
+    const recentBadSessions =
+      executions.filter(
+        item =>
+          item.belowRangeSets > 0 ||
+          item.closeToFailureSets > 0 ||
+          item.pronouncedDrop
+      ).length;
+
+    let status: RecentTrendStatus =
+      'stable';
+
+    if (
+      enoughE1rm &&
+      e1rmChange !== null &&
+      e1rmChange > e1rmTolerance &&
+      repsChange >= -REPS_TREND_TOLERANCE &&
+      (
+        rirChange === null ||
+        rirChange >= -1
+      ) &&
+      recentBadSessions <= 1
+    ) {
+      status = 'improving';
+    } else if (
+      enoughE1rm &&
+      e1rmChange !== null &&
+      e1rmChange < -e1rmTolerance &&
+      (
+        repsChange <= REPS_TREND_TOLERANCE ||
+        recentBadSessions >= 2 ||
+        (
+          rirChange !== null &&
+          rirChange < -1
+        )
+      )
+    ) {
+      status = 'declining';
+    } else if (
+      !enoughE1rm &&
+      repsChange > REPS_TREND_TOLERANCE &&
+      (
+        rirChange === null ||
+        rirChange >= -1
+      ) &&
+      recentBadSessions <= 1
+    ) {
+      status = 'improving';
+    } else if (
+      !enoughE1rm &&
+      repsChange < -REPS_TREND_TOLERANCE &&
+      (
+        recentBadSessions >= 2 ||
+        (
+          rirChange !== null &&
+          rirChange < -1
+        )
+      )
+    ) {
+      status = 'declining';
+    }
+
+    return {
+      status,
+      exposures:
+        executions.length,
+      executions,
+      e1rmValues,
+      e1rmChange
+    };
+  }
+
+
+  private formatDecimal(
+    value: number
+  ): string {
+    return value.toFixed(1);
   }
 
 

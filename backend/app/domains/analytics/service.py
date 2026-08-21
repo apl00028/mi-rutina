@@ -26,6 +26,8 @@ from app.domains.workouts.service import (
     workout_row_to_model,
 )
 
+E1RM_TREND_TOLERANCE_RATIO = 0.015
+
 
 @dataclass
 class CatalogExercise:
@@ -61,7 +63,21 @@ class WorkoutExerciseAggregate:
     max_weight: float | None = None
     best_e1rm: float | None = None
     best_reps: int | None = None
+    total_reps: int = 0
+    valid_sets: int = 0
     rir: float | None = None
+
+
+@dataclass
+class ExerciseTrend:
+    status: str = "insufficient_data"
+    exposures: int = 0
+    first_e1rm: float | None = None
+    last_e1rm: float | None = None
+    e1rm_change: float | None = None
+    e1rm_change_percent: float | None = None
+    plateau: bool = False
+    signal: str | None = None
 
 
 def _parse_datetime(value: Any) -> datetime | None:
@@ -175,6 +191,134 @@ def _format_weight_reps_mark(
     return (
         f"{_format_number(weight)} kg x "
         f"{reps} reps"
+    )
+
+
+def _classify_e1rm_trend(
+    executions: list[WorkoutExerciseAggregate],
+) -> ExerciseTrend:
+    window = sorted(
+        executions,
+        key=lambda item: item.date,
+    )[-5:]
+
+    if len(window) < 3:
+        return ExerciseTrend(
+            exposures=len(window),
+            first_e1rm=(
+                window[0].best_e1rm
+                if window
+                else None
+            ),
+            last_e1rm=(
+                window[-1].best_e1rm
+                if window
+                else None
+            ),
+        )
+
+    e1rm_values = [
+        item.best_e1rm
+        for item in window
+        if item.best_e1rm is not None
+    ]
+
+    if len(e1rm_values) < 3:
+        return ExerciseTrend(
+            exposures=len(window),
+            first_e1rm=(
+                e1rm_values[0]
+                if e1rm_values
+                else None
+            ),
+            last_e1rm=(
+                e1rm_values[-1]
+                if e1rm_values
+                else None
+            ),
+        )
+
+    first = e1rm_values[0]
+    last = e1rm_values[-1]
+    change = last - first
+    change_percent = (
+        change / first * 100
+        if first > 0
+        else None
+    )
+    tolerance = max(
+        first * E1RM_TREND_TOLERANCE_RATIO,
+        1,
+    )
+
+    # Rule: latest 3-5 finished executions by exerciseId; changes
+    # within 1.5% or 1 kg are noise, and a sharp RIR drop keeps
+    # small e1RM changes from being treated as clean progress.
+    rir_values = [
+        item.rir
+        for item in window
+        if item.rir is not None
+    ]
+    rir_change = (
+        rir_values[-1] - rir_values[0]
+        if len(rir_values) >= 2
+        else None
+    )
+    first_reps = window[0].total_reps
+    last_reps = window[-1].total_reps
+    reps_change = last_reps - first_reps
+    negative_steps = 0
+
+    for index in range(1, len(e1rm_values)):
+        if (
+            e1rm_values[index]
+            < e1rm_values[index - 1] - tolerance
+        ):
+            negative_steps += 1
+
+    status = "stable"
+    plateau = False
+    signal = "Rendimiento estable"
+
+    if change > tolerance and (
+        rir_change is None
+        or rir_change >= -1
+    ):
+        status = "improving"
+        signal = "Progreso consistente"
+    elif change < -tolerance and (
+        negative_steps >= 2
+        or reps_change < -1
+        or (
+            rir_change is not None
+            and rir_change < -1
+        )
+    ):
+        status = "declining"
+        signal = "Rendimiento reciente en descenso"
+    elif (
+        len(window) >= 4
+        and abs(change) <= tolerance
+        and reps_change <= 1
+        and (
+            rir_change is None
+            or abs(rir_change) <= 1
+        )
+    ):
+        plateau = True
+        signal = (
+            f"Sin mejora relevante en {len(window)} exposiciones"
+        )
+
+    return ExerciseTrend(
+        status=status,
+        exposures=len(window),
+        first_e1rm=first,
+        last_e1rm=last,
+        e1rm_change=change,
+        e1rm_change_percent=change_percent,
+        plateau=plateau,
+        signal=signal,
     )
 
 
@@ -409,10 +553,6 @@ async def get_training_analytics(
             weight = float(workout_set.weight)
             reps = int(workout_set.reps)
             volume = weight * reps
-            e1rm = _epley_e1rm(
-                weight,
-                reps,
-            )
 
             summary.totalVolume += volume
             aggregate.total_volume += volume
@@ -423,14 +563,6 @@ async def get_training_analytics(
                 or weight > aggregate.max_weight
             ):
                 aggregate.max_weight = weight
-
-            if (
-                aggregate.best_e1rm is None
-                or e1rm > aggregate.best_e1rm
-            ):
-                aggregate.best_e1rm = e1rm
-                aggregate.best_weight = weight
-                aggregate.best_reps = reps
 
             if (
                 aggregate.last_date is None
@@ -449,6 +581,25 @@ async def get_training_analytics(
                 or weight > progress.max_weight
             ):
                 progress.max_weight = weight
+
+            progress.total_reps += reps
+            progress.valid_sets += 1
+
+            if weight <= 0:
+                continue
+
+            e1rm = _epley_e1rm(
+                weight,
+                reps,
+            )
+
+            if (
+                aggregate.best_e1rm is None
+                or e1rm > aggregate.best_e1rm
+            ):
+                aggregate.best_e1rm = e1rm
+                aggregate.best_weight = weight
+                aggregate.best_reps = reps
 
             if (
                 progress.best_e1rm is None
@@ -477,45 +628,77 @@ async def get_training_analytics(
         )
     ]
 
-    exercises = [
-        ExerciseAnalyticsItem(
-            exerciseId=aggregate.exercise_id,
-            name=aggregate.name,
-            recordTypes=aggregate.record_types,
-            sessions=len(
-                aggregate.workout_ids
-            ),
-            completedSets=aggregate.completed_sets,
-            maxWeight=aggregate.max_weight,
-            bestSet=(
-                _format_weight_reps_mark(
-                    aggregate.best_weight,
-                    aggregate.best_reps,
-                )
-                if (
-                    aggregate.best_weight
-                    is not None
-                    and aggregate.best_reps
-                    is not None
-                )
-                else None
-            ),
-            bestE1rm=aggregate.best_e1rm,
-            totalVolume=(
-                aggregate.total_volume
-                if aggregate.has_volume
-                else None
-            ),
-            lastMark=aggregate.last_mark,
+    trend_by_exercise: dict[str, ExerciseTrend] = {}
+
+    for exercise_id in unique_exercise_ids:
+        trend_by_exercise[exercise_id] = (
+            _classify_e1rm_trend(
+                [
+                    aggregate
+                    for (
+                        progress_exercise_id,
+                        _workout_id,
+                    ), aggregate in progress_aggregates.items()
+                    if progress_exercise_id == exercise_id
+                ]
+            )
         )
-        for aggregate in sorted(
-            exercise_aggregates.values(),
-            key=lambda item: (
-                -item.completed_sets,
-                item.name,
-            ),
+
+    exercises: list[ExerciseAnalyticsItem] = []
+
+    for aggregate in sorted(
+        exercise_aggregates.values(),
+        key=lambda item: (
+            -item.completed_sets,
+            item.name,
+        ),
+    ):
+        trend = trend_by_exercise.get(
+            aggregate.exercise_id,
+            ExerciseTrend(),
         )
-    ]
+        exercises.append(
+            ExerciseAnalyticsItem(
+                exerciseId=aggregate.exercise_id,
+                name=aggregate.name,
+                recordTypes=aggregate.record_types,
+                sessions=len(
+                    aggregate.workout_ids
+                ),
+                completedSets=aggregate.completed_sets,
+                maxWeight=aggregate.max_weight,
+                bestSet=(
+                    _format_weight_reps_mark(
+                        aggregate.best_weight,
+                        aggregate.best_reps,
+                    )
+                    if (
+                        aggregate.best_weight
+                        is not None
+                        and aggregate.best_reps
+                        is not None
+                    )
+                    else None
+                ),
+                bestE1rm=aggregate.best_e1rm,
+                firstE1rm=trend.first_e1rm,
+                lastE1rm=trend.last_e1rm,
+                e1rmChange=trend.e1rm_change,
+                e1rmChangePercent=(
+                    trend.e1rm_change_percent
+                ),
+                trend=trend.status,
+                trendExposures=trend.exposures,
+                plateau=trend.plateau,
+                signal=trend.signal,
+                totalVolume=(
+                    aggregate.total_volume
+                    if aggregate.has_volume
+                    else None
+                ),
+                lastMark=aggregate.last_mark,
+            )
+        )
 
     points_by_exercise: dict[
         str,
@@ -538,6 +721,12 @@ async def get_training_analytics(
                 maxWeight=aggregate.max_weight,
                 bestE1rm=aggregate.best_e1rm,
                 bestReps=aggregate.best_reps,
+                totalReps=(
+                    aggregate.total_reps
+                    if aggregate.valid_sets
+                    else None
+                ),
+                validSets=aggregate.valid_sets,
                 rir=aggregate.rir,
             )
         )

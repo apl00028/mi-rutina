@@ -1,1 +1,66 @@
-/* You can add global styles to this file, and also import other style files */
+:root {
+  --gymos-bg: #f6f7f9;
+  --gymos-surface: #ffffff;
+  --gymos-surface-muted: #f9fafb;
+  --gymos-border: #e5e7eb;
+  --gymos-text: #111827;
+  --gymos-text-muted: #6b7280;
+  --gymos-navy: #111827;
+  --gymos-danger: #b91c1c;
+  --gymos-font-scale: 1;
+
+  color-scheme: light;
+}
+
+html.gymos-theme-dark {
+  --gymos-bg: #0f172a;
+  --gymos-surface: #111827;
+  --gymos-surface-muted: #1f2937;
+  --gymos-border: #374151;
+  --gymos-text: #f9fafb;
+  --gymos-text-muted: #d1d5db;
+  --gymos-navy: #f9fafb;
+
+  color-scheme: dark;
+}
+
+@media (prefers-color-scheme: dark) {
+  html:not(.gymos-theme-light) {
+    --gymos-bg: #0f172a;
+    --gymos-surface: #111827;
+    --gymos-surface-muted: #1f2937;
+    --gymos-border: #374151;
+    --gymos-text: #f9fafb;
+    --gymos-text-muted: #d1d5db;
+    --gymos-navy: #f9fafb;
+
+    color-scheme: dark;
+  }
+}
+
+html.gymos-text-small {
+  --gymos-font-scale: 0.94;
+}
+
+html.gymos-text-large {
+  --gymos-font-scale: 1.08;
+}
+
+body {
+  margin: 0;
+
+  background: var(--gymos-bg);
+  color: var(--gymos-text);
+
+  font-size:
+    calc(16px * var(--gymos-font-scale));
+}
+
+html.gymos-reduce-motion *,
+html.gymos-reduce-motion *::before,
+html.gymos-reduce-motion *::after {
+  animation-duration: 0.001ms !important;
+  animation-iteration-count: 1 !important;
+  scroll-behavior: auto !important;
+  transition-duration: 0.001ms !important;
+}

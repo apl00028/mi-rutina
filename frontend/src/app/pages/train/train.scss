@@ -406,6 +406,12 @@ button:disabled {
     #111827;
 }
 
+.set-row.in-progress:not(.completed) {
+  box-shadow:
+    inset 3px 0 0
+    #111827;
+}
+
 .set-summary-row {
   min-width: 0;
   width: 100%;
@@ -486,6 +492,11 @@ button:disabled {
 }
 
 .next-set:not(.completed) .set-state {
+  background: #111827;
+  color: #ffffff;
+}
+
+.in-progress:not(.completed) .set-state {
   background: #111827;
   color: #ffffff;
 }
@@ -871,6 +882,12 @@ button:disabled {
   }
 
   .set-row.next-set:not(.completed) {
+    box-shadow:
+      inset 5px 0 0
+      #111827;
+  }
+
+  .set-row.in-progress:not(.completed) {
     box-shadow:
       inset 5px 0 0
       #111827;

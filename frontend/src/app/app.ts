@@ -21,6 +21,9 @@ import {
   AuthService,
   GymOSMe
 } from './core/auth.service';
+import {
+  SettingsService
+} from './core/settings.service';
 
 type AppInitializationState =
   | 'initializing'
@@ -82,7 +85,9 @@ export class App implements OnDestroy {
 
   constructor(
     public auth: AuthService,
-    private router: Router
+    private router: Router,
+    private settingsService:
+      SettingsService
   ) {
     this.syncRouteState();
 
@@ -275,7 +280,10 @@ export class App implements OnDestroy {
       return path === '/';
     }
 
-    return path === route;
+    return (
+      path === route ||
+      path.startsWith(`${route}/`)
+    );
   }
 
 

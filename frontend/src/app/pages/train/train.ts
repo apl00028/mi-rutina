@@ -3,6 +3,9 @@ import { CommonModule } from '@angular/common';
 import { HttpClient, HttpHeaders } from '@angular/common/http';
 import { environment } from '../../../environments/environment';
 import { AuthService } from '../../core/auth.service';
+import {
+  SettingsService
+} from '../../core/settings.service';
 
 interface Exercise {
   exerciseId: string;
@@ -209,7 +212,9 @@ export class Train implements OnInit, OnDestroy {
 
   constructor(
     private http: HttpClient,
-    public auth: AuthService
+    public auth: AuthService,
+    public settingsService:
+      SettingsService
   ) {}
 
   async ngOnInit(): Promise<void> {
@@ -701,7 +706,12 @@ export class Train implements OnInit, OnDestroy {
   supportsRir(
     exercise: Exercise
   ): boolean {
-    return Boolean(exercise.targetRir);
+    return (
+      this.settingsService
+        .settings()
+        .showRir &&
+      Boolean(exercise.targetRir)
+    );
   }
 
 
@@ -1723,6 +1733,9 @@ export class Train implements OnInit, OnDestroy {
     }
 
     if (
+      this.settingsService
+        .settings()
+        .showRir &&
       set.rir !== null &&
       set.rir !== undefined &&
       Number.isFinite(set.rir)
@@ -1942,15 +1955,6 @@ export class Train implements OnInit, OnDestroy {
   isExerciseExpanded(
     exerciseId: string
   ): boolean {
-    if (
-      !this.expandedExerciseExists()
-    ) {
-      return (
-        this.firstPendingExercise()
-          ?.exerciseId === exerciseId
-      );
-    }
-
     return (
       this.expandedExerciseId() ===
       exerciseId
@@ -1973,9 +1977,7 @@ export class Train implements OnInit, OnDestroy {
     this.expandedExerciseId.set(
       exerciseId
     );
-    this.openBestSetForExercise(
-      exercise
-    );
+    this.expandedSetKey.set(null);
   }
 
 
@@ -1990,21 +1992,6 @@ export class Train implements OnInit, OnDestroy {
     exerciseId: string,
     setIndex: number
   ): boolean {
-    if (
-      !this.expandedExerciseExists()
-    ) {
-      const exercise =
-        this.firstPendingExercise();
-
-      return (
-        exercise?.exerciseId ===
-        exerciseId &&
-        this.firstPendingSetIndex(
-          exercise
-        ) === setIndex
-      );
-    }
-
     return (
       this.expandedSetKey() ===
       this.setExpansionKey(
@@ -2019,12 +2006,24 @@ export class Train implements OnInit, OnDestroy {
     exerciseId: string,
     setIndex: number
   ): void {
+    const exercise =
+      this.findSessionExercise(
+        exerciseId
+      );
+
+    if (!exercise) {
+      return;
+    }
+
     const key =
       this.setExpansionKey(
         exerciseId,
         setIndex
       );
 
+    this.expandedExerciseId.set(
+      exerciseId
+    );
     this.expandedSetKey.set(
       this.expandedSetKey() === key
         ? null
@@ -2089,6 +2088,9 @@ export class Train implements OnInit, OnDestroy {
     }
 
     if (
+      this.settingsService
+        .settings()
+        .showRir &&
       set.rir !== null &&
       set.rir !== undefined &&
       Number.isFinite(set.rir)
@@ -2102,6 +2104,23 @@ export class Train implements OnInit, OnDestroy {
   }
 
 
+  isSetInProgress(
+    exercise: Exercise,
+    setIndex: number
+  ): boolean {
+    return (
+      this.isSetExpanded(
+        exercise.exerciseId,
+        setIndex
+      ) &&
+      !this.isSetCompleted(
+        exercise.exerciseId,
+        setIndex
+      )
+    );
+  }
+
+
   private setExpansionKey(
     exerciseId: string,
     setIndex: number
@@ -2110,99 +2129,84 @@ export class Train implements OnInit, OnDestroy {
   }
 
 
-  private firstPendingExercise():
-    Exercise | null {
-    const session =
-      this.activeSession();
-
-    if (!session) {
-      return null;
-    }
-
-    return (
-      session.exercises.find(
-        exercise =>
-          !this.isExerciseCompleted(
-            exercise
-          )
-      ) ??
-      session.exercises[0] ??
-      null
-    );
-  }
-
-
-  private expandedExerciseExists():
-    boolean {
-    const expanded =
-      this.expandedExerciseId();
-    const session =
-      this.activeSession();
-
-    return Boolean(
-      expanded &&
-      session?.exercises.some(
-        exercise =>
-          exercise.exerciseId === expanded
-      )
-    );
-  }
-
-
-  private firstPendingSetIndex(
-    exercise: Exercise
-  ): number {
-    for (
-      let index = 0;
-      index < exercise.sets;
-      index += 1
-    ) {
-      if (
-        !this.isSetCompleted(
-          exercise.exerciseId,
-          index
-        )
-      ) {
-        return index;
-      }
-    }
-
-    return Math.max(
-      0,
-      exercise.sets - 1
-    );
-  }
-
-
   private syncExpandedWorkoutStep(): void {
-    const exercise =
-      this.firstPendingExercise();
+    const context =
+      this.restorableWorkoutContext();
 
-    if (!exercise) {
+    if (!context) {
       this.expandedExerciseId.set(null);
       this.expandedSetKey.set(null);
       return;
     }
 
     this.expandedExerciseId.set(
-      exercise.exerciseId
+      context.exercise.exerciseId
     );
-    this.openBestSetForExercise(
-      exercise
+    this.expandedSetKey.set(
+      this.setExpansionKey(
+        context.exercise.exerciseId,
+        context.setIndex
+      )
     );
   }
 
 
-  private openBestSetForExercise(
-    exercise: Exercise
-  ): void {
-    this.expandedSetKey.set(
-      this.setExpansionKey(
-        exercise.exerciseId,
-        this.firstPendingSetIndex(
-          exercise
-        )
-      )
+  private restorableWorkoutContext():
+    {
+      exercise: Exercise;
+      setIndex: number;
+    } | null {
+    const session =
+      this.activeSession();
+    const workout =
+      this.activeWorkout();
+
+    if (!session || !workout) {
+      return null;
+    }
+
+    for (const exercise of session.exercises) {
+      for (
+        let index = 0;
+        index < exercise.sets;
+        index += 1
+      ) {
+        const set =
+          this.getCurrentSet(
+            exercise.exerciseId,
+            index
+          );
+
+        if (
+          set &&
+          !set.completedAt &&
+          this.hasRecordedSetInput(set)
+        ) {
+          return {
+            exercise,
+            setIndex: index
+          };
+        }
+      }
+    }
+
+    return null;
+  }
+
+
+  private hasRecordedSetInput(
+    set: WorkoutSetInput
+  ): boolean {
+    return [
+      set.weight,
+      set.reps,
+      set.rir,
+      set.durationSeconds
+    ].some(
+      value =>
+        value !== null &&
+        value !== undefined &&
+        Number.isFinite(value)
     );
   }
 
@@ -2234,21 +2238,10 @@ export class Train implements OnInit, OnDestroy {
       return;
     }
 
-    if (
-      this.isExerciseCompleted(
-        exercise
-      )
-    ) {
-      this.syncExpandedWorkoutStep();
-      return;
-    }
-
     this.expandedExerciseId.set(
       exerciseId
     );
-    this.openBestSetForExercise(
-      exercise
-    );
+    this.expandedSetKey.set(null);
   }
 
 
@@ -2561,7 +2554,12 @@ export class Train implements OnInit, OnDestroy {
       !wasCompleted
     );
 
-    if (shouldStartRestTimer) {
+    if (
+      shouldStartRestTimer &&
+      this.settingsService
+        .settings()
+        .automaticRestTimer
+    ) {
       this.startRestTimerForSet(
         exerciseId,
         setIndex
@@ -2569,6 +2567,22 @@ export class Train implements OnInit, OnDestroy {
     }
 
     await this.saveWorkout();
+  }
+
+
+  requestFinishWorkout(): void {
+    if (
+      this.settingsService
+        .settings()
+        .confirmBeforeFinish &&
+      !window.confirm(
+        '¿Finalizar este entrenamiento?'
+      )
+    ) {
+      return;
+    }
+
+    void this.finishWorkout();
   }
 
 

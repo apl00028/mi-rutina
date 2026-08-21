@@ -1,0 +1,273 @@
+.settings-page {
+  width: 100%;
+  max-width: 720px;
+  margin: 0 auto;
+
+  box-sizing: border-box;
+
+  color: var(--gymos-text);
+}
+
+.settings-header {
+  margin-bottom: 16px;
+}
+
+.settings-header h1 {
+  margin: 0;
+
+  color: var(--gymos-text);
+
+  font-size: clamp(1.75rem, 5vw, 2.35rem);
+  line-height: 1.08;
+}
+
+.settings-list,
+.settings-panel {
+  display: grid;
+
+  border: 1px solid var(--gymos-border);
+  border-radius: 14px;
+
+  background: var(--gymos-surface);
+
+  overflow: hidden;
+}
+
+.settings-row,
+.settings-field,
+.settings-toggle-row {
+  min-width: 0;
+  min-height: 54px;
+
+  box-sizing: border-box;
+  padding: 12px 14px;
+
+  border: 0;
+  border-bottom: 1px solid var(--gymos-border);
+
+  background: transparent;
+  color: var(--gymos-text);
+}
+
+.settings-row:last-child,
+.settings-field:last-child,
+.settings-toggle-row:last-child {
+  border-bottom: 0;
+}
+
+.settings-row {
+  display: grid;
+  grid-template-columns:
+    34px
+    minmax(0, 1fr)
+    18px;
+  align-items: center;
+  gap: 10px;
+
+  text-decoration: none;
+}
+
+.settings-row:hover,
+.settings-toggle-row:hover {
+  background: var(--gymos-surface-muted);
+}
+
+.settings-row:focus-visible,
+.settings-back:focus-visible,
+.settings-toggle-row:focus-visible,
+.segmented-control button:focus-visible {
+  outline: 3px solid rgb(37 99 235 / 22%);
+  outline-offset: 2px;
+}
+
+.settings-icon {
+  width: 34px;
+  height: 34px;
+
+  display: grid;
+  place-items: center;
+
+  border-radius: 9px;
+
+  background: var(--gymos-surface-muted);
+  color: var(--gymos-navy);
+
+  font-size: 1rem;
+  font-weight: 800;
+}
+
+.settings-copy,
+.settings-field,
+.settings-toggle-row > span:first-child {
+  min-width: 0;
+
+  display: grid;
+  gap: 4px;
+}
+
+.settings-copy strong,
+.settings-field strong,
+.settings-toggle-row strong {
+  min-width: 0;
+
+  color: var(--gymos-text);
+
+  font-size: 0.98rem;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+}
+
+.settings-copy span,
+.settings-field > span,
+.settings-field small,
+.settings-toggle-row small,
+.settings-note {
+  color: var(--gymos-text-muted);
+
+  font-size: 0.84rem;
+  line-height: 1.38;
+}
+
+.settings-field > span {
+  font-weight: 800;
+}
+
+.settings-chevron {
+  color: var(--gymos-text-muted);
+
+  font-size: 1.35rem;
+}
+
+.settings-back {
+  min-height: 44px;
+
+  display: inline-flex;
+  align-items: center;
+
+  margin-bottom: 10px;
+
+  color: var(--gymos-text);
+
+  text-decoration: none;
+
+  font-weight: 800;
+}
+
+.settings-toggle-row {
+  width: 100%;
+
+  display: grid;
+  grid-template-columns:
+    minmax(0, 1fr)
+    auto;
+  align-items: center;
+  gap: 14px;
+
+  text-align: left;
+
+  cursor: pointer;
+}
+
+.switch {
+  width: 46px;
+  height: 28px;
+
+  display: inline-flex;
+  align-items: center;
+
+  padding: 3px;
+
+  border-radius: 999px;
+
+  background: #d1d5db;
+}
+
+.switch::before {
+  content: "";
+
+  width: 22px;
+  height: 22px;
+
+  border-radius: 50%;
+
+  background: #ffffff;
+
+  transition:
+    transform 140ms ease;
+}
+
+.switch.on {
+  background: #111827;
+}
+
+.switch.on::before {
+  transform: translateX(18px);
+}
+
+.segmented-control {
+  display: grid;
+  grid-template-columns:
+    repeat(auto-fit, minmax(84px, 1fr));
+  gap: 6px;
+
+  padding: 4px;
+
+  border: 1px solid var(--gymos-border);
+  border-radius: 12px;
+
+  background: var(--gymos-surface-muted);
+}
+
+.segmented-control button {
+  min-width: 0;
+  min-height: 40px;
+
+  border: 0;
+  border-radius: 9px;
+
+  background: transparent;
+  color: var(--gymos-text-muted);
+
+  font: inherit;
+  font-size: 0.9rem;
+  font-weight: 800;
+
+  cursor: pointer;
+}
+
+.segmented-control button.active {
+  background: #111827;
+  color: #ffffff;
+}
+
+.settings-note {
+  margin: 12px 0 0;
+}
+
+@media (max-width: 500px) {
+  .settings-header {
+    margin-bottom: 12px;
+  }
+
+  .settings-header h1 {
+    font-size: 1.75rem;
+  }
+
+  .settings-row,
+  .settings-field,
+  .settings-toggle-row {
+    padding: 11px 12px;
+  }
+
+  .settings-row {
+    grid-template-columns:
+      32px
+      minmax(0, 1fr)
+      16px;
+  }
+
+  .settings-icon {
+    width: 32px;
+    height: 32px;
+  }
+}

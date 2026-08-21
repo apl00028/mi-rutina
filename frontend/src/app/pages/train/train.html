@@ -68,13 +68,13 @@
                           </strong>
                         </span>
 
-                        @if (exercise.targetRir) {
+                        @if (supportsRir(exercise)) {
                           <span>
                             RIR objetivo
                             <strong>
-                              {{ exercise.targetRir.min }}
+                              {{ exercise.targetRir?.min }}
                               -
-                              {{ exercise.targetRir.max }}
+                              {{ exercise.targetRir?.max }}
                             </strong>
                           </span>
                         }
@@ -194,6 +194,12 @@
                         $index
                       )
                     "
+                    [class.in-progress]="
+                      isSetInProgress(
+                        exercise,
+                        $index
+                      )
+                    "
                     [class.duration-set]="
                       isDurationExercise(exercise)
                     "
@@ -243,6 +249,13 @@
                           )
                         ) {
                           Completada
+                        } @else if (
+                          isSetInProgress(
+                            exercise,
+                            $index
+                          )
+                        ) {
+                          En curso
                         } @else if (
                           isNextSet(
                             exercise,
@@ -740,7 +753,7 @@
           <button
             type="button"
             class="finish-button"
-            (click)="finishWorkout()"
+            (click)="requestFinishWorkout()"
             [disabled]="
               workoutLoading() ||
               cancellingWorkout()

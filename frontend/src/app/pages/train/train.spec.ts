@@ -72,6 +72,10 @@ describe('Train first workout flow', () => {
         HttpTestingController
       );
 
+    localStorage.removeItem(
+      'gymos-settings-v1'
+    );
+
     vi.spyOn(
       crypto,
       'randomUUID'
@@ -337,8 +341,9 @@ describe('Train first workout flow', () => {
       durationSeconds:
         values.durationSeconds,
       completedAt:
-        values.completedAt ??
-        '2026-08-18T18:10:00Z'
+        values.completedAt === undefined
+          ? '2026-08-18T18:10:00Z'
+          : values.completedAt
     };
   }
 
@@ -504,7 +509,7 @@ describe('Train first workout flow', () => {
   });
 
 
-  it('opens the first pending exercise when starting a workout', async () => {
+  it('starts a new workout with every exercise collapsed', async () => {
     const fixture =
       await createLoadedTrain(
         [],
@@ -535,24 +540,19 @@ describe('Train first workout flow', () => {
     await start;
     fixture.detectChanges();
 
-    expect(
-      component.expandedExerciseId()
-    ).toBe('dumbbell-bench-press');
-    expect(
-      component.isSetExpanded(
-        'dumbbell-bench-press',
-        0
-      )
-    ).toBe(true);
+    expect(component.expandedExerciseId())
+      .toBeNull();
+    expect(component.expandedSetKey())
+      .toBeNull();
     expect(
       fixture.nativeElement.querySelectorAll(
         '.exercise-expanded'
       ).length
-    ).toBe(1);
+    ).toBe(0);
   });
 
 
-  it('opens the correct exercise when resuming persisted progress', async () => {
+  it('restores the active set when resuming persisted in-progress input', async () => {
     const fixture =
       await createLoadedTrain(
         [
@@ -575,10 +575,9 @@ describe('Train first workout flow', () => {
               }),
               historySet(1, {
                 weight: 80,
-                reps: 8,
+                reps: 6,
                 rir: 2,
-                completedAt:
-                  '2026-08-20T15:10:00Z'
+                completedAt: null
               })
             ]
           }
@@ -591,37 +590,144 @@ describe('Train first workout flow', () => {
 
     expect(
       component.expandedExerciseId()
-    ).toBe('lat-pulldown');
+    ).toBe('dumbbell-bench-press');
     expect(
       component.isSetExpanded(
-        'lat-pulldown',
-        0
+        'dumbbell-bench-press',
+        1
       )
     ).toBe(true);
+    expect(
+      pageText(fixture)
+    ).toContain('En curso');
   });
 
 
-  it('keeps only one set open initially', async () => {
+  it('does not invent a resume context when only completed progress exists', async () => {
     const fixture =
-      await createLoadedTrain([
-        activeWorkout()
-      ]);
+      await createLoadedTrain(
+        [
+          {
+            workoutId:
+              'active-workout',
+            routineId:
+              'routine-1',
+            sessionId:
+              'session-1',
+            status:
+              'in_progress',
+            sets: [
+              historySet(0, {
+                weight: 80,
+                reps: 8,
+                rir: 2,
+                completedAt:
+                  '2026-08-20T15:05:00Z'
+              })
+            ]
+          }
+        ],
+        undefined,
+        twoExerciseRoutine()
+      );
+
+    const component =
+      fixture.componentInstance;
+
+    expect(component.expandedExerciseId())
+      .toBeNull();
+    expect(component.expandedSetKey())
+      .toBeNull();
 
     expect(
       fixture.nativeElement.querySelectorAll(
         '.set-expanded'
       ).length
-    ).toBe(1);
+    ).toBe(0);
   });
 
 
-  it('completing a set collapses it and opens the next set', async () => {
+  it('opens an exercise without opening a set automatically', async () => {
     const fixture =
       await createLoadedTrain([
         activeWorkout()
       ]);
     const component =
       fixture.componentInstance;
+
+    component.openExercise(
+      'dumbbell-bench-press'
+    );
+    fixture.detectChanges();
+
+    expect(
+      component.expandedExerciseId()
+    ).toBe('dumbbell-bench-press');
+    expect(component.expandedSetKey())
+      .toBeNull();
+    expect(
+      fixture.nativeElement.querySelectorAll(
+        '.set-expanded'
+      ).length
+    ).toBe(0);
+  });
+
+
+  it('clicking a pending set expands its exercise and only that set', async () => {
+    const fixture =
+      await createLoadedTrain(
+        [
+          activeWorkout()
+        ],
+        undefined,
+        twoExerciseRoutine()
+      );
+    const component =
+      fixture.componentInstance;
+
+    component.toggleSet(
+      'dumbbell-bench-press',
+      0
+    );
+    component.toggleSet(
+      'lat-pulldown',
+      1
+    );
+    fixture.detectChanges();
+
+    expect(
+      component.expandedExerciseId()
+    ).toBe('lat-pulldown');
+    expect(
+      component.isSetExpanded(
+        'dumbbell-bench-press',
+        0
+      )
+    ).toBe(false);
+    expect(
+      component.isSetExpanded(
+        'lat-pulldown',
+        1
+      )
+    ).toBe(true);
+    expect(
+      pageText(fixture)
+    ).toContain('En curso');
+  });
+
+
+  it('completing a set collapses it and keeps the next set folded', async () => {
+    const fixture =
+      await createLoadedTrain([
+        activeWorkout()
+      ]);
+    const component =
+      fixture.componentInstance;
+
+    component.toggleSet(
+      'dumbbell-bench-press',
+      0
+    );
 
     const complete =
       component.completeSet(
@@ -651,7 +757,10 @@ describe('Train first workout flow', () => {
         'dumbbell-bench-press',
         1
       )
-    ).toBe(true);
+    ).toBe(false);
+    expect(
+      pageText(fixture)
+    ).toContain('Siguiente');
   });
 
 
@@ -662,6 +771,11 @@ describe('Train first workout flow', () => {
       ]);
     const component =
       fixture.componentInstance;
+
+    component.toggleSet(
+      'dumbbell-bench-press',
+      0
+    );
 
     const complete =
       component.completeSet(
@@ -691,7 +805,7 @@ describe('Train first workout flow', () => {
   });
 
 
-  it('completing an exercise advances to the next exercise', async () => {
+  it('keeps a completed exercise folded but allows reopening it manually', async () => {
     const fixture =
       await createLoadedTrain(
         [
@@ -704,6 +818,11 @@ describe('Train first workout flow', () => {
       fixture.componentInstance;
 
     for (const setIndex of [0, 1]) {
+      component.toggleSet(
+        'dumbbell-bench-press',
+        setIndex
+      );
+
       const complete =
         component.completeSet(
           'dumbbell-bench-press',
@@ -720,14 +839,23 @@ describe('Train first workout flow', () => {
     }
 
     expect(
-      component.expandedExerciseId()
-    ).toBe('lat-pulldown');
-    expect(
-      component.isSetExpanded(
-        'lat-pulldown',
-        0
+      component.isExerciseCompleted(
+        component.activeSession()!.exercises[0]
       )
     ).toBe(true);
+    expect(
+      component.expandedExerciseId()
+    ).toBe('dumbbell-bench-press');
+    expect(component.expandedSetKey())
+      .toBeNull();
+
+    component.openExercise(
+      'dumbbell-bench-press'
+    );
+
+    expect(
+      component.expandedExerciseId()
+    ).toBe('dumbbell-bench-press');
   });
 
 
@@ -903,6 +1031,15 @@ describe('Train first workout flow', () => {
     const component =
       fixture.componentInstance;
 
+    component.openExercise(
+      'dumbbell-bench-press'
+    );
+    component.toggleSet(
+      'dumbbell-bench-press',
+      0
+    );
+    fixture.detectChanges();
+
     let text =
       (
         fixture.nativeElement as HTMLElement
@@ -917,9 +1054,7 @@ describe('Train first workout flow', () => {
     expect(text).toContain(
       '0 / 2 series'
     );
-    expect(text).toContain(
-      'Siguiente'
-    );
+    expect(text).toContain('En curso');
 
     const weightInput =
       fixture
@@ -940,6 +1075,40 @@ describe('Train first workout flow', () => {
         'enterkeyhint'
       )
     ).toBe('next');
+
+    const rirInput =
+      fixture
+        .nativeElement
+        .querySelector(
+          'input[aria-label="RIR realizado para Press banca con mancuernas, serie 1"]'
+        ) as HTMLInputElement | null;
+
+    expect(rirInput)
+      .toBeTruthy();
+    expect(
+      rirInput?.getAttribute(
+        'inputmode'
+      )
+    ).toBe('decimal');
+
+    component.updateSet(
+      'dumbbell-bench-press',
+      0,
+      'weight',
+      '80'
+    );
+    component.updateSet(
+      'dumbbell-bench-press',
+      0,
+      'reps',
+      '8'
+    );
+    component.updateSet(
+      'dumbbell-bench-press',
+      0,
+      'rir',
+      '2'
+    );
 
     const complete =
       component.completeSet(
@@ -971,8 +1140,14 @@ describe('Train first workout flow', () => {
       'Serie 1'
     );
     expect(text).toContain(
-      'completada'
+      '80 kg · 8 reps · RIR 2'
     );
+    expect(
+      component.isSetExpanded(
+        'dumbbell-bench-press',
+        0
+      )
+    ).toBe(false);
 
     const completedSummary =
       fixture
@@ -996,6 +1171,114 @@ describe('Train first workout flow', () => {
 
     expect(completedButton)
       .toBeTruthy();
+  });
+
+
+  it('omits RIR from collapsed summaries when no RIR was recorded', async () => {
+    const fixture =
+      await createLoadedTrain([
+        {
+          workoutId:
+            'workout-1',
+          routineId:
+            'routine-1',
+          sessionId:
+            'session-1',
+          status:
+            'in_progress',
+          sets: [
+            historySet(0, {
+              weight: 80,
+              reps: 8,
+              rir: null,
+              completedAt:
+                '2026-08-20T15:05:00Z'
+            })
+          ]
+        }
+      ]);
+
+    const component =
+      fixture.componentInstance;
+
+    component.openExercise(
+      'dumbbell-bench-press'
+    );
+    fixture.detectChanges();
+
+    expect(
+      component.setSummary(
+        component.activeSession()!.exercises[0],
+        0
+      )
+    ).toBe('80 kg · 8 reps');
+    expect(
+      component.setSummary(
+        component.activeSession()!.exercises[0],
+        0
+      )
+    ).not.toContain('RIR 0');
+  });
+
+
+  it('hides RIR in training when the setting is disabled without deleting stored values', async () => {
+    const fixture =
+      await createLoadedTrain([
+        {
+          workoutId:
+            'workout-1',
+          routineId:
+            'routine-1',
+          sessionId:
+            'session-1',
+          status:
+            'in_progress',
+          sets: [
+            historySet(0, {
+              weight: 80,
+              reps: 8,
+              rir: 2,
+              completedAt:
+                '2026-08-20T15:05:00Z'
+            })
+          ]
+        }
+      ]);
+
+    const component =
+      fixture.componentInstance;
+
+    component.settingsService.update({
+      showRir: false
+    });
+    component.openExercise(
+      'dumbbell-bench-press'
+    );
+    component.toggleSet(
+      'dumbbell-bench-press',
+      0
+    );
+    fixture.detectChanges();
+
+    expect(pageText(fixture))
+      .not.toContain('RIR objetivo');
+    expect(
+      fixture.nativeElement.querySelector(
+        'input[aria-label="RIR realizado para Press banca con mancuernas, serie 1"]'
+      )
+    ).toBeNull();
+    expect(
+      component.setSummary(
+        component.activeSession()!.exercises[0],
+        0
+      )
+    ).toBe('80 kg · 8 reps');
+    expect(
+      component.getCurrentSet(
+        'dumbbell-bench-press',
+        0
+      )?.rir
+    ).toBe(2);
   });
 
 
@@ -1120,6 +1403,11 @@ describe('Train first workout flow', () => {
       '82.5 kg × 8 @2 · 82.5 kg × 7 @3'
     );
 
+    component.openExercise(
+      'dumbbell-bench-press'
+    );
+    fixture.detectChanges();
+
     const text =
       pageText(fixture);
 
@@ -1226,6 +1514,9 @@ describe('Train first workout flow', () => {
         }
       ]
     });
+    component.openExercise(
+      'barbell-bench-press'
+    );
     fixture.detectChanges();
 
     expect(
@@ -1340,6 +1631,11 @@ describe('Train first workout flow', () => {
         2
       )?.weight
     ).toBe(65);
+
+    component.openExercise(
+      'dumbbell-bench-press'
+    );
+    fixture.detectChanges();
 
     const text =
       pageText(fixture);
@@ -1639,6 +1935,14 @@ describe('Train first workout flow', () => {
     ).toBe(
       'Podrías subir ligeramente la carga'
     );
+
+    fixture
+      .componentInstance
+      .openExercise(
+        'dumbbell-bench-press'
+      );
+    fixture.detectChanges();
+
     expect(
       pageText(fixture)
     ).toContain('Sugerencia');
@@ -2296,6 +2600,11 @@ describe('Train first workout flow', () => {
           .activeWorkout()
       );
 
+    fixture
+      .componentInstance
+      .openExercise(
+        'dumbbell-bench-press'
+      );
     fixture.detectChanges();
 
     expect(
@@ -2470,6 +2779,45 @@ describe('Train first workout flow', () => {
     expect(
       component.activeSession()
     ).toBeNull();
+  });
+
+
+  it('asks for confirmation before finishing from the UI action', async () => {
+    const fixture =
+      await createLoadedTrain([
+        activeWorkout()
+      ]);
+
+    const component =
+      fixture.componentInstance;
+    const confirm =
+      vi.spyOn(
+        window,
+        'confirm'
+      )
+        .mockReturnValueOnce(false)
+        .mockReturnValueOnce(true);
+
+    component.requestFinishWorkout();
+
+    expect(confirm)
+      .toHaveBeenCalledWith(
+        '¿Finalizar este entrenamiento?'
+      );
+    http.expectNone(
+      `${environment.apiUrl}/workouts/active-workout`
+    );
+
+    component.requestFinishWorkout();
+    await waitForHttpTick();
+
+    const save =
+      http.expectOne(
+        `${environment.apiUrl}/workouts/active-workout`
+      );
+
+    save.flush(save.request.body);
+    await fixture.whenStable();
   });
 
 
@@ -3355,6 +3703,8 @@ describe('Train first workout flow', () => {
       ]
     });
 
+    component.openExercise('plank');
+    component.toggleSet('plank', 0);
     fixture.detectChanges();
 
     expect(
@@ -3443,6 +3793,7 @@ describe('Train first workout flow', () => {
       ]
     });
 
+    component.toggleSet('plank', 0);
     component.startTimedSet(
       'plank',
       0
@@ -3565,6 +3916,13 @@ describe('Train first workout flow', () => {
     save.flush(save.request.body);
 
     await complete;
+
+    expect(
+      component.setSummary(
+        component.activeSession()!.exercises[0],
+        0
+      )
+    ).toBe('47 s · RIR 2');
 
     expect(
       component.restTimerLabel()
@@ -3799,6 +4157,51 @@ describe('Train first workout flow', () => {
     save.flush(save.request.body);
 
     await complete;
+  });
+
+
+  it('respects the automatic rest timer setting', async () => {
+    const fixture =
+      await createLoadedTrain([
+        {
+          workoutId:
+            'workout-1',
+          routineId:
+            'routine-1',
+          sessionId:
+            'session-1',
+          status:
+            'in_progress',
+          sets: []
+        }
+      ]);
+
+    const component =
+      fixture.componentInstance;
+
+    component.settingsService.update({
+      automaticRestTimer: false
+    });
+
+    const complete =
+      component.completeSet(
+        'dumbbell-bench-press',
+        0
+      );
+
+    await waitForHttpTick();
+
+    const save =
+      http.expectOne(
+        `${environment.apiUrl}/workouts/workout-1`
+      );
+
+    save.flush(save.request.body);
+
+    await complete;
+
+    expect(component.restTimer())
+      .toBeNull();
   });
 
 

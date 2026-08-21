@@ -96,6 +96,78 @@ export const routes: Routes = [
     ]
   },
   {
+    path: 'ajustes',
+    loadComponent: () =>
+      import(
+        './pages/settings/settings'
+      ).then(
+        module => module.SettingsHub
+      ),
+    canActivate: [
+      accessGuard
+    ]
+  },
+  {
+    path: 'ajustes/cuenta',
+    loadComponent: () =>
+      import(
+        './pages/settings/settings'
+      ).then(
+        module => module.SettingsAccount
+      ),
+    canActivate: [
+      accessGuard
+    ]
+  },
+  {
+    path: 'ajustes/entrenamiento',
+    loadComponent: () =>
+      import(
+        './pages/settings/settings'
+      ).then(
+        module => module.SettingsTraining
+      ),
+    canActivate: [
+      accessGuard
+    ]
+  },
+  {
+    path: 'ajustes/apariencia',
+    loadComponent: () =>
+      import(
+        './pages/settings/settings'
+      ).then(
+        module => module.SettingsAppearance
+      ),
+    canActivate: [
+      accessGuard
+    ]
+  },
+  {
+    path: 'ajustes/datos',
+    loadComponent: () =>
+      import(
+        './pages/settings/settings'
+      ).then(
+        module => module.SettingsData
+      ),
+    canActivate: [
+      accessGuard
+    ]
+  },
+  {
+    path: 'ajustes/acerca-de',
+    loadComponent: () =>
+      import(
+        './pages/settings/settings'
+      ).then(
+        module => module.SettingsAbout
+      ),
+    canActivate: [
+      accessGuard
+    ]
+  },
+  {
     path: '**',
     redirectTo: ''
   }

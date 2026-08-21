@@ -108,6 +108,9 @@ describe('App', () => {
     getMe =
       vi.fn()
         .mockResolvedValue(null);
+    localStorage.removeItem(
+      'gymos-settings-v1'
+    );
 
     await TestBed.configureTestingModule({
       imports: [App],
@@ -255,6 +258,18 @@ describe('App', () => {
     expect(routeByPath.get('entrenar')?.canActivate)
       .toEqual([accessGuard]);
     expect(routeByPath.get('rutinas')?.canActivate)
+      .toEqual([accessGuard]);
+    expect(routeByPath.get('ajustes')?.canActivate)
+      .toEqual([accessGuard]);
+    expect(routeByPath.get('ajustes/cuenta')?.canActivate)
+      .toEqual([accessGuard]);
+    expect(routeByPath.get('ajustes/entrenamiento')?.canActivate)
+      .toEqual([accessGuard]);
+    expect(routeByPath.get('ajustes/apariencia')?.canActivate)
+      .toEqual([accessGuard]);
+    expect(routeByPath.get('ajustes/datos')?.canActivate)
+      .toEqual([accessGuard]);
+    expect(routeByPath.get('ajustes/acerca-de')?.canActivate)
       .toEqual([accessGuard]);
     expect(routeByPath.get('login')?.canActivate)
       .toBeUndefined();
@@ -474,7 +489,8 @@ describe('App', () => {
     ).toEqual([
       '/',
       '/entrenar',
-      '/rutinas'
+      '/rutinas',
+      '/ajustes'
     ]);
 
     const activeLink =
@@ -521,6 +537,54 @@ describe('App', () => {
     expect(trainingLink).toBeTruthy();
     expect(trainingLink.getAttribute('aria-current'))
       .toBe('page');
+  });
+
+  it('opens settings from the account dropdown', async () => {
+    authUser.set({
+      email:
+        'adrian@example.com',
+      user_metadata: {
+        full_name:
+          'Adrián Peláez'
+      }
+    });
+
+    const fixture =
+      await createReadyApp();
+
+    const router =
+      TestBed.inject(Router);
+    const navigate =
+      vi.spyOn(
+        router,
+        'navigateByUrl'
+      ).mockResolvedValue(true);
+
+    const userButton =
+      fixture.nativeElement.querySelector(
+        '.user-button'
+      ) as HTMLButtonElement;
+
+    userButton.click();
+    fixture.detectChanges();
+
+    const settingsLink =
+      fixture.nativeElement.querySelector(
+        '.user-dropdown-link[href="/ajustes"]'
+      ) as HTMLAnchorElement;
+
+    expect(settingsLink).toBeTruthy();
+    expect(settingsLink.textContent).toContain('Ajustes');
+
+    settingsLink.click();
+    await fixture.whenStable();
+
+    expect(navigate).toHaveBeenCalled();
+    expect(
+      router.serializeUrl(
+        navigate.mock.calls[0][0] as any
+      )
+    ).toBe('/ajustes');
   });
 
   it('keeps mobile navigation and account menu independent', async () => {
@@ -886,7 +950,7 @@ describe('App', () => {
     expect(dropdown.textContent).toContain('Adrián Peláez');
     expect(dropdown.textContent).toContain('adrian@example.com');
     expect(dropdown.textContent).toContain('Mi cuenta');
-    expect(dropdown.textContent).toContain('Configuración');
+    expect(dropdown.textContent).toContain('Ajustes');
     expect(dropdown.textContent).toContain('Cerrar sesión');
   });
 

@@ -236,6 +236,34 @@
                 }
               </a>
 
+              <a
+                routerLink="/ajustes"
+                routerLinkActive="active"
+                [attr.aria-current]="
+                  isCurrentRoute('/ajustes')
+                    ? 'page'
+                    : null
+                "
+                (click)="closeMobileNav()"
+              >
+                <span
+                  class="nav-icon"
+                  aria-hidden="true"
+                >
+                  ⚙
+                </span>
+
+                <span class="nav-label">
+                  Ajustes
+                </span>
+
+                @if (isCurrentRoute('/ajustes')) {
+                  <span class="active-marker">
+                    Actual
+                  </span>
+                }
+              </a>
+
               @if (isAdmin()) {
                 <a
                   routerLink="/admin/access"
@@ -337,6 +365,15 @@
                   Mi cuenta
                 </button>
 
+                <a
+                  class="user-dropdown-link"
+                  routerLink="/ajustes"
+                  (click)="closeUserMenu()"
+                  role="menuitem"
+                >
+                  Ajustes
+                </a>
+
                 @if (isAdmin()) {
                   <a
                     class="user-dropdown-link"
@@ -347,15 +384,6 @@
                     Solicitudes de acceso
                   </a>
                 }
-
-                <button
-                  type="button"
-                  disabled
-                  aria-disabled="true"
-                  role="menuitem"
-                >
-                  Configuración
-                </button>
 
                 <div class="user-dropdown-separator"></div>
 

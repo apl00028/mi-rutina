@@ -301,4 +301,136 @@
     width: 32px;
     height: 32px;
   }
+  .settings-action,
+.settings-danger-action {
+  width: fit-content;
+  min-height: 42px;
+
+  margin-top: 6px;
+  padding: 9px 13px;
+
+  border: 1px solid var(--gymos-border);
+  border-radius: 10px;
+
+  background: var(--gymos-surface-muted);
+  color: var(--gymos-text);
+
+  font: inherit;
+  font-size: 0.86rem;
+  font-weight: 800;
+
+  cursor: pointer;
+
+  transition:
+    background 140ms ease,
+    border-color 140ms ease,
+    opacity 140ms ease;
+}
+
+.settings-action:hover:not(:disabled) {
+  border-color: var(--gymos-border-strong);
+
+  background: var(--gymos-accent);
+  color: var(--gymos-accent-contrast);
+}
+
+.settings-danger-action {
+  margin-top: 0;
+
+  color: var(--gymos-danger);
+}
+
+.settings-danger-action:hover:not(:disabled) {
+  border-color: var(--gymos-danger);
+
+  background: var(--gymos-surface-muted);
+}
+
+.settings-action:disabled,
+.settings-danger-action:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.settings-action:focus-visible,
+.settings-danger-action:focus-visible {
+  outline: 3px solid rgb(37 99 235 / 22%);
+  outline-offset: 2px;
+}
+
+.settings-status {
+  margin: 6px 0 0;
+
+  font-size: 0.82rem;
+  font-weight: 700;
+  line-height: 1.4;
+}
+
+.settings-status-success {
+  color: var(--gymos-success);
+}
+
+.settings-status-error {
+  color: var(--gymos-danger);
+}
+
+.settings-status-muted {
+  color: var(--gymos-text-muted);
+}
+
+.passkey-list {
+  display: grid;
+  gap: 8px;
+
+  margin-top: 4px;
+}
+
+.passkey-item {
+  min-width: 0;
+
+  display: grid;
+  grid-template-columns:
+    minmax(0, 1fr)
+    auto;
+  align-items: center;
+  gap: 12px;
+
+  padding: 10px;
+
+  border: 1px solid var(--gymos-border);
+  border-radius: 10px;
+
+  background: var(--gymos-surface-muted);
+}
+
+.passkey-copy {
+  min-width: 0;
+
+  display: grid;
+  gap: 2px;
+}
+
+.passkey-copy strong {
+  color: var(--gymos-text);
+
+  font-size: 0.9rem;
+  overflow-wrap: anywhere;
+}
+
+.passkey-copy small {
+  color: var(--gymos-text-muted);
+
+  font-size: 0.78rem;
+}
+
+
+@media (max-width: 500px) {
+  .passkey-item {
+    grid-template-columns: 1fr;
+  }
+
+  .settings-danger-action {
+    width: 100%;
+  }
+}
 }

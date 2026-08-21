@@ -1,9 +1,11 @@
 import { Injectable, signal } from '@angular/core';
+
 import {
   HttpClient,
   HttpErrorResponse,
   HttpHeaders
 } from '@angular/common/http';
+
 import {
   firstValueFrom
 } from 'rxjs';
@@ -15,12 +17,15 @@ import {
   User
 } from '@supabase/supabase-js';
 
-import { environment } from '../../environments/environment';
+import {
+  environment
+} from '../../environments/environment';
 
 
 export interface GymOSMe {
   user_id: string;
   email: string | null;
+
   access_status:
     | 'unregistered'
     | 'pending'
@@ -56,18 +61,32 @@ export class AuthService {
         auth: {
           persistSession: true,
           autoRefreshToken: true,
-          detectSessionInUrl: true
+          detectSessionInUrl: true,
+
+          experimental: {
+            passkey: true
+          }
         }
       }
     );
 
-  session = signal<Session | null>(null);
-  user = signal<User | null>(null);
-  me = signal<GymOSMe | null>(null);
-  loading = signal(true);
+
+  session =
+    signal<Session | null>(null);
+
+  user =
+    signal<User | null>(null);
+
+  me =
+    signal<GymOSMe | null>(null);
+
+  loading =
+    signal(true);
+
 
   private meRequest:
     Promise<GymOSMe> | null = null;
+
 
   constructor(
     private http: HttpClient
@@ -76,9 +95,13 @@ export class AuthService {
   }
 
 
-  private async initialize(): Promise<void> {
+  private async initialize():
+    Promise<void> {
     try {
-      const { data, error } =
+      const {
+        data,
+        error
+      } =
         await this.client.auth.getSession();
 
       if (error) {
@@ -95,7 +118,10 @@ export class AuthService {
 
       this.client.auth.onAuthStateChange(
         (_event, session) => {
-          this.session.set(session);
+          this.session.set(
+            session
+          );
+
           this.user.set(
             session?.user ?? null
           );
@@ -116,7 +142,10 @@ export class AuthService {
     Promise<Session | null> {
     while (this.loading()) {
       await new Promise(resolve =>
-        setTimeout(resolve, 25)
+        setTimeout(
+          resolve,
+          25
+        )
       );
     }
 
@@ -130,9 +159,12 @@ export class AuthService {
     const redirectTo =
       `${window.location.origin}/login`;
 
-    const { error } =
+    const {
+      error
+    } =
       await this.client.auth.signInWithOtp({
         email,
+
         options: {
           emailRedirectTo: redirectTo,
           shouldCreateUser: true
@@ -145,8 +177,206 @@ export class AuthService {
   }
 
 
-  async signOut(): Promise<void> {
-    const { error } =
+  async signInWithGoogle():
+    Promise<void> {
+    const redirectTo =
+      `${window.location.origin}/login?oauth=google`;
+
+    const {
+      error
+    } =
+      await this.client.auth.signInWithOAuth({
+        provider: 'google',
+
+        options: {
+          redirectTo
+        }
+      });
+
+    if (error) {
+      throw error;
+    }
+  }
+
+
+  /*
+   * Passkeys / WebAuthn
+   */
+
+  isPasskeySupported():
+    boolean {
+    if (
+      typeof window === 'undefined' ||
+      typeof navigator === 'undefined'
+    ) {
+      return false;
+    }
+
+    return (
+      window.isSecureContext &&
+      'PublicKeyCredential' in window &&
+      !!navigator.credentials
+    );
+  }
+
+
+  async registerPasskey() {
+    const session =
+      await this.waitForSession();
+
+    if (!session) {
+      throw new Error(
+        'Necesitas iniciar sesión antes de configurar el acceso con dispositivo.'
+      );
+    }
+
+    if (!this.isPasskeySupported()) {
+      throw new Error(
+        'Este dispositivo o navegador no admite acceso mediante passkey.'
+      );
+    }
+
+    const {
+      data,
+      error
+    } =
+      await this.client.auth.registerPasskey();
+
+    if (error) {
+      throw error;
+    }
+
+    return data;
+  }
+
+
+  async signInWithPasskey():
+    Promise<void> {
+    if (!this.isPasskeySupported()) {
+      throw new Error(
+        'Este dispositivo o navegador no admite acceso mediante passkey.'
+      );
+    }
+
+    const {
+      data,
+      error
+    } =
+      await this.client.auth.signInWithPasskey();
+
+    if (error) {
+      throw error;
+    }
+
+    this.session.set(
+      data.session ?? null
+    );
+
+    this.user.set(
+      data.user ?? null
+    );
+
+    this.me.set(null);
+    this.meRequest = null;
+  }
+
+
+  async listPasskeys() {
+    const session =
+      await this.waitForSession();
+
+    if (!session) {
+      throw new Error(
+        'Necesitas iniciar sesión.'
+      );
+    }
+
+    const {
+      data,
+      error
+    } =
+      await this.client.auth.passkey.list();
+
+    if (error) {
+      throw error;
+    }
+
+    return data ?? [];
+  }
+
+
+  async renamePasskey(
+    passkeyId: string,
+    friendlyName: string
+  ): Promise<void> {
+    const id =
+      passkeyId.trim();
+
+    const name =
+      friendlyName.trim();
+
+    if (!id) {
+      throw new Error(
+        'La passkey no es válida.'
+      );
+    }
+
+    if (!name) {
+      throw new Error(
+        'El nombre no puede estar vacío.'
+      );
+    }
+
+    if (name.length > 120) {
+      throw new Error(
+        'El nombre no puede superar 120 caracteres.'
+      );
+    }
+
+    const {
+      error
+    } =
+      await this.client.auth.passkey.update({
+        passkeyId: id,
+        friendlyName: name
+      });
+
+    if (error) {
+      throw error;
+    }
+  }
+
+
+  async deletePasskey(
+    passkeyId: string
+  ): Promise<void> {
+    const id =
+      passkeyId.trim();
+
+    if (!id) {
+      throw new Error(
+        'La passkey no es válida.'
+      );
+    }
+
+    const {
+      error
+    } =
+      await this.client.auth.passkey.delete({
+        passkeyId: id
+      });
+
+    if (error) {
+      throw error;
+    }
+  }
+
+
+  async signOut():
+    Promise<void> {
+    const {
+      error
+    } =
       await this.client.auth.signOut();
 
     if (error) {
@@ -162,7 +392,10 @@ export class AuthService {
 
   async getAccessToken():
     Promise<string | null> {
-    const { data, error } =
+    const {
+      data,
+      error
+    } =
       await this.client.auth.getSession();
 
     if (error) {
@@ -194,7 +427,9 @@ export class AuthService {
   }
 
 
-  isAuthFailure(error: unknown): boolean {
+  isAuthFailure(
+    error: unknown
+  ): boolean {
     return (
       error instanceof HttpErrorResponse &&
       (
@@ -231,9 +466,15 @@ export class AuthService {
       await this.getAuthHeaders();
 
     try {
-      return await request(headers);
+      return await request(
+        headers
+      );
     } catch (error) {
-      if (this.isAuthFailure(error)) {
+      if (
+        this.isAuthFailure(
+          error
+        )
+      ) {
         await this.clearInvalidSession();
       }
 
@@ -265,7 +506,9 @@ export class AuthService {
           await firstValueFrom(
             this.http.get<GymOSMe>(
               `${this.apiUrl}/me`,
-              { headers }
+              {
+                headers
+              }
             )
           )
       );
@@ -274,7 +517,9 @@ export class AuthService {
       const me =
         await this.meRequest;
 
-      this.me.set(me);
+      this.me.set(
+        me
+      );
 
       return me;
     } finally {
@@ -292,12 +537,16 @@ export class AuthService {
             this.http.post<GymOSMe>(
               `${this.apiUrl}/me/bootstrap`,
               {},
-              { headers }
+              {
+                headers
+              }
             )
           )
       );
 
-    this.me.set(me);
+    this.me.set(
+      me
+    );
 
     return me;
   }
@@ -306,7 +555,9 @@ export class AuthService {
   async resolveAccess():
     Promise<GymOSMe> {
     const me =
-      await this.getMe(true);
+      await this.getMe(
+        true
+      );
 
     if (
       me.access_status ===
@@ -316,24 +567,5 @@ export class AuthService {
     }
 
     return me;
-  }
-
-
-  async signInWithGoogle():
-    Promise<void> {
-    const redirectTo =
-      `${window.location.origin}/login?oauth=google`;
-
-    const { error } =
-      await this.client.auth.signInWithOAuth({
-        provider: 'google',
-        options: {
-          redirectTo
-        }
-      });
-
-    if (error) {
-      throw error;
-    }
   }
 }

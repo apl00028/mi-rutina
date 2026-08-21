@@ -126,7 +126,19 @@ describe('Settings pages', () => {
                 full_name:
                   'Adrián Peláez'
               }
-            })
+            }),
+
+            isPasskeySupported:
+              vi.fn(() => false),
+
+            listPasskeys:
+              vi.fn(async () => []),
+
+            registerPasskey:
+              vi.fn(),
+
+            deletePasskey:
+              vi.fn()
           }
         }
       ]
@@ -183,7 +195,7 @@ describe('Settings pages', () => {
           .trim()
       )
     ).toEqual([
-      '◉ Cuenta Identidad, email y unidades. ›',
+      '◉ Cuenta Identidad, acceso, email y unidades. ›',
       '◫ Entrenamiento Registro, RIR y descanso. ›',
       '◐ Apariencia Tema, texto y movimiento. ›',
       '⇅ Datos Sincronización y exportación. ›',

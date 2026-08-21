@@ -196,12 +196,128 @@
 
 .content {
   min-width: 0;
+  min-height: calc(100vh - 64px);
 
   box-sizing: border-box;
 
   padding: 28px;
 
   background: #f6f7f9;
+}
+
+.global-init-state {
+  min-height: min(620px, calc(100vh - 120px));
+
+  display: grid;
+  align-content: center;
+  gap: 22px;
+
+  box-sizing: border-box;
+  padding: 28px;
+
+  border: 1px solid #e5e7eb;
+  border-radius: 14px;
+
+  background: #ffffff;
+}
+
+.global-init-copy {
+  display: grid;
+  gap: 8px;
+
+  max-width: 560px;
+}
+
+.global-init-kicker {
+  color: #6b7280;
+
+  font-size: 0.74rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.global-init-copy h1 {
+  margin: 0;
+
+  color: #111827;
+
+  font-size: clamp(1.45rem, 4vw, 2.2rem);
+  line-height: 1.1;
+}
+
+.global-init-copy p {
+  margin: 0;
+
+  color: #4b5563;
+
+  font-size: 0.95rem;
+  line-height: 1.5;
+}
+
+.global-init-skeleton {
+  display: grid;
+  gap: 12px;
+
+  max-width: 640px;
+}
+
+.global-init-skeleton span {
+  height: 46px;
+
+  border-radius: 10px;
+
+  background:
+    linear-gradient(
+      90deg,
+      #f3f4f6 0%,
+      #e5e7eb 48%,
+      #f3f4f6 100%
+    );
+  background-size: 220% 100%;
+
+  animation:
+    global-init-pulse 1.35s ease-in-out
+    infinite;
+}
+
+.global-init-skeleton span:nth-child(2) {
+  width: 84%;
+}
+
+.global-init-skeleton span:nth-child(3) {
+  width: 68%;
+}
+
+.global-init-error {
+  align-content: center;
+}
+
+.global-init-retry {
+  width: fit-content;
+  min-height: 44px;
+
+  padding: 10px 16px;
+
+  border: 1px solid #111827;
+  border-radius: 10px;
+
+  background: #111827;
+  color: #ffffff;
+
+  font: inherit;
+  font-weight: 750;
+  cursor: pointer;
+}
+
+@keyframes global-init-pulse {
+  from {
+    background-position: 120% 0;
+  }
+
+  to {
+    background-position: -120% 0;
+  }
 }
 
 .sidebar-collapsed .sidebar {
@@ -240,6 +356,16 @@
     padding: 16px;
   }
 
+  .global-init-state {
+    min-height: calc(100vh - 96px);
+
+    padding: 20px;
+  }
+
+  .global-init-skeleton span {
+    height: 40px;
+  }
+
   .sidebar {
     padding-top: 12px;
     padding-bottom: 12px;
@@ -253,6 +379,20 @@
   .sidebar-nav a,
   .collapse-button {
     min-height: 44px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app-shell,
+  .sidebar,
+  .sidebar-nav a,
+  .collapse-button,
+  .user-button,
+  .user-dropdown button,
+  .user-dropdown-link,
+  .global-init-skeleton span {
+    animation: none;
+    transition: none;
   }
 }
 

@@ -1,6 +1,7 @@
 import {
   Component,
   HostListener,
+  OnDestroy,
   signal
 } from '@angular/core';
 
@@ -21,6 +22,11 @@ import {
   GymOSMe
 } from './core/auth.service';
 
+type AppInitializationState =
+  | 'initializing'
+  | 'ready'
+  | 'error';
+
 
 @Component({
   selector: 'app-root',
@@ -33,7 +39,7 @@ import {
   templateUrl: './app.html',
   styleUrl: './app.scss'
 })
-export class App {
+export class App implements OnDestroy {
 
   sidebarExpanded = signal(
     localStorage.getItem(
@@ -50,6 +56,23 @@ export class App {
   gymosMe =
     signal<GymOSMe | null>(null);
 
+  initializationState =
+    signal<AppInitializationState>(
+      'initializing'
+    );
+
+  showServerWakeMessage =
+    signal(false);
+
+  private initializationAttempt = 0;
+  private wakeMessageTimer:
+    ReturnType<typeof setTimeout> | null = null;
+  private initializationTimeoutTimer:
+    ReturnType<typeof setTimeout> | null = null;
+
+  private readonly wakeMessageDelayMs = 3000;
+  private readonly initializationTimeoutMs = 60000;
+
 
   constructor(
     public auth: AuthService,
@@ -57,7 +80,7 @@ export class App {
   ) {
     this.syncRouteState();
 
-    void this.loadGymOSUser();
+    this.startInitialization();
 
     this.router.events
       .pipe(
@@ -70,8 +93,13 @@ export class App {
       .subscribe(() => {
         this.syncRouteState();
 
-        void this.loadGymOSUser();
+        this.startInitialization();
       });
+  }
+
+
+  ngOnDestroy(): void {
+    this.clearInitializationTimers();
   }
 
 
@@ -114,6 +142,101 @@ export class App {
 
     } catch {
       this.gymosMe.set(null);
+    }
+  }
+
+
+  private startInitialization(): void {
+    const attempt =
+      ++this.initializationAttempt;
+
+    this.clearInitializationTimers();
+    this.showServerWakeMessage.set(false);
+
+    if (this.isStandalonePage()) {
+      this.initializationState.set('ready');
+      return;
+    }
+
+    this.initializationState.set(
+      'initializing'
+    );
+
+    this.wakeMessageTimer =
+      setTimeout(() => {
+        if (
+          this.initializationAttempt ===
+          attempt &&
+          this.initializationState() ===
+          'initializing'
+        ) {
+          this.showServerWakeMessage.set(true);
+        }
+      }, this.wakeMessageDelayMs);
+
+    this.initializationTimeoutTimer =
+      setTimeout(() => {
+        if (
+          this.initializationAttempt ===
+          attempt &&
+          this.initializationState() ===
+          'initializing'
+        ) {
+          this.initializationState.set('error');
+        }
+      }, this.initializationTimeoutMs);
+
+    void this.initializeProtectedShell(
+      attempt
+    );
+  }
+
+
+  private async initializeProtectedShell(
+    attempt: number
+  ): Promise<void> {
+    try {
+      await this.loadGymOSUser();
+
+      if (
+        this.initializationAttempt !==
+        attempt
+      ) {
+        return;
+      }
+
+      this.initializationState.set('ready');
+      this.showServerWakeMessage.set(false);
+      this.clearInitializationTimers();
+    } catch {
+      if (
+        this.initializationAttempt ===
+        attempt &&
+        this.initializationState() ===
+        'initializing'
+      ) {
+        this.showServerWakeMessage.set(true);
+      }
+    }
+  }
+
+
+  retryInitialization(): void {
+    this.startInitialization();
+  }
+
+
+  private clearInitializationTimers(): void {
+    if (this.wakeMessageTimer) {
+      clearTimeout(this.wakeMessageTimer);
+      this.wakeMessageTimer = null;
+    }
+
+    if (this.initializationTimeoutTimer) {
+      clearTimeout(
+        this.initializationTimeoutTimer
+      );
+      this.initializationTimeoutTimer = null;
     }
   }
 

@@ -223,7 +223,74 @@
       </header>
 
       <main class="content">
-        <router-outlet />
+        @if (
+          initializationState() ===
+          'initializing'
+        ) {
+          <section
+            class="global-init-state"
+            aria-live="polite"
+            aria-busy="true"
+          >
+            <div class="global-init-copy">
+              <span class="global-init-kicker">
+                GymOS
+              </span>
+
+              <h1>
+                Conectando con GymOS…
+              </h1>
+
+              @if (showServerWakeMessage()) {
+                <p>
+                  El servidor puede tardar unos segundos
+                  en arrancar.
+                </p>
+              }
+            </div>
+
+            <div
+              class="global-init-skeleton"
+              aria-hidden="true"
+            >
+              <span></span>
+              <span></span>
+              <span></span>
+            </div>
+          </section>
+        } @else if (
+          initializationState() ===
+          'error'
+        ) {
+          <section
+            class="global-init-state global-init-error"
+            aria-live="assertive"
+          >
+            <div class="global-init-copy">
+              <span class="global-init-kicker">
+                GymOS
+              </span>
+
+              <h1>
+                No se pudo conectar con GymOS
+              </h1>
+
+              <p>
+                El servidor no respondió a tiempo.
+              </p>
+            </div>
+
+            <button
+              type="button"
+              class="global-init-retry"
+              (click)="retryInitialization()"
+            >
+              Reintentar
+            </button>
+          </section>
+        } @else {
+          <router-outlet />
+        }
       </main>
     </section>
   </div>

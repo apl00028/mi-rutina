@@ -1,4 +1,5 @@
 import {
+  Component,
   signal,
   WritableSignal
 } from '@angular/core';
@@ -21,11 +22,21 @@ import {
   AuthService
 } from './core/auth.service';
 
+@Component({
+  standalone: true,
+  template: 'Pantalla de login'
+})
+class LoginStub {}
+
 describe('App', () => {
   let authUser:
     WritableSignal<any>;
 
   let signOut:
+    ReturnType<typeof vi.fn>;
+  let waitForSession:
+    ReturnType<typeof vi.fn>;
+  let getMe:
     ReturnType<typeof vi.fn>;
 
 
@@ -36,21 +47,31 @@ describe('App', () => {
     signOut =
       vi.fn()
         .mockResolvedValue(undefined);
+    waitForSession =
+      vi.fn()
+        .mockResolvedValue(null);
+    getMe =
+      vi.fn()
+        .mockResolvedValue(null);
 
     await TestBed.configureTestingModule({
       imports: [App],
       providers: [
-        provideRouter([]),
+        provideRouter([
+          {
+            path:
+              'login',
+            component:
+              LoginStub
+          }
+        ]),
         {
           provide: AuthService,
           useValue: {
             user: authUser,
             waitForSession:
-              vi.fn()
-                .mockResolvedValue(null),
-            getMe:
-              vi.fn()
-                .mockResolvedValue(null),
+              waitForSession,
+            getMe,
             signOut
           }
         }
@@ -60,8 +81,38 @@ describe('App', () => {
 
 
   afterEach(() => {
+    vi.useRealTimers();
     vi.restoreAllMocks();
   });
+
+
+  function deferred<T>() {
+    let resolve:
+      (value: T) => void =
+        () => {};
+    let reject:
+      (reason?: unknown) => void =
+        () => {};
+    const promise =
+      new Promise<T>(
+        (promiseResolve, promiseReject) => {
+          resolve = promiseResolve;
+          reject = promiseReject;
+        }
+      );
+
+    return {
+      promise,
+      resolve,
+      reject
+    };
+  }
+
+
+  async function flushPromises() {
+    await Promise.resolve();
+    await Promise.resolve();
+  }
 
 
   it('should create the app', () => {
@@ -77,6 +128,181 @@ describe('App', () => {
     const compiled = fixture.nativeElement as HTMLElement;
     expect(compiled.textContent).toContain('GymOS');
     expect(compiled.textContent).toContain('Inicio');
+  });
+
+  it('shows global initialization while protected shell waits', () => {
+    const pending =
+      deferred<null>();
+
+    waitForSession.mockReturnValue(
+      pending.promise
+    );
+
+    const fixture =
+      TestBed.createComponent(App);
+
+    fixture.detectChanges();
+
+    const text =
+      fixture.nativeElement.textContent;
+
+    expect(text).toContain(
+      'Conectando con GymOS…'
+    );
+    expect(text).not.toContain(
+      'El servidor puede tardar'
+    );
+  });
+
+  it('shows protected content once initialization is ready', async () => {
+    const fixture =
+      TestBed.createComponent(App);
+
+    fixture.detectChanges();
+    await fixture.whenStable();
+    await flushPromises();
+    fixture.detectChanges();
+
+    const text =
+      fixture.nativeElement.textContent;
+
+    expect(text).toContain('GymOS');
+    expect(text).toContain('Inicio');
+    expect(text).not.toContain(
+      'Conectando con GymOS…'
+    );
+  });
+
+  it('shows retry after initialization timeout', () => {
+    vi.useFakeTimers();
+
+    const pending =
+      deferred<null>();
+
+    waitForSession.mockReturnValue(
+      pending.promise
+    );
+
+    const fixture =
+      TestBed.createComponent(App);
+
+    fixture.detectChanges();
+
+    vi.advanceTimersByTime(60000);
+    fixture.detectChanges();
+
+    const text =
+      fixture.nativeElement.textContent;
+
+    expect(text).toContain(
+      'No se pudo conectar con GymOS'
+    );
+    expect(text).toContain('Reintentar');
+  });
+
+  it('retry starts initialization again', () => {
+    vi.useFakeTimers();
+
+    const first =
+      deferred<null>();
+    const second =
+      deferred<null>();
+
+    waitForSession
+      .mockReturnValueOnce(first.promise)
+      .mockReturnValueOnce(second.promise);
+
+    const fixture =
+      TestBed.createComponent(App);
+
+    fixture.detectChanges();
+
+    vi.advanceTimersByTime(60000);
+    fixture.detectChanges();
+
+    const retry =
+      fixture.nativeElement.querySelector(
+        '.global-init-retry'
+      ) as HTMLButtonElement;
+
+    retry.click();
+    fixture.detectChanges();
+
+    expect(waitForSession)
+      .toHaveBeenCalledTimes(2);
+    expect(
+      fixture.nativeElement.textContent
+    ).toContain('Conectando con GymOS…');
+    expect(
+      fixture.nativeElement.textContent
+    ).not.toContain(
+      'No se pudo conectar con GymOS'
+    );
+  });
+
+  it('shows server wake message only after delay', () => {
+    vi.useFakeTimers();
+
+    const pending =
+      deferred<null>();
+
+    waitForSession.mockReturnValue(
+      pending.promise
+    );
+
+    const fixture =
+      TestBed.createComponent(App);
+
+    fixture.detectChanges();
+
+    vi.advanceTimersByTime(2999);
+    fixture.detectChanges();
+
+    expect(
+      fixture.nativeElement.textContent
+    ).not.toContain(
+      'El servidor puede tardar unos segundos en arrancar.'
+    );
+
+    vi.advanceTimersByTime(1);
+    fixture.detectChanges();
+
+    expect(
+      fixture.nativeElement.textContent
+    ).toContain(
+      'El servidor puede tardar unos segundos en arrancar.'
+    );
+  });
+
+  it('does not block login with global initialization', async () => {
+    const pending =
+      deferred<null>();
+
+    waitForSession.mockReturnValue(
+      pending.promise
+    );
+
+    const router =
+      TestBed.inject(Router);
+
+    await router.navigateByUrl('/login');
+
+    const fixture =
+      TestBed.createComponent(App);
+
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    const text =
+      fixture.nativeElement.textContent;
+
+    expect(text).toContain(
+      'Pantalla de login'
+    );
+    expect(text).not.toContain(
+      'Conectando con GymOS…'
+    );
   });
 
   it('should render the user button with readable account identity', () => {

@@ -77,7 +77,10 @@ interface StoredRoutine {
 }
 
 interface ImportIssue {
-  severity: 'error' | 'warning';
+  severity:
+    | 'error'
+    | 'warning'
+    | 'autocorrection';
   sheet: string;
   row?: number;
   column?: string;
@@ -88,6 +91,7 @@ interface ImportValidationResult {
   sessions: RoutineSessionDraft[];
   errors: ImportIssue[];
   warnings: ImportIssue[];
+  autocorrections: ImportIssue[];
 }
 
 type TrainingAnalyticsPeriod =
@@ -1195,36 +1199,373 @@ export class Routines implements OnInit {
     target.push(issue);
   }
 
+  importErrors(): ImportIssue[] {
+    return this.importIssues()
+      .filter(
+        issue =>
+          issue.severity === 'error'
+      );
+  }
+
+  importWarnings(): ImportIssue[] {
+    return this.importIssues()
+      .filter(
+        issue =>
+          issue.severity === 'warning'
+      );
+  }
+
+  importAutocorrections(): ImportIssue[] {
+    return this.importIssues()
+      .filter(
+        issue =>
+          issue.severity ===
+          'autocorrection'
+      );
+  }
+
+  private normalizeImportToken(
+    value: unknown
+  ): string {
+    return this.normalizeHeader(value)
+      .replace(/\s+/g, ' ');
+  }
+
+  private normalizeTargetType(
+    value: unknown
+  ): string | null {
+    const normalized =
+      this.normalizeImportToken(value);
+
+    const repetitionsAliases =
+      new Set([
+        'rep',
+        'reps',
+        'repeticion',
+        'repeticiones',
+        'repetitions'
+      ]);
+
+    if (
+      repetitionsAliases.has(
+        normalized
+      )
+    ) {
+      return 'repeticiones';
+    }
+
+    return null;
+  }
+
+  private normalizeNumberCell(
+    value: unknown
+  ): unknown {
+    if (
+      typeof value !== 'string'
+    ) {
+      return value;
+    }
+
+    const trimmed =
+      value.trim();
+
+    if (!trimmed) {
+      return '';
+    }
+
+    const normalized =
+      trimmed.replace(',', '.');
+
+    const parsed =
+      Number(normalized);
+
+    return Number.isFinite(parsed)
+      ? parsed
+      : trimmed;
+  }
+
+  private noteAutocorrection(
+    autocorrections: ImportIssue[],
+    sheet: string,
+    row: number,
+    column: string,
+    before: unknown,
+    after: unknown
+  ): void {
+    const beforeText =
+      String(before ?? '');
+
+    const afterText =
+      String(after ?? '');
+
+    if (
+      beforeText === afterText
+    ) {
+      return;
+    }
+
+    this.addImportIssue(
+      autocorrections,
+      {
+        severity: 'autocorrection',
+        sheet,
+        row,
+        column,
+        message:
+          `"${beforeText}" → "${afterText}"`
+      }
+    );
+  }
+
+  private normalizeImportedRoutineRows(
+    rows: Record<string, any>[]
+  ): {
+    rows: Record<string, any>[];
+    autocorrections: ImportIssue[];
+  } {
+    const autocorrections:
+      ImportIssue[] = [];
+
+    // Future migration point: expose a converted workbook download once
+    // import preview needs to offer "download current template version".
+    const numericColumns = [
+      'Orden',
+      'Series',
+      'Objetivo mínimo',
+      'Objetivo máximo',
+      'RIR mínimo',
+      'RIR máximo',
+      'Descanso (s)'
+    ];
+
+    return {
+      rows:
+        rows.map(
+          (row, index) => {
+            const excelRow =
+              index + 2;
+            const next = {
+              ...row
+            };
+
+            [
+              'Sesión',
+              'Ejercicio',
+              '_GymOS exercise'
+            ].forEach(column => {
+              const original =
+                next[column];
+
+              if (
+                typeof original === 'string'
+              ) {
+                const trimmed =
+                  original.trim();
+
+                next[column] =
+                  trimmed;
+
+                this.noteAutocorrection(
+                  autocorrections,
+                  'Rutina',
+                  excelRow,
+                  column,
+                  original,
+                  trimmed
+                );
+              }
+            });
+
+            numericColumns.forEach(
+              column => {
+                const original =
+                  next[column];
+                const normalized =
+                  this.normalizeNumberCell(
+                    original
+                  );
+
+                next[column] =
+                  normalized;
+
+                this.noteAutocorrection(
+                  autocorrections,
+                  'Rutina',
+                  excelRow,
+                  column,
+                  original,
+                  normalized
+                );
+              }
+            );
+
+            const originalTarget =
+              next['Tipo de objetivo'];
+            const targetType =
+              this.normalizeTargetType(
+                originalTarget
+              );
+
+            if (targetType) {
+              next['Tipo de objetivo'] =
+                targetType;
+
+              this.noteAutocorrection(
+                autocorrections,
+                'Rutina',
+                excelRow,
+                'Tipo de objetivo',
+                originalTarget,
+                targetType
+              );
+            }
+
+            return next;
+          }
+        ),
+
+      autocorrections
+    };
+  }
+
+  private normalizeImportedSessionRows(
+    rows: Record<string, any>[]
+  ): {
+    rows: Record<string, any>[];
+    autocorrections: ImportIssue[];
+  } {
+    const autocorrections:
+      ImportIssue[] = [];
+
+    return {
+      rows:
+        rows.map(
+          (row, index) => {
+            const excelRow =
+              index + 2;
+            const next = {
+              ...row
+            };
+
+            [
+              'Sesión',
+              'Nombre',
+              '_GymOS session'
+            ].forEach(column => {
+              const original =
+                next[column];
+
+              if (
+                typeof original === 'string'
+              ) {
+                const trimmed =
+                  original.trim();
+
+                next[column] =
+                  trimmed;
+
+                this.noteAutocorrection(
+                  autocorrections,
+                  'Sesiones',
+                  excelRow,
+                  column,
+                  original,
+                  trimmed
+                );
+              }
+            });
+
+            const originalOrder =
+              next['Orden'];
+            const normalizedOrder =
+              this.normalizeNumberCell(
+                originalOrder
+              );
+
+            next['Orden'] =
+              normalizedOrder;
+
+            this.noteAutocorrection(
+              autocorrections,
+              'Sesiones',
+              excelRow,
+              'Orden',
+              originalOrder,
+              normalizedOrder
+            );
+
+            return next;
+          }
+        ),
+
+      autocorrections
+    };
+  }
+
+  private importAutocorrectionSummary(
+    count: number
+  ): string | null {
+    if (!count) {
+      return null;
+    }
+
+    return count === 1
+      ? '1 ajuste realizado automáticamente.'
+      : `${count} ajustes realizados automáticamente.`;
+  }
+
   private validateImportedWorkbook(
     workbook: XLSX.WorkBook
   ): ImportValidationResult {
     const errors: ImportIssue[] = [];
     const warnings: ImportIssue[] = [];
+    const autocorrections:
+      ImportIssue[] = [];
 
     const metadata =
       this.readGymOSMetadata(workbook);
 
     if (
-      metadata['templateVersion'] !== '2'
+      !metadata['templateVersion']
     ) {
-      this.addImportIssue(errors, {
-        severity: 'error',
+      this.addImportIssue(warnings, {
+        severity: 'warning',
         sheet: '_GymOS',
         column: 'templateVersion',
         message:
-          `GymOS requiere templateVersion 2. Se encontró "${metadata['templateVersion'] || 'ausente'}".`
+          'El archivo no declara templateVersion. Se tratará como plantilla legacy compatible.'
+      });
+    } else if (
+      metadata['templateVersion'] !== '2'
+    ) {
+      this.addImportIssue(warnings, {
+        severity: 'warning',
+        sheet: '_GymOS',
+        column: 'templateVersion',
+        message:
+          `El archivo declara templateVersion "${metadata['templateVersion']}". GymOS aplicará normalización segura antes de validar.`
       });
     }
 
     if (
-      metadata['schemaVersion'] !== '4.2'
+      !metadata['schemaVersion']
     ) {
-      this.addImportIssue(errors, {
-        severity: 'error',
+      this.addImportIssue(warnings, {
+        severity: 'warning',
         sheet: '_GymOS',
         column: 'schemaVersion',
         message:
-          `GymOS requiere schemaVersion 4.2. Se encontró "${metadata['schemaVersion'] || 'ausente'}".`
+          'El archivo no declara schemaVersion. Se validará contra el esquema actual.'
+      });
+    } else if (
+      metadata['schemaVersion'] !== '4.2'
+    ) {
+      this.addImportIssue(warnings, {
+        severity: 'warning',
+        sheet: '_GymOS',
+        column: 'schemaVersion',
+        message:
+          `El archivo declara schemaVersion "${metadata['schemaVersion']}". Se validará contra el esquema actual 4.2.`
       });
     }
 
@@ -1259,11 +1600,12 @@ export class Routines implements OnInit {
       return {
         sessions: [],
         errors,
-        warnings
+        warnings,
+        autocorrections
       };
     }
 
-    const sessionRows =
+    const rawSessionRows =
       XLSX.utils.sheet_to_json<
         Record<string, any>
       >(
@@ -1271,13 +1613,34 @@ export class Routines implements OnInit {
         { defval: '' }
       );
 
-    const routineRows =
+    const rawRoutineRows =
       XLSX.utils.sheet_to_json<
         Record<string, any>
       >(
         routineSheet,
         { defval: '' }
       );
+
+    const normalizedSessions =
+      this.normalizeImportedSessionRows(
+        rawSessionRows
+      );
+    const normalizedRoutine =
+      this.normalizeImportedRoutineRows(
+        rawRoutineRows
+      );
+
+    const sessionRows =
+      normalizedSessions.rows;
+    const routineRows =
+      normalizedRoutine.rows;
+
+    autocorrections.push(
+      ...normalizedSessions
+        .autocorrections,
+      ...normalizedRoutine
+        .autocorrections
+    );
 
     if (
       sessionRows.length < 2 ||
@@ -1643,17 +2006,12 @@ export class Routines implements OnInit {
         }
 
         const targetType =
-          this.normalizeHeader(
+          this.normalizeTargetType(
             row['Tipo de objetivo']
           );
 
         if (
-          ![
-            'repeticiones',
-            'repeticion',
-            'reps',
-            'rep'
-          ].includes(targetType)
+          targetType !== 'repeticiones'
         ) {
           this.addImportIssue(errors, {
             severity: 'error',
@@ -1833,7 +2191,8 @@ export class Routines implements OnInit {
         importedSessions,
 
       errors,
-      warnings
+      warnings,
+      autocorrections
     };
   }
 
@@ -1884,7 +2243,8 @@ export class Routines implements OnInit {
 
       this.importIssues.set([
         ...validation.errors,
-        ...validation.warnings
+        ...validation.warnings,
+        ...validation.autocorrections
       ]);
 
       if (
@@ -1911,9 +2271,17 @@ export class Routines implements OnInit {
       this.creating.set(true);
 
       this.importMessage.set(
-        validation.warnings.length
-          ? `Rutina válida con ${validation.warnings.length} aviso(s). Revísala antes de guardarla y activarla.`
-          : 'Rutina validada correctamente. Revísala antes de guardarla y activarla.'
+        [
+          this.importAutocorrectionSummary(
+            validation.autocorrections
+              .length
+          ),
+          validation.warnings.length
+            ? `Rutina válida con ${validation.warnings.length} aviso(s).`
+            : 'La rutina está lista para importar.'
+        ]
+          .filter(Boolean)
+          .join(' ')
       );
 
     } catch (err: any) {

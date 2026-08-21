@@ -27,12 +27,31 @@ import {
 import {
   environment
 } from '../../../environments/environment';
+import * as XLSX from 'xlsx';
 import {
   AuthService
 } from '../../core/auth.service';
 import {
   Routines
 } from './routines';
+
+type ImportIssueLike = {
+  severity:
+    | 'error'
+    | 'warning'
+    | 'autocorrection';
+  sheet: string;
+  row?: number;
+  column?: string;
+  message: string;
+};
+
+type ImportValidationLike = {
+  sessions: any[];
+  errors: ImportIssueLike[];
+  warnings: ImportIssueLike[];
+  autocorrections: ImportIssueLike[];
+};
 
 
 describe('Routines training analytics', () => {
@@ -227,6 +246,459 @@ describe('Routines training analytics', () => {
         .textContent ?? ''
     ).replace(/\s+/g, ' ');
   }
+
+
+  const catalogExercise = (
+    id = 'bench-press',
+    name = 'Press de banca'
+  ) => ({
+    id,
+    name,
+    muscle:
+      'Pecho',
+    equipment:
+      'Barra',
+    type:
+      'strength',
+    category:
+      'compound'
+  });
+
+
+  function routineRow(
+    overrides: Record<string, any> = {}
+  ) {
+    return {
+      'Sesión':
+        'A',
+      'Orden':
+        1,
+      'Ejercicio':
+        'Press de banca',
+      'Series':
+        3,
+      'Tipo de objetivo':
+        'repeticiones',
+      'Objetivo mínimo':
+        6,
+      'Objetivo máximo':
+        10,
+      'RIR mínimo':
+        1,
+      'RIR máximo':
+        3,
+      'Descanso (s)':
+        120,
+      'Notas':
+        '',
+      '_GymOS exercise':
+        'bench-press',
+      ...overrides
+    };
+  }
+
+
+  function workbookForImport(
+    options: {
+      routineRows?: Record<string, any>[];
+      sessionRows?: Record<string, any>[];
+      metadata?: any[] | null;
+    } = {}
+  ): XLSX.WorkBook {
+    const workbook =
+      XLSX.utils.book_new();
+
+    XLSX.utils.book_append_sheet(
+      workbook,
+      XLSX.utils.json_to_sheet(
+        options.sessionRows ?? [
+          {
+            'Sesión': 'A',
+            'Orden': 1,
+            'Nombre': 'Sesión A',
+            '_GymOS session': ''
+          },
+          {
+            'Sesión': 'B',
+            'Orden': 2,
+            'Nombre': 'Sesión B',
+            '_GymOS session': ''
+          }
+        ]
+      ),
+      'Sesiones'
+    );
+
+    XLSX.utils.book_append_sheet(
+      workbook,
+      XLSX.utils.json_to_sheet(
+        options.routineRows ?? [
+          routineRow(),
+          routineRow({
+            'Sesión': 'B',
+            'Orden': 1
+          })
+        ]
+      ),
+      'Rutina'
+    );
+
+    if (
+      options.metadata !== null
+    ) {
+      XLSX.utils.book_append_sheet(
+        workbook,
+        XLSX.utils.aoa_to_sheet(
+          options.metadata ?? [
+            [
+              'templateVersion',
+              2
+            ],
+            [
+              'schemaVersion',
+              '4.2'
+            ],
+            [
+              'kind',
+              'template'
+            ]
+          ]
+        ),
+        '_GymOS'
+      );
+    }
+
+    return workbook;
+  }
+
+
+  function validateWorkbook(
+    workbook: XLSX.WorkBook,
+    exercises = [
+      catalogExercise()
+    ]
+  ) {
+    const fixture =
+      TestBed.createComponent(
+        Routines
+      );
+    const component =
+      fixture.componentInstance as any;
+
+    component.exercises.set(
+      exercises
+    );
+
+    return component
+      .validateImportedWorkbook(
+        workbook
+      ) as ImportValidationLike;
+  }
+
+
+  it.each([
+    'reps',
+    'Reps',
+    ' REPETICIONES ',
+    'repeticion',
+    'repetición',
+    'repeticiones',
+    'repetitions'
+  ])(
+    'normalizes target type alias "%s" to repeticiones',
+    targetType => {
+      const validation =
+        validateWorkbook(
+          workbookForImport({
+            routineRows: [
+              routineRow({
+                'Tipo de objetivo':
+                  targetType
+              }),
+              routineRow({
+                'Sesión': 'B',
+                'Orden': 1
+              })
+            ]
+          })
+        );
+
+      expect(validation.errors)
+        .toHaveLength(0);
+      expect(
+        validation.sessions[0]
+          .exercises[0]
+          .repsMin
+      ).toBe(6);
+
+      if (
+        targetType !== 'repeticiones'
+      ) {
+        expect(
+          validation.autocorrections
+            .some(
+              issue =>
+                issue.sheet === 'Rutina' &&
+                issue.column ===
+                  'Tipo de objetivo' &&
+                issue.message.includes(
+                  'repeticiones'
+                )
+            )
+        ).toBe(true);
+      }
+    }
+  );
+
+
+  it('keeps canonical target type unchanged without an autocorrection', () => {
+    const validation =
+      validateWorkbook(
+        workbookForImport()
+      );
+
+    expect(validation.errors)
+      .toHaveLength(0);
+    expect(
+      validation.autocorrections
+        .some(
+          issue =>
+            issue.column ===
+            'Tipo de objetivo'
+        )
+    ).toBe(false);
+  });
+
+
+  it('keeps ambiguous target types as blocking errors', () => {
+    const validation =
+      validateWorkbook(
+        workbookForImport({
+          routineRows: [
+            routineRow({
+              'Tipo de objetivo':
+                'fuerza'
+            }),
+            routineRow({
+              'Sesión': 'B',
+              'Orden': 1
+            })
+          ]
+        })
+      );
+
+    expect(validation.errors)
+      .toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            sheet: 'Rutina',
+            row: 2,
+            column:
+              'Tipo de objetivo',
+            message:
+              'En esta versión usa "repeticiones".'
+          })
+        ])
+      );
+  });
+
+
+  it('keeps unknown exercise IDs as blocking errors', () => {
+    const validation =
+      validateWorkbook(
+        workbookForImport({
+          routineRows: [
+            routineRow({
+              '_GymOS exercise':
+                'unknown-exercise'
+            }),
+            routineRow({
+              'Sesión': 'B',
+              'Orden': 1
+            })
+          ]
+        })
+      );
+
+    expect(validation.errors)
+      .toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            sheet: 'Rutina',
+            row: 2,
+            column:
+              '_GymOS exercise'
+          })
+        ])
+      );
+  });
+
+
+  it('trims accidental whitespace in exercise IDs without fuzzy matching', () => {
+    const validation =
+      validateWorkbook(
+        workbookForImport({
+          routineRows: [
+            routineRow({
+              '_GymOS exercise':
+                ' bench-press '
+            }),
+            routineRow({
+              'Sesión': 'B',
+              'Orden': 1
+            })
+          ]
+        })
+      );
+
+    expect(validation.errors)
+      .toHaveLength(0);
+    expect(
+      validation.autocorrections
+    ).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          sheet: 'Rutina',
+          row: 2,
+          column:
+            '_GymOS exercise',
+          message:
+            '" bench-press " → "bench-press"'
+        })
+      ])
+    );
+  });
+
+
+  it('imports compatible legacy files without templateVersion as warnings only', () => {
+    const validation =
+      validateWorkbook(
+        workbookForImport({
+          metadata: null
+        })
+      );
+
+    expect(validation.errors)
+      .toHaveLength(0);
+    expect(validation.warnings)
+      .toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            sheet: '_GymOS',
+            column:
+              'templateVersion'
+          })
+        ])
+      );
+  });
+
+
+  it('does not block import for warnings or autocorrections but blocks errors', () => {
+    const warningOnly =
+      validateWorkbook(
+        workbookForImport({
+          routineRows: [
+            routineRow({
+              'Ejercicio':
+                'Nombre externo',
+              'Tipo de objetivo':
+                'Reps'
+            }),
+            routineRow({
+              'Sesión': 'B',
+              'Orden': 1
+            })
+          ]
+        })
+      );
+
+    expect(warningOnly.errors)
+      .toHaveLength(0);
+    expect(warningOnly.warnings.length)
+      .toBeGreaterThan(0);
+    expect(
+      warningOnly.autocorrections.length
+    ).toBeGreaterThan(0);
+
+    const withError =
+      validateWorkbook(
+        workbookForImport({
+          routineRows: [
+            routineRow({
+              'Tipo de objetivo':
+                'fuerza'
+            }),
+            routineRow({
+              'Sesión': 'B',
+              'Orden': 1
+            })
+          ]
+        })
+      );
+
+    expect(withError.errors.length)
+      .toBeGreaterThan(0);
+  });
+
+
+  it('regresses the production row 7 target type error into an autocorrection', () => {
+    const exercises =
+      Array.from(
+        {
+          length: 6
+        },
+        (_, index) =>
+          catalogExercise(
+            `exercise-${index + 1}`,
+            `Ejercicio ${index + 1}`
+          )
+      );
+    const routineRows =
+      exercises.map(
+        (exercise, index) =>
+          routineRow({
+            'Sesión':
+              index < 3 ? 'A' : 'B',
+            'Orden':
+              index < 3
+                ? index + 1
+                : index - 2,
+            'Ejercicio':
+              exercise.name,
+            '_GymOS exercise':
+              exercise.id,
+            'Tipo de objetivo':
+              index === 5
+                ? 'reps'
+                : 'repeticiones'
+          })
+      );
+
+    const validation =
+      validateWorkbook(
+        workbookForImport({
+          routineRows
+        }),
+        exercises
+      );
+
+    expect(validation.errors)
+      .toHaveLength(0);
+    expect(
+      validation.autocorrections
+    ).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          sheet: 'Rutina',
+          row: 7,
+          column:
+            'Tipo de objetivo',
+          message:
+            '"reps" → "repeticiones"'
+        })
+      ])
+    );
+  });
 
 
   it('renders training analytics metrics', async () => {

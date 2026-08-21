@@ -145,6 +145,19 @@ button,
   margin: 16px 0;
 }
 
+.import-issue-group {
+  display: grid;
+  gap: 8px;
+}
+
+.import-issue-group h4 {
+  margin: 4px 0 0;
+
+  color: var(--gymos-text);
+
+  font-size: 0.95rem;
+}
+
 .import-issue {
   padding: 12px;
   border: 1px solid var(--gymos-border-strong);
@@ -163,6 +176,13 @@ button,
 
 .import-issue.warning {
   opacity: 0.85;
+}
+
+.import-issue.autocorrection {
+  border-color: var(--gymos-success-border);
+
+  background: var(--gymos-success-bg);
+  color: var(--gymos-success);
 }
 
 .issue-location {

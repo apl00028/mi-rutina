@@ -31,38 +31,96 @@
         Resultado de validación
       </h3>
 
-      @for (
-        issue of importIssues();
-        track $index
-      ) {
-        <div
-          class="import-issue"
-          [class.warning]="issue.severity === 'warning'"
-          [class.error]="issue.severity === 'error'"
-        >
-          <strong>
-            {{
-              issue.severity === 'error'
-                ? 'Error'
-                : 'Aviso'
-            }}
-          </strong>
+      @if (importErrors().length) {
+        <div class="import-issue-group">
+          <h4>Errores</h4>
 
-          <div class="issue-location">
-            {{ issue.sheet }}
+          @for (
+            issue of importErrors();
+            track $index
+          ) {
+            <div class="import-issue error">
+              <strong>Error</strong>
 
-            @if (issue.row) {
-              · fila {{ issue.row }}
-            }
+              <div class="issue-location">
+                {{ issue.sheet }}
 
-            @if (issue.column) {
-              · {{ issue.column }}
-            }
-          </div>
+                @if (issue.row) {
+                  · fila {{ issue.row }}
+                }
 
-          <div>
-            {{ issue.message }}
-          </div>
+                @if (issue.column) {
+                  · {{ issue.column }}
+                }
+              </div>
+
+              <div>
+                {{ issue.message }}
+              </div>
+            </div>
+          }
+        </div>
+      }
+
+      @if (importWarnings().length) {
+        <div class="import-issue-group">
+          <h4>Advertencias</h4>
+
+          @for (
+            issue of importWarnings();
+            track $index
+          ) {
+            <div class="import-issue warning">
+              <strong>Aviso</strong>
+
+              <div class="issue-location">
+                {{ issue.sheet }}
+
+                @if (issue.row) {
+                  · fila {{ issue.row }}
+                }
+
+                @if (issue.column) {
+                  · {{ issue.column }}
+                }
+              </div>
+
+              <div>
+                {{ issue.message }}
+              </div>
+            </div>
+          }
+        </div>
+      }
+
+      @if (importAutocorrections().length) {
+        <div class="import-issue-group">
+          <h4>Ajustes automáticos</h4>
+
+          @for (
+            issue of importAutocorrections();
+            track $index
+          ) {
+            <div class="import-issue autocorrection">
+              <strong>Autocorrección</strong>
+
+              <div class="issue-location">
+                {{ issue.sheet }}
+
+                @if (issue.row) {
+                  · fila {{ issue.row }}
+                }
+
+                @if (issue.column) {
+                  · {{ issue.column }}
+                }
+              </div>
+
+              <div>
+                {{ issue.message }}
+              </div>
+            </div>
+          }
         </div>
       }
     </section>

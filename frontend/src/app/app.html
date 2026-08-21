@@ -5,7 +5,9 @@
     class="app-shell"
     [class.sidebar-expanded]="sidebarExpanded()"
     [class.sidebar-collapsed]="!sidebarExpanded()"
-    [class.training-route]="isTrainingRoute()"
+    [class.workout-session-active]="
+      workoutSessionState.shouldHideBottomNav()
+    "
   >
     <aside class="sidebar">
       <div class="sidebar-top">
@@ -46,6 +48,11 @@
           [routerLinkActiveOptions]="{
             exact: true
           }"
+          [attr.aria-current]="
+            isCurrentRoute('/')
+              ? 'page'
+              : null
+          "
           title="Inicio"
         >
           <span class="nav-icon">
@@ -62,6 +69,11 @@
         <a
           routerLink="/entrenar"
           routerLinkActive="active"
+          [attr.aria-current]="
+            isCurrentRoute('/entrenar')
+              ? 'page'
+              : null
+          "
           title="Entrenar"
         >
           <span class="nav-icon">
@@ -78,7 +90,12 @@
         <a
           routerLink="/rutinas"
           routerLinkActive="active"
-          title="Rutinas"
+          [attr.aria-current]="
+            isCurrentRoute('/rutinas')
+              ? 'page'
+              : null
+          "
+          title="Planificación"
         >
           <span class="nav-icon">
             ☷
@@ -86,7 +103,7 @@
 
           @if (sidebarExpanded()) {
             <span class="nav-label">
-              Rutinas
+              Planificación
             </span>
           }
         </a>
@@ -226,7 +243,7 @@
                 </span>
 
                 <span class="nav-label">
-                  Rutinas
+                  Planificación
                 </span>
 
                 @if (isCurrentRoute('/rutinas')) {
@@ -483,6 +500,11 @@
         [routerLinkActiveOptions]="{
           exact: true
         }"
+        [attr.aria-current]="
+          isCurrentRoute('/')
+            ? 'page'
+            : null
+        "
         aria-label="Ir a Inicio"
       >
         <span
@@ -500,6 +522,11 @@
       <a
         routerLink="/entrenar"
         routerLinkActive="active"
+        [attr.aria-current]="
+          isCurrentRoute('/entrenar')
+            ? 'page'
+            : null
+        "
         aria-label="Ir a Entrenar"
       >
         <span
@@ -517,7 +544,12 @@
       <a
         routerLink="/rutinas"
         routerLinkActive="active"
-        aria-label="Ir a Rutinas"
+        [attr.aria-current]="
+          isCurrentRoute('/rutinas')
+            ? 'page'
+            : null
+        "
+        aria-label="Ir a Planificación"
       >
         <span
           class="nav-icon"
@@ -527,7 +559,7 @@
         </span>
 
         <span class="nav-label">
-          Rutinas
+          Planificación
         </span>
       </a>
     </nav>

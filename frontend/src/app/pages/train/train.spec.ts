@@ -31,6 +31,9 @@ import {
   AuthService
 } from '../../core/auth.service';
 import {
+  WorkoutSessionStateService
+} from '../../core/workout-session-state.service';
+import {
   Train
 } from './train';
 
@@ -382,6 +385,10 @@ describe('Train first workout flow', () => {
   it('renders the first training screen with active routine and no history', async () => {
     const fixture =
       await createLoadedTrain();
+    const sessionState =
+      TestBed.inject(
+        WorkoutSessionStateService
+      );
 
     const text =
       (
@@ -399,6 +406,11 @@ describe('Train first workout flow', () => {
     expect(text).not.toContain(
       'Última vez'
     );
+    expect(sessionState.state())
+      .toBe('idle');
+    expect(
+      sessionState.shouldHideBottomNav()
+    ).toBe(false);
     expect(text).not.toContain(
       'undefined'
     );
@@ -518,6 +530,10 @@ describe('Train first workout flow', () => {
       );
     const component =
       fixture.componentInstance;
+    const sessionState =
+      TestBed.inject(
+        WorkoutSessionStateService
+      );
     const session =
       component.routine()!.sessions[0];
 
@@ -544,6 +560,11 @@ describe('Train first workout flow', () => {
       .toBeNull();
     expect(component.expandedSetKey())
       .toBeNull();
+    expect(sessionState.state())
+      .toBe('active');
+    expect(
+      sessionState.shouldHideBottomNav()
+    ).toBe(true);
     expect(
       fixture.nativeElement.querySelectorAll(
         '.exercise-expanded'
@@ -587,7 +608,16 @@ describe('Train first workout flow', () => {
       );
     const component =
       fixture.componentInstance;
+    const sessionState =
+      TestBed.inject(
+        WorkoutSessionStateService
+      );
 
+    expect(sessionState.state())
+      .toBe('active');
+    expect(
+      sessionState.shouldHideBottomNav()
+    ).toBe(true);
     expect(
       component.expandedExerciseId()
     ).toBe('dumbbell-bench-press');
@@ -600,6 +630,29 @@ describe('Train first workout flow', () => {
     expect(
       pageText(fixture)
     ).toContain('En curso');
+  });
+
+
+  it('returns the shell session state to idle when leaving training', async () => {
+    const fixture =
+      await createLoadedTrain([
+        activeWorkout()
+      ]);
+    const sessionState =
+      TestBed.inject(
+        WorkoutSessionStateService
+      );
+
+    expect(sessionState.state())
+      .toBe('active');
+
+    fixture.destroy();
+
+    expect(sessionState.state())
+      .toBe('idle');
+    expect(
+      sessionState.shouldHideBottomNav()
+    ).toBe(false);
   });
 
 
@@ -633,7 +686,13 @@ describe('Train first workout flow', () => {
 
     const component =
       fixture.componentInstance;
+    const sessionState =
+      TestBed.inject(
+        WorkoutSessionStateService
+      );
 
+    expect(sessionState.state())
+      .toBe('active');
     expect(component.expandedExerciseId())
       .toBeNull();
     expect(component.expandedSetKey())
@@ -2779,6 +2838,16 @@ describe('Train first workout flow', () => {
     expect(
       component.activeSession()
     ).toBeNull();
+    const sessionState =
+      TestBed.inject(
+        WorkoutSessionStateService
+      );
+
+    expect(sessionState.state())
+      .toBe('idle');
+    expect(
+      sessionState.shouldHideBottomNav()
+    ).toBe(false);
   });
 
 
@@ -2959,6 +3028,16 @@ describe('Train first workout flow', () => {
     expect(
       component.activeSession()
     ).toBeNull();
+    const sessionState =
+      TestBed.inject(
+        WorkoutSessionStateService
+      );
+
+    expect(sessionState.state())
+      .toBe('idle');
+    expect(
+      sessionState.shouldHideBottomNav()
+    ).toBe(false);
     expect(
       component.workoutHistory()
         .some(

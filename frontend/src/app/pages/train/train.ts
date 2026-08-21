@@ -6,6 +6,9 @@ import { AuthService } from '../../core/auth.service';
 import {
   SettingsService
 } from '../../core/settings.service';
+import {
+  WorkoutSessionStateService
+} from '../../core/workout-session-state.service';
 
 interface Exercise {
   exerciseId: string;
@@ -214,10 +217,15 @@ export class Train implements OnInit, OnDestroy {
     private http: HttpClient,
     public auth: AuthService,
     public settingsService:
-      SettingsService
+      SettingsService,
+    private workoutSessionState:
+      WorkoutSessionStateService
   ) {}
 
   async ngOnInit(): Promise<void> {
+    this.workoutSessionState
+      .setChecking();
+
     await this.loadRoutine();
     await this.loadWorkoutHistory();
     this.restoreActiveWorkout();
@@ -226,6 +234,8 @@ export class Train implements OnInit, OnDestroy {
 
   ngOnDestroy(): void {
     this.destroyed = true;
+    this.workoutSessionState
+      .setIdle();
     this.clearSetTimer();
     this.clearRestTimer();
 
@@ -510,6 +520,8 @@ export class Train implements OnInit, OnDestroy {
     const routine = this.routine();
 
     if (!routine) {
+      this.workoutSessionState
+        .setIdle();
       return;
     }
 
@@ -518,6 +530,8 @@ export class Train implements OnInit, OnDestroy {
     );
 
     if (!active) {
+      this.workoutSessionState
+        .setIdle();
       return;
     }
 
@@ -526,11 +540,15 @@ export class Train implements OnInit, OnDestroy {
     );
 
     if (!session) {
+      this.workoutSessionState
+        .setIdle();
       return;
     }
 
     this.activeWorkout.set(active);
     this.activeSession.set(session);
+    this.workoutSessionState
+      .setActive();
     this.syncExpandedWorkoutStep();
   }
 
@@ -2371,6 +2389,8 @@ export class Train implements OnInit, OnDestroy {
 
       this.activeWorkout.set(created);
       this.activeSession.set(session);
+      this.workoutSessionState
+        .setActive();
       this.syncExpandedWorkoutStep();
       this.cancelConfirmationOpen.set(false);
       this.workoutEditVersion = 0;
@@ -3410,6 +3430,8 @@ export class Train implements OnInit, OnDestroy {
 
       this.activeWorkout.set(null);
       this.activeSession.set(null);
+      this.workoutSessionState
+        .setIdle();
       this.expandedExerciseId.set(null);
       this.expandedSetKey.set(null);
       this.cancelConfirmationOpen.set(false);
@@ -3517,6 +3539,8 @@ export class Train implements OnInit, OnDestroy {
       );
       this.activeWorkout.set(null);
       this.activeSession.set(null);
+      this.workoutSessionState
+        .setIdle();
       this.expandedExerciseId.set(null);
       this.expandedSetKey.set(null);
       this.cancelConfirmationOpen.set(false);

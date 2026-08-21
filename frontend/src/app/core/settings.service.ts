@@ -41,6 +41,9 @@ export const DEFAULT_SETTINGS:
 const STORAGE_KEY =
   'gymos-settings-v1';
 
+const DARK_THEME_ENABLED =
+  false;
+
 @Injectable({
   providedIn: 'root'
 })
@@ -59,10 +62,10 @@ export class SettingsService {
   update(
     patch: Partial<GymOSSettings>
   ): void {
-    const next = {
+    const next = this.normalize({
       ...this.settings(),
       ...patch
-    };
+    });
 
     this.settings.set(next);
     this.writeSettings(next);
@@ -146,10 +149,12 @@ export class SettingsService {
               value.confirmBeforeFinish
             ),
       theme:
-        value.theme === 'light' ||
-        value.theme === 'dark'
-          ? value.theme
-          : 'system',
+        value.theme === 'dark' &&
+        DARK_THEME_ENABLED
+          ? 'dark'
+          : value.theme === 'light'
+            ? 'light'
+            : 'system',
       textSize:
         value.textSize === 'small' ||
         value.textSize === 'large'
@@ -175,11 +180,9 @@ export class SettingsService {
       'gymos-reduce-motion'
     );
 
-    if (settings.theme !== 'system') {
-      root.classList.add(
-        `gymos-theme-${settings.theme}`
-      );
-    }
+    root.classList.add(
+      `gymos-theme-${this.effectiveTheme(settings)}`
+    );
 
     root.classList.add(
       `gymos-text-${settings.textSize}`
@@ -190,5 +193,18 @@ export class SettingsService {
         'gymos-reduce-motion'
       );
     }
+  }
+
+  private effectiveTheme(
+    settings: GymOSSettings
+  ): 'light' | 'dark' {
+    if (
+      settings.theme === 'dark' &&
+      DARK_THEME_ENABLED
+    ) {
+      return 'dark';
+    }
+
+    return 'light';
   }
 }

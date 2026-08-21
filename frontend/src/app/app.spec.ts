@@ -33,6 +33,9 @@ import {
 import {
   AuthService
 } from './core/auth.service';
+import {
+  WorkoutSessionStateService
+} from './core/workout-session-state.service';
 
 @Component({
   selector: 'app-login-stub',
@@ -302,7 +305,7 @@ describe('App', () => {
     ).toEqual([
       '⌂ Inicio',
       '◫ Entrenar',
-      '☷ Rutinas'
+      '☷ Planificación'
     ]);
     expect(
       links.map(link =>
@@ -492,6 +495,13 @@ describe('App', () => {
       '/rutinas',
       '/ajustes'
     ]);
+    expect(
+      links.map(link =>
+        link.textContent
+          ?.replace(/\s+/g, ' ')
+          .trim()
+      )
+    ).toContain('☷ Planificación Actual');
 
     const activeLink =
       fixture.nativeElement.querySelector(
@@ -505,10 +515,35 @@ describe('App', () => {
     expect(activeLink.textContent).toContain('Actual');
   });
 
-  it('keeps the bottom navigation hidden on training while brand navigation remains available', async () => {
+  it('keeps bottom navigation visible on training when there is no active workout', async () => {
     const fixture =
       await createReadyApp('/entrenar');
 
+    const shell =
+      fixture.nativeElement.querySelector(
+        '.app-shell'
+      ) as HTMLElement;
+
+    expect(
+      shell.classList.contains(
+        'workout-session-active'
+      )
+    ).toBe(false);
+    expect(
+      fixture.nativeElement.querySelector(
+        '.bottom-nav'
+      )
+    ).toBeTruthy();
+  });
+
+
+  it('hides bottom navigation while a workout session is active and keeps brand navigation available', async () => {
+    const fixture =
+      await createReadyApp('/entrenar');
+    const sessionState =
+      TestBed.inject(
+        WorkoutSessionStateService
+      );
     const shell =
       fixture.nativeElement.querySelector(
         '.app-shell'
@@ -518,7 +553,14 @@ describe('App', () => {
         '.mobile-brand'
       ) as HTMLButtonElement;
 
-    expect(shell.classList.contains('training-route'))
+    sessionState.setActive();
+    fixture.detectChanges();
+
+    expect(
+      shell.classList.contains(
+        'workout-session-active'
+      )
+    )
       .toBe(true);
     expect(
       fixture.nativeElement.querySelector(
@@ -656,8 +698,11 @@ describe('App', () => {
         '.app-shell'
       ) as HTMLElement;
 
-    expect(shell.classList.contains('training-route'))
-      .toBe(true);
+    expect(
+      shell.classList.contains(
+        'workout-session-active'
+      )
+    ).toBe(false);
     expect(
       fixture.nativeElement.textContent
     ).toContain('Entrenar protegido');

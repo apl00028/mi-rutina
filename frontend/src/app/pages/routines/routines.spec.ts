@@ -237,6 +237,18 @@ describe('Routines training analytics', () => {
       pageText(fixture);
 
     expect(text).toContain(
+      'Planificación'
+    );
+    expect(text).not.toContain(
+      'Rutinas'
+    );
+    expect(text).toContain(
+      'Gestionar rutina'
+    );
+    expect(text).toContain(
+      'Crear rutina manual'
+    );
+    expect(text).toContain(
       'Entrenamientos 3'
     );
     expect(text).toContain(

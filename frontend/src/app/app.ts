@@ -24,6 +24,9 @@ import {
 import {
   SettingsService
 } from './core/settings.service';
+import {
+  WorkoutSessionStateService
+} from './core/workout-session-state.service';
 
 type AppInitializationState =
   | 'initializing'
@@ -59,9 +62,6 @@ export class App implements OnDestroy {
   isStandalonePage =
     signal(false);
 
-  isTrainingRoute =
-    signal(false);
-
   gymosMe =
     signal<GymOSMe | null>(null);
 
@@ -87,7 +87,9 @@ export class App implements OnDestroy {
     public auth: AuthService,
     private router: Router,
     private settingsService:
-      SettingsService
+      SettingsService,
+    public workoutSessionState:
+      WorkoutSessionStateService
   ) {
     this.syncRouteState();
 
@@ -124,10 +126,6 @@ export class App implements OnDestroy {
       path === '/login' ||
       path === '/access-pending' ||
       path === '/onboarding'
-    );
-
-    this.isTrainingRoute.set(
-      path === '/entrenar'
     );
 
     if (

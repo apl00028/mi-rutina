@@ -211,7 +211,7 @@ describe('Settings pages', () => {
     ).toBe(false);
   });
 
-  it('applies appearance settings globally and keeps them after reload', () => {
+  it('keeps the incomplete dark theme disabled and applies the safe light class', () => {
     const fixture =
       TestBed.createComponent(
         SettingsAppearance
@@ -230,10 +230,16 @@ describe('Settings pages', () => {
       reduceMotion: true
     });
 
+    expect(service.settings().theme)
+      .toBe('system');
+    expect(
+      document.documentElement.classList
+        .contains('gymos-theme-light')
+    ).toBe(true);
     expect(
       document.documentElement.classList
         .contains('gymos-theme-dark')
-    ).toBe(true);
+    ).toBe(false);
     expect(
       document.documentElement.classList
         .contains('gymos-text-large')
@@ -248,10 +254,103 @@ describe('Settings pages', () => {
 
     expect(fresh.settings())
       .toMatchObject({
-        theme: 'dark',
+        theme: 'system',
         textSize: 'large',
         reduceMotion: true
       });
+    expect(
+      document.documentElement.classList
+        .contains('gymos-theme-light')
+    ).toBe(true);
+    expect(
+      document.documentElement.classList
+        .contains('gymos-theme-dark')
+    ).toBe(false);
+  });
+
+
+  it('uses a safe light foreground/background theme for the system default', () => {
+    const service =
+      TestBed.inject(
+        SettingsService
+      );
+
+    expect(service.settings().theme)
+      .toBe('system');
+    expect(
+      document.documentElement.classList
+        .contains('gymos-theme-light')
+    ).toBe(true);
+    expect(
+      document.documentElement.classList
+        .contains('gymos-theme-dark')
+    ).toBe(false);
+  });
+
+
+  it('shows the dark theme option as unavailable while dark mode is incomplete', () => {
+    const fixture =
+      TestBed.createComponent(
+        SettingsAppearance
+      );
+
+    fixture.detectChanges();
+
+    const buttons =
+      Array.from(
+        fixture.nativeElement.querySelectorAll(
+          '[aria-label="Tema"] button'
+        )
+      ) as HTMLButtonElement[];
+    const darkButton =
+      buttons.find(
+        button =>
+          button.textContent
+            ?.trim() === 'Oscuro'
+      );
+
+    expect(darkButton).toBeTruthy();
+    expect(darkButton?.disabled)
+      .toBe(true);
+    expect(
+      darkButton?.getAttribute(
+        'aria-disabled'
+      )
+    ).toBe('true');
+  });
+
+
+  it('keeps explicit light theme applied after reload', () => {
+    const service =
+      TestBed.inject(
+        SettingsService
+      );
+
+    service.update({
+      theme: 'light'
+    });
+
+    expect(
+      document.documentElement.classList
+        .contains('gymos-theme-light')
+    ).toBe(true);
+    expect(
+      JSON.parse(
+        localStorage.getItem(
+          'gymos-settings-v1'
+        ) ?? '{}'
+      ).theme
+    ).toBe('light');
+
+    const fresh =
+      new SettingsService();
+
+    expect(fresh.settings().theme)
+      .toBe('light');
+    expect(
+      document.documentElement.classList
+        .contains('gymos-theme-light')
+    ).toBe(true);
   });
 
   it('does not render fake data actions', () => {

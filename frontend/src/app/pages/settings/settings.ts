@@ -403,13 +403,20 @@ export class SettingsTraining {
                 type="button"
                 role="radio"
                 [attr.aria-checked]="theme() === option.value"
+                [attr.aria-disabled]="option.disabled ? 'true' : null"
                 [class.active]="theme() === option.value"
+                [disabled]="option.disabled"
                 (click)="setTheme(option.value)"
               >
                 {{ option.label }}
               </button>
             }
           </div>
+
+          <small>
+            El tema oscuro queda pendiente hasta completar
+            la adaptación visual de todas las pantallas.
+          </small>
         </div>
 
         <div class="settings-field">
@@ -466,6 +473,7 @@ export class SettingsAppearance {
   readonly themeOptions: {
     value: ThemePreference;
     label: string;
+    disabled?: boolean;
   }[] = [
     {
       value: 'system',
@@ -477,7 +485,8 @@ export class SettingsAppearance {
     },
     {
       value: 'dark',
-      label: 'Oscuro'
+      label: 'Oscuro',
+      disabled: true
     }
   ];
 
@@ -525,6 +534,10 @@ export class SettingsAppearance {
   setTheme(
     theme: ThemePreference
   ): void {
+    if (theme === 'dark') {
+      return;
+    }
+
     this.settingsService.update({
       theme
     });

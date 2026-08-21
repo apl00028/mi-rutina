@@ -12,6 +12,10 @@
   color-scheme: light;
 }
 
+html.gymos-theme-light {
+  color-scheme: light;
+}
+
 html.gymos-theme-dark {
   --gymos-bg: #0f172a;
   --gymos-surface: #111827;
@@ -22,20 +26,6 @@ html.gymos-theme-dark {
   --gymos-navy: #f9fafb;
 
   color-scheme: dark;
-}
-
-@media (prefers-color-scheme: dark) {
-  html:not(.gymos-theme-light) {
-    --gymos-bg: #0f172a;
-    --gymos-surface: #111827;
-    --gymos-surface-muted: #1f2937;
-    --gymos-border: #374151;
-    --gymos-text: #f9fafb;
-    --gymos-text-muted: #d1d5db;
-    --gymos-navy: #f9fafb;
-
-    color-scheme: dark;
-  }
 }
 
 html.gymos-text-small {

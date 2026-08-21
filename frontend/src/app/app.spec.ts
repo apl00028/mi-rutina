@@ -19,6 +19,18 @@ import {
 
 import { App } from './app';
 import {
+  routes
+} from './app.routes';
+import {
+  accessGuard
+} from './core/access.guard';
+import {
+  adminGuard
+} from './core/admin.guard';
+import {
+  authGuard
+} from './core/auth.guard';
+import {
   AuthService
 } from './core/auth.service';
 
@@ -27,6 +39,42 @@ import {
   template: 'Pantalla de login'
 })
 class LoginStub {}
+
+@Component({
+  standalone: true,
+  template: 'Inicio protegido'
+})
+class HomeStub {}
+
+@Component({
+  standalone: true,
+  template: 'Entrenar protegido'
+})
+class TrainStub {}
+
+@Component({
+  standalone: true,
+  template: 'Rutinas protegidas'
+})
+class RoutinesStub {}
+
+@Component({
+  standalone: true,
+  template: 'Acceso pendiente'
+})
+class AccessPendingStub {}
+
+@Component({
+  standalone: true,
+  template: 'Onboarding'
+})
+class OnboardingStub {}
+
+@Component({
+  standalone: true,
+  template: 'Admin access'
+})
+class AdminAccessStub {}
 
 describe('App', () => {
   let authUser:
@@ -63,6 +111,42 @@ describe('App', () => {
               'login',
             component:
               LoginStub
+          },
+          {
+            path:
+              'access-pending',
+            component:
+              AccessPendingStub
+          },
+          {
+            path:
+              'onboarding',
+            component:
+              OnboardingStub
+          },
+          {
+            path:
+              'admin/access',
+            component:
+              AdminAccessStub
+          },
+          {
+            path:
+              '',
+            component:
+              HomeStub
+          },
+          {
+            path:
+              'entrenar',
+            component:
+              TrainStub
+          },
+          {
+            path:
+              'rutinas',
+            component:
+              RoutinesStub
           }
         ]),
         {
@@ -128,6 +212,154 @@ describe('App', () => {
     const compiled = fixture.nativeElement as HTMLElement;
     expect(compiled.textContent).toContain('GymOS');
     expect(compiled.textContent).toContain('Inicio');
+  });
+
+  it('keeps the primary protected routes configured with the existing guards', () => {
+    const routeByPath =
+      new Map(
+        routes.map(route => [
+          route.path,
+          route
+        ])
+      );
+
+    expect(routeByPath.get('')?.canActivate)
+      .toEqual([accessGuard]);
+    expect(routeByPath.get('entrenar')?.canActivate)
+      .toEqual([accessGuard]);
+    expect(routeByPath.get('rutinas')?.canActivate)
+      .toEqual([accessGuard]);
+    expect(routeByPath.get('login')?.canActivate)
+      .toBeUndefined();
+    expect(routeByPath.get('access-pending')?.canActivate)
+      .toEqual([authGuard]);
+    expect(routeByPath.get('onboarding')?.canActivate)
+      .toEqual([accessGuard]);
+    expect(routeByPath.get('admin/access')?.canActivate)
+      .toEqual([adminGuard]);
+  });
+
+  it('renders mobile bottom navigation with the same primary routes', async () => {
+    const fixture =
+      TestBed.createComponent(App);
+
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    const links =
+      Array.from(
+        fixture.nativeElement.querySelectorAll(
+          '.bottom-nav a'
+        )
+      ) as HTMLAnchorElement[];
+
+    expect(links).toHaveLength(3);
+    expect(
+      links.map(link =>
+        link.textContent
+          ?.replace(/\s+/g, ' ')
+          .trim()
+      )
+    ).toEqual([
+      '⌂ Inicio',
+      '◫ Entrenar',
+      '☷ Rutinas'
+    ]);
+    expect(
+      links.map(link =>
+        link.getAttribute('href')
+      )
+    ).toEqual([
+      '/',
+      '/entrenar',
+      '/rutinas'
+    ]);
+    expect(
+      fixture.nativeElement.querySelector(
+        '.bottom-nav'
+      )?.getAttribute('aria-label')
+    ).toBe('Navegación principal');
+  });
+
+  it('marks the training shell route without changing the route content', async () => {
+    const router =
+      TestBed.inject(Router);
+
+    await router.navigateByUrl('/entrenar');
+
+    const fixture =
+      TestBed.createComponent(App);
+
+    fixture.detectChanges();
+    await fixture.whenStable();
+    await flushPromises();
+    fixture.detectChanges();
+
+    const shell =
+      fixture.nativeElement.querySelector(
+        '.app-shell'
+      ) as HTMLElement;
+
+    expect(shell.classList.contains('training-route'))
+      .toBe(true);
+    expect(
+      fixture.nativeElement.textContent
+    ).toContain('Entrenar protegido');
+  });
+
+  it('keeps standalone routes outside the protected shell', async () => {
+    const router =
+      TestBed.inject(Router);
+
+    for (
+      const path of [
+        '/login',
+        '/access-pending',
+        '/onboarding'
+      ]
+    ) {
+      await router.navigateByUrl(path);
+
+      const fixture =
+        TestBed.createComponent(App);
+
+      fixture.detectChanges();
+      await fixture.whenStable();
+      fixture.detectChanges();
+
+      expect(
+        fixture.nativeElement.querySelector(
+          '.app-shell'
+        )
+      ).toBeNull();
+    }
+  });
+
+  it('keeps admin access inside the protected shell', async () => {
+    const router =
+      TestBed.inject(Router);
+
+    await router.navigateByUrl(
+      '/admin/access'
+    );
+
+    const fixture =
+      TestBed.createComponent(App);
+
+    fixture.detectChanges();
+    await fixture.whenStable();
+    await flushPromises();
+    fixture.detectChanges();
+
+    expect(
+      fixture.nativeElement.querySelector(
+        '.app-shell'
+      )
+    ).toBeTruthy();
+    expect(
+      fixture.nativeElement.textContent
+    ).toContain('Admin access');
   });
 
   it('shows global initialization while protected shell waits', () => {

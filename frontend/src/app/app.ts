@@ -53,6 +53,9 @@ export class App implements OnDestroy {
   isStandalonePage =
     signal(false);
 
+  isTrainingRoute =
+    signal(false);
+
   gymosMe =
     signal<GymOSMe | null>(null);
 
@@ -113,6 +116,10 @@ export class App implements OnDestroy {
       path === '/login' ||
       path === '/access-pending' ||
       path === '/onboarding'
+    );
+
+    this.isTrainingRoute.set(
+      path === '/entrenar'
     );
 
     if (

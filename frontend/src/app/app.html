@@ -5,6 +5,7 @@
     class="app-shell"
     [class.sidebar-expanded]="sidebarExpanded()"
     [class.sidebar-collapsed]="!sidebarExpanded()"
+    [class.training-route]="isTrainingRoute()"
   >
     <aside class="sidebar">
       <div class="sidebar-top">
@@ -116,7 +117,15 @@
 
     <section class="app-main">
       <header class="topbar">
-        <div></div>
+        <div class="mobile-brand">
+          <span class="brand-icon">
+            G
+          </span>
+
+          <span class="brand-text">
+            GymOS
+          </span>
+        </div>
 
         @if (auth.user()) {
           <div class="user-menu-wrapper">
@@ -293,5 +302,64 @@
         }
       </main>
     </section>
+
+    <nav
+      class="bottom-nav"
+      aria-label="Navegación principal"
+    >
+      <a
+        routerLink="/"
+        routerLinkActive="active"
+        [routerLinkActiveOptions]="{
+          exact: true
+        }"
+        aria-label="Ir a Inicio"
+      >
+        <span
+          class="nav-icon"
+          aria-hidden="true"
+        >
+          ⌂
+        </span>
+
+        <span class="nav-label">
+          Inicio
+        </span>
+      </a>
+
+      <a
+        routerLink="/entrenar"
+        routerLinkActive="active"
+        aria-label="Ir a Entrenar"
+      >
+        <span
+          class="nav-icon"
+          aria-hidden="true"
+        >
+          ◫
+        </span>
+
+        <span class="nav-label">
+          Entrenar
+        </span>
+      </a>
+
+      <a
+        routerLink="/rutinas"
+        routerLinkActive="active"
+        aria-label="Ir a Rutinas"
+      >
+        <span
+          class="nav-icon"
+          aria-hidden="true"
+        >
+          ☷
+        </span>
+
+        <span class="nav-label">
+          Rutinas
+        </span>
+      </a>
+    </nav>
   </div>
 }

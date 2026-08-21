@@ -2,6 +2,17 @@
   width: 100%;
   max-width: 1100px;
   margin: 0 auto;
+
+  box-sizing: border-box;
+}
+
+.routines-page h1 {
+  margin: 0 0 16px;
+
+  color: #111827;
+
+  font-size: clamp(1.75rem, 4vw, 2.5rem);
+  line-height: 1.08;
 }
 
 .actions {
@@ -360,6 +371,8 @@ button,
 }
 
 .management-content {
+  min-width: 0;
+
   display: grid;
   gap: 4px;
 }
@@ -838,16 +851,147 @@ button,
 }
 
 @media (max-width: 500px) {
+  .routines-page h1 {
+    margin-bottom: 12px;
+
+    font-size: 1.75rem;
+  }
+
+  .routine-management {
+    margin: 14px 0;
+  }
+
+  .routine-management-summary,
+  .routine-action-card {
+    grid-template-columns:
+      34px
+      minmax(0, 1fr)
+      18px;
+    gap: 10px;
+
+    padding: 12px;
+
+    border-radius: 12px;
+  }
+
+  .routine-actions {
+    gap: 8px;
+
+    margin: 12px 0;
+  }
+
+  .routine-management
+  .routine-actions {
+    margin-top: 8px;
+  }
+
+  .management-icon,
+  .routine-action-icon {
+    width: 34px;
+    height: 34px;
+
+    border-radius: 9px;
+
+    font-size: 1rem;
+  }
+
+  .management-content strong,
+  .routine-action-content strong {
+    font-size: 0.95rem;
+    line-height: 1.2;
+  }
+
+  .management-content > span,
+  .routine-action-content > span {
+    font-size: 0.8rem;
+    line-height: 1.32;
+  }
+
+  .management-chevron,
+  .routine-action-arrow {
+    font-size: 1.25rem;
+  }
+
+  .analysis-content {
+    gap: 16px;
+
+    margin-top: 8px;
+    padding: 12px;
+
+    border-radius: 12px;
+  }
+
+  .analysis-section {
+    gap: 10px;
+  }
+
+  .analysis-section + .analysis-section {
+    padding-top: 14px;
+  }
+
+  .analysis-section-header h3 {
+    font-size: 1rem;
+  }
+
+  .analysis-section-header p {
+    font-size: 0.82rem;
+    line-height: 1.35;
+  }
+
+  .period-selector {
+    display: grid;
+    grid-template-columns:
+      repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .period-selector button {
+    min-width: 0;
+    min-height: 40px;
+
+    padding: 8px 10px;
+
+    font-size: 0.82rem;
+    white-space: normal;
+  }
+
   .metric-grid {
     grid-template-columns: 1fr;
   }
 
-  .analysis-content {
-    padding: 14px;
+  .metric-card {
+    padding: 12px;
+  }
+
+  .metric-card strong {
+    font-size: 1.2rem;
+  }
+
+  .analysis-ranking-row {
+    align-items: center;
+
+    padding: 9px 10px;
+
+    font-size: 0.86rem;
   }
 
   .trend-groups,
   .selected-trend-summary {
     grid-template-columns: 1fr;
+  }
+
+  .trend-exercise {
+    min-height: 0;
+
+    padding: 9px 10px;
+  }
+
+  .analysis-evolution select {
+    width: 100%;
+    max-width: none;
+  }
+
+  .e1rm-chart svg {
+    height: 180px;
   }
 }

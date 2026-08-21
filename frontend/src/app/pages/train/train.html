@@ -143,6 +143,43 @@
                   }
 
                   @if (
+                    todayPerformance(exercise);
+                    as today
+                  ) {
+                    <div
+                      class="today-performance"
+                      [class.today-performance-above]="
+                        today.status === 'above_usual'
+                      "
+                      [class.today-performance-normal]="
+                        today.status === 'normal'
+                      "
+                      [class.today-performance-below]="
+                        today.status === 'below_usual'
+                      "
+                      [class.today-performance-insufficient]="
+                        today.status === 'insufficient_data'
+                      "
+                    >
+                      <p>
+                        <span>
+                          Estado de hoy
+                        </span>
+
+                        {{
+                          today.label
+                        }}
+                      </p>
+
+                      <small>
+                        {{
+                          today.summary
+                        }}
+                      </small>
+                    </div>
+                  }
+
+                  @if (
                     progressionRecommendation(
                       exercise
                     );

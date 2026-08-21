@@ -130,6 +130,23 @@ interface ExerciseRecentTrend {
   e1rmChange: number | null;
 }
 
+type TodayPerformanceStatus =
+  | 'above_usual'
+  | 'normal'
+  | 'below_usual'
+  | 'insufficient_data';
+
+interface TodayPerformance {
+  status: TodayPerformanceStatus;
+  label: string;
+  summary: string;
+  baselineE1rm: number | null;
+  currentE1rm: number | null;
+  percentChange: number | null;
+  previousExposures: number;
+  validSetsToday: number;
+}
+
 type ProgressionCategory =
   | 'increase_load'
   | 'increase_reps'
@@ -150,6 +167,7 @@ interface RepTarget {
 }
 
 const E1RM_TREND_TOLERANCE_RATIO = 0.015;
+const TODAY_PERFORMANCE_TOLERANCE_RATIO = 0.03;
 const REPS_TREND_TOLERANCE = 1;
 
 type AutosaveStatus =
@@ -1160,6 +1178,13 @@ export class Train implements OnInit, OnDestroy {
       this.exerciseRecentTrend(
         exercise
       );
+    const todayPerformance =
+      this.todayPerformance(
+        exercise
+      );
+    const belowUsualToday =
+      todayPerformance.status ===
+      'below_usual';
     const trendDeclining =
       trend.status === 'declining';
     const trendStableOrBetter =
@@ -1212,7 +1237,8 @@ export class Train implements OnInit, OnDestroy {
       allRirEnough &&
       !pronouncedDrop &&
       allWeightsPositive &&
-      !trendDeclining
+      !trendDeclining &&
+      !belowUsualToday
     ) {
       return {
         category:
@@ -1229,7 +1255,8 @@ export class Train implements OnInit, OnDestroy {
         anyBelowRange &&
         anyRirTooLow
       ) ||
-      trendDeclining
+      trendDeclining ||
+      belowUsualToday
     ) {
       return {
         category:
@@ -1237,7 +1264,9 @@ export class Train implements OnInit, OnDestroy {
         title:
           'Mantén o baja un poco la carga',
         reason:
-          trendDeclining
+          belowUsualToday
+            ? 'El rendimiento de hoy está por debajo de tu referencia reciente; consolida antes de subir.'
+            : trendDeclining
             ? 'La tendencia reciente cae; consolida antes de progresar.'
             : `La última vez quedaste por debajo del rango ${target.min}-${target.max} y cerca del fallo.`
       };
@@ -1304,6 +1333,274 @@ export class Train implements OnInit, OnDestroy {
     }
 
     return `${recommendation.title}. ${recommendation.reason}`;
+  }
+
+
+  todayPerformance(
+    exercise: Exercise
+  ): TodayPerformance {
+    const empty =
+      this.emptyTodayPerformance(
+        'Datos insuficientes',
+        'GymOS necesita al menos 3 exposiciones recientes y 2 series válidas hoy.'
+      );
+
+    if (
+      !this.isExternallyLoadedExercise(
+        exercise
+      )
+    ) {
+      return {
+        ...empty,
+        summary:
+          'Disponible por ahora sólo para ejercicios con carga externa.'
+      };
+    }
+
+    const currentSets =
+      this.currentCompletedSets(
+        exercise.exerciseId
+      );
+    const currentE1rms =
+      currentSets
+        .map(set =>
+          this.estimatedOneRepMax(
+            exercise,
+            set
+          )
+        )
+        .filter(
+          (
+            value
+          ): value is number =>
+            value !== null
+        );
+    const validSetsToday =
+      currentE1rms.length;
+
+    if (validSetsToday === 0) {
+      return empty;
+    }
+
+    const executions =
+      this
+        .getRecentExerciseHistories(
+          exercise.exerciseId
+        )
+        .slice(0, 5)
+        .map(history =>
+          this.executionPerformance(
+            exercise,
+            history,
+            this.parseRepTarget(
+              exercise.target
+            )
+          )
+        )
+        .filter(
+          execution =>
+            execution.bestE1rm !== null
+        );
+
+    const baselineValues =
+      executions
+        .map(
+          execution =>
+            execution.bestE1rm
+        )
+        .filter(
+          (
+            value
+          ): value is number =>
+            value !== null
+        );
+
+    if (baselineValues.length < 3) {
+      return {
+        ...empty,
+        previousExposures:
+          baselineValues.length
+      };
+    }
+
+    const baselineE1rm =
+      this.median(baselineValues);
+
+    if (baselineE1rm === null) {
+      return {
+        ...empty,
+        previousExposures:
+          baselineValues.length
+      };
+    }
+
+    const currentE1rm =
+      currentE1rms.length
+        ? this.median(currentE1rms)
+        : null;
+    const percentChange =
+      baselineE1rm !== null &&
+      currentE1rm !== null
+        ? (
+            (
+              currentE1rm -
+              baselineE1rm
+            ) /
+            baselineE1rm
+          ) * 100
+        : null;
+    const preliminary =
+      currentE1rm !== null &&
+      percentChange !== null
+        ? this.todayPerformanceChangeText(
+            percentChange
+          )
+        : null;
+
+    if (validSetsToday < 2) {
+      return {
+        status:
+          'insufficient_data',
+        label:
+          'Datos insuficientes',
+        summary:
+          preliminary
+            ? `${preliminary} preliminar; completa otra serie para clasificar.`
+            : 'Completa otra serie para clasificar el rendimiento de hoy.',
+        baselineE1rm,
+        currentE1rm,
+        percentChange,
+        previousExposures:
+          baselineValues.length,
+        validSetsToday
+      };
+    }
+
+    if (currentE1rm === null) {
+      return {
+        ...empty,
+        baselineE1rm,
+        previousExposures:
+          baselineValues.length,
+        validSetsToday
+      };
+    }
+
+    const baselineRir =
+      this.median(
+        executions
+          .map(
+            execution =>
+              execution.averageRir
+          )
+          .filter(
+            (
+              value
+            ): value is number =>
+              value !== null
+          )
+      );
+    const currentRir =
+      this.averageRir(
+        currentSets
+      );
+    const comparableEffort =
+      baselineRir === null ||
+      currentRir === null ||
+      currentRir <= baselineRir + 0.5;
+    const notMuchEasier =
+      baselineRir === null ||
+      currentRir === null ||
+      currentRir <= baselineRir + 1;
+    const tolerance =
+      Math.max(
+        baselineE1rm *
+          TODAY_PERFORMANCE_TOLERANCE_RATIO,
+        1.5
+      );
+    const lowerLimit =
+      baselineE1rm - tolerance;
+    const upperLimit =
+      baselineE1rm + tolerance;
+    const lowSets =
+      currentE1rms.filter(
+        value =>
+          value < lowerLimit
+      ).length;
+    const highSets =
+      currentE1rms.filter(
+        value =>
+          value > upperLimit
+      ).length;
+
+    if (
+      currentE1rm < lowerLimit &&
+      lowSets >= 2 &&
+      comparableEffort
+    ) {
+      return {
+        status:
+          'below_usual',
+        label:
+          'Por debajo de lo habitual',
+        summary:
+          `${this.todayPerformanceChangeText(percentChange)} frente a tu referencia reciente.`,
+        baselineE1rm,
+        currentE1rm,
+        percentChange,
+        previousExposures:
+          baselineValues.length,
+        validSetsToday
+      };
+    }
+
+    if (
+      currentE1rm > upperLimit &&
+      highSets >= 2 &&
+      notMuchEasier
+    ) {
+      return {
+        status:
+          'above_usual',
+        label:
+          'Mejor de lo habitual',
+        summary:
+          `${this.todayPerformanceChangeText(percentChange)} frente a tu referencia reciente.`,
+        baselineE1rm,
+        currentE1rm,
+        percentChange,
+        previousExposures:
+          baselineValues.length,
+        validSetsToday
+      };
+    }
+
+    return {
+      status:
+        'normal',
+      label:
+        'Rendimiento habitual',
+      summary:
+        'Dentro de tu rango reciente.',
+      baselineE1rm,
+      currentE1rm,
+      percentChange,
+      previousExposures:
+        baselineValues.length,
+      validSetsToday
+    };
+  }
+
+
+  todayPerformanceSummary(
+    exercise: Exercise
+  ): string {
+    const performance =
+      this.todayPerformance(
+        exercise
+      );
+
+    return `Estado de hoy · ${performance.label}. ${performance.summary}`;
   }
 
 
@@ -1703,6 +2000,96 @@ export class Train implements OnInit, OnDestroy {
       e1rmValues,
       e1rmChange
     };
+  }
+
+
+  private emptyTodayPerformance(
+    label: string,
+    summary: string
+  ): TodayPerformance {
+    return {
+      status:
+        'insufficient_data',
+      label,
+      summary,
+      baselineE1rm:
+        null,
+      currentE1rm:
+        null,
+      percentChange:
+        null,
+      previousExposures:
+        0,
+      validSetsToday:
+        0
+    };
+  }
+
+
+  private todayPerformanceChangeText(
+    percentChange: number | null
+  ): string {
+    if (percentChange === null) {
+      return 'Sin comparación porcentual';
+    }
+
+    const rounded =
+      Math.round(percentChange);
+    const sign =
+      rounded > 0
+        ? '+'
+        : '';
+
+    return `≈ ${sign}${rounded}%`;
+  }
+
+
+  private median(
+    values: number[]
+  ): number | null {
+    if (!values.length) {
+      return null;
+    }
+
+    const sorted =
+      [...values].sort(
+        (first, second) =>
+          first - second
+      );
+    const middle =
+      Math.floor(sorted.length / 2);
+
+    return sorted.length % 2
+      ? sorted[middle]
+      : (
+          sorted[middle - 1] +
+          sorted[middle]
+        ) / 2;
+  }
+
+
+  private averageRir(
+    sets: WorkoutSetInput[]
+  ): number | null {
+    const rirs =
+      sets
+        .map(set => set.rir)
+        .filter(
+          (
+            value
+          ): value is number =>
+            value !== null &&
+            value !== undefined &&
+            Number.isFinite(value)
+        );
+
+    return rirs.length
+      ? rirs.reduce(
+          (sum, value) =>
+            sum + value,
+          0
+        ) / rirs.length
+      : null;
   }
 
 

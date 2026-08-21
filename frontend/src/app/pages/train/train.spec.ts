@@ -2310,6 +2310,874 @@ describe('Train first workout flow', () => {
   });
 
 
+  it('returns insufficient today performance with fewer than 3 previous exposures', async () => {
+    const fixture =
+      await createLoadedTrain([
+        {
+          ...activeWorkout(),
+          sets: [
+            historySet(0, {
+              weight: 80,
+              reps: 8,
+              rir: 2,
+              completedAt:
+                '2026-08-21T18:00:00Z'
+            })
+          ]
+        },
+        trendWorkout(
+          'w1',
+          '2026-08-11T18:00:00Z',
+          {
+            weight: 80,
+            reps: 10,
+            rir: 2
+          }
+        ),
+        trendWorkout(
+          'w2',
+          '2026-08-12T18:00:00Z',
+          {
+            weight: 80,
+            reps: 10,
+            rir: 2
+          }
+        )
+      ]);
+
+    const performance =
+      fixture
+        .componentInstance
+        .todayPerformance(
+          fixture
+            .componentInstance
+            .activeSession()!
+            .exercises[0]
+        );
+
+    expect(
+      performance.status
+    ).toBe('insufficient_data');
+    expect(
+      performance.previousExposures
+    ).toBe(2);
+  });
+
+
+  it('does not classify below usual from one valid set today', async () => {
+    const fixture =
+      await createLoadedTrain([
+        {
+          ...activeWorkout(),
+          sets: [
+            historySet(0, {
+              weight: 70,
+              reps: 6,
+              rir: 0,
+              completedAt:
+                '2026-08-21T18:00:00Z'
+            })
+          ]
+        },
+        trendWorkout(
+          'w1',
+          '2026-08-11T18:00:00Z',
+          {
+            weight: 80,
+            reps: 10,
+            rir: 2
+          }
+        ),
+        trendWorkout(
+          'w2',
+          '2026-08-12T18:00:00Z',
+          {
+            weight: 80,
+            reps: 10,
+            rir: 2
+          }
+        ),
+        trendWorkout(
+          'w3',
+          '2026-08-13T18:00:00Z',
+          {
+            weight: 80,
+            reps: 10,
+            rir: 2
+          }
+        )
+      ]);
+
+    const performance =
+      fixture
+        .componentInstance
+        .todayPerformance(
+          fixture
+            .componentInstance
+            .activeSession()!
+            .exercises[0]
+        );
+
+    expect(
+      performance.status
+    ).toBe('insufficient_data');
+    expect(
+      performance.summary
+    ).toContain('preliminar');
+  });
+
+
+  it('classifies normal today performance within recent e1RM noise', async () => {
+    const fixture =
+      await createLoadedTrain([
+        {
+          ...activeWorkout(),
+          sets: [
+            historySet(0, {
+              weight: 80,
+              reps: 10,
+              rir: 2,
+              completedAt:
+                '2026-08-21T18:00:00Z'
+            }),
+            historySet(1, {
+              weight: 80,
+              reps: 10,
+              rir: 2,
+              completedAt:
+                '2026-08-21T18:05:00Z'
+            })
+          ]
+        },
+        trendWorkout(
+          'w1',
+          '2026-08-11T18:00:00Z',
+          {
+            weight: 80,
+            reps: 10,
+            rir: 2
+          }
+        ),
+        trendWorkout(
+          'w2',
+          '2026-08-12T18:00:00Z',
+          {
+            weight: 81,
+            reps: 10,
+            rir: 2
+          }
+        ),
+        trendWorkout(
+          'w3',
+          '2026-08-13T18:00:00Z',
+          {
+            weight: 80,
+            reps: 10,
+            rir: 2
+          }
+        )
+      ]);
+
+    expect(
+      fixture
+        .componentInstance
+        .todayPerformance(
+          fixture
+            .componentInstance
+            .activeSession()!
+            .exercises[0]
+        )
+        .status
+    ).toBe('normal');
+  });
+
+
+  it('classifies clear consistent improvement as above usual', async () => {
+    const fixture =
+      await createLoadedTrain([
+        {
+          ...activeWorkout(),
+          sets: [
+            historySet(0, {
+              weight: 90,
+              reps: 10,
+              rir: 2,
+              completedAt:
+                '2026-08-21T18:00:00Z'
+            }),
+            historySet(1, {
+              weight: 90,
+              reps: 10,
+              rir: 2,
+              completedAt:
+                '2026-08-21T18:05:00Z'
+            })
+          ]
+        },
+        trendWorkout(
+          'w1',
+          '2026-08-11T18:00:00Z',
+          {
+            weight: 80,
+            reps: 10,
+            rir: 2
+          }
+        ),
+        trendWorkout(
+          'w2',
+          '2026-08-12T18:00:00Z',
+          {
+            weight: 80,
+            reps: 10,
+            rir: 2
+          }
+        ),
+        trendWorkout(
+          'w3',
+          '2026-08-13T18:00:00Z',
+          {
+            weight: 80,
+            reps: 10,
+            rir: 2
+          }
+        )
+      ]);
+
+    const performance =
+      fixture
+        .componentInstance
+        .todayPerformance(
+          fixture
+            .componentInstance
+            .activeSession()!
+            .exercises[0]
+        );
+
+    expect(
+      performance.status
+    ).toBe('above_usual');
+    expect(
+      performance.label
+    ).toBe('Mejor de lo habitual');
+  });
+
+
+  it('classifies clear consistent drop with comparable effort as below usual', async () => {
+    const fixture =
+      await createLoadedTrain([
+        {
+          ...activeWorkout(),
+          sets: [
+            historySet(0, {
+              weight: 70,
+              reps: 8,
+              rir: 0,
+              completedAt:
+                '2026-08-21T18:00:00Z'
+            }),
+            historySet(1, {
+              weight: 70,
+              reps: 8,
+              rir: 0,
+              completedAt:
+                '2026-08-21T18:05:00Z'
+            })
+          ]
+        },
+        trendWorkout(
+          'w1',
+          '2026-08-11T18:00:00Z',
+          {
+            weight: 80,
+            reps: 10,
+            rir: 2
+          }
+        ),
+        trendWorkout(
+          'w2',
+          '2026-08-12T18:00:00Z',
+          {
+            weight: 80,
+            reps: 10,
+            rir: 2
+          }
+        ),
+        trendWorkout(
+          'w3',
+          '2026-08-13T18:00:00Z',
+          {
+            weight: 80,
+            reps: 10,
+            rir: 2
+          }
+        )
+      ]);
+
+    expect(
+      fixture
+        .componentInstance
+        .todayPerformance(
+          fixture
+            .componentInstance
+            .activeSession()!
+            .exercises[0]
+        )
+        .status
+    ).toBe('below_usual');
+  });
+
+
+  it('does not classify below usual from one isolated bad set', async () => {
+    const fixture =
+      await createLoadedTrain([
+        {
+          ...activeWorkout(),
+          sets: [
+            historySet(0, {
+              weight: 70,
+              reps: 6,
+              rir: 0,
+              completedAt:
+                '2026-08-21T18:00:00Z'
+            }),
+            historySet(1, {
+              weight: 80,
+              reps: 10,
+              rir: 2,
+              completedAt:
+                '2026-08-21T18:05:00Z'
+            })
+          ]
+        },
+        trendWorkout(
+          'w1',
+          '2026-08-11T18:00:00Z',
+          {
+            weight: 80,
+            reps: 10,
+            rir: 2
+          }
+        ),
+        trendWorkout(
+          'w2',
+          '2026-08-12T18:00:00Z',
+          {
+            weight: 80,
+            reps: 10,
+            rir: 2
+          }
+        ),
+        trendWorkout(
+          'w3',
+          '2026-08-13T18:00:00Z',
+          {
+            weight: 80,
+            reps: 10,
+            rir: 2
+          }
+        )
+      ]);
+
+    expect(
+      fixture
+        .componentInstance
+        .todayPerformance(
+          fixture
+            .componentInstance
+            .activeSession()!
+            .exercises[0]
+        )
+        .status
+    ).toBe('normal');
+  });
+
+
+  it('does not flag a false drop when today has much higher RIR', async () => {
+    const fixture =
+      await createLoadedTrain([
+        {
+          ...activeWorkout(),
+          sets: [
+            historySet(0, {
+              weight: 70,
+              reps: 8,
+              rir: 5,
+              completedAt:
+                '2026-08-21T18:00:00Z'
+            }),
+            historySet(1, {
+              weight: 70,
+              reps: 8,
+              rir: 5,
+              completedAt:
+                '2026-08-21T18:05:00Z'
+            })
+          ]
+        },
+        trendWorkout(
+          'w1',
+          '2026-08-11T18:00:00Z',
+          {
+            weight: 80,
+            reps: 10,
+            rir: 2
+          }
+        ),
+        trendWorkout(
+          'w2',
+          '2026-08-12T18:00:00Z',
+          {
+            weight: 80,
+            reps: 10,
+            rir: 2
+          }
+        ),
+        trendWorkout(
+          'w3',
+          '2026-08-13T18:00:00Z',
+          {
+            weight: 80,
+            reps: 10,
+            rir: 2
+          }
+        )
+      ]);
+
+    expect(
+      fixture
+        .componentInstance
+        .todayPerformance(
+          fixture
+            .componentInstance
+            .activeSession()!
+            .exercises[0]
+        )
+        .status
+    ).toBe('normal');
+  });
+
+
+  it('classifies same load and fewer reps with equal or lower RIR as below usual', async () => {
+    const fixture =
+      await createLoadedTrain([
+        {
+          ...activeWorkout(),
+          sets: [
+            historySet(0, {
+              weight: 80,
+              reps: 6,
+              rir: 0,
+              completedAt:
+                '2026-08-21T18:00:00Z'
+            }),
+            historySet(1, {
+              weight: 80,
+              reps: 6,
+              rir: 0,
+              completedAt:
+                '2026-08-21T18:05:00Z'
+            })
+          ]
+        },
+        trendWorkout(
+          'w1',
+          '2026-08-11T18:00:00Z',
+          {
+            weight: 80,
+            reps: 10,
+            rir: 2
+          }
+        ),
+        trendWorkout(
+          'w2',
+          '2026-08-12T18:00:00Z',
+          {
+            weight: 80,
+            reps: 10,
+            rir: 2
+          }
+        ),
+        trendWorkout(
+          'w3',
+          '2026-08-13T18:00:00Z',
+          {
+            weight: 80,
+            reps: 10,
+            rir: 2
+          }
+        )
+      ]);
+
+    expect(
+      fixture
+        .componentInstance
+        .todayPerformance(
+          fixture
+            .componentInstance
+            .activeSession()!
+            .exercises[0]
+        )
+        .status
+    ).toBe('below_usual');
+  });
+
+
+  it('returns insufficient today performance for bodyweight and duration exercises', async () => {
+    const fixture =
+      await createLoadedTrain([
+        {
+          ...activeWorkout(),
+          sets: [
+            historySet(0, {
+              weight: 80,
+              reps: 10,
+              rir: 2,
+              completedAt:
+                '2026-08-21T18:00:00Z'
+            }),
+            historySet(1, {
+              weight: 80,
+              reps: 10,
+              rir: 2,
+              completedAt:
+                '2026-08-21T18:05:00Z'
+            })
+          ]
+        },
+        trendWorkout(
+          'w1',
+          '2026-08-11T18:00:00Z',
+          {
+            weight: 80,
+            reps: 10,
+            rir: 2
+          }
+        ),
+        trendWorkout(
+          'w2',
+          '2026-08-12T18:00:00Z',
+          {
+            weight: 80,
+            reps: 10,
+            rir: 2
+          }
+        ),
+        trendWorkout(
+          'w3',
+          '2026-08-13T18:00:00Z',
+          {
+            weight: 80,
+            reps: 10,
+            rir: 2
+          }
+        )
+      ]);
+    const component =
+      fixture.componentInstance;
+    const exercise =
+      component.activeSession()!.exercises[0];
+
+    expect(
+      component.todayPerformance({
+        ...exercise,
+        recordTypes:
+          ['bodyweight_reps']
+      }).status
+    ).toBe('insufficient_data');
+    expect(
+      component.todayPerformance({
+        ...exercise,
+        recordTypes:
+          ['duration']
+      }).status
+    ).toBe('insufficient_data');
+  });
+
+
+  it('blocks increase load recommendation when today is below usual', async () => {
+    const fixture =
+      await createLoadedTrain([
+        {
+          ...activeWorkout(),
+          sets: [
+            historySet(0, {
+              weight: 70,
+              reps: 8,
+              rir: 0,
+              completedAt:
+                '2026-08-21T18:00:00Z'
+            }),
+            historySet(1, {
+              weight: 70,
+              reps: 8,
+              rir: 0,
+              completedAt:
+                '2026-08-21T18:05:00Z'
+            })
+          ]
+        },
+        trendWorkout(
+          'w1',
+          '2026-08-11T18:00:00Z',
+          {
+            weight: 80,
+            reps: 10,
+            rir: 2
+          }
+        ),
+        trendWorkout(
+          'w2',
+          '2026-08-12T18:00:00Z',
+          {
+            weight: 80,
+            reps: 10,
+            rir: 2
+          }
+        ),
+        trendWorkout(
+          'w3',
+          '2026-08-13T18:00:00Z',
+          {
+            weight: 80,
+            reps: 10,
+            rir: 2
+          }
+        )
+      ]);
+
+    const recommendation =
+      fixture
+        .componentInstance
+        .progressionRecommendation(
+          fixture
+            .componentInstance
+            .activeSession()!
+            .exercises[0]
+        );
+
+    expect(
+      recommendation?.category
+    ).toBe('consider_reduce');
+    expect(
+      recommendation?.reason
+    ).toContain('rendimiento de hoy');
+  });
+
+
+  it('keeps normal today performance recommendation unchanged', async () => {
+    const fixture =
+      await createLoadedTrain([
+        {
+          ...activeWorkout(),
+          sets: [
+            historySet(0, {
+              weight: 80,
+              reps: 10,
+              rir: 2,
+              completedAt:
+                '2026-08-21T18:00:00Z'
+            }),
+            historySet(1, {
+              weight: 80,
+              reps: 10,
+              rir: 2,
+              completedAt:
+                '2026-08-21T18:05:00Z'
+            })
+          ]
+        },
+        trendWorkout(
+          'w1',
+          '2026-08-11T18:00:00Z',
+          {
+            weight: 80,
+            reps: 10,
+            rir: 2
+          }
+        ),
+        trendWorkout(
+          'w2',
+          '2026-08-12T18:00:00Z',
+          {
+            weight: 80,
+            reps: 10,
+            rir: 2
+          }
+        ),
+        trendWorkout(
+          'w3',
+          '2026-08-13T18:00:00Z',
+          {
+            weight: 80,
+            reps: 10,
+            rir: 2
+          }
+        )
+      ]);
+
+    expect(
+      fixture
+        .componentInstance
+        .progressionRecommendation(
+          fixture
+            .componentInstance
+            .activeSession()!
+            .exercises[0]
+        )
+        ?.category
+    ).toBe('increase_load');
+  });
+
+
+  it('does not force an increase load recommendation when today is above usual', async () => {
+    const fixture =
+      await createLoadedTrain([
+        {
+          ...activeWorkout(),
+          sets: [
+            historySet(0, {
+              weight: 90,
+              reps: 8,
+              rir: 2,
+              completedAt:
+                '2026-08-21T18:00:00Z'
+            }),
+            historySet(1, {
+              weight: 90,
+              reps: 8,
+              rir: 2,
+              completedAt:
+                '2026-08-21T18:05:00Z'
+            })
+          ]
+        },
+        trendWorkout(
+          'w1',
+          '2026-08-11T18:00:00Z',
+          {
+            weight: 80,
+            reps: 8,
+            rir: 2
+          }
+        ),
+        trendWorkout(
+          'w2',
+          '2026-08-12T18:00:00Z',
+          {
+            weight: 80,
+            reps: 8,
+            rir: 2
+          }
+        ),
+        trendWorkout(
+          'w3',
+          '2026-08-13T18:00:00Z',
+          {
+            weight: 80,
+            reps: 8,
+            rir: 2
+          }
+        )
+      ]);
+    const component =
+      fixture.componentInstance;
+    const exercise =
+      component.activeSession()!.exercises[0];
+
+    expect(
+      component.todayPerformance(
+        exercise
+      ).status
+    ).toBe('above_usual');
+    expect(
+      component.progressionRecommendation(
+        exercise
+      )?.category
+    ).toBe('increase_reps');
+  });
+
+
+  it('shows today performance without autosaving and recalculates restored workouts', async () => {
+    const fixture =
+      await createLoadedTrain([
+        {
+          ...activeWorkout(),
+          sets: [
+            historySet(0, {
+              weight: 70,
+              reps: 8,
+              rir: 0,
+              completedAt:
+                '2026-08-21T18:00:00Z'
+            }),
+            historySet(1, {
+              weight: 70,
+              reps: 8,
+              rir: 0,
+              completedAt:
+                '2026-08-21T18:05:00Z'
+            })
+          ]
+        },
+        trendWorkout(
+          'w1',
+          '2026-08-11T18:00:00Z',
+          {
+            weight: 80,
+            reps: 10,
+            rir: 2
+          }
+        ),
+        trendWorkout(
+          'w2',
+          '2026-08-12T18:00:00Z',
+          {
+            weight: 80,
+            reps: 10,
+            rir: 2
+          }
+        ),
+        trendWorkout(
+          'w3',
+          '2026-08-13T18:00:00Z',
+          {
+            weight: 80,
+            reps: 10,
+            rir: 2
+          }
+        )
+      ]);
+    const component =
+      fixture.componentInstance;
+    const before =
+      JSON.stringify(
+        component.activeWorkout()
+      );
+
+    component.openExercise(
+      'dumbbell-bench-press'
+    );
+    fixture.detectChanges();
+
+    expect(
+      pageText(fixture)
+    ).toContain('Estado de hoy');
+    expect(
+      component.todayPerformance(
+        component.activeSession()!.exercises[0]
+      ).status
+    ).toBe('below_usual');
+    expect(
+      JSON.stringify(
+        component.activeWorkout()
+      )
+    ).toBe(before);
+    http.expectNone(
+      `${environment.apiUrl}/workouts/active-workout`
+    );
+  });
+
+
   it('uses the best e1RM per finished execution and the latest 3-5 exposures', async () => {
     const fixture =
       await createLoadedTrain([

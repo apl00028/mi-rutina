@@ -451,6 +451,72 @@ describe('Routines training analytics', () => {
   );
 
 
+  it.each([
+    'duración',
+    'duracion',
+    'Duration',
+    'seconds',
+    'segundos',
+    ' SEC '
+  ])(
+    'normalizes duration target type alias "%s" to duración',
+    targetType => {
+      const validation =
+        validateWorkbook(
+          workbookForImport({
+            routineRows: [
+              routineRow({
+                'Tipo de objetivo':
+                  targetType,
+                'Objetivo mínimo':
+                  45,
+                'Objetivo máximo':
+                  60
+              }),
+              routineRow({
+                'Sesión': 'B',
+                'Orden': 1
+              })
+            ]
+          })
+        );
+
+      expect(validation.errors)
+        .toHaveLength(0);
+      expect(
+        validation.sessions[0]
+          .exercises[0]
+      ).toMatchObject({
+        targetType:
+          'duración',
+        repsMin:
+          45,
+        repsMax:
+          60
+      });
+
+      if (
+        targetType !== 'duración'
+      ) {
+        expect(
+          validation.autocorrections
+        ).toEqual(
+          expect.arrayContaining([
+            expect.objectContaining({
+              sheet: 'Rutina',
+              row: 2,
+              column:
+                'Tipo de objetivo',
+              message:
+                `"${targetType}" → "duración"`
+            })
+          ])
+        );
+      }
+    }
+  );
+
+
   it('keeps canonical target type unchanged without an autocorrection', () => {
     const validation =
       validateWorkbook(
@@ -496,7 +562,76 @@ describe('Routines training analytics', () => {
             column:
               'Tipo de objetivo',
             message:
-              'En esta versión usa "repeticiones".'
+              'Usa "repeticiones" o "duración".'
+          })
+        ])
+      );
+  });
+
+
+  it('rejects invalid duration ranges', () => {
+    const maxBelowMin =
+      validateWorkbook(
+        workbookForImport({
+          routineRows: [
+            routineRow({
+              'Tipo de objetivo':
+                'duración',
+              'Objetivo mínimo':
+                60,
+              'Objetivo máximo':
+                45
+            }),
+            routineRow({
+              'Sesión': 'B',
+              'Orden': 1
+            })
+          ]
+        })
+      );
+
+    expect(maxBelowMin.errors)
+      .toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            sheet: 'Rutina',
+            row: 2,
+            column:
+              'Objetivo mínimo/máximo'
+          })
+        ])
+      );
+
+    const zeroDuration =
+      validateWorkbook(
+        workbookForImport({
+          routineRows: [
+            routineRow({
+              'Tipo de objetivo':
+                'duración',
+              'Objetivo mínimo':
+                0,
+              'Objetivo máximo':
+                60
+            }),
+            routineRow({
+              'Sesión': 'B',
+              'Orden': 1
+            })
+          ]
+        })
+      );
+
+    expect(zeroDuration.errors)
+      .toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            sheet: 'Rutina',
+            row: 2,
+            column:
+              'Objetivo mínimo/máximo',
+            message:
+              'La duración debe estar entre 1 y 3600 segundos y el máximo no puede ser menor que el mínimo.'
           })
         ])
       );
@@ -698,6 +833,210 @@ describe('Routines training analytics', () => {
         })
       ])
     );
+  });
+
+
+  it('imports a duration target as a timed exercise range in seconds', () => {
+    const validation =
+      validateWorkbook(
+        workbookForImport({
+          routineRows: [
+            routineRow({
+              'Tipo de objetivo':
+                'duración',
+              'Objetivo mínimo':
+                45,
+              'Objetivo máximo':
+                60
+            }),
+            routineRow({
+              'Sesión': 'B',
+              'Orden': 1
+            })
+          ]
+        })
+      );
+
+    expect(validation.errors)
+      .toHaveLength(0);
+    expect(
+      validation.sessions[0]
+        .exercises[0]
+    ).toMatchObject({
+      targetType:
+        'duración',
+      repsMin:
+        45,
+      repsMax:
+        60
+    });
+  });
+
+
+  it('imports plank as a valid timed exercise with RIR and rest', () => {
+    const plank =
+      catalogExercise(
+        'plank',
+        'Plancha'
+      );
+    const validation =
+      validateWorkbook(
+        workbookForImport({
+          routineRows: [
+            routineRow({
+              'Ejercicio':
+                'Plancha',
+              '_GymOS exercise':
+                'plank',
+              'Series':
+                2,
+              'Tipo de objetivo':
+                'duración',
+              'Objetivo mínimo':
+                45,
+              'Objetivo máximo':
+                60,
+              'RIR mínimo':
+                2,
+              'RIR máximo':
+                3,
+              'Descanso (s)':
+                60
+            }),
+            routineRow({
+              'Sesión': 'B',
+              'Orden': 1,
+              'Ejercicio':
+                'Plancha',
+              '_GymOS exercise':
+                'plank',
+              'Tipo de objetivo':
+                'duración',
+              'Objetivo mínimo':
+                45,
+              'Objetivo máximo':
+                60
+            })
+          ]
+        }),
+        [
+          plank
+        ]
+      );
+
+    expect(validation.errors)
+      .toHaveLength(0);
+    expect(
+      validation.sessions[0]
+        .exercises[0]
+    ).toMatchObject({
+      exerciseId:
+        'plank',
+      name:
+        'Plancha',
+      sets:
+        2,
+      targetType:
+        'duración',
+      repsMin:
+        45,
+      repsMax:
+        60,
+      rirMin:
+        2,
+      rirMax:
+        3,
+      restSeconds:
+        60
+    });
+  });
+
+
+  it('builds duration imports with the canonical Train timed-exercise payload', () => {
+    const fixture =
+      TestBed.createComponent(
+        Routines
+      );
+    const component =
+      fixture.componentInstance as any;
+
+    component.routineName.set(
+      'Rutina temporizada'
+    );
+    component.sessions.set([
+      {
+        sessionId:
+          'session-a',
+        name:
+          'Core',
+        exercises: [
+          {
+            exerciseId:
+              'plank',
+            name:
+              'Plancha',
+            sets:
+              2,
+            targetType:
+              'duración',
+            repsMin:
+              45,
+            repsMax:
+              60,
+            rirMin:
+              2,
+            rirMax:
+              3,
+            restSeconds:
+              60,
+            weight:
+              null
+          }
+        ]
+      }
+    ]);
+
+    const routine =
+      component
+        .buildCanonicalRoutine();
+    const exercise =
+      routine.sessions[0]
+        .exercises[0];
+
+    expect(exercise)
+      .toMatchObject({
+        exerciseId:
+          'plank',
+        recordType:
+          'duration',
+        recordTypes: [
+          'duration'
+        ],
+        target:
+          '45-60 s',
+        prescription: {
+          recordType:
+            'duration',
+          target: {
+            type:
+              'duration',
+            min:
+              45,
+            max:
+              60,
+            unit:
+              'seconds'
+          },
+          targetRir: {
+            min:
+              2,
+            max:
+              3
+          },
+          restSeconds:
+            60
+        }
+      });
   });
 
 

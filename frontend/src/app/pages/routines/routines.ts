@@ -21,6 +21,7 @@ interface RoutineExercise {
   exerciseId: string;
   name: string;
   sets: number;
+  targetType?: 'repeticiones' | 'duración';
   repsMin: number;
   repsMax: number;
   rirMin: number;
@@ -971,14 +972,27 @@ export class Routines implements OnInit {
           return `${exercise.name}: las series deben estar entre 1 y 10.`;
         }
 
+        const isDuration =
+          exercise.targetType ===
+          'duración';
+
         if (
           !Number.isFinite(exercise.repsMin) ||
           !Number.isFinite(exercise.repsMax) ||
           exercise.repsMin < 1 ||
-          exercise.repsMax > 100 ||
-          exercise.repsMax < exercise.repsMin
+          exercise.repsMax < exercise.repsMin ||
+          (
+            !isDuration &&
+            exercise.repsMax > 100
+          ) ||
+          (
+            isDuration &&
+            exercise.repsMax > 3600
+          )
         ) {
-          return `${exercise.name}: el rango de repeticiones no es válido.`;
+          return isDuration
+            ? `${exercise.name}: el rango de duración no es válido.`
+            : `${exercise.name}: el rango de repeticiones no es válido.`;
         }
 
         if (
@@ -1023,31 +1037,30 @@ export class Routines implements OnInit {
           order: sessionIndex + 1,
 
           exercises: session.exercises.map(
-            (exercise, exerciseIndex) => ({
-              exerciseId: exercise.exerciseId,
-              id: exercise.exerciseId,
-              name: exercise.name,
-              order: exerciseIndex + 1,
-              sets: exercise.sets,
+            (exercise, exerciseIndex) => {
+              const isDuration =
+                exercise.targetType ===
+                'duración';
 
-              target:
-                `${exercise.repsMin}-${exercise.repsMax} reps`,
-
-              targetRir: {
-                min: exercise.rirMin,
-                max: exercise.rirMax
-              },
-
-              restSeconds: exercise.restSeconds,
-              weight: exercise.weight ?? null,
-
-              prescription: {
+              return {
+                exerciseId: exercise.exerciseId,
+                id: exercise.exerciseId,
+                name: exercise.name,
+                order: exerciseIndex + 1,
                 sets: exercise.sets,
+                recordType:
+                  isDuration
+                    ? 'duration'
+                    : 'weight_reps',
+                recordTypes:
+                  isDuration
+                    ? ['duration']
+                    : ['weight_reps'],
 
-                reps: {
-                  min: exercise.repsMin,
-                  max: exercise.repsMax
-                },
+                target:
+                  isDuration
+                    ? `${exercise.repsMin}-${exercise.repsMax} s`
+                    : `${exercise.repsMin}-${exercise.repsMax} reps`,
 
                 targetRir: {
                   min: exercise.rirMin,
@@ -1055,9 +1068,53 @@ export class Routines implements OnInit {
                 },
 
                 restSeconds: exercise.restSeconds,
-                weight: exercise.weight ?? null
-              }
-            })
+                weight:
+                  isDuration
+                    ? null
+                    : exercise.weight ?? null,
+
+                prescription: {
+                  sets: exercise.sets,
+                  recordType:
+                    isDuration
+                      ? 'duration'
+                      : 'weight_reps',
+
+                  reps:
+                    isDuration
+                      ? undefined
+                      : {
+                          min: exercise.repsMin,
+                          max: exercise.repsMax
+                        },
+
+                  target:
+                    isDuration
+                      ? {
+                          type: 'duration',
+                          min: exercise.repsMin,
+                          max: exercise.repsMax,
+                          unit: 'seconds'
+                        }
+                      : {
+                          type: 'repetitions',
+                          min: exercise.repsMin,
+                          max: exercise.repsMax
+                        },
+
+                  targetRir: {
+                    min: exercise.rirMin,
+                    max: exercise.rirMax
+                  },
+
+                  restSeconds: exercise.restSeconds,
+                  weight:
+                    isDuration
+                      ? null
+                      : exercise.weight ?? null
+                }
+              };
+            }
           )
         })
       )
@@ -1233,7 +1290,7 @@ export class Routines implements OnInit {
 
   private normalizeTargetType(
     value: unknown
-  ): string | null {
+  ): 'repeticiones' | 'duración' | null {
     const normalized =
       this.normalizeImportToken(value);
 
@@ -1252,6 +1309,26 @@ export class Routines implements OnInit {
       )
     ) {
       return 'repeticiones';
+    }
+
+    const durationAliases =
+      new Set([
+        'duracion',
+        'duración',
+        'tiempo',
+        'duration',
+        'segundos',
+        'seconds',
+        'sec',
+        'secs'
+      ]);
+
+    if (
+      durationAliases.has(
+        normalized
+      )
+    ) {
+      return 'duración';
     }
 
     return null;
@@ -2011,7 +2088,7 @@ export class Routines implements OnInit {
           );
 
         if (
-          targetType !== 'repeticiones'
+          !targetType
         ) {
           this.addImportIssue(errors, {
             severity: 'error',
@@ -2019,11 +2096,11 @@ export class Routines implements OnInit {
             row: excelRow,
             column: 'Tipo de objetivo',
             message:
-              'En esta versión usa "repeticiones".'
+              'Usa "repeticiones" o "duración".'
           });
         }
 
-        const repsMin =
+        const targetMin =
           Number(
             row['Objetivo mínimo']
           );
@@ -2031,21 +2108,28 @@ export class Routines implements OnInit {
         const repsMaxRaw =
           row['Objetivo máximo'];
 
-        const repsMax =
+        const targetMax =
           repsMaxRaw === '' ||
           repsMaxRaw === null ||
           repsMaxRaw === undefined
-            ? repsMin
+            ? targetMin
             : Number(repsMaxRaw);
 
-        if (
-          !Number.isFinite(repsMin) ||
-          !Number.isFinite(repsMax) ||
-          repsMin < 1 ||
-          repsMin > 100 ||
-          repsMax < repsMin ||
-          repsMax > 100
-        ) {
+        const targetRangeInvalid =
+          !Number.isFinite(targetMin) ||
+          !Number.isFinite(targetMax) ||
+          targetMin < 1 ||
+          targetMax < targetMin ||
+          (
+            targetType === 'repeticiones' &&
+            targetMax > 100
+          ) ||
+          (
+            targetType === 'duración' &&
+            targetMax > 3600
+          );
+
+        if (targetRangeInvalid) {
           this.addImportIssue(errors, {
             severity: 'error',
             sheet: 'Rutina',
@@ -2053,7 +2137,9 @@ export class Routines implements OnInit {
             column:
               'Objetivo mínimo/máximo',
             message:
-              'Las repeticiones deben estar entre 1 y 100 y el máximo no puede ser menor que el mínimo.'
+              targetType === 'duración'
+                ? 'La duración debe estar entre 1 y 3600 segundos y el máximo no puede ser menor que el mínimo.'
+                : 'Las repeticiones deben estar entre 1 y 100 y el máximo no puede ser menor que el mínimo.'
           });
         }
 
@@ -2145,9 +2231,13 @@ export class Routines implements OnInit {
               canonicalExercise.name,
 
             sets,
+            targetType:
+              targetType ?? 'repeticiones',
 
-            repsMin,
-            repsMax,
+            repsMin:
+              targetMin,
+            repsMax:
+              targetMax,
 
             rirMin,
             rirMax,
@@ -2343,6 +2433,14 @@ export class Routines implements OnInit {
         'Usa objetivos entre 1 y 100 repeticiones.'
       ],
       [
+        'Duración',
+        'Si Tipo de objetivo es duración, Objetivo mínimo y máximo se expresan en segundos.'
+      ],
+      [
+        'Tipo de objetivo',
+        'Usa "repeticiones" para reps o "duración" para ejercicios temporizados.'
+      ],
+      [
         'RIR',
         'Usa valores entre 0 y 10.'
       ],
@@ -2465,8 +2563,18 @@ export class Routines implements OnInit {
     XLSX.utils.book_append_sheet(
       workbook,
       XLSX.utils.aoa_to_sheet([
-        ['Tipos de objetivo'],
-        ['repeticiones']
+        [
+          'Tipos de objetivo',
+          'Semántica de Objetivo mínimo/máximo'
+        ],
+        [
+          'repeticiones',
+          'Número de repeticiones'
+        ],
+        [
+          'duración',
+          'Segundos'
+        ]
       ]),
       '_Catálogos'
     );

@@ -44,7 +44,7 @@ button:disabled {
   display: block;
   margin-bottom: 6px;
 
-  color: #6b7280;
+  color: var(--gymos-text-muted);
 
   font-size: 0.75rem;
   font-weight: 800;
@@ -53,7 +53,7 @@ button:disabled {
 }
 
 .muted {
-  color: #6b7280;
+  color: var(--gymos-text-muted);
 }
 
 .page-header,
@@ -83,8 +83,8 @@ button:disabled {
 .status-pill {
   padding: 8px 12px;
 
-  background: #dcfce7;
-  color: #166534;
+  background: var(--gymos-success-bg);
+  color: var(--gymos-success);
 
   font-size: 0.82rem;
 }
@@ -93,8 +93,8 @@ button:disabled {
 .sets-badge {
   padding: 6px 10px;
 
-  background: #f3f4f6;
-  color: #4b5563;
+  background: var(--gymos-surface-hover);
+  color: var(--gymos-text-muted);
 
   font-size: 0.78rem;
 }
@@ -115,10 +115,10 @@ button:disabled {
 .state-card {
   box-sizing: border-box;
 
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--gymos-border);
   border-radius: 16px;
 
-  background: #ffffff;
+  background: var(--gymos-surface);
 
   box-shadow:
     0 1px 2px
@@ -161,7 +161,7 @@ button:disabled {
 
   padding: 10px 0;
 
-  border-bottom: 1px solid #f3f4f6;
+  border-bottom: 1px solid var(--gymos-border);
 }
 
 .session-exercise:last-child {
@@ -180,7 +180,7 @@ button:disabled {
 }
 
 .session-exercise span {
-  color: #6b7280;
+  color: var(--gymos-text-muted);
 
   font-size: 0.82rem;
 }
@@ -204,10 +204,10 @@ button:disabled {
 }
 
 .primary-button {
-  border: 1px solid #111827;
+  border: 1px solid var(--gymos-accent);
 
-  background: #111827;
-  color: white;
+  background: var(--gymos-accent);
+  color: var(--gymos-accent-contrast);
 
   padding: 10px 16px;
 }
@@ -222,19 +222,19 @@ button:disabled {
 }
 
 .secondary-button {
-  border: 1px solid #d1d5db;
+  border: 1px solid var(--gymos-border-strong);
 
-  background: white;
-  color: #111827;
+  background: var(--gymos-surface);
+  color: var(--gymos-text);
 
   padding: 10px 16px;
 }
 
 .finish-button {
-  border: 1px solid #111827;
+  border: 1px solid var(--gymos-accent);
 
-  background: #111827;
-  color: white;
+  background: var(--gymos-accent);
+  color: var(--gymos-accent-contrast);
 
   padding: 10px 18px;
 }
@@ -248,8 +248,8 @@ button:disabled {
   border-radius: 8px;
 
   background: transparent;
-  border-color: #fecaca;
-  color: #b91c1c;
+  border-color: var(--gymos-danger-border);
+  color: var(--gymos-danger);
 
   font: inherit;
   font-size: 0.84rem;
@@ -266,7 +266,7 @@ button:disabled {
 }
 
 .exercise-header {
-  border-bottom: 1px solid #f0f1f3;
+  border-bottom: 1px solid var(--gymos-border);
 }
 
 .exercise-toggle {
@@ -283,8 +283,8 @@ button:disabled {
 
   border: 0;
 
-  background: #ffffff;
-  color: #111827;
+  background: var(--gymos-surface);
+  color: var(--gymos-text);
 
   text-align: left;
 }
@@ -302,7 +302,7 @@ button:disabled {
   flex-wrap: wrap;
   gap: 6px;
 
-  color: #6b7280;
+  color: var(--gymos-text-muted);
 
   font-size: 0.88rem;
 }
@@ -316,11 +316,11 @@ button:disabled {
 
   border-radius: 999px;
 
-  background: #f9fafb;
+  background: var(--gymos-surface-muted);
 }
 
 .exercise-target strong {
-  color: #111827;
+  color: var(--gymos-text);
 
   font-weight: 800;
 }
@@ -337,13 +337,13 @@ button:disabled {
 
   padding: 10px 20px;
 
-  border-bottom: 1px solid #f3f4f6;
+  border-bottom: 1px solid var(--gymos-border);
 
-  background: #fbfdff;
+  background: var(--gymos-surface-muted);
 }
 
 .previous-exercise span {
-  color: #6b7280;
+  color: var(--gymos-text-muted);
 
   font-size: 0.72rem;
   font-weight: 800;
@@ -353,14 +353,14 @@ button:disabled {
 .previous-exercise p {
   margin: 0;
 
-  color: #374151;
+  color: var(--gymos-text-muted);
 
   font-size: 0.84rem;
   font-weight: 650;
 }
 
 .previous-exercise .exercise-trend {
-  color: #4b5563;
+  color: var(--gymos-text-muted);
 
   font-size: 0.78rem;
   font-weight: 600;
@@ -377,7 +377,7 @@ button:disabled {
 
   padding: 0;
 
-  border-bottom: 1px solid #f3f4f6;
+  border-bottom: 1px solid var(--gymos-border);
 
   transition:
     background 140ms ease,
@@ -393,23 +393,23 @@ button:disabled {
 }
 
 .set-row.completed {
-  background: #ffffff;
+  background: var(--gymos-surface);
 }
 
 .set-row.next-set {
-  background: #ffffff;
+  background: var(--gymos-surface);
 }
 
 .set-row.next-set:not(.completed) {
   box-shadow:
     inset 3px 0 0
-    #111827;
+    var(--gymos-accent);
 }
 
 .set-row.in-progress:not(.completed) {
   box-shadow:
     inset 3px 0 0
-    #111827;
+    var(--gymos-accent);
 }
 
 .set-summary-row {
@@ -429,7 +429,7 @@ button:disabled {
   border: 0;
 
   background: transparent;
-  color: #111827;
+  color: var(--gymos-text);
 
   text-align: left;
 }
@@ -443,16 +443,16 @@ button:disabled {
 
   border-radius: 50%;
 
-  background: #f3f4f6;
-  color: #374151;
+  background: var(--gymos-surface-hover);
+  color: var(--gymos-text-muted);
 
   font-size: 0.87rem;
   font-weight: 800;
 }
 
 .completed .set-number {
-  background: #dcfce7;
-  color: #166534;
+  background: var(--gymos-success-bg);
+  color: var(--gymos-success);
 }
 
 .set-summary-copy {
@@ -468,7 +468,7 @@ button:disabled {
 }
 
 .set-summary-copy span {
-  color: #6b7280;
+  color: var(--gymos-text-muted);
 
   font-size: 0.8rem;
   overflow-wrap: anywhere;
@@ -483,8 +483,8 @@ button:disabled {
 
   border-radius: 999px;
 
-  background: #f3f4f6;
-  color: #4b5563;
+  background: var(--gymos-surface-hover);
+  color: var(--gymos-text-muted);
 
   font-size: 0.7rem;
   font-weight: 800;
@@ -492,18 +492,18 @@ button:disabled {
 }
 
 .next-set:not(.completed) .set-state {
-  background: #111827;
-  color: #ffffff;
+  background: var(--gymos-accent);
+  color: var(--gymos-accent-contrast);
 }
 
 .in-progress:not(.completed) .set-state {
-  background: #111827;
-  color: #ffffff;
+  background: var(--gymos-accent);
+  color: var(--gymos-accent-contrast);
 }
 
 .completed .set-state {
-  background: #f0fdf4;
-  color: #166534;
+  background: var(--gymos-success-bg);
+  color: var(--gymos-success);
 }
 
 .set-row-body {
@@ -529,7 +529,7 @@ button:disabled {
 }
 
 .set-inputs label > span {
-  color: #6b7280;
+  color: var(--gymos-text-muted);
 
   font-size: 0.72rem;
   font-weight: 700;
@@ -545,10 +545,11 @@ button:disabled {
 
   padding: 8px;
 
-  border: 1px solid #d1d5db;
+  border: 1px solid var(--gymos-border-strong);
   border-radius: 9px;
 
-  background: #fff;
+  background: var(--gymos-input-bg);
+  color: var(--gymos-text);
 
   font-size: 1rem;
   font-weight: 650;
@@ -557,11 +558,11 @@ button:disabled {
 }
 
 .set-inputs input:focus {
-  border-color: #111827;
+  border-color: var(--gymos-text);
 
   box-shadow:
     0 0 0 3px
-    rgb(17 24 39 / 8%);
+    var(--gymos-shadow-soft);
 }
 
 .complete-set-button {
@@ -569,14 +570,14 @@ button:disabled {
 
   padding: 10px 12px;
 
-  border: 1px solid #111827;
+  border: 1px solid var(--gymos-accent);
 
-  background: #111827;
-  color: #ffffff;
+  background: var(--gymos-accent);
+  color: var(--gymos-accent-contrast);
 }
 
 .complete-set-button:not(:disabled):hover {
-  background: #1f2937;
+  background: var(--gymos-accent-hover);
 }
 
 .reuse-weight-button {
@@ -585,11 +586,11 @@ button:disabled {
 
   padding: 6px 8px;
 
-  border: 1px solid #d1d5db;
+  border: 1px solid var(--gymos-border-strong);
   border-radius: 8px;
 
-  background: #ffffff;
-  color: #1e3a8a;
+  background: var(--gymos-surface);
+  color: var(--gymos-info);
 
   font-size: 0.74rem;
   font-weight: 800;
@@ -618,11 +619,11 @@ button:disabled {
 
   padding: 8px 10px;
 
-  border: 1px solid #dbeafe;
+  border: 1px solid var(--gymos-info-border);
   border-radius: 10px;
 
-  background: #eff6ff;
-  color: #1e3a8a;
+  background: var(--gymos-info-bg);
+  color: var(--gymos-info);
 }
 
 .set-timer-display span {
@@ -658,10 +659,10 @@ button:disabled {
 }
 
 .completed .complete-set-button {
-  border-color: #bbf7d0;
+  border-color: var(--gymos-success-border);
 
-  background: #f0fdf4;
-  color: #166534;
+  background: var(--gymos-success-bg);
+  color: var(--gymos-success);
 }
 
 .workout-actions {
@@ -679,17 +680,16 @@ button:disabled {
 
   padding: 12px;
 
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--gymos-border);
   border-radius: 14px;
 
-  background:
-    rgb(255 255 255 / 94%);
+  background: var(--gymos-topbar-bg);
 
   backdrop-filter: blur(10px);
 
   box-shadow:
     0 10px 30px
-    rgb(0 0 0 / 8%);
+    var(--gymos-shadow);
 }
 
 .confirm-overlay {
@@ -700,7 +700,7 @@ button:disabled {
   display: grid;
   place-items: center;
 
-  background: rgb(17 24 39 / 42%);
+  background: var(--gymos-overlay);
 }
 
 
@@ -714,18 +714,18 @@ button:disabled {
   margin-right: auto;
   padding: 10px 12px;
 
-  border: 1px solid #dbeafe;
+  border: 1px solid var(--gymos-info-border);
   border-radius: 12px;
 
-  background: #eff6ff;
-  color: #1e3a8a;
+  background: var(--gymos-info-bg);
+  color: var(--gymos-info);
 }
 
 .rest-timer.finished {
-  border-color: #bbf7d0;
+  border-color: var(--gymos-success-border);
 
-  background: #f0fdf4;
-  color: #166534;
+  background: var(--gymos-success-bg);
+  color: var(--gymos-success);
 }
 
 .rest-timer > div:first-child {
@@ -775,7 +775,7 @@ button:disabled {
 .autosave-status {
   margin-right: auto;
 
-  color: #6b7280;
+  color: var(--gymos-text-muted);
 
   font-size: 0.78rem;
   font-weight: 650;
@@ -784,7 +784,7 @@ button:disabled {
 .workout-id {
   margin: 12px 0 0;
 
-  color: #9ca3af;
+  color: var(--gymos-text-subtle);
 
   font-size: 0.72rem;
 }
@@ -794,11 +794,11 @@ button:disabled {
 
   padding: 12px 14px;
 
-  border: 1px solid #fecaca;
+  border: 1px solid var(--gymos-danger-border);
   border-radius: 10px;
 
-  background: #fef2f2;
-  color: #991b1b;
+  background: var(--gymos-danger-bg);
+  color: var(--gymos-danger);
 }
 
 .login-card,
@@ -828,8 +828,11 @@ button:disabled {
 
   padding: 11px 12px;
 
-  border: 1px solid #d1d5db;
+  border: 1px solid var(--gymos-border-strong);
   border-radius: 10px;
+
+  background: var(--gymos-input-bg);
+  color: var(--gymos-text);
 }
 
 .message {
@@ -884,13 +887,13 @@ button:disabled {
   .set-row.next-set:not(.completed) {
     box-shadow:
       inset 5px 0 0
-      #111827;
+      var(--gymos-accent);
   }
 
   .set-row.in-progress:not(.completed) {
     box-shadow:
       inset 5px 0 0
-      #111827;
+      var(--gymos-accent);
   }
 
   .set-summary-row {

@@ -41,9 +41,6 @@ export const DEFAULT_SETTINGS:
 const STORAGE_KEY =
   'gymos-settings-v1';
 
-const DARK_THEME_ENABLED =
-  false;
-
 @Injectable({
   providedIn: 'root'
 })
@@ -53,7 +50,27 @@ export class SettingsService {
       this.readSettings()
     );
 
+  private readonly systemThemeQuery =
+    window.matchMedia?.(
+      '(prefers-color-scheme: dark)'
+    ) ?? null;
+
+  private readonly handleSystemThemeChange =
+    () => {
+      if (this.settings().theme === 'system') {
+        this.applyGlobalSettings(
+          this.settings()
+        );
+      }
+    };
+
   constructor() {
+    this.systemThemeQuery
+      ?.addEventListener?.(
+        'change',
+        this.handleSystemThemeChange
+      );
+
     this.applyGlobalSettings(
       this.settings()
     );
@@ -149,12 +166,10 @@ export class SettingsService {
               value.confirmBeforeFinish
             ),
       theme:
-        value.theme === 'dark' &&
-        DARK_THEME_ENABLED
-          ? 'dark'
-          : value.theme === 'light'
-            ? 'light'
-            : 'system',
+        value.theme === 'light' ||
+        value.theme === 'dark'
+          ? value.theme
+          : 'system',
       textSize:
         value.textSize === 'small' ||
         value.textSize === 'large'
@@ -172,6 +187,7 @@ export class SettingsService {
       document.documentElement;
 
     root.classList.remove(
+      'gymos-theme-system',
       'gymos-theme-light',
       'gymos-theme-dark',
       'gymos-text-small',
@@ -181,7 +197,7 @@ export class SettingsService {
     );
 
     root.classList.add(
-      `gymos-theme-${this.effectiveTheme(settings)}`
+      `gymos-theme-${settings.theme}`
     );
 
     root.classList.add(
@@ -195,16 +211,4 @@ export class SettingsService {
     }
   }
 
-  private effectiveTheme(
-    settings: GymOSSettings
-  ): 'light' | 'dark' {
-    if (
-      settings.theme === 'dark' &&
-      DARK_THEME_ENABLED
-    ) {
-      return 'dark';
-    }
-
-    return 'light';
-  }
 }

@@ -1,4 +1,24 @@
 :host {
+  --a: var(--gymos-accent);
+  --ac: var(--gymos-accent-contrast);
+  --ah: var(--gymos-accent-hover);
+  --b: var(--gymos-border);
+  --bs: var(--gymos-border-strong);
+  --bg: var(--gymos-bg);
+  --d: var(--gymos-danger);
+  --db: var(--gymos-danger-bg);
+  --dbd: var(--gymos-danger-border);
+  --s: var(--gymos-surface);
+  --sm: var(--gymos-surface-muted);
+  --sh: var(--gymos-shadow);
+  --shs: var(--gymos-shadow-soft);
+  --t: var(--gymos-text);
+  --tm: var(--gymos-text-muted);
+  --ts: var(--gymos-text-subtle);
+  --w: var(--gymos-warning);
+  --wb: var(--gymos-warning-bg);
+  --wbd: var(--gymos-warning-border);
+
   display: block;
   min-height: 100vh;
 
@@ -11,13 +31,9 @@
     "Segoe UI",
     sans-serif;
 
-  color: #0f172a;
+  color: var(--t);
 }
 
-
-/* =========================================================
-   PAGE
-   ========================================================= */
 
 .onboarding-page {
   min-height: 100vh;
@@ -31,25 +47,17 @@
   background:
     radial-gradient(
       circle at 50% -5%,
-      #ffffff 0%,
-      #f8fafc 40%,
-      #f1f5f9 100%
+      var(--s) 0%,
+      var(--sm) 40%,
+      var(--bg) 100%
     );
 }
 
-
-/* =========================================================
-   CARD
-   ========================================================= */
 
 .onboarding-card {
   width: min(100%, 680px);
 }
 
-
-/* =========================================================
-   BRAND
-   ========================================================= */
 
 .brand {
   display: flex;
@@ -68,8 +76,8 @@
 
   border-radius: 12px;
 
-  background: #0f172a;
-  color: #ffffff;
+  background: var(--a);
+  color: var(--ac);
 
   font-size: 16px;
   font-weight: 800;
@@ -88,16 +96,12 @@
 }
 
 .brand-copy span {
-  color: #64748b;
+  color: var(--tm);
 
   font-size: 11px;
   font-weight: 500;
 }
 
-
-/* =========================================================
-   WELCOME
-   ========================================================= */
 
 .welcome {
   max-width: 570px;
@@ -110,7 +114,7 @@
 
   margin-bottom: 12px;
 
-  color: #64748b;
+  color: var(--tm);
 
   font-size: 10px;
   font-weight: 750;
@@ -123,7 +127,7 @@
 .welcome h1 {
   margin: 0;
 
-  color: #0f172a;
+  color: var(--t);
 
   font-size: 36px;
   font-weight: 780;
@@ -137,7 +141,7 @@
 
   margin: 14px 0 0;
 
-  color: #334155;
+  color: var(--tm);
 
   font-size: 21px;
   font-weight: 650;
@@ -151,7 +155,7 @@
 
   margin: 17px 0 0;
 
-  color: #64748b;
+  color: var(--tm);
 
   font-size: 13px;
   font-weight: 450;
@@ -163,16 +167,12 @@
 
   margin-top: 10px;
 
-  color: #94a3b8;
+  color: var(--ts);
 
   font-size: 11px;
   font-weight: 550;
 }
 
-
-/* =========================================================
-   FORM CARD
-   ========================================================= */
 
 .form-section {
   display: grid;
@@ -180,20 +180,16 @@
 
   padding: 28px;
 
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--b);
   border-radius: 18px;
 
-  background: #ffffff;
+  background: var(--s);
 
   box-shadow:
-    0 18px 48px rgba(15, 23, 42, 0.055),
-    0 2px 8px rgba(15, 23, 42, 0.025);
+    0 18px 48px var(--sh),
+    0 2px 8px var(--shs);
 }
 
-
-/* =========================================================
-   SECTION HEADER
-   ========================================================= */
 
 .section-heading {
   display: flex;
@@ -203,7 +199,7 @@
   margin-bottom: 5px;
   padding-bottom: 19px;
 
-  border-bottom: 1px solid #edf1f5;
+  border-bottom: 1px solid var(--b);
 }
 
 .step-number {
@@ -217,8 +213,8 @@
 
   border-radius: 9px;
 
-  background: #f1f5f9;
-  color: #475569;
+  background: var(--bg);
+  color: var(--tm);
 
   font-size: 9px;
   font-weight: 800;
@@ -230,23 +226,19 @@
 }
 
 .section-heading strong {
-  color: #0f172a;
+  color: var(--t);
 
   font-size: 13px;
   font-weight: 700;
 }
 
 .section-heading span:last-child {
-  color: #94a3b8;
+  color: var(--ts);
 
   font-size: 10px;
   font-weight: 500;
 }
 
-
-/* =========================================================
-   FIELDS
-   ========================================================= */
 
 label {
   display: grid;
@@ -254,7 +246,7 @@ label {
 }
 
 .field-label {
-  color: #334155;
+  color: var(--tm);
 
   font-size: 11px;
   font-weight: 650;
@@ -273,7 +265,7 @@ select {
   box-sizing: border-box;
   padding: 0 42px 0 13px;
 
-  border: 1px solid #dbe3ec;
+  border: 1px solid var(--b);
   border-radius: 9px;
 
   appearance: none;
@@ -283,7 +275,7 @@ select {
     linear-gradient(
       45deg,
       transparent 50%,
-      #64748b 50%
+      var(--tm) 50%
     )
     calc(100% - 17px)
     20px / 5px 5px
@@ -291,16 +283,16 @@ select {
 
     linear-gradient(
       135deg,
-      #64748b 50%,
+      var(--tm) 50%,
       transparent 50%
     )
     calc(100% - 12px)
     20px / 5px 5px
     no-repeat,
 
-    #ffffff;
+    var(--s);
 
-  color: #0f172a;
+  color: var(--t);
 
   font: inherit;
   font-size: 12px;
@@ -317,21 +309,17 @@ select {
 }
 
 select:hover {
-  border-color: #cbd5e1;
+  border-color: var(--bs);
 }
 
 select:focus {
-  border-color: #94a3b8;
+  border-color: var(--ts);
 
   box-shadow:
     0 0 0 3px
       rgba(148, 163, 184, 0.14);
 }
 
-
-/* =========================================================
-   CREATE BUTTON
-   ========================================================= */
 
 .create-button {
   width: 100%;
@@ -345,11 +333,11 @@ select:focus {
   margin-top: 5px;
   padding: 0 18px;
 
-  border: 1px solid #0f172a;
+  border: 1px solid var(--a);
   border-radius: 10px;
 
-  background: #0f172a;
-  color: #ffffff;
+  background: var(--a);
+  color: var(--ac);
 
   font: inherit;
   font-size: 12px;
@@ -359,7 +347,7 @@ select:focus {
 
   box-shadow:
     0 7px 16px
-      rgba(15, 23, 42, 0.13);
+      var(--sh);
 
   transition:
     background 130ms ease,
@@ -368,13 +356,13 @@ select:focus {
 }
 
 .create-button:hover:not(:disabled) {
-  background: #1e293b;
+  background: var(--ah);
 
   transform: translateY(-1px);
 
   box-shadow:
     0 9px 20px
-      rgba(15, 23, 42, 0.16);
+      var(--sh);
 }
 
 .create-button:active:not(:disabled) {
@@ -400,14 +388,10 @@ select:focus {
 }
 
 
-/* =========================================================
-   FORM FOOTER
-   ========================================================= */
-
 .form-footer {
   margin: -3px 0 0;
 
-  color: #94a3b8;
+  color: var(--ts);
 
   font-size: 9px;
   font-weight: 500;
@@ -417,19 +401,15 @@ select:focus {
 }
 
 
-/* =========================================================
-   ERROR
-   ========================================================= */
-
 .error {
   margin: 0;
   padding: 11px 12px;
 
-  border: 1px solid #fecaca;
+  border: 1px solid var(--dbd);
   border-radius: 9px;
 
-  background: #fef2f2;
-  color: #b42318;
+  background: var(--db);
+  color: var(--d);
 
   font-size: 11px;
   font-weight: 600;
@@ -437,27 +417,23 @@ select:focus {
 }
 
 
-/* =========================================================
-   PROPOSAL
-   ========================================================= */
-
 .proposal {
   margin-top: 30px;
   padding: 28px;
 
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--b);
   border-radius: 18px;
 
-  background: #ffffff;
+  background: var(--s);
 
   box-shadow:
-    0 18px 48px rgba(15, 23, 42, 0.045);
+    0 18px 48px var(--shs);
 }
 
 .proposal-header {
   padding-bottom: 21px;
 
-  border-bottom: 1px solid #edf1f5;
+  border-bottom: 1px solid var(--b);
 }
 
 .proposal-badge {
@@ -468,8 +444,8 @@ select:focus {
 
   border-radius: 999px;
 
-  background: #f1f5f9;
-  color: #475569;
+  background: var(--bg);
+  color: var(--tm);
 
   font-size: 9px;
   font-weight: 700;
@@ -478,7 +454,7 @@ select:focus {
 .proposal-header h2 {
   margin: 0;
 
-  color: #0f172a;
+  color: var(--t);
 
   font-size: 21px;
   font-weight: 730;
@@ -489,7 +465,7 @@ select:focus {
 .proposal-header p {
   margin: 7px 0 0;
 
-  color: #94a3b8;
+  color: var(--ts);
 
   font-size: 11px;
 }
@@ -504,20 +480,20 @@ select:focus {
 .session {
   overflow: hidden;
 
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--b);
   border-radius: 12px;
 
-  background: #f8fafc;
+  background: var(--sm);
 }
 
 .session > header {
   padding: 15px;
 
-  border-bottom: 1px solid #e8edf3;
+  border-bottom: 1px solid var(--b);
 }
 
 .session > header > span {
-  color: #94a3b8;
+  color: var(--ts);
 
   font-size: 9px;
   font-weight: 700;
@@ -529,7 +505,7 @@ select:focus {
 .session h3 {
   margin: 5px 0 0;
 
-  color: #0f172a;
+  color: var(--t);
 
   font-size: 13px;
   font-weight: 700;
@@ -538,7 +514,7 @@ select:focus {
 .session header p {
   margin: 3px 0 0;
 
-  color: #64748b;
+  color: var(--tm);
 
   font-size: 10px;
 }
@@ -562,7 +538,7 @@ select:focus {
 }
 
 .session li + li {
-  border-top: 1px solid #e8edf3;
+  border-top: 1px solid var(--b);
 }
 
 .exercise-main {
@@ -573,14 +549,14 @@ select:focus {
 }
 
 .exercise-main strong {
-  color: #334155;
+  color: var(--tm);
 
   font-size: 11px;
   font-weight: 650;
 }
 
 .exercise-main span {
-  color: #64748b;
+  color: var(--tm);
 
   font-size: 9px;
   font-weight: 500;
@@ -589,7 +565,7 @@ select:focus {
 .exercise-meta {
   flex: 0 0 auto;
 
-  color: #94a3b8;
+  color: var(--ts);
 
   font-size: 9px;
   font-weight: 550;
@@ -599,11 +575,11 @@ select:focus {
   margin-top: 18px;
   padding: 14px;
 
-  border: 1px solid #fde7b0;
+  border: 1px solid var(--wbd);
   border-radius: 10px;
 
-  background: #fffbeb;
-  color: #92400e;
+  background: var(--wb);
+  color: var(--w);
 
   font-size: 10px;
   line-height: 1.55;
@@ -620,10 +596,6 @@ select:focus {
   padding-left: 16px;
 }
 
-
-/* =========================================================
-   MOBILE
-   ========================================================= */
 
 @media (max-width: 620px) {
   .onboarding-page {
@@ -682,11 +654,7 @@ select:focus {
     padding-top: 11px;
     padding-bottom: 11px;
   }
-  /* =========================================================
-   ONBOARDING SECTIONS
-   ========================================================= */
-
-.onboarding-section {
+  .onboarding-section {
   display: grid;
   gap: 19px;
 }
@@ -696,13 +664,9 @@ select:focus {
   margin-top: 8px;
   padding-top: 26px;
 
-  border-top: 1px solid #edf1f5;
+  border-top: 1px solid var(--b);
 }
 
-
-/* =========================================================
-   TEXT INPUTS
-   ========================================================= */
 
 input {
   width: 100%;
@@ -711,11 +675,11 @@ input {
   box-sizing: border-box;
   padding: 0 13px;
 
-  border: 1px solid #dbe3ec;
+  border: 1px solid var(--b);
   border-radius: 9px;
 
-  background: #ffffff;
-  color: #0f172a;
+  background: var(--s);
+  color: var(--t);
 
   font: inherit;
   font-size: 12px;
@@ -729,26 +693,22 @@ input {
 }
 
 input::placeholder {
-  color: #b3bfcc;
+  color: var(--ts);
   font-weight: 500;
 }
 
 input:hover {
-  border-color: #cbd5e1;
+  border-color: var(--bs);
 }
 
 input:focus {
-  border-color: #94a3b8;
+  border-color: var(--ts);
 
   box-shadow:
     0 0 0 3px
     rgba(148, 163, 184, 0.14);
 }
 
-
-/* =========================================================
-   INPUT UNIT
-   ========================================================= */
 
 .input-unit {
   position: relative;
@@ -765,7 +725,7 @@ input:focus {
 
   transform: translateY(-50%);
 
-  color: #94a3b8;
+  color: var(--ts);
 
   font-size: 10px;
   font-weight: 650;
@@ -773,10 +733,6 @@ input:focus {
   pointer-events: none;
 }
 
-
-/* =========================================================
-   MOTIVATION
-   ========================================================= */
 
 .motivation-field {
   display: grid;
@@ -790,7 +746,7 @@ input:focus {
 }
 
 .motivation-heading > span:last-child {
-  color: #94a3b8;
+  color: var(--ts);
 
   font-size: 9px;
   font-weight: 550;
@@ -807,11 +763,11 @@ input:focus {
 
   padding: 0 12px;
 
-  border: 1px solid #dbe3ec;
+  border: 1px solid var(--b);
   border-radius: 999px;
 
-  background: #ffffff;
-  color: #475569;
+  background: var(--s);
+  color: var(--tm);
 
   font: inherit;
   font-size: 10px;
@@ -827,22 +783,18 @@ input:focus {
 }
 
 .motivation-option:hover {
-  border-color: #94a3b8;
+  border-color: var(--ts);
 
   transform: translateY(-1px);
 }
 
 .motivation-option.selected {
-  border-color: #0f172a;
+  border-color: var(--t);
 
-  background: #0f172a;
-  color: #ffffff;
+  background: var(--a);
+  color: var(--ac);
 }
 }
-
-/* =========================================================
-   EXTRA ONBOARDING FIELDS
-   ========================================================= */
 
 .onboarding-section {
   display: grid;
@@ -852,13 +804,9 @@ input:focus {
 .onboarding-section + .onboarding-section {
   margin-top: 8px;
   padding-top: 26px;
-  border-top: 1px solid #edf1f5;
+  border-top: 1px solid var(--b);
 }
 
-
-/* =========================================================
-   INPUTS
-   ========================================================= */
 
 .form-section input {
   width: 100%;
@@ -868,11 +816,11 @@ input:focus {
   box-sizing: border-box;
   padding: 0 13px;
 
-  border: 1px solid #dbe3ec;
+  border: 1px solid var(--b);
   border-radius: 9px;
 
-  background: #ffffff;
-  color: #0f172a;
+  background: var(--s);
+  color: var(--t);
 
   font-family: inherit;
   font-size: 12px;
@@ -886,16 +834,16 @@ input:focus {
 }
 
 .form-section input::placeholder {
-  color: #a8b4c3;
+  color: var(--ts);
   font-weight: 500;
 }
 
 .form-section input:hover {
-  border-color: #cbd5e1;
+  border-color: var(--bs);
 }
 
 .form-section input:focus {
-  border-color: #94a3b8;
+  border-color: var(--ts);
 
   box-shadow:
     0 0 0 3px
@@ -917,10 +865,6 @@ input:focus {
 }
 
 
-/* =========================================================
-   UNITS
-   ========================================================= */
-
 .input-unit {
   position: relative;
   width: 100%;
@@ -937,7 +881,7 @@ input:focus {
 
   transform: translateY(-50%);
 
-  color: #94a3b8;
+  color: var(--ts);
 
   font-size: 10px;
   font-weight: 700;
@@ -945,10 +889,6 @@ input:focus {
   pointer-events: none;
 }
 
-
-/* =========================================================
-   MOTIVATION
-   ========================================================= */
 
 .motivation-field {
   display: grid;
@@ -965,7 +905,7 @@ input:focus {
 .motivation-heading > span:last-child {
   flex: 0 0 auto;
 
-  color: #94a3b8;
+  color: var(--ts);
 
   font-size: 9px;
   font-weight: 600;
@@ -983,11 +923,11 @@ input:focus {
 
   padding: 0 13px;
 
-  border: 1px solid #dbe3ec;
+  border: 1px solid var(--b);
   border-radius: 999px;
 
-  background: #ffffff;
-  color: #475569;
+  background: var(--s);
+  color: var(--tm);
 
   box-shadow: none;
 
@@ -1006,23 +946,19 @@ input:focus {
 }
 
 .form-section .motivation-option:hover {
-  border-color: #94a3b8;
-  background: #f8fafc;
+  border-color: var(--ts);
+  background: var(--sm);
 
   transform: translateY(-1px);
 }
 
 .form-section .motivation-option.selected {
-  border-color: #0f172a;
+  border-color: var(--t);
 
-  background: #0f172a;
-  color: #ffffff;
+  background: var(--a);
+  color: var(--ac);
 }
 
-
-/* =========================================================
-   MOBILE
-   ========================================================= */
 
 @media (max-width: 620px) {
   .form-section input {
@@ -1039,10 +975,6 @@ input:focus {
   }
 }
 
-/* =========================================================
-   LIMITATIONS
-   ========================================================= */
-
 .limitation-question {
   display: grid;
   gap: 10px;
@@ -1057,11 +989,11 @@ input:focus {
 .form-section .choice-option {
   min-height: 43px;
 
-  border: 1px solid #dbe3ec;
+  border: 1px solid var(--b);
   border-radius: 9px;
 
-  background: #ffffff;
-  color: #475569;
+  background: var(--s);
+  color: var(--tm);
 
   font: inherit;
   font-size: 11px;
@@ -1076,14 +1008,14 @@ input:focus {
 }
 
 .form-section .choice-option:hover {
-  border-color: #94a3b8;
-  background: #f8fafc;
+  border-color: var(--ts);
+  background: var(--sm);
 }
 
 .form-section .choice-option.selected {
-  border-color: #0f172a;
-  background: #0f172a;
-  color: #ffffff;
+  border-color: var(--t);
+  background: var(--a);
+  color: var(--ac);
 }
 
 .limitation-details {
@@ -1092,10 +1024,10 @@ input:focus {
 
   padding: 18px;
 
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--b);
   border-radius: 12px;
 
-  background: #f8fafc;
+  background: var(--sm);
 }
 
 .form-section textarea {
@@ -1104,11 +1036,11 @@ input:focus {
   box-sizing: border-box;
   padding: 12px 13px;
 
-  border: 1px solid #dbe3ec;
+  border: 1px solid var(--b);
   border-radius: 9px;
 
-  background: #ffffff;
-  color: #0f172a;
+  background: var(--s);
+  color: var(--t);
 
   font: inherit;
   font-size: 11px;
@@ -1120,11 +1052,11 @@ input:focus {
 }
 
 .form-section textarea::placeholder {
-  color: #a8b4c3;
+  color: var(--ts);
 }
 
 .form-section textarea:focus {
-  border-color: #94a3b8;
+  border-color: var(--ts);
 
   box-shadow:
     0 0 0 3px
@@ -1132,16 +1064,12 @@ input:focus {
 }
 
 .field-help {
-  color: #94a3b8;
+  color: var(--ts);
 
   font-size: 9px;
   font-weight: 500;
   line-height: 1.5;
 }
-
-/* =========================================================
-   EXERCISE PREFERENCES
-   ========================================================= */
 
 .exercise-preference-block {
   display: grid;
@@ -1153,7 +1081,7 @@ input:focus {
   margin-top: 4px;
   padding-top: 19px;
 
-  border-top: 1px solid #edf1f5;
+  border-top: 1px solid var(--b);
 }
 
 .preference-heading > div {
@@ -1177,14 +1105,14 @@ input:focus {
 
   overflow: hidden;
 
-  border: 1px solid #dbe3ec;
+  border: 1px solid var(--b);
   border-radius: 10px;
 
-  background: #ffffff;
+  background: var(--s);
 
   box-shadow:
     0 12px 30px
-    rgba(15, 23, 42, 0.12);
+    var(--sh);
 }
 
 .form-section .exercise-result {
@@ -1201,8 +1129,8 @@ input:focus {
   border: 0;
   border-radius: 0;
 
-  background: #ffffff;
-  color: #0f172a;
+  background: var(--s);
+  color: var(--t);
 
   font: inherit;
   text-align: left;
@@ -1212,11 +1140,11 @@ input:focus {
 
 .form-section .exercise-result +
 .exercise-result {
-  border-top: 1px solid #edf1f5;
+  border-top: 1px solid var(--b);
 }
 
 .form-section .exercise-result:hover {
-  background: #f8fafc;
+  background: var(--sm);
 }
 
 .exercise-result > div {
@@ -1237,7 +1165,7 @@ input:focus {
 }
 
 .exercise-result div span {
-  color: #94a3b8;
+  color: var(--ts);
 
   font-size: 8px;
 }
@@ -1245,7 +1173,7 @@ input:focus {
 .result-action {
   flex: 0 0 auto;
 
-  color: #64748b;
+  color: var(--tm);
 
   font-size: 9px;
   font-weight: 650;
@@ -1267,11 +1195,11 @@ input:focus {
 
   padding: 0 10px;
 
-  border: 1px solid #dbe3ec;
+  border: 1px solid var(--b);
   border-radius: 999px;
 
-  background: #f8fafc;
-  color: #475569;
+  background: var(--sm);
+  color: var(--tm);
 
   font: inherit;
   font-size: 9px;
@@ -1281,35 +1209,31 @@ input:focus {
 }
 
 .form-section .selected-exercise:hover {
-  border-color: #94a3b8;
+  border-color: var(--ts);
 }
 
 .form-section
 .selected-exercise.preferred {
-  background: #f8fafc;
+  background: var(--sm);
 }
 
 .form-section
 .selected-exercise.avoided {
-  background: #fffafa;
+  background: var(--db);
 }
 
 .catalog-message {
   padding: 12px 13px;
 
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--b);
   border-radius: 9px;
 
-  background: #f8fafc;
-  color: #64748b;
+  background: var(--sm);
+  color: var(--tm);
 
   font-size: 10px;
   line-height: 1.5;
 }
-
-/* =========================================================
-   COMPLETE ONBOARDING
-   ========================================================= */
 
 .proposal-actions {
   display: grid;
@@ -1318,7 +1242,7 @@ input:focus {
   margin-top: 24px;
   padding-top: 22px;
 
-  border-top: 1px solid #edf1f5;
+  border-top: 1px solid var(--b);
 }
 
 .proposal-ready {
@@ -1327,23 +1251,19 @@ input:focus {
 }
 
 .proposal-ready strong {
-  color: #0f172a;
+  color: var(--t);
 
   font-size: 12px;
   font-weight: 700;
 }
 
 .proposal-ready span {
-  color: #64748b;
+  color: var(--tm);
 
   font-size: 10px;
   font-weight: 500;
   line-height: 1.55;
 }
-
-/* =========================================================
-   ONBOARDING WIZARD
-   ========================================================= */
 
 .onboarding-progress {
   display: grid;
@@ -1359,7 +1279,7 @@ input:focus {
 
   border-radius: 999px;
 
-  background: #e2e8f0;
+  background: var(--b);
 }
 
 .progress-value {
@@ -1367,7 +1287,7 @@ input:focus {
 
   border-radius: inherit;
 
-  background: #0f172a;
+  background: var(--a);
 
   transition:
     width 180ms ease;
@@ -1389,11 +1309,11 @@ input:focus {
 
   padding: 0 9px;
 
-  border: 1px solid #dbe3ec;
+  border: 1px solid var(--b);
   border-radius: 10px;
 
-  background: #ffffff;
-  color: #64748b;
+  background: var(--s);
+  color: var(--tm);
 
   font: inherit;
 
@@ -1406,22 +1326,22 @@ input:focus {
 }
 
 .progress-steps button:hover {
-  border-color: #94a3b8;
+  border-color: var(--ts);
 
-  background: #f8fafc;
+  background: var(--sm);
 }
 
 .progress-steps button.active {
-  border-color: #0f172a;
+  border-color: var(--t);
 
-  color: #0f172a;
+  color: var(--t);
 }
 
 .progress-steps button.completed {
-  border-color: #0f172a;
+  border-color: var(--t);
 
-  background: #0f172a;
-  color: #ffffff;
+  background: var(--a);
+  color: var(--ac);
 }
 
 .progress-steps span {
@@ -1435,7 +1355,7 @@ input:focus {
 
   border-radius: 999px;
 
-  background: #f1f5f9;
+  background: var(--bg);
   color: inherit;
 
   font-size: 10px;
@@ -1472,7 +1392,7 @@ input:focus {
   margin-top: 5px;
   padding-top: 22px;
 
-  border-top: 1px solid #edf1f5;
+  border-top: 1px solid var(--b);
 }
 
 .wizard-actions .create-button {
@@ -1489,11 +1409,11 @@ input:focus {
 
   padding: 0 18px;
 
-  border: 1px solid #dbe3ec;
+  border: 1px solid var(--b);
   border-radius: 10px;
 
-  background: #ffffff;
-  color: #475569;
+  background: var(--s);
+  color: var(--tm);
 
   font: inherit;
   font-size: 11px;
@@ -1508,10 +1428,10 @@ input:focus {
 }
 
 .secondary-button:hover {
-  border-color: #94a3b8;
+  border-color: var(--ts);
 
-  background: #f8fafc;
-  color: #0f172a;
+  background: var(--sm);
+  color: var(--t);
 }
 
 
@@ -1535,10 +1455,6 @@ input:focus {
   }
 }
 
-/* =========================================================
-   COMPLETE ONBOARDING
-   ========================================================= */
-
 .proposal-actions {
   display: grid;
   gap: 14px;
@@ -1546,7 +1462,7 @@ input:focus {
   margin-top: 24px;
   padding-top: 22px;
 
-  border-top: 1px solid #edf1f5;
+  border-top: 1px solid var(--b);
 }
 
 .proposal-ready {
@@ -1555,14 +1471,14 @@ input:focus {
 }
 
 .proposal-ready strong {
-  color: #0f172a;
+  color: var(--t);
 
   font-size: 12px;
   font-weight: 700;
 }
 
 .proposal-ready span {
-  color: #64748b;
+  color: var(--tm);
 
   font-size: 10px;
   font-weight: 500;

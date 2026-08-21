@@ -126,8 +126,16 @@ export class SettingsHub {
       <a
         class="settings-back"
         routerLink="/ajustes"
+        aria-label="Volver a Ajustes"
       >
-        ← Ajustes
+        <span
+          class="settings-back-icon"
+          aria-hidden="true"
+        >
+          ‹
+        </span>
+
+        <span>Ajustes</span>
       </a>
 
       <header class="settings-header">
@@ -238,8 +246,16 @@ export class SettingsAccount {
       <a
         class="settings-back"
         routerLink="/ajustes"
+        aria-label="Volver a Ajustes"
       >
-        ← Ajustes
+        <span
+          class="settings-back-icon"
+          aria-hidden="true"
+        >
+          ‹
+        </span>
+
+        <span>Ajustes</span>
       </a>
 
       <header class="settings-header">
@@ -379,8 +395,16 @@ export class SettingsTraining {
       <a
         class="settings-back"
         routerLink="/ajustes"
+        aria-label="Volver a Ajustes"
       >
-        ← Ajustes
+        <span
+          class="settings-back-icon"
+          aria-hidden="true"
+        >
+          ‹
+        </span>
+
+        <span>Ajustes</span>
       </a>
 
       <header class="settings-header">
@@ -403,20 +427,13 @@ export class SettingsTraining {
                 type="button"
                 role="radio"
                 [attr.aria-checked]="theme() === option.value"
-                [attr.aria-disabled]="option.disabled ? 'true' : null"
                 [class.active]="theme() === option.value"
-                [disabled]="option.disabled"
                 (click)="setTheme(option.value)"
               >
                 {{ option.label }}
               </button>
             }
           </div>
-
-          <small>
-            El tema oscuro queda pendiente hasta completar
-            la adaptación visual de todas las pantallas.
-          </small>
         </div>
 
         <div class="settings-field">
@@ -473,7 +490,6 @@ export class SettingsAppearance {
   readonly themeOptions: {
     value: ThemePreference;
     label: string;
-    disabled?: boolean;
   }[] = [
     {
       value: 'system',
@@ -485,8 +501,7 @@ export class SettingsAppearance {
     },
     {
       value: 'dark',
-      label: 'Oscuro',
-      disabled: true
+      label: 'Oscuro'
     }
   ];
 
@@ -534,10 +549,6 @@ export class SettingsAppearance {
   setTheme(
     theme: ThemePreference
   ): void {
-    if (theme === 'dark') {
-      return;
-    }
-
     this.settingsService.update({
       theme
     });
@@ -570,8 +581,16 @@ export class SettingsAppearance {
       <a
         class="settings-back"
         routerLink="/ajustes"
+        aria-label="Volver a Ajustes"
       >
-        ← Ajustes
+        <span
+          class="settings-back-icon"
+          aria-hidden="true"
+        >
+          ‹
+        </span>
+
+        <span>Ajustes</span>
       </a>
 
       <header class="settings-header">
@@ -611,8 +630,16 @@ export class SettingsData {}
       <a
         class="settings-back"
         routerLink="/ajustes"
+        aria-label="Volver a Ajustes"
       >
-        ← Ajustes
+        <span
+          class="settings-back-icon"
+          aria-hidden="true"
+        >
+          ‹
+        </span>
+
+        <span>Ajustes</span>
       </a>
 
       <header class="settings-header">

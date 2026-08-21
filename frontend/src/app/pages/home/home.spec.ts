@@ -60,7 +60,7 @@ describe('Home', () => {
     );
     expect(
       document.documentElement.classList
-        .contains('gymos-theme-light')
+        .contains('gymos-theme-system')
     ).toBe(true);
     expect(
       document.documentElement.classList

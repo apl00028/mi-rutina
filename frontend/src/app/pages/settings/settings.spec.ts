@@ -16,7 +16,9 @@ import {
   beforeEach,
   describe,
   expect,
-  it
+  it,
+  afterEach,
+  vi
 } from 'vitest';
 
 import {
@@ -38,11 +40,53 @@ import {
 } from './settings';
 
 describe('Settings pages', () => {
+  let systemThemeMatches = false;
+  let systemThemeListener:
+    ((event: MediaQueryListEvent) => void) | null =
+      null;
+
   beforeEach(async () => {
     localStorage.removeItem(
       'gymos-settings-v1'
     );
     document.documentElement.className = '';
+    systemThemeMatches = false;
+    systemThemeListener = null;
+
+    vi.stubGlobal(
+      'matchMedia',
+      vi.fn(
+        (query: string) => ({
+          matches:
+            query.includes(
+              'prefers-color-scheme'
+            )
+              ? systemThemeMatches
+              : false,
+          media: query,
+          onchange: null,
+          addEventListener:
+            vi.fn(
+              (
+                _event: string,
+                listener:
+                  (event: MediaQueryListEvent) => void
+              ) => {
+                systemThemeListener =
+                  listener;
+              }
+            ),
+          removeEventListener:
+            vi.fn(),
+          addListener:
+            vi.fn(),
+          removeListener:
+            vi.fn(),
+          dispatchEvent:
+            vi.fn()
+        } as MediaQueryList)
+      )
+    );
 
     await TestBed.configureTestingModule({
       providers: [
@@ -88,6 +132,24 @@ describe('Settings pages', () => {
       ]
     }).compileComponents();
   });
+
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+  });
+
+
+  function dispatchSystemTheme(
+    dark: boolean
+  ): void {
+    systemThemeMatches = dark;
+    systemThemeListener?.({
+      matches: dark,
+      media:
+        '(prefers-color-scheme: dark)'
+    } as MediaQueryListEvent);
+  }
 
   function text(
     element: HTMLElement
@@ -211,7 +273,7 @@ describe('Settings pages', () => {
     ).toBe(false);
   });
 
-  it('keeps the incomplete dark theme disabled and applies the safe light class', () => {
+  it('applies appearance settings globally and keeps dark after reload', () => {
     const fixture =
       TestBed.createComponent(
         SettingsAppearance
@@ -231,14 +293,14 @@ describe('Settings pages', () => {
     });
 
     expect(service.settings().theme)
-      .toBe('system');
-    expect(
-      document.documentElement.classList
-        .contains('gymos-theme-light')
-    ).toBe(true);
+      .toBe('dark');
     expect(
       document.documentElement.classList
         .contains('gymos-theme-dark')
+    ).toBe(true);
+    expect(
+      document.documentElement.classList
+        .contains('gymos-theme-light')
     ).toBe(false);
     expect(
       document.documentElement.classList
@@ -254,22 +316,18 @@ describe('Settings pages', () => {
 
     expect(fresh.settings())
       .toMatchObject({
-        theme: 'system',
+        theme: 'dark',
         textSize: 'large',
         reduceMotion: true
       });
     expect(
       document.documentElement.classList
-        .contains('gymos-theme-light')
-    ).toBe(true);
-    expect(
-      document.documentElement.classList
         .contains('gymos-theme-dark')
-    ).toBe(false);
+    ).toBe(true);
   });
 
 
-  it('uses a safe light foreground/background theme for the system default', () => {
+  it('uses system theme by default and follows a light system preference', () => {
     const service =
       TestBed.inject(
         SettingsService
@@ -279,7 +337,7 @@ describe('Settings pages', () => {
       .toBe('system');
     expect(
       document.documentElement.classList
-        .contains('gymos-theme-light')
+        .contains('gymos-theme-system')
     ).toBe(true);
     expect(
       document.documentElement.classList
@@ -288,7 +346,54 @@ describe('Settings pages', () => {
   });
 
 
-  it('shows the dark theme option as unavailable while dark mode is incomplete', () => {
+  it('keeps system selected while responding to dark system preference changes', () => {
+    const service =
+      TestBed.inject(
+        SettingsService
+      );
+
+    expect(service.settings().theme)
+      .toBe('system');
+
+    dispatchSystemTheme(true);
+
+    expect(
+      document.documentElement.classList
+        .contains('gymos-theme-system')
+    ).toBe(true);
+    expect(
+      document.documentElement.classList
+        .contains('gymos-theme-dark')
+    ).toBe(false);
+  });
+
+
+  it('ignores system preference changes when dark is explicit', () => {
+    const service =
+      TestBed.inject(
+        SettingsService
+      );
+
+    service.update({
+      theme: 'dark'
+    });
+
+    dispatchSystemTheme(false);
+
+    expect(service.settings().theme)
+      .toBe('dark');
+    expect(
+      document.documentElement.classList
+        .contains('gymos-theme-dark')
+    ).toBe(true);
+    expect(
+      document.documentElement.classList
+        .contains('gymos-theme-system')
+    ).toBe(false);
+  });
+
+
+  it('shows the dark theme option as selectable', () => {
     const fixture =
       TestBed.createComponent(
         SettingsAppearance
@@ -311,12 +416,12 @@ describe('Settings pages', () => {
 
     expect(darkButton).toBeTruthy();
     expect(darkButton?.disabled)
-      .toBe(true);
+      .toBe(false);
     expect(
-      darkButton?.getAttribute(
-        'aria-disabled'
-      )
-    ).toBe('true');
+      text(fixture.nativeElement)
+    ).not.toContain(
+      'El tema oscuro queda pendiente'
+    );
   });
 
 
@@ -400,7 +505,7 @@ describe('Settings pages', () => {
     );
   });
 
-  it('subscreens provide a back link to settings', () => {
+  it('subscreens provide an accessible back button to settings', () => {
     const fixture =
       TestBed.createComponent(
         SettingsTraining
@@ -415,6 +520,47 @@ describe('Settings pages', () => {
 
     expect(back.textContent).toContain('Ajustes');
     expect(back.getAttribute('href'))
+      .toBe('/ajustes');
+    expect(
+      back.getAttribute('aria-label')
+    ).toBe('Volver a Ajustes');
+    expect(
+      back.querySelector(
+        '.settings-back-icon'
+      )?.textContent?.trim()
+    ).toBe('‹');
+
+    back.focus();
+
+    expect(document.activeElement)
+      .toBe(back);
+  });
+
+
+  it('back button navigates to the settings hub', async () => {
+    const router =
+      TestBed.inject(Router);
+
+    await router.navigateByUrl(
+      '/ajustes/entrenamiento'
+    );
+
+    const fixture =
+      TestBed.createComponent(
+        SettingsTraining
+      );
+
+    fixture.detectChanges();
+
+    const back =
+      fixture.nativeElement.querySelector(
+        '.settings-back'
+      ) as HTMLAnchorElement;
+
+    back.click();
+    await fixture.whenStable();
+
+    expect(router.url)
       .toBe('/ajustes');
   });
 

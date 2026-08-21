@@ -6,6 +6,31 @@
   <base href="/">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <link rel="icon" type="image/x-icon" href="favicon.ico">
+  <script>
+    (() => {
+      try {
+        const raw =
+          localStorage.getItem('gymos-settings-v1');
+        const theme =
+          raw
+            ? JSON.parse(raw).theme
+            : 'system';
+        const safeTheme =
+          theme === 'light' ||
+          theme === 'dark'
+            ? theme
+            : 'system';
+
+        document.documentElement.classList.add(
+          `gymos-theme-${safeTheme}`
+        );
+      } catch {
+        document.documentElement.classList.add(
+          'gymos-theme-system'
+        );
+      }
+    })();
+  </script>
 </head>
 <body>
   <app-root></app-root>

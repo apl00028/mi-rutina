@@ -139,18 +139,49 @@
 }
 
 .settings-back {
+  width: fit-content;
   min-height: 44px;
 
   display: inline-flex;
   align-items: center;
+  gap: 10px;
 
-  margin-bottom: 10px;
+  margin-bottom: 12px;
 
   color: var(--gymos-text);
 
   text-decoration: none;
 
   font-weight: 800;
+}
+
+.settings-back-icon {
+  width: 44px;
+  height: 44px;
+
+  display: inline-grid;
+  place-items: center;
+
+  border: 1px solid var(--gymos-border);
+  border-radius: 12px;
+
+  background: var(--gymos-surface);
+  color: var(--gymos-accent-text);
+
+  font-size: 1.55rem;
+  line-height: 1;
+
+  transition:
+    background 140ms ease,
+    border-color 140ms ease,
+    color 140ms ease;
+}
+
+.settings-back:hover .settings-back-icon {
+  border-color: var(--gymos-border-strong);
+
+  background: var(--gymos-accent);
+  color: var(--gymos-accent-contrast);
 }
 
 .settings-toggle-row {
@@ -179,7 +210,7 @@
 
   border-radius: 999px;
 
-  background: #d1d5db;
+  background: var(--gymos-border-strong);
 }
 
 .switch::before {
@@ -190,14 +221,14 @@
 
   border-radius: 50%;
 
-  background: #ffffff;
+  background: var(--gymos-surface);
 
   transition:
     transform 140ms ease;
 }
 
 .switch.on {
-  background: #111827;
+  background: var(--gymos-accent);
 }
 
 .switch.on::before {
@@ -236,20 +267,8 @@
 }
 
 .segmented-control button.active {
-  background: #111827;
-  color: #ffffff;
-}
-
-.segmented-control button:disabled {
-  color: var(--gymos-text-muted);
-
-  cursor: not-allowed;
-  opacity: 0.52;
-}
-
-.segmented-control button:disabled.active {
-  background: transparent;
-  color: var(--gymos-text-muted);
+  background: var(--gymos-accent);
+  color: var(--gymos-accent-contrast);
 }
 
 .settings-note {

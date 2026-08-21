@@ -9,7 +9,8 @@ import {
 } from '@angular/router';
 
 import {
-  AuthService
+  AuthService,
+  GymOSMe
 } from '../../core/auth.service';
 
 import {
@@ -32,10 +33,20 @@ export class Login {
   readonly language =
     this.languageService.language;
 
-  email = signal('');
+  email =
+    signal('');
 
-  loading = signal(false);
-  googleLoading = signal(false);
+  loading =
+    signal(false);
+
+  googleLoading =
+    signal(false);
+
+  passkeyLoading =
+    signal(false);
+
+  readonly passkeySupported =
+    signal(false);
 
   message =
     signal<string | null>(null);
@@ -48,6 +59,10 @@ export class Login {
     public auth: AuthService,
     private router: Router
   ) {
+    this.passkeySupported.set(
+      this.auth.isPasskeySupported()
+    );
+
     this.handleLoginState();
   }
 
@@ -87,40 +102,14 @@ export class Login {
       const me =
         await this.auth.resolveAccess();
 
-        if (
-          me.access_status === 'active'
-        ) {
-          await this.router.navigateByUrl(
-            me.onboarding_completed
-              ? '/'
-              : '/onboarding'
-          );
-
-          return;
-        }
-
-      if (
-        me.access_status === 'pending' ||
-        me.access_status === 'suspended'
-      ) {
-        await this.router.navigateByUrl(
-          '/access-pending'
-        );
-
-        return;
-      }
-
-      this.error.set(
-        this.language() === 'es'
-          ? 'No se pudo determinar el estado de tu acceso.'
-          : 'Your access status could not be determined.'
+      await this.navigateAfterLogin(
+        me
       );
 
-    } catch (err: any) {
+    } catch (err: unknown) {
       this.error.set(
-        err?.error?.detail ??
-        err?.message ??
-        (
+        this.authErrorMessage(
+          err,
           this.language() === 'es'
             ? 'No se pudo comprobar tu acceso a GymOS.'
             : 'Your GymOS access could not be verified.'
@@ -135,6 +124,81 @@ export class Login {
           '/login'
         );
       }
+    }
+  }
+
+
+  private async navigateAfterLogin(
+    me: GymOSMe
+  ): Promise<void> {
+    if (
+      me.access_status ===
+      'active'
+    ) {
+      await this.router.navigateByUrl(
+        me.onboarding_completed
+          ? '/'
+          : '/onboarding'
+      );
+
+      return;
+    }
+
+    if (
+      me.access_status === 'pending' ||
+      me.access_status === 'suspended'
+    ) {
+      await this.router.navigateByUrl(
+        '/access-pending'
+      );
+
+      return;
+    }
+
+    throw new Error(
+      this.language() === 'es'
+        ? 'No se pudo determinar el estado de tu acceso.'
+        : 'Your access status could not be determined.'
+    );
+  }
+
+
+  async signInWithPasskey():
+    Promise<void> {
+    if (
+      this.passkeyLoading()
+    ) {
+      return;
+    }
+
+    this.passkeyLoading.set(
+      true
+    );
+
+    this.message.set(null);
+    this.error.set(null);
+
+    try {
+      await this.auth.signInWithPasskey();
+
+      const me =
+        await this.auth.resolveAccess();
+
+      await this.navigateAfterLogin(
+        me
+      );
+
+    } catch (err: unknown) {
+      this.error.set(
+        this.passkeyErrorMessage(
+          err
+        )
+      );
+
+    } finally {
+      this.passkeyLoading.set(
+        false
+      );
     }
   }
 
@@ -166,10 +230,10 @@ export class Login {
           : 'We sent you a sign-in link. Check your email.'
       );
 
-    } catch (err: any) {
+    } catch (err: unknown) {
       this.error.set(
-        err?.message ??
-        (
+        this.authErrorMessage(
+          err,
           this.language() === 'es'
             ? 'No se pudo enviar el enlace de acceso.'
             : 'The sign-in link could not be sent.'
@@ -191,10 +255,10 @@ export class Login {
     try {
       await this.auth.signInWithGoogle();
 
-    } catch (err: any) {
+    } catch (err: unknown) {
       this.error.set(
-        err?.message ??
-        (
+        this.authErrorMessage(
+          err,
           this.language() === 'es'
             ? 'No se pudo iniciar sesión con Google.'
             : 'Google sign-in could not be started.'
@@ -215,7 +279,8 @@ export class Login {
   }
 
 
-  requestAccess(): void {
+  requestAccess():
+    void {
     this.message.set(
       this.language() === 'es'
         ? 'El acceso a GymOS está actualmente disponible mediante invitación.'
@@ -223,5 +288,88 @@ export class Login {
     );
 
     this.error.set(null);
+  }
+
+
+  private passkeyErrorMessage(
+    error: unknown
+  ): string {
+    const candidate =
+      error as {
+        name?: string;
+        code?: string;
+        message?: string;
+      };
+
+    if (
+      candidate.name ===
+      'NotAllowedError'
+    ) {
+      return (
+        this.language() === 'es'
+          ? 'El acceso se canceló o no fue autorizado por el dispositivo.'
+          : 'Device sign-in was cancelled or not authorized.'
+      );
+    }
+
+    switch (
+      candidate.code
+    ) {
+      case 'webauthn_credential_not_found':
+        return (
+          this.language() === 'es'
+            ? 'No se encontró una passkey de GymOS en este dispositivo.'
+            : 'No GymOS passkey was found on this device.'
+        );
+
+      case 'webauthn_challenge_expired':
+        return (
+          this.language() === 'es'
+            ? 'La solicitud ha caducado. Inténtalo de nuevo.'
+            : 'The request expired. Please try again.'
+        );
+
+      case 'webauthn_verification_failed':
+        return (
+          this.language() === 'es'
+            ? 'No se pudo verificar el acceso con este dispositivo.'
+            : 'Device sign-in could not be verified.'
+        );
+
+      case 'passkey_disabled':
+        return (
+          this.language() === 'es'
+            ? 'El acceso con dispositivo no está disponible temporalmente.'
+            : 'Device sign-in is temporarily unavailable.'
+        );
+
+      default:
+        return this.authErrorMessage(
+          error,
+          this.language() === 'es'
+            ? 'No se pudo iniciar sesión con el dispositivo.'
+            : 'Device sign-in could not be completed.'
+        );
+    }
+  }
+
+
+  private authErrorMessage(
+    error: unknown,
+    fallback: string
+  ): string {
+    const candidate =
+      error as {
+        error?: {
+          detail?: string;
+        };
+        message?: string;
+      };
+
+    return (
+      candidate?.error?.detail ??
+      candidate?.message ??
+      fallback
+    );
   }
 }

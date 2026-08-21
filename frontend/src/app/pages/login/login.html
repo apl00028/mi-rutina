@@ -65,30 +65,62 @@
       </p>
     </div>
 
-    <button
-      class="google-button"
-      type="button"
-      (click)="signInWithGoogle()"
-      [disabled]="googleLoading()"
-    >
-      <span class="google-icon">
-        G
-      </span>
+    @if (passkeySupported()) {
+      <button
+        class="passkey-button"
+        type="button"
+        (click)="signInWithPasskey()"
+        [disabled]="passkeyLoading()"
+      >
+        <span
+          class="passkey-icon"
+          aria-hidden="true"
+        >
+          ◉
+        </span>
 
-      {{
-        googleLoading()
-          ? (
-              language() === 'es'
-                ? 'Conectando...'
-                : 'Connecting...'
-            )
-          : (
-              language() === 'es'
-                ? 'Continuar con Google'
-                : 'Continue with Google'
-            )
-      }}
-    </button>
+        {{
+          passkeyLoading()
+            ? (
+                language() === 'es'
+                  ? 'Verificando...'
+                  : 'Verifying...'
+              )
+            : (
+                language() === 'es'
+                  ? 'Entrar con dispositivo'
+                  : 'Sign in with device'
+              )
+        }}
+      </button>
+    }
+
+    <div class="login-methods">
+      <button
+        class="google-button"
+        type="button"
+        (click)="signInWithGoogle()"
+        [disabled]="googleLoading()"
+      >
+        <span class="google-icon">
+          G
+        </span>
+
+        {{
+          googleLoading()
+            ? (
+                language() === 'es'
+                  ? 'Conectando...'
+                  : 'Connecting...'
+              )
+            : (
+                language() === 'es'
+                  ? 'Continuar con Google'
+                  : 'Continue with Google'
+              )
+        }}
+      </button>
+    </div>
 
     <div class="divider">
       <span></span>
@@ -147,13 +179,19 @@
     </form>
 
     @if (message()) {
-      <div class="status success">
+      <div
+        class="status success"
+        role="status"
+      >
         {{ message() }}
       </div>
     }
 
     @if (error()) {
-      <div class="status error">
+      <div
+        class="status error"
+        role="alert"
+      >
         {{ error() }}
       </div>
     }

@@ -35,42 +35,49 @@ import {
 } from './core/auth.service';
 
 @Component({
+  selector: 'app-login-stub',
   standalone: true,
   template: 'Pantalla de login'
 })
 class LoginStub {}
 
 @Component({
+  selector: 'app-home-stub',
   standalone: true,
   template: 'Inicio protegido'
 })
 class HomeStub {}
 
 @Component({
+  selector: 'app-train-stub',
   standalone: true,
   template: 'Entrenar protegido'
 })
 class TrainStub {}
 
 @Component({
+  selector: 'app-routines-stub',
   standalone: true,
   template: 'Rutinas protegidas'
 })
 class RoutinesStub {}
 
 @Component({
+  selector: 'app-access-pending-stub',
   standalone: true,
   template: 'Acceso pendiente'
 })
 class AccessPendingStub {}
 
 @Component({
+  selector: 'app-onboarding-stub',
   standalone: true,
   template: 'Onboarding'
 })
 class OnboardingStub {}
 
 @Component({
+  selector: 'app-admin-access-stub',
   standalone: true,
   template: 'Admin access'
 })
@@ -199,6 +206,26 @@ describe('App', () => {
   }
 
 
+  async function createReadyApp(
+    path = '/'
+  ) {
+    const router =
+      TestBed.inject(Router);
+
+    await router.navigateByUrl(path);
+
+    const fixture =
+      TestBed.createComponent(App);
+
+    fixture.detectChanges();
+    await fixture.whenStable();
+    await flushPromises();
+    fixture.detectChanges();
+
+    return fixture;
+  }
+
+
   it('should create the app', () => {
     const fixture = TestBed.createComponent(App);
     const app = fixture.componentInstance;
@@ -241,11 +268,7 @@ describe('App', () => {
 
   it('renders mobile bottom navigation with the same primary routes', async () => {
     const fixture =
-      TestBed.createComponent(App);
-
-    fixture.detectChanges();
-    await fixture.whenStable();
-    fixture.detectChanges();
+      await createReadyApp();
 
     const links =
       Array.from(
@@ -282,19 +305,287 @@ describe('App', () => {
     ).toBe('Navegación principal');
   });
 
-  it('marks the training shell route without changing the route content', async () => {
-    const router =
-      TestBed.inject(Router);
+  it('opens the mobile brand navigation from the header button', async () => {
+    const fixture =
+      await createReadyApp();
 
-    await router.navigateByUrl('/entrenar');
+    const button =
+      fixture.nativeElement.querySelector(
+        '.mobile-brand'
+      ) as HTMLButtonElement;
+
+    expect(button).toBeTruthy();
+    expect(button.getAttribute('aria-expanded'))
+      .toBe('false');
+    expect(button.getAttribute('aria-controls'))
+      .toBe('mobile-primary-navigation');
+    expect(button.getAttribute('aria-label'))
+      .toBe('Abrir navegación');
+
+    button.click();
+    fixture.detectChanges();
+
+    expect(button.getAttribute('aria-expanded'))
+      .toBe('true');
+    expect(button.getAttribute('aria-label'))
+      .toBe('Cerrar navegación');
+    expect(
+      fixture.nativeElement.querySelector(
+        '#mobile-primary-navigation'
+      )
+    ).toBeTruthy();
+  });
+
+  it('closes the mobile brand navigation on a second click', async () => {
+    const fixture =
+      await createReadyApp();
+
+    const button =
+      fixture.nativeElement.querySelector(
+        '.mobile-brand'
+      ) as HTMLButtonElement;
+
+    button.click();
+    fixture.detectChanges();
+    button.click();
+    fixture.detectChanges();
+
+    expect(
+      fixture.nativeElement.querySelector(
+        '.mobile-nav-menu'
+      )
+    ).toBeNull();
+    expect(button.getAttribute('aria-expanded'))
+      .toBe('false');
+  });
+
+  it('closes the mobile brand navigation with Escape', async () => {
+    const fixture =
+      await createReadyApp();
+
+    const button =
+      fixture.nativeElement.querySelector(
+        '.mobile-brand'
+      ) as HTMLButtonElement;
+
+    button.click();
+    fixture.detectChanges();
+
+    document.dispatchEvent(
+      new KeyboardEvent(
+        'keydown',
+        {
+          key:
+            'Escape',
+          bubbles:
+            true
+        }
+      )
+    );
+    fixture.detectChanges();
+
+    expect(
+      fixture.nativeElement.querySelector(
+        '.mobile-nav-menu'
+      )
+    ).toBeNull();
+  });
+
+  it('closes the mobile brand navigation on outside click', async () => {
+    const fixture =
+      await createReadyApp();
+
+    const button =
+      fixture.nativeElement.querySelector(
+        '.mobile-brand'
+      ) as HTMLButtonElement;
+
+    button.click();
+    fixture.detectChanges();
+
+    document.body.dispatchEvent(
+      new MouseEvent(
+        'click',
+        {
+          bubbles:
+            true
+        }
+      )
+    );
+    fixture.detectChanges();
+
+    expect(
+      fixture.nativeElement.querySelector(
+        '.mobile-nav-menu'
+      )
+    ).toBeNull();
+  });
+
+  it('closes the mobile brand navigation when selecting a route', async () => {
+    const fixture =
+      await createReadyApp();
+
+    const button =
+      fixture.nativeElement.querySelector(
+        '.mobile-brand'
+      ) as HTMLButtonElement;
+
+    button.click();
+    fixture.detectChanges();
+
+    const routinesLink =
+      fixture.nativeElement.querySelector(
+        '.mobile-nav-menu a[href="/rutinas"]'
+      ) as HTMLAnchorElement;
+
+    routinesLink.click();
+    fixture.detectChanges();
+
+    expect(
+      fixture.nativeElement.querySelector(
+        '.mobile-nav-menu'
+      )
+    ).toBeNull();
+  });
+
+  it('renders mobile brand navigation with the correct routes and active state', async () => {
+    const fixture =
+      await createReadyApp('/rutinas');
+
+    const button =
+      fixture.nativeElement.querySelector(
+        '.mobile-brand'
+      ) as HTMLButtonElement;
+
+    button.click();
+    fixture.detectChanges();
+
+    const links =
+      Array.from(
+        fixture.nativeElement.querySelectorAll(
+          '.mobile-nav-menu a'
+        )
+      ) as HTMLAnchorElement[];
+
+    expect(
+      links.map(link =>
+        link.getAttribute('href')
+      )
+    ).toEqual([
+      '/',
+      '/entrenar',
+      '/rutinas'
+    ]);
+
+    const activeLink =
+      fixture.nativeElement.querySelector(
+        '.mobile-nav-menu a[aria-current="page"]'
+      ) as HTMLAnchorElement;
+
+    expect(activeLink.getAttribute('href'))
+      .toBe('/rutinas');
+    expect(activeLink.getAttribute('aria-current'))
+      .toBe('page');
+    expect(activeLink.textContent).toContain('Actual');
+  });
+
+  it('keeps the bottom navigation hidden on training while brand navigation remains available', async () => {
+    const fixture =
+      await createReadyApp('/entrenar');
+
+    const shell =
+      fixture.nativeElement.querySelector(
+        '.app-shell'
+      ) as HTMLElement;
+    const button =
+      fixture.nativeElement.querySelector(
+        '.mobile-brand'
+      ) as HTMLButtonElement;
+
+    expect(shell.classList.contains('training-route'))
+      .toBe(true);
+    expect(
+      fixture.nativeElement.querySelector(
+        '.bottom-nav'
+      )
+    ).toBeTruthy();
+
+    button.click();
+    fixture.detectChanges();
+
+    const trainingLink =
+      fixture.nativeElement.querySelector(
+        '.mobile-nav-menu a[href="/entrenar"]'
+      ) as HTMLAnchorElement;
+
+    expect(trainingLink).toBeTruthy();
+    expect(trainingLink.getAttribute('aria-current'))
+      .toBe('page');
+  });
+
+  it('keeps mobile navigation and account menu independent', async () => {
+    authUser.set({
+      email:
+        'adrian@example.com',
+      user_metadata: {
+        full_name:
+          'Adrián Peláez'
+      }
+    });
 
     const fixture =
-      TestBed.createComponent(App);
+      await createReadyApp();
 
+    const brandButton =
+      fixture.nativeElement.querySelector(
+        '.mobile-brand'
+      ) as HTMLButtonElement;
+    const userButton =
+      fixture.nativeElement.querySelector(
+        '.user-button'
+      ) as HTMLButtonElement;
+
+    brandButton.click();
     fixture.detectChanges();
-    await fixture.whenStable();
-    await flushPromises();
+
+    expect(
+      fixture.nativeElement.querySelector(
+        '.mobile-nav-menu'
+      )
+    ).toBeTruthy();
+
+    userButton.click();
     fixture.detectChanges();
+
+    expect(
+      fixture.nativeElement.querySelector(
+        '.mobile-nav-menu'
+      )
+    ).toBeNull();
+    expect(
+      fixture.nativeElement.querySelector(
+        '.user-dropdown'
+      )
+    ).toBeTruthy();
+
+    brandButton.click();
+    fixture.detectChanges();
+
+    expect(
+      fixture.nativeElement.querySelector(
+        '.user-dropdown'
+      )
+    ).toBeNull();
+    expect(
+      fixture.nativeElement.querySelector(
+        '.mobile-nav-menu'
+      )
+    ).toBeTruthy();
+  });
+
+  it('marks the training shell route without changing the route content', async () => {
+    const fixture =
+      await createReadyApp('/entrenar');
 
     const shell =
       fixture.nativeElement.querySelector(

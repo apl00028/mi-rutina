@@ -50,6 +50,9 @@ export class App implements OnDestroy {
   userMenuOpen =
     signal(false);
 
+  mobileNavOpen =
+    signal(false);
+
   isStandalonePage =
     signal(false);
 
@@ -126,6 +129,7 @@ export class App implements OnDestroy {
       this.isStandalonePage()
     ) {
       this.userMenuOpen.set(false);
+      this.mobileNavOpen.set(false);
     }
   }
 
@@ -259,6 +263,22 @@ export class App implements OnDestroy {
   }
 
 
+  isCurrentRoute(
+    route: string
+  ): boolean {
+    const path =
+      this.router.url
+        .split('?')[0]
+        .split('#')[0];
+
+    if (route === '/') {
+      return path === '/';
+    }
+
+    return path === route;
+  }
+
+
   toggleSidebar(): void {
     const next =
       !this.sidebarExpanded();
@@ -273,7 +293,18 @@ export class App implements OnDestroy {
 
 
   toggleUserMenu(): void {
+    this.mobileNavOpen.set(false);
+
     this.userMenuOpen.update(
+      current => !current
+    );
+  }
+
+
+  toggleMobileNav(): void {
+    this.userMenuOpen.set(false);
+
+    this.mobileNavOpen.update(
       current => !current
     );
   }
@@ -289,17 +320,27 @@ export class App implements OnDestroy {
     const target =
       event.target as Element | null;
 
-    if (
-      !this.userMenuOpen() ||
-      (
+    if (this.userMenuOpen()) {
+      if (
         target instanceof Element &&
         target.closest('.user-menu-wrapper')
-      )
-    ) {
-      return;
+      ) {
+        return;
+      }
+
+      this.closeUserMenu();
     }
 
-    this.closeUserMenu();
+    if (this.mobileNavOpen()) {
+      if (
+        target instanceof Element &&
+        target.closest('.mobile-nav-wrapper')
+      ) {
+        return;
+      }
+
+      this.closeMobileNav();
+    }
   }
 
 
@@ -308,6 +349,7 @@ export class App implements OnDestroy {
   )
   closeUserMenuOnEscape(): void {
     this.closeUserMenu();
+    this.closeMobileNav();
   }
 
 
@@ -316,11 +358,17 @@ export class App implements OnDestroy {
   }
 
 
+  closeMobileNav(): void {
+    this.mobileNavOpen.set(false);
+  }
+
+
   async signOut(): Promise<void> {
     await this.auth.signOut();
 
     this.gymosMe.set(null);
     this.userMenuOpen.set(false);
+    this.mobileNavOpen.set(false);
 
     await this.router.navigateByUrl(
       '/login'

@@ -117,14 +117,156 @@
 
     <section class="app-main">
       <header class="topbar">
-        <div class="mobile-brand">
-          <span class="brand-icon">
-            G
-          </span>
+        <div class="mobile-nav-wrapper">
+          <button
+            type="button"
+            class="mobile-brand"
+            (click)="toggleMobileNav()"
+            aria-haspopup="menu"
+            aria-controls="mobile-primary-navigation"
+            [attr.aria-expanded]="mobileNavOpen()"
+            [attr.aria-label]="
+              mobileNavOpen()
+                ? 'Cerrar navegación'
+                : 'Abrir navegación'
+            "
+          >
+            <span
+              class="brand-icon"
+              aria-hidden="true"
+            >
+              G
+            </span>
 
-          <span class="brand-text">
-            GymOS
-          </span>
+            <span class="brand-text">
+              GymOS
+            </span>
+          </button>
+
+          @if (mobileNavOpen()) {
+            <nav
+              id="mobile-primary-navigation"
+              class="mobile-nav-menu"
+              aria-label="Navegación principal"
+            >
+              <a
+                routerLink="/"
+                routerLinkActive="active"
+                [routerLinkActiveOptions]="{
+                  exact: true
+                }"
+                [attr.aria-current]="
+                  isCurrentRoute('/')
+                    ? 'page'
+                    : null
+                "
+                (click)="closeMobileNav()"
+              >
+                <span
+                  class="nav-icon"
+                  aria-hidden="true"
+                >
+                  ⌂
+                </span>
+
+                <span class="nav-label">
+                  Inicio
+                </span>
+
+                @if (isCurrentRoute('/')) {
+                  <span class="active-marker">
+                    Actual
+                  </span>
+                }
+              </a>
+
+              <a
+                routerLink="/entrenar"
+                routerLinkActive="active"
+                [attr.aria-current]="
+                  isCurrentRoute('/entrenar')
+                    ? 'page'
+                    : null
+                "
+                (click)="closeMobileNav()"
+              >
+                <span
+                  class="nav-icon"
+                  aria-hidden="true"
+                >
+                  ◫
+                </span>
+
+                <span class="nav-label">
+                  Entrenar
+                </span>
+
+                @if (isCurrentRoute('/entrenar')) {
+                  <span class="active-marker">
+                    Actual
+                  </span>
+                }
+              </a>
+
+              <a
+                routerLink="/rutinas"
+                routerLinkActive="active"
+                [attr.aria-current]="
+                  isCurrentRoute('/rutinas')
+                    ? 'page'
+                    : null
+                "
+                (click)="closeMobileNav()"
+              >
+                <span
+                  class="nav-icon"
+                  aria-hidden="true"
+                >
+                  ☷
+                </span>
+
+                <span class="nav-label">
+                  Rutinas
+                </span>
+
+                @if (isCurrentRoute('/rutinas')) {
+                  <span class="active-marker">
+                    Actual
+                  </span>
+                }
+              </a>
+
+              @if (isAdmin()) {
+                <a
+                  routerLink="/admin/access"
+                  routerLinkActive="active"
+                  [attr.aria-current]="
+                    isCurrentRoute('/admin/access')
+                      ? 'page'
+                      : null
+                  "
+                  (click)="closeMobileNav()"
+                >
+                  <span
+                    class="nav-icon"
+                    aria-hidden="true"
+                  >
+                    ⋯
+                  </span>
+
+                  <span class="nav-label">
+                    Solicitudes
+                  </span>
+
+                  @if (isCurrentRoute('/admin/access')) {
+                    <span class="active-marker">
+                      Actual
+                    </span>
+                  }
+                </a>
+              }
+            </nav>
+          }
         </div>
 
         @if (auth.user()) {

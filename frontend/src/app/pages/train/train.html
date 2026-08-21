@@ -27,60 +27,88 @@
             exercise of session.exercises;
             track exercise.exerciseId
           ) {
-            <article class="exercise-card">
+            <article
+              class="exercise-card"
+              [class.exercise-expanded]="
+                isExerciseExpanded(
+                  exercise.exerciseId
+                )
+              "
+              [class.exercise-completed]="
+                isExerciseCompleted(exercise)
+              "
+            >
               <header class="exercise-header">
-                <div>
-                  <h2>
-                    {{ exercise.name }}
-                  </h2>
+                <button
+                  type="button"
+                  class="exercise-toggle"
+                  (click)="toggleExercise(
+                    exercise.exerciseId
+                  )"
+                  [attr.aria-expanded]="
+                    isExerciseExpanded(
+                      exercise.exerciseId
+                    )
+                  "
+                >
+                  <div>
+                    <span class="exercise-title">
+                      {{ exercise.name }}
+                    </span>
 
-                  @if (exercise.target) {
-                    <div
-                      class="exercise-target"
-                      aria-label="Objetivos del ejercicio"
-                    >
-                      <span>
-                        {{ targetLabel(exercise) }}
-                        <strong>
-                          {{ exercise.target }}
-                        </strong>
-                      </span>
-
-                      @if (exercise.targetRir) {
+                    @if (exercise.target) {
+                      <div
+                        class="exercise-target"
+                        aria-label="Objetivos del ejercicio"
+                      >
                         <span>
-                          RIR objetivo
+                          {{ targetLabel(exercise) }}
                           <strong>
-                            {{ exercise.targetRir.min }}
-                            -
-                            {{ exercise.targetRir.max }}
+                            {{ exercise.target }}
                           </strong>
                         </span>
-                      }
 
-                      @if (exercise.restSeconds) {
-                        <span>
-                          Descanso
-                          <strong>
-                            {{ exercise.restSeconds }}s
-                          </strong>
-                        </span>
-                      }
-                    </div>
-                  }
-                </div>
+                        @if (exercise.targetRir) {
+                          <span>
+                            RIR objetivo
+                            <strong>
+                              {{ exercise.targetRir.min }}
+                              -
+                              {{ exercise.targetRir.max }}
+                            </strong>
+                          </span>
+                        }
 
-                <span class="sets-badge">
-                  {{ exerciseProgressLabel(exercise) }}
-                  series
-                </span>
+                        @if (exercise.restSeconds) {
+                          <span>
+                            Descanso
+                            <strong>
+                              {{ exercise.restSeconds }}s
+                            </strong>
+                          </span>
+                        }
+                      </div>
+                    }
+                  </div>
+
+                  <span class="sets-badge">
+                    {{ exerciseProgressLabel(exercise) }}
+                    series
+                  </span>
+                </button>
               </header>
 
               @if (
-                getPreviousExerciseHistory(
+                isExerciseExpanded(
                   exercise.exerciseId
-                );
-                as previousExercise
+                )
               ) {
+                @if (
+                  getPreviousExerciseHistory(
+                    exercise.exerciseId
+                  );
+                  as previousExercise
+                ) {
                 <section class="previous-exercise">
                   <span>
                     Última vez
@@ -139,7 +167,7 @@
                     </div>
                   }
                 </section>
-              }
+                }
 
               <div class="sets-list">
                 @for (
@@ -148,6 +176,12 @@
                 ) {
                   <section
                     class="set-row"
+                    [class.set-expanded]="
+                      isSetExpanded(
+                        exercise.exerciseId,
+                        $index
+                      )
+                    "
                     [class.completed]="
                       isSetCompleted(
                         exercise.exerciseId,
@@ -164,43 +198,78 @@
                       isDurationExercise(exercise)
                     "
                   >
-                    <div class="set-meta">
-                      <div class="set-number">
-                        {{ $index + 1 }}
-                      </div>
+                    <button
+                      type="button"
+                      class="set-summary-row"
+                      (click)="toggleSet(
+                        exercise.exerciseId,
+                        $index
+                      )"
+                      [attr.aria-expanded]="
+                        isSetExpanded(
+                          exercise.exerciseId,
+                          $index
+                        )
+                      "
+                    >
+                      <span class="set-number">
+                        @if (
+                          isSetCompleted(
+                            exercise.exerciseId,
+                            $index
+                          )
+                        ) {
+                          ✓
+                        } @else {
+                          {{ $index + 1 }}
+                        }
+                      </span>
 
-                      <div>
+                      <span class="set-summary-copy">
                         <strong>
                           Serie {{ $index + 1 }}
                         </strong>
 
-                        <span class="set-state">
-                          @if (
-                            isSetCompleted(
-                              exercise.exerciseId,
-                              $index
-                            )
-                          ) {
-                            Completada
-                          } @else if (
-                            isNextSet(
-                              exercise,
-                              $index
-                            )
-                          ) {
-                            Siguiente
-                          } @else {
-                            Pendiente
-                          }
+                        <span>
+                          {{ setSummary(exercise, $index) }}
                         </span>
-                      </div>
-                    </div>
+                      </span>
+
+                      <span class="set-state">
+                        @if (
+                          isSetCompleted(
+                            exercise.exerciseId,
+                            $index
+                          )
+                        ) {
+                          Completada
+                        } @else if (
+                          isNextSet(
+                            exercise,
+                            $index
+                          )
+                        ) {
+                          Siguiente
+                        } @else {
+                          Pendiente
+                        }
+                      </span>
+                    </button>
+
+                    @if (
+                      isSetExpanded(
+                        exercise.exerciseId,
+                        $index
+                      )
+                    ) {
+                    <div class="set-row-body">
 
                     <div class="set-inputs">
                       @if (supportsWeight(exercise)) {
                         <label>
                         <span>Kg</span>
 
+                        <div class="weight-input-row">
                         <input
                           type="number"
                           min="0"
@@ -230,6 +299,45 @@
                             $any($event.target).value
                           )"
                         />
+                        @if (
+                          previousSetWeightLabel(
+                            exercise.exerciseId,
+                            $index
+                          )
+                        ) {
+                          <button
+                            type="button"
+                            class="reuse-weight-button"
+                            (click)="usePreviousWeight(
+                              exercise.exerciseId,
+                              $index
+                            )"
+                            [disabled]="
+                              workoutLoading() ||
+                              cancellingWorkout()
+                            "
+                            [attr.aria-label]="
+                              'Usar carga anterior de ' +
+                              previousSetWeightLabel(
+                                exercise.exerciseId,
+                                $index
+                              ) +
+                              ' para ' +
+                              exercise.name +
+                              ', serie ' +
+                              ($index + 1)
+                            "
+                          >
+                            Usar
+                            {{
+                              previousSetWeightLabel(
+                                exercise.exerciseId,
+                                $index
+                              )
+                            }}
+                          </button>
+                        }
+                        </div>
                         </label>
                       }
 
@@ -341,46 +449,6 @@
                         </label>
                       }
                     </div>
-
-                    @if (
-                      supportsWeight(exercise) &&
-                      previousSetWeightLabel(
-                        exercise.exerciseId,
-                        $index
-                      )
-                    ) {
-                      <button
-                        type="button"
-                        class="secondary-button reuse-weight-button"
-                        (click)="usePreviousWeight(
-                          exercise.exerciseId,
-                          $index
-                        )"
-                        [disabled]="
-                          workoutLoading() ||
-                          cancellingWorkout()
-                        "
-                        [attr.aria-label]="
-                          'Usar carga anterior de ' +
-                          previousSetWeightLabel(
-                            exercise.exerciseId,
-                            $index
-                          ) +
-                          ' para ' +
-                          exercise.name +
-                          ', serie ' +
-                          ($index + 1)
-                        "
-                      >
-                        Usar
-                        {{
-                          previousSetWeightLabel(
-                            exercise.exerciseId,
-                            $index
-                          )
-                        }}
-                      </button>
-                    }
 
                     @if (isDurationExercise(exercise)) {
                       <div class="set-timer-panel">
@@ -546,9 +614,12 @@
                         Completar
                       }
                     </button>
+                    </div>
+                    }
                   </section>
                 }
               </div>
+              }
             </article>
           }
         </div>
@@ -640,7 +711,7 @@
 
           <button
             type="button"
-            class="secondary-button cancel-workout-button"
+            class="cancel-workout-button"
             (click)="openCancelWorkoutConfirmation()"
             [disabled]="
               workoutLoading() ||
@@ -662,7 +733,7 @@
             {{
               workoutLoading()
                 ? 'Guardando...'
-                : 'Guardar'
+                : 'Guardar y salir'
             }}
           </button>
 

@@ -126,6 +126,42 @@ describe('Train first workout flow', () => {
   }
 
 
+  function twoExerciseRoutine() {
+    return {
+      ...routine(),
+      sessions: [
+        {
+          ...routine().sessions[0],
+          exercises: [
+            {
+              ...routine()
+                .sessions[0]
+                .exercises[0],
+              sets:
+                2
+            },
+            {
+              exerciseId:
+                'lat-pulldown',
+              name:
+                'Jalón al pecho',
+              sets: 2,
+              target:
+                '8-12',
+              targetRir: {
+                min: 1,
+                max: 3
+              },
+              restSeconds:
+                90
+            }
+          ]
+        }
+      ]
+    };
+  }
+
+
   async function waitForHttpTick() {
     await new Promise(
       resolve =>
@@ -173,7 +209,8 @@ describe('Train first workout flow', () => {
         recordTypes:
           ['duration']
       }
-    ]
+    ],
+    routinePayload: any = routine()
   ) {
     const fixture =
       TestBed.createComponent(
@@ -190,7 +227,7 @@ describe('Train first workout flow', () => {
       .expectOne(
         `${environment.apiUrl}/routines/active`
       )
-      .flush(routine());
+      .flush(routinePayload);
 
     await fixture.whenStable();
     await waitForHttpTick();
@@ -467,6 +504,281 @@ describe('Train first workout flow', () => {
   });
 
 
+  it('opens the first pending exercise when starting a workout', async () => {
+    const fixture =
+      await createLoadedTrain(
+        [],
+        undefined,
+        twoExerciseRoutine()
+      );
+    const component =
+      fixture.componentInstance;
+    const session =
+      component.routine()!.sessions[0];
+
+    const start =
+      component.startWorkout(session);
+
+    await waitForHttpTick();
+
+    const request =
+      http.expectOne(
+        `${environment.apiUrl}/workouts`
+      );
+
+    request.flush({
+      ...request.request.body,
+      startedAt:
+        '2026-08-20T15:00:00Z'
+    });
+
+    await start;
+    fixture.detectChanges();
+
+    expect(
+      component.expandedExerciseId()
+    ).toBe('dumbbell-bench-press');
+    expect(
+      component.isSetExpanded(
+        'dumbbell-bench-press',
+        0
+      )
+    ).toBe(true);
+    expect(
+      fixture.nativeElement.querySelectorAll(
+        '.exercise-expanded'
+      ).length
+    ).toBe(1);
+  });
+
+
+  it('opens the correct exercise when resuming persisted progress', async () => {
+    const fixture =
+      await createLoadedTrain(
+        [
+          {
+            workoutId:
+              'active-workout',
+            routineId:
+              'routine-1',
+            sessionId:
+              'session-1',
+            status:
+              'in_progress',
+            sets: [
+              historySet(0, {
+                weight: 80,
+                reps: 8,
+                rir: 2,
+                completedAt:
+                  '2026-08-20T15:05:00Z'
+              }),
+              historySet(1, {
+                weight: 80,
+                reps: 8,
+                rir: 2,
+                completedAt:
+                  '2026-08-20T15:10:00Z'
+              })
+            ]
+          }
+        ],
+        undefined,
+        twoExerciseRoutine()
+      );
+    const component =
+      fixture.componentInstance;
+
+    expect(
+      component.expandedExerciseId()
+    ).toBe('lat-pulldown');
+    expect(
+      component.isSetExpanded(
+        'lat-pulldown',
+        0
+      )
+    ).toBe(true);
+  });
+
+
+  it('keeps only one set open initially', async () => {
+    const fixture =
+      await createLoadedTrain([
+        activeWorkout()
+      ]);
+
+    expect(
+      fixture.nativeElement.querySelectorAll(
+        '.set-expanded'
+      ).length
+    ).toBe(1);
+  });
+
+
+  it('completing a set collapses it and opens the next set', async () => {
+    const fixture =
+      await createLoadedTrain([
+        activeWorkout()
+      ]);
+    const component =
+      fixture.componentInstance;
+
+    const complete =
+      component.completeSet(
+        'dumbbell-bench-press',
+        0
+      );
+
+    await waitForHttpTick();
+
+    const save =
+      http.expectOne(
+        `${environment.apiUrl}/workouts/active-workout`
+      );
+
+    save.flush(save.request.body);
+    await complete;
+    fixture.detectChanges();
+
+    expect(
+      component.isSetExpanded(
+        'dumbbell-bench-press',
+        0
+      )
+    ).toBe(false);
+    expect(
+      component.isSetExpanded(
+        'dumbbell-bench-press',
+        1
+      )
+    ).toBe(true);
+  });
+
+
+  it('lets a completed set reopen for corrections', async () => {
+    const fixture =
+      await createLoadedTrain([
+        activeWorkout()
+      ]);
+    const component =
+      fixture.componentInstance;
+
+    const complete =
+      component.completeSet(
+        'dumbbell-bench-press',
+        0
+      );
+
+    await waitForHttpTick();
+    const save =
+      http.expectOne(
+        `${environment.apiUrl}/workouts/active-workout`
+      );
+    save.flush(save.request.body);
+    await complete;
+
+    component.toggleSet(
+      'dumbbell-bench-press',
+      0
+    );
+
+    expect(
+      component.isSetExpanded(
+        'dumbbell-bench-press',
+        0
+      )
+    ).toBe(true);
+  });
+
+
+  it('completing an exercise advances to the next exercise', async () => {
+    const fixture =
+      await createLoadedTrain(
+        [
+          activeWorkout()
+        ],
+        undefined,
+        twoExerciseRoutine()
+      );
+    const component =
+      fixture.componentInstance;
+
+    for (const setIndex of [0, 1]) {
+      const complete =
+        component.completeSet(
+          'dumbbell-bench-press',
+          setIndex
+        );
+
+      await waitForHttpTick();
+      const save =
+        http.expectOne(
+          `${environment.apiUrl}/workouts/active-workout`
+        );
+      save.flush(save.request.body);
+      await complete;
+    }
+
+    expect(
+      component.expandedExerciseId()
+    ).toBe('lat-pulldown');
+    expect(
+      component.isSetExpanded(
+        'lat-pulldown',
+        0
+      )
+    ).toBe(true);
+  });
+
+
+  it('manual exercise changes keep entered set data', async () => {
+    const fixture =
+      await createLoadedTrain(
+        [
+          activeWorkout()
+        ],
+        undefined,
+        twoExerciseRoutine()
+      );
+    const component =
+      fixture.componentInstance;
+
+    component.updateSet(
+      'dumbbell-bench-press',
+      0,
+      'weight',
+      '80'
+    );
+
+    const save =
+      component.saveWorkout();
+
+    await waitForHttpTick();
+
+    const request =
+      http.expectOne(
+        `${environment.apiUrl}/workouts/active-workout`
+      );
+
+    request.flush(request.request.body);
+    await save;
+
+    component.openExercise(
+      'lat-pulldown'
+    );
+
+    expect(
+      component.expandedExerciseId()
+    ).toBe('lat-pulldown');
+    expect(
+      component.getCurrentSet(
+        'dumbbell-bench-press',
+        0
+      )?.weight
+    ).toBe(80);
+  });
+
+
   it('records, persists, and can unmark a completed set', async () => {
     const fixture =
       await createLoadedTrain([
@@ -656,8 +968,24 @@ describe('Train first workout flow', () => {
       '1 / 2 series'
     );
     expect(text).toContain(
-      'Completada - desmarcar'
+      'Serie 1'
     );
+    expect(text).toContain(
+      'completada'
+    );
+
+    const completedSummary =
+      fixture
+        .nativeElement
+        .querySelector(
+          'button[aria-expanded="false"]'
+        ) as HTMLButtonElement | null;
+
+    expect(completedSummary)
+      .toBeTruthy();
+
+    completedSummary?.click();
+    fixture.detectChanges();
 
     const completedButton =
       fixture

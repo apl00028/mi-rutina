@@ -179,6 +179,10 @@ export class Train implements OnInit, OnDestroy {
     signal<RestTimerState | null>(null);
   setTimer =
     signal<SetTimerState | null>(null);
+  expandedExerciseId =
+    signal<string | null>(null);
+  expandedSetKey =
+    signal<string | null>(null);
 
   email = signal('');
   loginLoading = signal(false);
@@ -522,6 +526,7 @@ export class Train implements OnInit, OnDestroy {
 
     this.activeWorkout.set(active);
     this.activeSession.set(session);
+    this.syncExpandedWorkoutStep();
   }
 
 
@@ -1924,6 +1929,329 @@ export class Train implements OnInit, OnDestroy {
   }
 
 
+  isExerciseCompleted(
+    exercise: Exercise
+  ): boolean {
+    return (
+      this.completedSetCount(exercise) >=
+      exercise.sets
+    );
+  }
+
+
+  isExerciseExpanded(
+    exerciseId: string
+  ): boolean {
+    if (
+      !this.expandedExerciseExists()
+    ) {
+      return (
+        this.firstPendingExercise()
+          ?.exerciseId === exerciseId
+      );
+    }
+
+    return (
+      this.expandedExerciseId() ===
+      exerciseId
+    );
+  }
+
+
+  openExercise(
+    exerciseId: string
+  ): void {
+    const exercise =
+      this.findSessionExercise(
+        exerciseId
+      );
+
+    if (!exercise) {
+      return;
+    }
+
+    this.expandedExerciseId.set(
+      exerciseId
+    );
+    this.openBestSetForExercise(
+      exercise
+    );
+  }
+
+
+  toggleExercise(
+    exerciseId: string
+  ): void {
+    this.openExercise(exerciseId);
+  }
+
+
+  isSetExpanded(
+    exerciseId: string,
+    setIndex: number
+  ): boolean {
+    if (
+      !this.expandedExerciseExists()
+    ) {
+      const exercise =
+        this.firstPendingExercise();
+
+      return (
+        exercise?.exerciseId ===
+        exerciseId &&
+        this.firstPendingSetIndex(
+          exercise
+        ) === setIndex
+      );
+    }
+
+    return (
+      this.expandedSetKey() ===
+      this.setExpansionKey(
+        exerciseId,
+        setIndex
+      )
+    );
+  }
+
+
+  toggleSet(
+    exerciseId: string,
+    setIndex: number
+  ): void {
+    const key =
+      this.setExpansionKey(
+        exerciseId,
+        setIndex
+      );
+
+    this.expandedSetKey.set(
+      this.expandedSetKey() === key
+        ? null
+        : key
+    );
+  }
+
+
+  setSummary(
+    exercise: Exercise,
+    setIndex: number
+  ): string {
+    const set =
+      this.getCurrentSet(
+        exercise.exerciseId,
+        setIndex
+      );
+
+    if (
+      !set ||
+      !this.isSetCompleted(
+        exercise.exerciseId,
+        setIndex
+      )
+    ) {
+      return this.isNextSet(
+        exercise,
+        setIndex
+      )
+        ? 'siguiente'
+        : 'pendiente';
+    }
+
+    const parts: string[] = [];
+
+    if (
+      set.weight !== null &&
+      set.weight !== undefined &&
+      Number.isFinite(set.weight)
+    ) {
+      parts.push(`${set.weight} kg`);
+    }
+
+    if (
+      set.reps !== null &&
+      set.reps !== undefined &&
+      Number.isFinite(set.reps)
+    ) {
+      parts.push(`${set.reps} reps`);
+    }
+
+    if (
+      set.durationSeconds !== null &&
+      set.durationSeconds !== undefined &&
+      Number.isFinite(set.durationSeconds)
+    ) {
+      parts.push(
+        this.formatDurationSeconds(
+          set.durationSeconds
+        )
+      );
+    }
+
+    if (
+      set.rir !== null &&
+      set.rir !== undefined &&
+      Number.isFinite(set.rir)
+    ) {
+      parts.push(`RIR ${set.rir}`);
+    }
+
+    return parts.length
+      ? parts.join(' · ')
+      : 'completada';
+  }
+
+
+  private setExpansionKey(
+    exerciseId: string,
+    setIndex: number
+  ): string {
+    return `${exerciseId}:${setIndex}`;
+  }
+
+
+  private firstPendingExercise():
+    Exercise | null {
+    const session =
+      this.activeSession();
+
+    if (!session) {
+      return null;
+    }
+
+    return (
+      session.exercises.find(
+        exercise =>
+          !this.isExerciseCompleted(
+            exercise
+          )
+      ) ??
+      session.exercises[0] ??
+      null
+    );
+  }
+
+
+  private expandedExerciseExists():
+    boolean {
+    const expanded =
+      this.expandedExerciseId();
+    const session =
+      this.activeSession();
+
+    return Boolean(
+      expanded &&
+      session?.exercises.some(
+        exercise =>
+          exercise.exerciseId === expanded
+      )
+    );
+  }
+
+
+  private firstPendingSetIndex(
+    exercise: Exercise
+  ): number {
+    for (
+      let index = 0;
+      index < exercise.sets;
+      index += 1
+    ) {
+      if (
+        !this.isSetCompleted(
+          exercise.exerciseId,
+          index
+        )
+      ) {
+        return index;
+      }
+    }
+
+    return Math.max(
+      0,
+      exercise.sets - 1
+    );
+  }
+
+
+  private syncExpandedWorkoutStep(): void {
+    const exercise =
+      this.firstPendingExercise();
+
+    if (!exercise) {
+      this.expandedExerciseId.set(null);
+      this.expandedSetKey.set(null);
+      return;
+    }
+
+    this.expandedExerciseId.set(
+      exercise.exerciseId
+    );
+    this.openBestSetForExercise(
+      exercise
+    );
+  }
+
+
+  private openBestSetForExercise(
+    exercise: Exercise
+  ): void {
+    this.expandedSetKey.set(
+      this.setExpansionKey(
+        exercise.exerciseId,
+        this.firstPendingSetIndex(
+          exercise
+        )
+      )
+    );
+  }
+
+
+  private syncExpandedAfterSetToggle(
+    exerciseId: string,
+    setIndex: number,
+    markedCompleted: boolean
+  ): void {
+    const exercise =
+      this.findSessionExercise(
+        exerciseId
+      );
+
+    if (!exercise) {
+      return;
+    }
+
+    if (!markedCompleted) {
+      this.expandedExerciseId.set(
+        exerciseId
+      );
+      this.expandedSetKey.set(
+        this.setExpansionKey(
+          exerciseId,
+          setIndex
+        )
+      );
+      return;
+    }
+
+    if (
+      this.isExerciseCompleted(
+        exercise
+      )
+    ) {
+      this.syncExpandedWorkoutStep();
+      return;
+    }
+
+    this.expandedExerciseId.set(
+      exerciseId
+    );
+    this.openBestSetForExercise(
+      exercise
+    );
+  }
+
+
   isNextSet(
     exercise: Exercise,
     setIndex: number
@@ -2050,6 +2378,7 @@ export class Train implements OnInit, OnDestroy {
 
       this.activeWorkout.set(created);
       this.activeSession.set(session);
+      this.syncExpandedWorkoutStep();
       this.cancelConfirmationOpen.set(false);
       this.workoutEditVersion = 0;
       this.persistedEditVersion = 0;
@@ -2106,6 +2435,8 @@ export class Train implements OnInit, OnDestroy {
         set.exerciseId === exerciseId &&
         set.setIndex === setIndex
     );
+    const wasCompleted =
+      Boolean(existing?.completedAt);
 
     let sets: WorkoutSetInput[];
 
@@ -2181,6 +2512,8 @@ export class Train implements OnInit, OnDestroy {
         set.exerciseId === exerciseId &&
         set.setIndex === setIndex
     );
+    const wasCompleted =
+      Boolean(existing?.completedAt);
 
     let sets: WorkoutSetInput[];
 
@@ -2221,6 +2554,12 @@ export class Train implements OnInit, OnDestroy {
       sets
     });
     this.workoutEditVersion += 1;
+
+    this.syncExpandedAfterSetToggle(
+      exerciseId,
+      setIndex,
+      !wasCompleted
+    );
 
     if (shouldStartRestTimer) {
       this.startRestTimerForSet(
@@ -3057,6 +3396,8 @@ export class Train implements OnInit, OnDestroy {
 
       this.activeWorkout.set(null);
       this.activeSession.set(null);
+      this.expandedExerciseId.set(null);
+      this.expandedSetKey.set(null);
       this.cancelConfirmationOpen.set(false);
 
     } catch (err: any) {
@@ -3162,6 +3503,8 @@ export class Train implements OnInit, OnDestroy {
       );
       this.activeWorkout.set(null);
       this.activeSession.set(null);
+      this.expandedExerciseId.set(null);
+      this.expandedSetKey.set(null);
       this.cancelConfirmationOpen.set(false);
       this.autosaveStatus.set('idle');
       this.workoutEditVersion = 0;

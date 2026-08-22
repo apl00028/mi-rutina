@@ -374,3 +374,30 @@ select:focus {
     flex: 1;
   }
 }
+
+.state-panel {
+  grid-column: 1 / -1;
+}
+
+.state-block {
+  margin-top: 20px;
+  padding-top: 20px;
+  border-top: 1px solid var(--border);
+}
+
+.state-block:first-of-type {
+  margin-top: 8px;
+}
+
+.state-block-heading {
+  margin-bottom: 16px;
+}
+
+.state-block-heading h3 {
+  margin: 0 0 4px;
+}
+
+.state-block-heading p {
+  margin: 0;
+  opacity: 0.7;
+}

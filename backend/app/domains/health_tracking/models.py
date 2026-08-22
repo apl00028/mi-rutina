@@ -22,6 +22,20 @@ class WeightEntryInput(BaseModel):
         ge=0,
         le=100,
     )
+    muscleMassKg: float | None = Field(
+        default=None,
+        gt=0,
+        le=250,
+    )
+    bodyWaterPercent: float | None = Field(
+        default=None,
+        ge=0,
+        le=100,
+    )
+    visceralFatIndex: float | None = Field(
+        default=None,
+        ge=0,
+    )
     source: HealthDataSource = "manual"
     notes: str | None = None
 
@@ -54,6 +68,11 @@ class WeeklyCheckInInput(BaseModel):
         ge=1,
         le=5,
     )
+    waistCm: float | None = Field(
+        default=None,
+        ge=30,
+        le=250,
+    )
     dietAdherencePercent: float | None = Field(
         default=None,
         ge=0,
@@ -79,6 +98,27 @@ class WeeklyCheckIn(WeeklyCheckInInput):
 
         return self
 
+
+
+class DailyCheckInInput(BaseModel):
+    hunger: int | None = Field(
+        default=None,
+        ge=1,
+        le=5,
+    )
+    dietAdherencePercent: float | None = Field(
+        default=None,
+        ge=0,
+        le=100,
+    )
+    notes: str | None = None
+
+
+class DailyCheckIn(DailyCheckInInput):
+    id: UUID
+    measurementDate: date
+    createdAt: str | None = None
+    updatedAt: str | None = None
 
 
 class WeightTrendSummary(BaseModel):

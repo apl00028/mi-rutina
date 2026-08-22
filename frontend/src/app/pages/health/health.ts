@@ -19,6 +19,9 @@ interface WeightEntry {
   measurementDate: string;
   weightKg: number;
   bodyFatPercent?: number;
+  muscleMassKg?: number;
+  bodyWaterPercent?: number;
+  visceralFatIndex?: number;
   source: 'manual' | 'imported' | 'scale';
   notes?: string;
 }
@@ -37,6 +40,15 @@ interface WeightTrendSummary {
 }
 
 
+interface DailyCheckIn {
+  id: string;
+  measurementDate: string;
+  hunger?: number;
+  dietAdherencePercent?: number;
+  notes?: string;
+}
+
+
 interface WeeklyCheckIn {
   id: string;
   weekStart: string;
@@ -44,6 +56,7 @@ interface WeeklyCheckIn {
   hunger?: number;
   recovery?: number;
   motivation?: number;
+  waistCm?: number;
   dietAdherencePercent?: number;
   notes?: string;
 }
@@ -68,6 +81,8 @@ export class Health implements OnInit {
     signal<WeightTrendSummary | null>(null);
   checkins =
     signal<WeeklyCheckIn[]>([]);
+  dailyCheckins =
+    signal<DailyCheckIn[]>([]);
 
   activeSection =
     signal<'metrics' | 'weekly'>('metrics');
@@ -75,6 +90,7 @@ export class Health implements OnInit {
   loading = signal(false);
   savingWeight = signal(false);
   savingCheckin = signal(false);
+  savingDailyCheckin = signal(false);
   deletingWeight = signal<string | null>(null);
 
   message = signal<string | null>(null);
@@ -86,16 +102,24 @@ export class Health implements OnInit {
 
   weightKg = signal('');
   bodyFatPercent = signal('');
+  muscleMassKg = signal('');
+  bodyWaterPercent = signal('');
+  visceralFatIndex = signal('');
 
   checkinWeekStart = signal(
     this.currentMonday()
   );
 
+  dailyDate = signal(
+    this.localDate(new Date())
+  );
+  dailyHunger = signal('');
+  dailyAdherence = signal('');
+
   fatigue = signal('');
-  hunger = signal('');
   recovery = signal('');
   motivation = signal('');
-  adherence = signal('');
+  waistCm = signal('');
 
 
   constructor(
@@ -139,7 +163,8 @@ export class Health implements OnInit {
       const [
         summary,
         weights,
-        checkins
+        checkins,
+        dailyCheckins
       ] = await Promise.all([
         firstValueFrom(
           this.http.get<WeightTrendSummary>(
@@ -158,12 +183,38 @@ export class Health implements OnInit {
             `${this.apiUrl}/health/checkins`,
             { headers }
           )
+        ),
+        firstValueFrom(
+          this.http.get<DailyCheckIn[]>(
+            `${this.apiUrl}/health/daily-checkins`,
+            { headers }
+          )
         )
       ]);
 
       this.summary.set(summary);
       this.weights.set(weights);
       this.checkins.set(checkins);
+      this.dailyCheckins.set(dailyCheckins);
+
+      const currentDaily =
+        dailyCheckins.find(
+          item =>
+            item.measurementDate ===
+            this.dailyDate()
+        );
+
+      this.dailyHunger.set(
+        currentDaily?.hunger?.toString()
+        ?? ''
+      );
+
+      this.dailyAdherence.set(
+        currentDaily
+          ?.dietAdherencePercent
+          ?.toString()
+        ?? ''
+      );
 
       const currentCheckin =
         checkins.find(
@@ -177,10 +228,6 @@ export class Health implements OnInit {
           currentCheckin.fatigue?.toString()
           ?? ''
         );
-        this.hunger.set(
-          currentCheckin.hunger?.toString()
-          ?? ''
-        );
         this.recovery.set(
           currentCheckin.recovery?.toString()
           ?? ''
@@ -189,10 +236,8 @@ export class Health implements OnInit {
           currentCheckin.motivation?.toString()
           ?? ''
         );
-        this.adherence.set(
-          currentCheckin
-            .dietAdherencePercent
-            ?.toString()
+        this.waistCm.set(
+          currentCheckin.waistCm?.toString()
           ?? ''
         );
       }
@@ -249,6 +294,71 @@ export class Health implements OnInit {
       return;
     }
 
+    const muscleText =
+      this.muscleMassKg().trim();
+
+    const muscle =
+      muscleText === ''
+        ? null
+        : Number(muscleText);
+
+    if (
+      muscle !== null
+      && (
+        !Number.isFinite(muscle)
+        || muscle <= 0
+        || muscle > 250
+      )
+    ) {
+      this.error.set(
+        'La masa muscular no es válida.'
+      );
+      return;
+    }
+
+    const waterText =
+      this.bodyWaterPercent().trim();
+
+    const water =
+      waterText === ''
+        ? null
+        : Number(waterText);
+
+    if (
+      water !== null
+      && (
+        !Number.isFinite(water)
+        || water < 0
+        || water > 100
+      )
+    ) {
+      this.error.set(
+        'El porcentaje de agua no es válido.'
+      );
+      return;
+    }
+
+    const visceralText =
+      this.visceralFatIndex().trim();
+
+    const visceral =
+      visceralText === ''
+        ? null
+        : Number(visceralText);
+
+    if (
+      visceral !== null
+      && (
+        !Number.isFinite(visceral)
+        || visceral < 0
+      )
+    ) {
+      this.error.set(
+        'La grasa visceral no es válida.'
+      );
+      return;
+    }
+
     this.savingWeight.set(true);
 
     try {
@@ -258,6 +368,9 @@ export class Health implements OnInit {
       const payload: {
         weightKg: number;
         bodyFatPercent?: number;
+        muscleMassKg?: number;
+        bodyWaterPercent?: number;
+        visceralFatIndex?: number;
         source: 'manual';
       } = {
         weightKg: weight,
@@ -266,6 +379,18 @@ export class Health implements OnInit {
 
       if (bodyFat !== null) {
         payload.bodyFatPercent = bodyFat;
+      }
+
+      if (muscle !== null) {
+        payload.muscleMassKg = muscle;
+      }
+
+      if (water !== null) {
+        payload.bodyWaterPercent = water;
+      }
+
+      if (visceral !== null) {
+        payload.visceralFatIndex = visceral;
       }
 
       await firstValueFrom(
@@ -283,6 +408,9 @@ export class Health implements OnInit {
 
       this.weightKg.set('');
       this.bodyFatPercent.set('');
+      this.muscleMassKg.set('');
+      this.bodyWaterPercent.set('');
+      this.visceralFatIndex.set('');
 
       this.message.set(
         'Peso registrado correctamente.'
@@ -351,36 +479,23 @@ export class Health implements OnInit {
   }
 
 
-  async saveCheckin(): Promise<void> {
+  async saveDailyCheckin(): Promise<void> {
     this.error.set(null);
     this.message.set(null);
 
-    const fatigue =
-      Number(this.fatigue());
     const hunger =
-      Number(this.hunger());
-    const recovery =
-      Number(this.recovery());
-    const motivation =
-      Number(this.motivation());
-    const adherence =
-      Number(this.adherence());
+      Number(this.dailyHunger());
 
-    const validScale = (
-      value: number
-    ) =>
-      Number.isInteger(value)
-      && value >= 1
-      && value <= 5;
+    const adherence =
+      Number(this.dailyAdherence());
 
     if (
-      !validScale(fatigue)
-      || !validScale(hunger)
-      || !validScale(recovery)
-      || !validScale(motivation)
+      !Number.isInteger(hunger)
+      || hunger < 1
+      || hunger > 5
     ) {
       this.error.set(
-        'Completa fatiga, hambre, recuperación y motivación del 1 al 5.'
+        'Selecciona el hambre del 1 al 5.'
       );
       return;
     }
@@ -396,7 +511,7 @@ export class Health implements OnInit {
       return;
     }
 
-    this.savingCheckin.set(true);
+    this.savingDailyCheckin.set(true);
 
     try {
       const headers =
@@ -405,14 +520,11 @@ export class Health implements OnInit {
       await firstValueFrom(
         this.http.put(
           (
-            `${this.apiUrl}/health/checkins/`
-            + this.checkinWeekStart()
+            `${this.apiUrl}/health/daily-checkins/`
+            + this.dailyDate()
           ),
           {
-            fatigue,
             hunger,
-            recovery,
-            motivation,
             dietAdherencePercent:
               adherence
           },
@@ -423,14 +535,117 @@ export class Health implements OnInit {
       await this.loadHealth();
 
       this.message.set(
-        'Check-in semanal guardado.'
+        'Estado diario guardado.'
       );
 
     } catch (err: any) {
       this.error.set(
         err?.error?.detail ??
         err?.message ??
-        'No se pudo guardar el check-in.'
+        'No se pudo guardar el estado diario.'
+      );
+    } finally {
+      this.savingDailyCheckin.set(false);
+    }
+  }
+
+
+  async saveCheckin(): Promise<void> {
+    this.error.set(null);
+    this.message.set(null);
+
+    const fatigue =
+      Number(this.fatigue());
+
+    const recovery =
+      Number(this.recovery());
+
+    const motivation =
+      Number(this.motivation());
+
+    const waistText =
+      this.waistCm().trim();
+
+    const waist =
+      waistText === ''
+        ? null
+        : Number(waistText);
+
+    const validScale = (
+      value: number
+    ) =>
+      Number.isInteger(value)
+      && value >= 1
+      && value <= 5;
+
+    if (
+      !validScale(fatigue)
+      || !validScale(recovery)
+      || !validScale(motivation)
+    ) {
+      this.error.set(
+        'Completa fatiga, recuperación y motivación del 1 al 5.'
+      );
+      return;
+    }
+
+    if (
+      waist !== null
+      && (
+        !Number.isFinite(waist)
+        || waist < 30
+        || waist > 250
+      )
+    ) {
+      this.error.set(
+        'Introduce una cintura válida.'
+      );
+      return;
+    }
+
+    this.savingCheckin.set(true);
+
+    try {
+      const headers =
+        await this.authHeaders();
+
+      const payload: {
+        fatigue: number;
+        recovery: number;
+        motivation: number;
+        waistCm?: number;
+      } = {
+        fatigue,
+        recovery,
+        motivation
+      };
+
+      if (waist !== null) {
+        payload.waistCm = waist;
+      }
+
+      await firstValueFrom(
+        this.http.put(
+          (
+            `${this.apiUrl}/health/checkins/`
+            + this.checkinWeekStart()
+          ),
+          payload,
+          { headers }
+        )
+      );
+
+      await this.loadHealth();
+
+      this.message.set(
+        'Estado semanal guardado.'
+      );
+
+    } catch (err: any) {
+      this.error.set(
+        err?.error?.detail ??
+        err?.message ??
+        'No se pudo guardar el estado semanal.'
       );
     } finally {
       this.savingCheckin.set(false);

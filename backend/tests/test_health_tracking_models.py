@@ -5,6 +5,7 @@ import pytest
 from pydantic import ValidationError
 
 from app.domains.health_tracking.models import (
+    DailyCheckInInput,
     WeeklyCheckIn,
     WeightEntry,
     WeightEntryInput,
@@ -73,4 +74,36 @@ def test_checkin_scales_are_one_to_five():
             id=ENTRY_ID,
             weekStart=date(2026, 8, 24),
             fatigue=6,
+        )
+
+
+
+def test_extended_body_metrics_are_valid():
+    entry = WeightEntry(
+        id=ENTRY_ID,
+        measurementDate=date(2026, 8, 24),
+        weightKg=75.4,
+        bodyFatPercent=18.2,
+        muscleMassKg=60.5,
+        bodyWaterPercent=57.3,
+        visceralFatIndex=5,
+        source="scale",
+    )
+
+    assert entry.muscleMassKg == 60.5
+    assert entry.bodyWaterPercent == 57.3
+    assert entry.visceralFatIndex == 5
+
+
+def test_daily_checkin_validates_hunger():
+    valid = DailyCheckInInput(
+        hunger=4,
+        dietAdherencePercent=90,
+    )
+
+    assert valid.hunger == 4
+
+    with pytest.raises(ValidationError):
+        DailyCheckInInput(
+            hunger=6,
         )

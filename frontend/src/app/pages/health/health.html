@@ -265,9 +265,67 @@
                 />
               </label>
 
+              <label>
+                Masa muscular (kg)
+
+                <input
+                  type="number"
+                  inputmode="decimal"
+                  min="0"
+                  max="250"
+                  step="0.1"
+                  placeholder="60.5"
+                  [value]="muscleMassKg()"
+                  (input)="
+                    muscleMassKg.set(
+                      $any($event.target).value
+                    )
+                  "
+                />
+              </label>
+
+              <label>
+                Agua corporal (%)
+
+                <input
+                  type="number"
+                  inputmode="decimal"
+                  min="0"
+                  max="100"
+                  step="0.1"
+                  placeholder="57.3"
+                  [value]="bodyWaterPercent()"
+                  (input)="
+                    bodyWaterPercent.set(
+                      $any($event.target).value
+                    )
+                  "
+                />
+              </label>
+
+              <label>
+                Grasa visceral
+
+                <input
+                  type="number"
+                  inputmode="decimal"
+                  min="0"
+                  step="0.1"
+                  placeholder="5"
+                  [value]="visceralFatIndex()"
+                  (input)="
+                    visceralFatIndex.set(
+                      $any($event.target).value
+                    )
+                  "
+                />
+              </label>
+
               <p class="optional-hint">
-                Regístrala solo si dispones
-                de una medición.
+                Estas métricas son opcionales.
+                Úsalas principalmente para observar
+                tendencias. Más adelante podrán
+                sincronizarse desde la báscula.
               </p>
             </div>
           </details>
@@ -291,7 +349,7 @@
 
 
       <section
-        class="panel"
+        class="panel state-panel"
         [class.health-section-hidden]="
           activeSection() !== 'weekly'
         "
@@ -303,172 +361,271 @@
               Estado
             </span>
 
-            <h2>Check-in semanal</h2>
+            <h2>Seguimiento personal</h2>
 
             <p>
-              Semana del
-              {{ checkinWeekStart() }}
+              Registra sensaciones diarias y
+              revisa tu estado general una vez
+              por semana.
             </p>
           </div>
         </div>
 
 
-        <form
-          class="form-grid"
-          (submit)="
-            $event.preventDefault();
-            saveCheckin()
-          "
-        >
+        <div class="state-block">
 
-          <label>
-            Fatiga
+          <div class="state-block-heading">
+            <div>
+              <span class="eyebrow">
+                Diario
+              </span>
 
-            <select
-              [value]="fatigue()"
-              (change)="
-                fatigue.set(
-                  $any($event.target).value
-                )
-              "
-            >
-              <option value="">
-                Selecciona
-              </option>
-              <option value="1">
-                1 · Muy baja
-              </option>
-              <option value="2">2</option>
-              <option value="3">
-                3 · Media
-              </option>
-              <option value="4">4</option>
-              <option value="5">
-                5 · Muy alta
-              </option>
-            </select>
-          </label>
+              <h3>Estado del día</h3>
+            </div>
+          </div>
 
-
-          <label>
-            Hambre
-
-            <select
-              [value]="hunger()"
-              (change)="
-                hunger.set(
-                  $any($event.target).value
-                )
-              "
-            >
-              <option value="">
-                Selecciona
-              </option>
-              <option value="1">
-                1 · Muy baja
-              </option>
-              <option value="2">2</option>
-              <option value="3">
-                3 · Media
-              </option>
-              <option value="4">4</option>
-              <option value="5">
-                5 · Muy alta
-              </option>
-            </select>
-          </label>
-
-
-          <label>
-            Recuperación
-
-            <select
-              [value]="recovery()"
-              (change)="
-                recovery.set(
-                  $any($event.target).value
-                )
-              "
-            >
-              <option value="">
-                Selecciona
-              </option>
-              <option value="1">
-                1 · Muy mala
-              </option>
-              <option value="2">2</option>
-              <option value="3">
-                3 · Normal
-              </option>
-              <option value="4">4</option>
-              <option value="5">
-                5 · Excelente
-              </option>
-            </select>
-          </label>
-
-
-          <label>
-            Motivación
-
-            <select
-              [value]="motivation()"
-              (change)="
-                motivation.set(
-                  $any($event.target).value
-                )
-              "
-            >
-              <option value="">
-                Selecciona
-              </option>
-              <option value="1">
-                1 · Muy baja
-              </option>
-              <option value="2">2</option>
-              <option value="3">
-                3 · Media
-              </option>
-              <option value="4">4</option>
-              <option value="5">
-                5 · Muy alta
-              </option>
-            </select>
-          </label>
-
-
-          <label>
-            Adherencia nutricional (%)
-
-            <input
-              type="number"
-              min="0"
-              max="100"
-              step="1"
-              placeholder="90"
-              [value]="adherence()"
-              (input)="
-                adherence.set(
-                  $any($event.target).value
-                )
-              "
-            />
-          </label>
-
-
-          <button
-            type="submit"
-            class="primary-button"
-            [disabled]="savingCheckin()"
+          <form
+            class="form-grid"
+            (submit)="
+              $event.preventDefault();
+              saveDailyCheckin()
+            "
           >
-            @if (savingCheckin()) {
-              Guardando…
-            } @else {
-              Guardar check-in
-            }
-          </button>
 
-        </form>
+            <label>
+              Fecha
+
+              <input
+                type="date"
+                [value]="dailyDate()"
+                (input)="
+                  dailyDate.set(
+                    $any($event.target).value
+                  )
+                "
+              />
+            </label>
+
+
+            <label>
+              Hambre
+
+              <select
+                [value]="dailyHunger()"
+                (change)="
+                  dailyHunger.set(
+                    $any($event.target).value
+                  )
+                "
+              >
+                <option value="">
+                  Selecciona
+                </option>
+
+                <option value="1">
+                  1 · Muy baja
+                </option>
+
+                <option value="2">2</option>
+
+                <option value="3">
+                  3 · Media
+                </option>
+
+                <option value="4">4</option>
+
+                <option value="5">
+                  5 · Muy alta
+                </option>
+              </select>
+            </label>
+
+
+            <label>
+              Adherencia nutricional (%)
+
+              <input
+                type="number"
+                min="0"
+                max="100"
+                step="1"
+                placeholder="90"
+                [value]="dailyAdherence()"
+                (input)="
+                  dailyAdherence.set(
+                    $any($event.target).value
+                  )
+                "
+              />
+            </label>
+
+
+            <button
+              type="submit"
+              class="primary-button"
+              [disabled]="savingDailyCheckin()"
+            >
+              @if (savingDailyCheckin()) {
+                Guardando…
+              } @else {
+                Guardar estado diario
+              }
+            </button>
+
+          </form>
+        </div>
+
+
+        <div class="state-block">
+
+          <div class="state-block-heading">
+            <div>
+              <span class="eyebrow">
+                Semanal
+              </span>
+
+              <h3>Resumen semanal</h3>
+
+              <p>
+                Semana del
+                {{ checkinWeekStart() }}
+              </p>
+            </div>
+          </div>
+
+
+          <form
+            class="form-grid"
+            (submit)="
+              $event.preventDefault();
+              saveCheckin()
+            "
+          >
+
+            <label>
+              Fatiga
+
+              <select
+                [value]="fatigue()"
+                (change)="
+                  fatigue.set(
+                    $any($event.target).value
+                  )
+                "
+              >
+                <option value="">
+                  Selecciona
+                </option>
+                <option value="1">
+                  1 · Muy baja
+                </option>
+                <option value="2">2</option>
+                <option value="3">
+                  3 · Media
+                </option>
+                <option value="4">4</option>
+                <option value="5">
+                  5 · Muy alta
+                </option>
+              </select>
+            </label>
+
+
+            <label>
+              Recuperación
+
+              <select
+                [value]="recovery()"
+                (change)="
+                  recovery.set(
+                    $any($event.target).value
+                  )
+                "
+              >
+                <option value="">
+                  Selecciona
+                </option>
+                <option value="1">
+                  1 · Muy mala
+                </option>
+                <option value="2">2</option>
+                <option value="3">
+                  3 · Normal
+                </option>
+                <option value="4">4</option>
+                <option value="5">
+                  5 · Excelente
+                </option>
+              </select>
+            </label>
+
+
+            <label>
+              Motivación
+
+              <select
+                [value]="motivation()"
+                (change)="
+                  motivation.set(
+                    $any($event.target).value
+                  )
+                "
+              >
+                <option value="">
+                  Selecciona
+                </option>
+                <option value="1">
+                  1 · Muy baja
+                </option>
+                <option value="2">2</option>
+                <option value="3">
+                  3 · Media
+                </option>
+                <option value="4">4</option>
+                <option value="5">
+                  5 · Muy alta
+                </option>
+              </select>
+            </label>
+
+
+            <label>
+              Cintura (cm)
+              <span class="optional">
+                opcional
+              </span>
+
+              <input
+                type="number"
+                inputmode="decimal"
+                min="30"
+                max="250"
+                step="0.1"
+                placeholder="88"
+                [value]="waistCm()"
+                (input)="
+                  waistCm.set(
+                    $any($event.target).value
+                  )
+                "
+              />
+            </label>
+
+
+            <button
+              type="submit"
+              class="primary-button"
+              [disabled]="savingCheckin()"
+            >
+              @if (savingCheckin()) {
+                Guardando…
+              } @else {
+                Guardar resumen semanal
+              }
+            </button>
+
+          </form>
+        </div>
 
       </section>
 

@@ -8,6 +8,7 @@ from app.core.auth import (
     require_user,
 )
 from app.domains.health_tracking.models import (
+    DailyCheckIn,
     WeeklyCheckIn,
     WeightEntry,
 )
@@ -43,6 +44,19 @@ def weight_entry():
     )
 
 
+def daily_checkin():
+    return DailyCheckIn(
+        id=ENTRY_ID,
+        measurementDate=date(
+            2026,
+            8,
+            24,
+        ),
+        hunger=4,
+        dietAdherencePercent=90,
+    )
+
+
 def weekly_checkin():
     return WeeklyCheckIn(
         id=ENTRY_ID,
@@ -54,6 +68,7 @@ def weekly_checkin():
         fatigue=3,
         hunger=2,
         recovery=4,
+        motivation=4,
         dietAdherencePercent=90,
     )
 
@@ -314,6 +329,7 @@ def test_save_weekly_checkin(
             24,
         )
         assert request.fatigue == 3
+        assert request.motivation == 4
         return weekly_checkin()
 
     app.dependency_overrides[
@@ -340,6 +356,7 @@ def test_save_weekly_checkin(
                 "fatigue": 3,
                 "hunger": 2,
                 "recovery": 4,
+                "motivation": 4,
                 "dietAdherencePercent":
                     90,
             },
@@ -395,3 +412,114 @@ def test_health_requires_authentication():
     )
 
     assert response.status_code == 401
+
+
+
+def test_list_daily_checkins(
+    monkeypatch,
+):
+    from app.domains.health_tracking import (
+        router as health_api,
+    )
+
+    async def fake_list(user):
+        assert user.id == "user-123"
+        return [daily_checkin()]
+
+    app.dependency_overrides[
+        require_user
+    ] = authenticated_user
+
+    monkeypatch.setattr(
+        health_api,
+        "list_user_daily_checkins",
+        fake_list,
+    )
+
+    try:
+        response = client.get(
+            "/api/v1/health/daily-checkins",
+            headers={
+                "Authorization":
+                    "Bearer token-123"
+            },
+        )
+    finally:
+        app.dependency_overrides.pop(
+            require_user,
+            None,
+        )
+
+    assert response.status_code == 200
+    assert response.json()[0]["hunger"] == 4
+    assert (
+        response.json()[0][
+            "dietAdherencePercent"
+        ]
+        == 90
+    )
+
+
+def test_save_daily_checkin(
+    monkeypatch,
+):
+    from app.domains.health_tracking import (
+        router as health_api,
+    )
+
+    async def fake_save(
+        user,
+        measurement_date,
+        request,
+    ):
+        assert user.id == "user-123"
+        assert measurement_date == date(
+            2026,
+            8,
+            24,
+        )
+        assert request.hunger == 4
+        assert (
+            request.dietAdherencePercent
+            == 90
+        )
+        return daily_checkin()
+
+    app.dependency_overrides[
+        require_user
+    ] = authenticated_user
+
+    monkeypatch.setattr(
+        health_api,
+        "save_user_daily_checkin",
+        fake_save,
+    )
+
+    try:
+        response = client.put(
+            (
+                "/api/v1/health/"
+                "daily-checkins/"
+                "2026-08-24"
+            ),
+            headers={
+                "Authorization":
+                    "Bearer token-123"
+            },
+            json={
+                "hunger": 4,
+                "dietAdherencePercent": 90,
+            },
+        )
+    finally:
+        app.dependency_overrides.pop(
+            require_user,
+            None,
+        )
+
+    assert response.status_code == 200
+    assert (
+        response.json()["measurementDate"]
+        == "2026-08-24"
+    )
+    assert response.json()["hunger"] == 4

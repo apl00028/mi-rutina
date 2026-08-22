@@ -128,6 +128,10 @@ describe('Health', () => {
       `${environment.apiUrl}/health/checkins`
     ).flush([]);
 
+    http.expectOne(
+      `${environment.apiUrl}/health/daily-checkins`
+    ).flush([]);
+
     await flushPromises();
     await fixture.whenStable();
     await flushPromises();
@@ -202,9 +206,20 @@ describe('Health', () => {
           weekStart:
             component.checkinWeekStart(),
           fatigue: 3,
-          hunger: 2,
           recovery: 4,
           motivation: 4,
+          waistCm: 88
+        }
+      ]);
+
+      http.expectOne(
+        `${environment.apiUrl}/health/daily-checkins`
+      ).flush([
+        {
+          id: 'daily-1',
+          measurementDate:
+            component.dailyDate(),
+          hunger: 2,
           dietAdherencePercent: 90
         }
       ]);
@@ -217,13 +232,19 @@ describe('Health', () => {
       expect(component.fatigue())
         .toBe('3');
 
-      expect(component.hunger())
-        .toBe('2');
-
       expect(component.recovery())
         .toBe('4');
 
-      expect(component.adherence())
+      expect(component.motivation())
+        .toBe('4');
+
+      expect(component.waistCm())
+        .toBe('88');
+
+      expect(component.dailyHunger())
+        .toBe('2');
+
+      expect(component.dailyAdherence())
         .toBe('90');
     }
   );
@@ -321,20 +342,93 @@ describe('Health', () => {
 
 
   it(
+    'rejects an invalid daily check-in',
+    async () => {
+
+      component.dailyHunger.set('');
+      component.dailyAdherence.set('90');
+
+      await component.saveDailyCheckin();
+
+      expect(component.error())
+        .toBe(
+          'Selecciona el hambre del 1 al 5.'
+        );
+
+      expect(getAccessToken)
+        .not.toHaveBeenCalled();
+
+      http.verify();
+    }
+  );
+
+
+  it(
+    'saves the daily check-in and reloads health data',
+    async () => {
+
+      component.dailyDate.set(
+        '2026-08-24'
+      );
+
+      component.dailyHunger.set('4');
+      component.dailyAdherence.set('90');
+
+      const savePromise =
+        component.saveDailyCheckin();
+
+      await flushPromises();
+
+      const request =
+        http.expectOne(
+          (
+            `${environment.apiUrl}`
+            + '/health/daily-checkins/'
+            + '2026-08-24'
+          )
+        );
+
+      expect(request.request.method)
+        .toBe('PUT');
+
+      expect(request.request.body)
+        .toEqual({
+          hunger: 4,
+          dietAdherencePercent: 90
+        });
+
+      request.flush({
+        id: 'daily-1',
+        measurementDate: '2026-08-24',
+        hunger: 4,
+        dietAdherencePercent: 90
+      });
+
+      await flushHealthLoad();
+
+      await savePromise;
+
+      expect(component.message())
+        .toBe(
+          'Estado diario guardado.'
+        );
+    }
+  );
+
+
+  it(
     'rejects an incomplete weekly check-in',
     async () => {
 
       component.fatigue.set('3');
-      component.hunger.set('');
-      component.recovery.set('4');
+      component.recovery.set('');
       component.motivation.set('4');
-      component.adherence.set('90');
 
       await component.saveCheckin();
 
       expect(component.error())
         .toBe(
-          'Completa fatiga, hambre, recuperación y motivación del 1 al 5.'
+          'Completa fatiga, recuperación y motivación del 1 al 5.'
         );
 
       expect(getAccessToken)
@@ -350,10 +444,9 @@ describe('Health', () => {
     async () => {
 
       component.fatigue.set('3');
-      component.hunger.set('2');
       component.recovery.set('4');
       component.motivation.set('4');
-      component.adherence.set('90');
+      component.waistCm.set('88');
 
       const week =
         component.checkinWeekStart();
@@ -378,20 +471,18 @@ describe('Health', () => {
       expect(request.request.body)
         .toEqual({
           fatigue: 3,
-          hunger: 2,
           recovery: 4,
           motivation: 4,
-          dietAdherencePercent: 90
+          waistCm: 88
         });
 
       request.flush({
         id: 'checkin-1',
         weekStart: week,
         fatigue: 3,
-        hunger: 2,
         recovery: 4,
         motivation: 4,
-        dietAdherencePercent: 90
+        waistCm: 88
       });
 
       await flushHealthLoad();
@@ -400,7 +491,7 @@ describe('Health', () => {
 
       expect(component.message())
         .toBe(
-          'Check-in semanal guardado.'
+          'Estado semanal guardado.'
         );
     }
   );

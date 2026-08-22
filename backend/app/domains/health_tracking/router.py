@@ -17,6 +17,8 @@ from app.domains.exercises.custom_repository import (
     SupabaseConfigError,
 )
 from app.domains.health_tracking.models import (
+    DailyCheckIn,
+    DailyCheckInInput,
     WeeklyCheckIn,
     WeeklyCheckInInput,
     WeightEntry,
@@ -26,8 +28,10 @@ from app.domains.health_tracking.models import (
 from app.domains.health_tracking.service import (
     build_weight_trend,
     delete_user_weight_entry,
+    list_user_daily_checkins,
     list_user_weekly_checkins,
     list_user_weight_entries,
+    save_user_daily_checkin,
     save_user_weekly_checkin,
     save_user_weight_entry,
 )
@@ -176,6 +180,52 @@ async def delete_weight(
             status.HTTP_204_NO_CONTENT
         )
     )
+
+
+@router.get(
+    "/daily-checkins",
+    response_model=list[DailyCheckIn],
+    response_model_exclude_none=True,
+)
+async def list_daily_health_checkins(
+    user: AuthenticatedUser = Depends(
+        require_user
+    ),
+) -> list[DailyCheckIn]:
+    try:
+        return await list_user_daily_checkins(
+            user
+        )
+    except (
+        httpx.HTTPError,
+        RuntimeError,
+    ) as exc:
+        _raise_health_http_error(exc)
+
+
+@router.put(
+    "/daily-checkins/{measurement_date}",
+    response_model=DailyCheckIn,
+    response_model_exclude_none=True,
+)
+async def save_daily_health_checkin(
+    measurement_date: date,
+    request: DailyCheckInInput,
+    user: AuthenticatedUser = Depends(
+        require_user
+    ),
+) -> DailyCheckIn:
+    try:
+        return await save_user_daily_checkin(
+            user,
+            measurement_date,
+            request,
+        )
+    except (
+        httpx.HTTPError,
+        RuntimeError,
+    ) as exc:
+        _raise_health_http_error(exc)
 
 
 @router.get(

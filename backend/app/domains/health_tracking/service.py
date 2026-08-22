@@ -3,6 +3,8 @@ from typing import Any
 
 from app.core.auth import AuthenticatedUser
 from app.domains.health_tracking.models import (
+    DailyCheckIn,
+    DailyCheckInInput,
     WeeklyCheckIn,
     WeeklyCheckInInput,
     WeightEntry,
@@ -11,8 +13,10 @@ from app.domains.health_tracking.models import (
 )
 from app.domains.health_tracking.repository import (
     delete_weight_entry,
+    list_daily_checkins,
     list_weekly_checkins,
     list_weight_entries,
+    upsert_daily_checkin,
     upsert_weekly_checkin,
     upsert_weight_entry,
 )
@@ -31,6 +35,18 @@ def weight_row_to_model(
         "bodyFatPercent":
             row.get(
                 "body_fat_percent"
+            ),
+        "muscleMassKg":
+            row.get(
+                "muscle_mass_kg"
+            ),
+        "bodyWaterPercent":
+            row.get(
+                "body_water_percent"
+            ),
+        "visceralFatIndex":
+            row.get(
+                "visceral_fat_index"
             ),
         "source":
             row.get(
@@ -62,6 +78,31 @@ def checkin_row_to_model(
             row.get("recovery"),
         "motivation":
             row.get("motivation"),
+        "waistCm":
+            row.get("waist_cm"),
+        "dietAdherencePercent":
+            row.get(
+                "diet_adherence_percent"
+            ),
+        "notes":
+            row.get("notes"),
+        "createdAt":
+            row.get("created_at"),
+        "updatedAt":
+            row.get("updated_at"),
+    })
+
+
+def daily_checkin_row_to_model(
+    row: dict[str, Any],
+) -> DailyCheckIn:
+    return DailyCheckIn.model_validate({
+        "id":
+            row["id"],
+        "measurementDate":
+            row["measurement_date"],
+        "hunger":
+            row.get("hunger"),
         "dietAdherencePercent":
             row.get(
                 "diet_adherence_percent"
@@ -140,6 +181,34 @@ async def save_user_weekly_checkin(
 
     return checkin_row_to_model(row)
 
+
+
+async def list_user_daily_checkins(
+    user: AuthenticatedUser,
+) -> list[DailyCheckIn]:
+    rows = await list_daily_checkins(user)
+
+    return [
+        daily_checkin_row_to_model(row)
+        for row in rows
+    ]
+
+
+async def save_user_daily_checkin(
+    user: AuthenticatedUser,
+    measurement_date: date,
+    request: DailyCheckInInput,
+) -> DailyCheckIn:
+    row = await upsert_daily_checkin(
+        user,
+        measurement_date,
+        request.model_dump(
+            mode="json",
+            exclude_none=True,
+        ),
+    )
+
+    return daily_checkin_row_to_model(row)
 
 
 def build_weight_trend(

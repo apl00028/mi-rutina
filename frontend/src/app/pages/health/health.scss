@@ -325,3 +325,52 @@ select:focus {
   opacity: 0.5;
   cursor: wait;
 }
+
+.health-tabs {
+  display: flex;
+  gap: 8px;
+  margin: 24px 0;
+  padding: 4px;
+
+  width: fit-content;
+
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--card);
+}
+
+.health-tabs button {
+  border: 0;
+  border-radius: 9px;
+  padding: 10px 18px;
+
+  background: transparent;
+  color: inherit;
+
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.health-tabs button.active {
+  background: var(--text);
+  color: var(--bg);
+}
+
+.health-section-hidden {
+  display: none !important;
+}
+
+.health-grid > .panel:not(.health-section-hidden) {
+  grid-column: 1 / -1;
+}
+
+@media (max-width: 700px) {
+  .health-tabs {
+    width: 100%;
+  }
+
+  .health-tabs button {
+    flex: 1;
+  }
+}

@@ -13,15 +13,25 @@
       </p>
     </div>
 
-    <label class="import-button">
-      Importar Excel
+    <div class="nutrition-actions">
+      <button
+        type="button"
+        class="template-button"
+        (click)="downloadTemplate()"
+      >
+        Descargar plantilla
+      </button>
 
-      <input
-        type="file"
-        accept=".xlsx"
-        (change)="importExcel($event)"
-      />
-    </label>
+      <label class="import-button">
+        Importar Excel
+
+        <input
+          type="file"
+          accept=".xlsx"
+          (change)="importExcel($event)"
+        />
+      </label>
+    </div>
   </header>
 
 

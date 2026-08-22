@@ -187,6 +187,163 @@ export class Nutrition implements OnInit {
   }
 
 
+  downloadTemplate(): void {
+
+    const workbook =
+      XLSX.utils.book_new();
+
+    const configSheet =
+      XLSX.utils.aoa_to_sheet([
+        [
+          'Campo',
+          'Valor',
+          'Ayuda'
+        ],
+        [
+          'Versión esquema',
+          '1.0',
+          'No modificar'
+        ],
+        [
+          'Semana (lunes)',
+          '',
+          'YYYY-MM-DD · debe ser lunes'
+        ],
+        [
+          'Objetivo',
+          '',
+          'perder_grasa | mantener | ganar_musculo'
+        ],
+        [
+          'Calorías objetivo',
+          '',
+          'Opcional'
+        ],
+        [
+          'Proteína objetivo (g)',
+          '',
+          'Opcional'
+        ],
+        [
+          'Carbohidratos objetivo (g)',
+          '',
+          'Opcional'
+        ],
+        [
+          'Grasas objetivo (g)',
+          '',
+          'Opcional'
+        ]
+      ]);
+
+    const planSheet =
+      XLSX.utils.aoa_to_sheet([
+        [
+          'Día',
+          'Comida',
+          'Plato',
+          'Ingrediente',
+          'Producto / marca',
+          'Cantidad',
+          'Unidad',
+          'Medición',
+          'kcal / 100 g',
+          'Proteína / 100 g',
+          'Carbohidratos / 100 g',
+          'Grasas / 100 g',
+          'Notas'
+        ]
+      ]);
+
+    const listsSheet =
+      XLSX.utils.aoa_to_sheet([
+        [
+          'Días',
+          'Comidas',
+          'Medición',
+          'Objetivos',
+          'Unidades'
+        ],
+        [
+          'Lunes',
+          'Desayuno',
+          'crudo',
+          'perder_grasa',
+          'g'
+        ],
+        [
+          'Martes',
+          'Comida',
+          'cocinado',
+          'mantener',
+          'ml'
+        ],
+        [
+          'Miércoles',
+          'Merienda',
+          'producto',
+          'ganar_musculo',
+          'ud'
+        ],
+        [
+          'Jueves',
+          'Cena',
+          'unidad',
+          '',
+          ''
+        ],
+        ['Viernes', '', '', '', ''],
+        ['Sábado', '', '', '', ''],
+        ['Domingo', '', '', '', '']
+      ]);
+
+    configSheet['!cols'] = [
+      { wch: 28 },
+      { wch: 22 },
+      { wch: 42 }
+    ];
+
+    planSheet['!cols'] = [
+      { wch: 14 },
+      { wch: 14 },
+      { wch: 26 },
+      { wch: 26 },
+      { wch: 24 },
+      { wch: 12 },
+      { wch: 10 },
+      { wch: 14 },
+      { wch: 14 },
+      { wch: 18 },
+      { wch: 22 },
+      { wch: 18 },
+      { wch: 30 }
+    ];
+
+    XLSX.utils.book_append_sheet(
+      workbook,
+      configSheet,
+      'Configuración'
+    );
+
+    XLSX.utils.book_append_sheet(
+      workbook,
+      planSheet,
+      'Plan'
+    );
+
+    XLSX.utils.book_append_sheet(
+      workbook,
+      listsSheet,
+      'Listas'
+    );
+
+    XLSX.writeFile(
+      workbook,
+      'gymos-plantilla-nutricion-v1.xlsx'
+    );
+  }
+
+
   async importExcel(
     event: Event
   ): Promise<void> {

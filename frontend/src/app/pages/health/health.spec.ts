@@ -204,6 +204,7 @@ describe('Health', () => {
           fatigue: 3,
           hunger: 2,
           recovery: 4,
+          motivation: 4,
           dietAdherencePercent: 90
         }
       ]);
@@ -326,13 +327,14 @@ describe('Health', () => {
       component.fatigue.set('3');
       component.hunger.set('');
       component.recovery.set('4');
+      component.motivation.set('4');
       component.adherence.set('90');
 
       await component.saveCheckin();
 
       expect(component.error())
         .toBe(
-          'Completa fatiga, hambre y recuperación del 1 al 5.'
+          'Completa fatiga, hambre, recuperación y motivación del 1 al 5.'
         );
 
       expect(getAccessToken)
@@ -350,6 +352,7 @@ describe('Health', () => {
       component.fatigue.set('3');
       component.hunger.set('2');
       component.recovery.set('4');
+      component.motivation.set('4');
       component.adherence.set('90');
 
       const week =
@@ -377,6 +380,7 @@ describe('Health', () => {
           fatigue: 3,
           hunger: 2,
           recovery: 4,
+          motivation: 4,
           dietAdherencePercent: 90
         });
 
@@ -386,6 +390,7 @@ describe('Health', () => {
         fatigue: 3,
         hunger: 2,
         recovery: 4,
+        motivation: 4,
         dietAdherencePercent: 90
       });
 

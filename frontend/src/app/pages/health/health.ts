@@ -43,6 +43,7 @@ interface WeeklyCheckIn {
   fatigue?: number;
   hunger?: number;
   recovery?: number;
+  motivation?: number;
   dietAdherencePercent?: number;
   notes?: string;
 }
@@ -68,6 +69,9 @@ export class Health implements OnInit {
   checkins =
     signal<WeeklyCheckIn[]>([]);
 
+  activeSection =
+    signal<'metrics' | 'weekly'>('metrics');
+
   loading = signal(false);
   savingWeight = signal(false);
   savingCheckin = signal(false);
@@ -90,6 +94,7 @@ export class Health implements OnInit {
   fatigue = signal('');
   hunger = signal('');
   recovery = signal('');
+  motivation = signal('');
   adherence = signal('');
 
 
@@ -178,6 +183,10 @@ export class Health implements OnInit {
         );
         this.recovery.set(
           currentCheckin.recovery?.toString()
+          ?? ''
+        );
+        this.motivation.set(
+          currentCheckin.motivation?.toString()
           ?? ''
         );
         this.adherence.set(
@@ -352,6 +361,8 @@ export class Health implements OnInit {
       Number(this.hunger());
     const recovery =
       Number(this.recovery());
+    const motivation =
+      Number(this.motivation());
     const adherence =
       Number(this.adherence());
 
@@ -366,9 +377,10 @@ export class Health implements OnInit {
       !validScale(fatigue)
       || !validScale(hunger)
       || !validScale(recovery)
+      || !validScale(motivation)
     ) {
       this.error.set(
-        'Completa fatiga, hambre y recuperación del 1 al 5.'
+        'Completa fatiga, hambre, recuperación y motivación del 1 al 5.'
       );
       return;
     }
@@ -400,6 +412,7 @@ export class Health implements OnInit {
             fatigue,
             hunger,
             recovery,
+            motivation,
             dietAdherencePercent:
               adherence
           },

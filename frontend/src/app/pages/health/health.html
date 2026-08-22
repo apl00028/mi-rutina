@@ -16,6 +16,28 @@
   </header>
 
 
+  <nav
+    class="health-tabs"
+    aria-label="Secciones de salud"
+  >
+    <button
+      type="button"
+      [class.active]="activeSection() === 'metrics'"
+      (click)="activeSection.set('metrics')"
+    >
+      Métricas
+    </button>
+
+    <button
+      type="button"
+      [class.active]="activeSection() === 'weekly'"
+      (click)="activeSection.set('weekly')"
+    >
+      Estado semanal
+    </button>
+  </nav>
+
+
   @if (error()) {
     <div class="message error">
       {{ error() }}
@@ -35,7 +57,12 @@
     </section>
   } @else {
 
-    <section class="summary-grid">
+    <section
+      class="summary-grid"
+      [class.health-section-hidden]="
+        activeSection() !== 'metrics'
+      "
+    >
 
       <article class="metric-card">
         <span>Peso actual</span>
@@ -153,7 +180,12 @@
 
     <div class="health-grid">
 
-      <section class="panel">
+      <section
+        class="panel"
+        [class.health-section-hidden]="
+          activeSection() !== 'metrics'
+        "
+      >
 
         <div class="panel-heading">
           <div>
@@ -258,12 +290,17 @@
       </section>
 
 
-      <section class="panel">
+      <section
+        class="panel"
+        [class.health-section-hidden]="
+          activeSection() !== 'weekly'
+        "
+      >
 
         <div class="panel-heading">
           <div>
             <span class="eyebrow">
-              Semana
+              Estado
             </span>
 
             <h2>Check-in semanal</h2>
@@ -372,6 +409,35 @@
 
 
           <label>
+            Motivación
+
+            <select
+              [value]="motivation()"
+              (change)="
+                motivation.set(
+                  $any($event.target).value
+                )
+              "
+            >
+              <option value="">
+                Selecciona
+              </option>
+              <option value="1">
+                1 · Muy baja
+              </option>
+              <option value="2">2</option>
+              <option value="3">
+                3 · Media
+              </option>
+              <option value="4">4</option>
+              <option value="5">
+                5 · Muy alta
+              </option>
+            </select>
+          </label>
+
+
+          <label>
             Adherencia nutricional (%)
 
             <input
@@ -409,7 +475,12 @@
     </div>
 
 
-    <section class="panel history-panel">
+    <section
+      class="panel history-panel"
+      [class.health-section-hidden]="
+        activeSection() !== 'metrics'
+      "
+    >
 
       <div class="panel-heading">
         <div>

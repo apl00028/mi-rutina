@@ -216,6 +216,8 @@ async def upsert_weekly_checkin(
             payload.get("hunger"),
         "recovery":
             payload.get("recovery"),
+        "motivation":
+            payload.get("motivation"),
         "diet_adherence_percent":
             payload.get(
                 "dietAdherencePercent"

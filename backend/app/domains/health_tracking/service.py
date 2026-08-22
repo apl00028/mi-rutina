@@ -60,6 +60,8 @@ def checkin_row_to_model(
             row.get("hunger"),
         "recovery":
             row.get("recovery"),
+        "motivation":
+            row.get("motivation"),
         "dietAdherencePercent":
             row.get(
                 "diet_adherence_percent"

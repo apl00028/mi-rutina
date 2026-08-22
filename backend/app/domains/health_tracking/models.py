@@ -49,6 +49,11 @@ class WeeklyCheckInInput(BaseModel):
         ge=1,
         le=5,
     )
+    motivation: int | None = Field(
+        default=None,
+        ge=1,
+        le=5,
+    )
     dietAdherencePercent: float | None = Field(
         default=None,
         ge=0,

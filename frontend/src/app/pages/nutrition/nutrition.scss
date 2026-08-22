@@ -137,3 +137,33 @@ p {
     text-align: center;
   }
 }
+
+.nutrition-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.template-button {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 11px 16px;
+
+  background: var(--card);
+  color: inherit;
+
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+@media (max-width: 700px) {
+  .nutrition-actions {
+    width: 100%;
+  }
+
+  .template-button {
+    width: 100%;
+  }
+}

@@ -110,14 +110,14 @@ async def authenticate_user(
     - onboarding/access bootstrap flows
     """
 
+    token = _extract_bearer_token(
+        credentials
+    )
+
     (
         supabase_url,
         publishable_key,
     ) = _supabase_config()
-
-    token = _extract_bearer_token(
-        credentials
-    )
 
     headers = {
         "Authorization":

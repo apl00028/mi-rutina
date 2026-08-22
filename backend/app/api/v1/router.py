@@ -14,6 +14,7 @@ from app.domains.workouts.router import (
 from app.domains.onboarding.router import (
     router as onboarding_router,
 )
+from app.domains.nutrition.router import router as nutrition_router
 
 
 router = APIRouter(
@@ -49,4 +50,9 @@ router.include_router(
 )
 router.include_router(
     onboarding_router
+)
+
+
+router.include_router(
+    nutrition_router
 )

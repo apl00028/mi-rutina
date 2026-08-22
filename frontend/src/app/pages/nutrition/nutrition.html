@@ -1,0 +1,253 @@
+<section class="nutrition-page">
+  <header class="nutrition-header">
+    <div>
+      <span class="eyebrow">
+        GymOS
+      </span>
+
+      <h1>Nutrición</h1>
+
+      <p>
+        Importa un plan semanal generado con la
+        plantilla de GymOS.
+      </p>
+    </div>
+
+    <label class="import-button">
+      Importar Excel
+
+      <input
+        type="file"
+        accept=".xlsx"
+        (change)="importExcel($event)"
+      />
+    </label>
+  </header>
+
+
+  @if (error()) {
+    <div class="message error">
+      {{ error() }}
+    </div>
+  }
+
+  @if (message()) {
+    <div class="message success">
+      {{ message() }}
+    </div>
+  }
+
+
+  @if (importIssues().length) {
+    <section class="issues-card">
+      <h2>
+        El archivo necesita revisión
+      </h2>
+
+      @for (
+        issue of importIssues();
+        track $index
+      ) {
+        <div class="issue">
+          <strong>
+            {{ issue.sheet }}
+            @if (issue.row) {
+              · fila {{ issue.row }}
+            }
+            @if (issue.column) {
+              · {{ issue.column }}
+            }
+          </strong>
+
+          <span>
+            {{ issue.message }}
+          </span>
+        </div>
+      }
+    </section>
+  }
+
+
+  @if (preview(); as plan) {
+    <section class="preview-card">
+      <div class="preview-heading">
+        <div>
+          <span class="eyebrow">
+            Vista previa
+          </span>
+
+          <h2>
+            Semana {{ plan.weekStart }}
+          </h2>
+
+          <p>
+            Objetivo:
+            {{ goalLabel(plan.goal) }}
+          </p>
+        </div>
+
+        <button
+          type="button"
+          class="save-button"
+          [disabled]="saving()"
+          (click)="savePreview()"
+        >
+          @if (saving()) {
+            Guardando…
+          } @else {
+            Importar plan
+          }
+        </button>
+      </div>
+
+      @for (
+        day of plan.days;
+        track day.date
+      ) {
+        <article class="day-card">
+          <h3>
+            {{ day.date }}
+          </h3>
+
+          @for (
+            meal of day.meals;
+            track meal.mealId
+          ) {
+            <div class="meal">
+              <div class="meal-heading">
+                <span>
+                  {{ mealLabel(meal.type) }}
+                </span>
+
+                <strong>
+                  {{ meal.name }}
+                </strong>
+              </div>
+
+              <div class="ingredients">
+                @for (
+                  ingredient
+                  of meal.ingredients;
+                  track ingredient.ingredientId
+                ) {
+                  <div class="ingredient">
+                    <div>
+                      <strong>
+                        {{ ingredient.name }}
+                      </strong>
+
+                      @if (
+                        ingredient.productBrand
+                      ) {
+                        <span>
+                          {{ ingredient.productBrand }}
+                        </span>
+                      }
+                    </div>
+
+                    <span>
+                      {{ ingredient.quantity }}
+                      {{ ingredient.unit }}
+                    </span>
+                  </div>
+                }
+              </div>
+            </div>
+          }
+        </article>
+      }
+    </section>
+  }
+
+
+  @if (!preview() && !importIssues().length) {
+    @if (plans().length) {
+      @if (plans()[0]; as plan) {
+        <section class="preview-card">
+          <div class="preview-heading">
+            <div>
+              <span class="eyebrow">
+                Plan actual
+              </span>
+
+              <h2>
+                Semana {{ plan.weekStart }}
+              </h2>
+
+              <p>
+                Objetivo:
+                {{ goalLabel(plan.goal) }}
+              </p>
+            </div>
+          </div>
+
+          @for (
+            day of plan.days;
+            track day.date
+          ) {
+            <article class="day-card">
+              <h3>
+                {{ day.date }}
+              </h3>
+
+              @for (
+                meal of day.meals;
+                track meal.mealId
+              ) {
+                <div class="meal">
+                  <div class="meal-heading">
+                    <span>
+                      {{ mealLabel(meal.type) }}
+                    </span>
+
+                    <strong>
+                      {{ meal.name }}
+                    </strong>
+                  </div>
+
+                  <div class="ingredients">
+                    @for (
+                      ingredient of meal.ingredients;
+                      track ingredient.ingredientId
+                    ) {
+                      <div class="ingredient">
+                        <div>
+                          <strong>
+                            {{ ingredient.name }}
+                          </strong>
+
+                          @if (ingredient.productBrand) {
+                            <span>
+                              {{ ingredient.productBrand }}
+                            </span>
+                          }
+                        </div>
+
+                        <span>
+                          {{ ingredient.quantity }}
+                          {{ ingredient.unit }}
+                        </span>
+                      </div>
+                    }
+                  </div>
+                </div>
+              }
+            </article>
+          }
+        </section>
+      }
+    } @else {
+      <section class="empty-card">
+        <h2>
+          Importa tu planificación
+        </h2>
+
+        <p>
+          ChatGPT puede modificar la plantilla
+          semanal y GymOS validará el archivo antes
+          de guardarlo.
+        </p>
+      </section>
+    }
+  }
+</section>

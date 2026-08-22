@@ -107,6 +107,28 @@
             </span>
           }
         </a>
+
+        <a
+          routerLink="/nutricion"
+          routerLinkActive="active"
+          [attr.aria-current]="
+            isCurrentRoute('/nutricion')
+              ? 'page'
+              : null
+          "
+          title="Nutrición"
+        >
+          <span class="nav-icon">
+            ◉
+          </span>
+
+          @if (sidebarExpanded()) {
+            <span class="nav-label">
+              Nutrición
+            </span>
+          }
+        </a>
+
       </nav>
 
       <div class="sidebar-footer">
@@ -252,6 +274,35 @@
                   </span>
                 }
               </a>
+
+              <a
+                routerLink="/nutricion"
+                routerLinkActive="active"
+                [attr.aria-current]="
+                  isCurrentRoute('/nutricion')
+                    ? 'page'
+                    : null
+                "
+                (click)="closeMobileNav()"
+              >
+                <span
+                  class="nav-icon"
+                  aria-hidden="true"
+                >
+                  ◉
+                </span>
+
+                <span class="nav-label">
+                  Nutrición
+                </span>
+
+                @if (isCurrentRoute('/nutricion')) {
+                  <span class="active-marker">
+                    Actual
+                  </span>
+                }
+              </a>
+
 
               <a
                 routerLink="/ajustes"
@@ -562,6 +613,29 @@
           Planificación
         </span>
       </a>
+
+      <a
+        routerLink="/nutricion"
+        routerLinkActive="active"
+        [attr.aria-current]="
+          isCurrentRoute('/nutricion')
+            ? 'page'
+            : null
+        "
+        aria-label="Ir a Nutrición"
+      >
+        <span
+          class="nav-icon"
+          aria-hidden="true"
+        >
+          ◉
+        </span>
+
+        <span class="nav-label">
+          Nutrición
+        </span>
+      </a>
+
     </nav>
   </div>
 }

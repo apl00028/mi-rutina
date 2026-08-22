@@ -96,6 +96,18 @@ export const routes: Routes = [
     ]
   },
   {
+    path: 'nutricion',
+    loadComponent: () =>
+      import(
+        './pages/nutrition/nutrition'
+      ).then(
+        module => module.Nutrition
+      ),
+    canActivate: [
+      accessGuard
+    ]
+  },
+  {
     path: 'ajustes',
     loadComponent: () =>
       import(

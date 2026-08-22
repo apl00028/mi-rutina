@@ -368,4 +368,307 @@ describe('Nutrition import', () => {
     }
   );
 
+  it(
+    'imports recipe instructions from the Recetas sheet',
+    () => {
+
+      const fixture =
+        TestBed.createComponent(
+          Nutrition
+        );
+
+      const component =
+        fixture.componentInstance;
+
+      const wb =
+        workbook();
+
+      const planSheet =
+        wb.Sheets['Plan'];
+
+      const rows =
+        XLSX.utils.sheet_to_json<any>(
+          planSheet
+        );
+
+      rows[0]['Receta ID'] =
+        'pollo-arroz';
+
+      wb.Sheets['Plan'] =
+        XLSX.utils.json_to_sheet(
+          rows
+        );
+
+      const recipes =
+        XLSX.utils.json_to_sheet([
+          {
+            'Receta ID':
+              'pollo-arroz',
+            'Plato':
+              'Pollo con arroz',
+            'Raciones':
+              1,
+            'Preparación min':
+              10,
+            'Cocción min':
+              20,
+            'Paso':
+              1,
+            'Instrucción':
+              'Cocer el arroz.',
+            'Notas':
+              'Arroz pesado en crudo.'
+          },
+          {
+            'Receta ID':
+              'pollo-arroz',
+            'Plato':
+              'Pollo con arroz',
+            'Raciones':
+              1,
+            'Preparación min':
+              10,
+            'Cocción min':
+              20,
+            'Paso':
+              2,
+            'Instrucción':
+              'Cocinar el pollo.',
+            'Notas':
+              'Arroz pesado en crudo.'
+          }
+        ]);
+
+      XLSX.utils.book_append_sheet(
+        wb,
+        recipes,
+        'Recetas'
+      );
+
+      const result =
+        parse(
+          component,
+          wb
+        );
+
+      expect(result.issues)
+        .toEqual([]);
+
+      const meal =
+        result.plan.days[0]
+          .meals[0];
+
+      expect(meal)
+        .toMatchObject({
+          recipeId:
+            'pollo-arroz',
+          servings:
+            1,
+          prepMinutes:
+            10,
+          cookMinutes:
+            20,
+          steps: [
+            'Cocer el arroz.',
+            'Cocinar el pollo.'
+          ],
+          notes:
+            'Arroz pesado en crudo.'
+        });
+    }
+  );
+
+
+
+  it(
+    'scales recipe ingredient quantities by servings',
+    () => {
+
+      const fixture =
+        TestBed.createComponent(
+          Nutrition
+        );
+
+      const component =
+        fixture.componentInstance;
+
+      const meal: any = {
+        mealId: 'meal-1',
+        type: 'lunch',
+        name: 'Pollo con arroz',
+        servings: 2,
+        ingredients: [
+          {
+            ingredientId: 'rice',
+            name: 'Arroz',
+            quantity: 160,
+            unit: 'g',
+            measurementBasis: 'raw'
+          }
+        ]
+      };
+
+      component.openRecipe(meal);
+
+      expect(
+        component.recipeServings()
+      ).toBe(2);
+
+      component.increaseRecipeServings();
+
+      expect(
+        component.scaledQuantity(
+          meal.ingredients[0],
+          meal
+        )
+      ).toBe(240);
+
+      component.decreaseRecipeServings();
+
+      expect(
+        component.scaledQuantity(
+          meal.ingredients[0],
+          meal
+        )
+      ).toBe(160);
+    }
+  );
+
+
+
+  it(
+    'updates ingredient quantities when recipe servings change',
+    () => {
+
+      const fixture =
+        TestBed.createComponent(
+          Nutrition
+        );
+
+      const component =
+        fixture.componentInstance;
+
+      const result =
+        parse(
+          component,
+          workbook()
+        );
+
+      const plan =
+        result.plan;
+
+      const meal =
+        plan.days[0]
+          .meals[0];
+
+      const updated =
+        component
+          .planWithRecipeServings(
+            plan,
+            meal.mealId,
+            2
+          );
+
+      expect(
+        updated.days[0]
+          .meals[0]
+          .servings
+      ).toBe(2);
+
+      expect(
+        updated.days[0]
+          .meals[0]
+          .ingredients[0]
+          .quantity
+      ).toBe(400);
+
+      expect(
+        plan.days[0]
+          .meals[0]
+          .ingredients[0]
+          .quantity
+      ).toBe(200);
+    }
+  );
+
+
+
+  it(
+    'tracks shopping progress and purchased items',
+    () => {
+
+      globalThis.localStorage.clear();
+
+      const fixture =
+        TestBed.createComponent(
+          Nutrition
+        );
+
+      const component =
+        fixture.componentInstance;
+
+      const result =
+        parse(
+          component,
+          workbook()
+        );
+
+      component.plans.set([
+        result.plan
+      ]);
+
+      const items: any[] = [
+        {
+          name: 'Arroz',
+          unit: 'g',
+          quantity: 500,
+          productBrand: 'Hacendado',
+          sources: []
+        },
+        {
+          name: 'Pechuga de pollo',
+          unit: 'g',
+          quantity: 800,
+          productBrand: 'Mercadona',
+          sources: []
+        }
+      ];
+
+      component.shoppingList.set(
+        items
+      );
+
+      expect(
+        component.purchasedCount()
+      ).toBe(0);
+
+      component.toggleShoppingItem(
+        items[0]
+      );
+
+      expect(
+        component.purchasedCount()
+      ).toBe(1);
+
+      expect(
+        component.shoppingProgress()
+      ).toBe(50);
+
+      expect(
+        component.isShoppingItemPurchased(
+          items[0]
+        )
+      ).toBe(true);
+
+      component.toggleShoppingItem(
+        items[0]
+      );
+
+      expect(
+        component.purchasedCount()
+      ).toBe(0);
+    }
+  );
+
+
 });

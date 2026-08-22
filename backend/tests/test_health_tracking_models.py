@@ -5,6 +5,7 @@ import pytest
 from pydantic import ValidationError
 
 from app.domains.health_tracking.models import (
+    BodyMeasurementInput,
     DailyCheckInInput,
     WeeklyCheckIn,
     WeightEntry,
@@ -106,4 +107,27 @@ def test_daily_checkin_validates_hunger():
     with pytest.raises(ValidationError):
         DailyCheckInInput(
             hunger=6,
+        )
+
+
+
+def test_body_measurement_validates_ranges():
+    measurement = BodyMeasurementInput(
+        waistCm=88,
+        abdomenCm=90,
+        chestCm=101,
+        shouldersCm=118,
+        neckCm=39,
+        leftArmCm=36,
+        rightArmCm=36.5,
+        leftThighCm=58,
+        rightThighCm=58.5,
+    )
+
+    assert measurement.waistCm == 88
+    assert measurement.rightArmCm == 36.5
+
+    with pytest.raises(ValidationError):
+        BodyMeasurementInput(
+            waistCm=10,
         )

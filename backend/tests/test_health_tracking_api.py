@@ -8,6 +8,7 @@ from app.core.auth import (
     require_user,
 )
 from app.domains.health_tracking.models import (
+    BodyMeasurement,
     DailyCheckIn,
     WeeklyCheckIn,
     WeightEntry,
@@ -41,6 +42,24 @@ def weight_entry():
         weightKg=75.4,
         bodyFatPercent=18.2,
         source="manual",
+    )
+
+
+def body_measurement():
+    return BodyMeasurement(
+        id=ENTRY_ID,
+        measurementDate=date(
+            2026,
+            8,
+            24,
+        ),
+        waistCm=88,
+        abdomenCm=90,
+        chestCm=101,
+        leftArmCm=36,
+        rightArmCm=36.5,
+        leftThighCm=58,
+        rightThighCm=58.5,
     )
 
 
@@ -523,3 +542,114 @@ def test_save_daily_checkin(
         == "2026-08-24"
     )
     assert response.json()["hunger"] == 4
+
+
+
+def test_list_body_measurements(
+    monkeypatch,
+):
+    from app.domains.health_tracking import (
+        router as health_api,
+    )
+
+    async def fake_list(user):
+        assert user.id == "user-123"
+        return [body_measurement()]
+
+    app.dependency_overrides[
+        require_user
+    ] = authenticated_user
+
+    monkeypatch.setattr(
+        health_api,
+        "list_user_body_measurements",
+        fake_list,
+    )
+
+    try:
+        response = client.get(
+            "/api/v1/health/body-measurements",
+            headers={
+                "Authorization":
+                    "Bearer token-123"
+            },
+        )
+    finally:
+        app.dependency_overrides.pop(
+            require_user,
+            None,
+        )
+
+    assert response.status_code == 200
+    assert response.json()[0]["waistCm"] == 88
+    assert (
+        response.json()[0]["rightThighCm"]
+        == 58.5
+    )
+
+
+def test_save_body_measurement(
+    monkeypatch,
+):
+    from app.domains.health_tracking import (
+        router as health_api,
+    )
+
+    async def fake_save(
+        user,
+        measurement_date,
+        request,
+    ):
+        assert user.id == "user-123"
+        assert measurement_date == date(
+            2026,
+            8,
+            24,
+        )
+        assert request.waistCm == 88
+        assert request.leftArmCm == 36
+        return body_measurement()
+
+    app.dependency_overrides[
+        require_user
+    ] = authenticated_user
+
+    monkeypatch.setattr(
+        health_api,
+        "save_user_body_measurement",
+        fake_save,
+    )
+
+    try:
+        response = client.put(
+            (
+                "/api/v1/health/"
+                "body-measurements/"
+                "2026-08-24"
+            ),
+            headers={
+                "Authorization":
+                    "Bearer token-123"
+            },
+            json={
+                "waistCm": 88,
+                "abdomenCm": 90,
+                "chestCm": 101,
+                "leftArmCm": 36,
+                "rightArmCm": 36.5,
+                "leftThighCm": 58,
+                "rightThighCm": 58.5,
+            },
+        )
+    finally:
+        app.dependency_overrides.pop(
+            require_user,
+            None,
+        )
+
+    assert response.status_code == 200
+    assert (
+        response.json()["measurementDate"]
+        == "2026-08-24"
+    )
+    assert response.json()["waistCm"] == 88

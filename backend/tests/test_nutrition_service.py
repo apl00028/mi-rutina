@@ -147,3 +147,104 @@ def test_server_columns_override_stale_json_values():
 
     assert plan.weekStart.isoformat() == "2026-08-24"
     assert plan.status == "active"
+
+
+def test_shopping_list_keeps_brand_and_meal_sources():
+    payload = plan_payload()
+
+    payload["days"][0]["meals"][0][
+        "ingredients"
+    ][0]["productBrand"] = (
+        "Mercadona / Hacendado"
+    )
+
+    payload["days"][1]["meals"][0][
+        "ingredients"
+    ][0]["productBrand"] = (
+        "Mercadona / Hacendado"
+    )
+
+    plan = NutritionPlan.model_validate(
+        payload
+    )
+
+    shopping_list = build_shopping_list(
+        plan
+    )
+
+    chicken = next(
+        item
+        for item in shopping_list
+        if item.name == "Pechuga de pollo"
+    )
+
+    assert chicken.quantity == 400
+
+    assert (
+        chicken.productBrand
+        == "Mercadona / Hacendado"
+    )
+
+    assert len(chicken.sources) == 2
+
+    assert {
+        source.date.isoformat()
+        for source in chicken.sources
+    } == {
+        "2026-08-24",
+        "2026-08-26",
+    }
+
+    assert {
+        source.mealName
+        for source in chicken.sources
+    } == {
+        "Pollo con arroz",
+        "Pollo con patata",
+    }
+
+
+def test_shopping_list_does_not_merge_different_brands():
+    payload = plan_payload()
+
+    first = payload[
+        "days"
+    ][0]["meals"][0]["ingredients"][0]
+
+    second = payload[
+        "days"
+    ][1]["meals"][0]["ingredients"][0]
+
+    first["productBrand"] = "Mercadona"
+    second["productBrand"] = "Carrefour"
+
+    plan = NutritionPlan.model_validate(
+        payload
+    )
+
+    shopping_list = build_shopping_list(
+        plan
+    )
+
+    chicken_items = [
+        item
+        for item in shopping_list
+        if item.name == "Pechuga de pollo"
+    ]
+
+    assert len(chicken_items) == 2
+
+    assert {
+        item.productBrand
+        for item in chicken_items
+    } == {
+        "Mercadona",
+        "Carrefour",
+    }
+
+    assert {
+        item.quantity
+        for item in chicken_items
+    } == {
+        200,
+    }

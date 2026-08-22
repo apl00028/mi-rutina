@@ -25,6 +25,12 @@ type MealType =
   | 'snack'
   | 'dinner';
 
+type NutritionSection =
+  | 'week'
+  | 'plan'
+  | 'shopping';
+
+
 type MeasurementBasis =
   | 'raw'
   | 'cooked'
@@ -56,6 +62,14 @@ interface NutritionMeal {
   mealId: string;
   type: MealType;
   name: string;
+
+  recipeId?: string;
+  servings?: number;
+  prepMinutes?: number;
+  cookMinutes?: number;
+  steps?: string[];
+  notes?: string;
+
   ingredients: NutritionIngredient[];
 }
 
@@ -95,6 +109,22 @@ interface ImportIssue {
 }
 
 
+interface ShoppingListSource {
+  date: string;
+  mealType: MealType;
+  mealName: string;
+}
+
+
+interface ShoppingListItem {
+  name: string;
+  unit: string;
+  quantity: number;
+  productBrand?: string;
+  sources: ShoppingListSource[];
+}
+
+
 @Component({
   selector: 'app-nutrition',
   standalone: true,
@@ -120,6 +150,34 @@ export class Nutrition implements OnInit {
   importIssues = signal<ImportIssue[]>([]);
   message = signal<string | null>(null);
   error = signal<string | null>(null);
+
+  nutritionSection =
+    signal<NutritionSection>('week');
+
+  shoppingList =
+    signal<ShoppingListItem[]>([]);
+
+  shoppingLoading =
+    signal(false);
+
+
+  purchasedItems =
+    signal<Set<string>>(
+      new Set()
+    );
+
+
+  selectedMeal =
+    signal<NutritionMeal | null>(null);
+
+  recipeServings =
+    signal(1);
+
+
+  savingRecipe =
+    signal(false);
+
+
 
   constructor(
     private http: HttpClient,
@@ -187,6 +245,930 @@ export class Nutrition implements OnInit {
   }
 
 
+  openRecipe(
+    meal: NutritionMeal
+  ): void {
+
+    this.selectedMeal.set(meal);
+
+    this.recipeServings.set(
+      meal.servings ?? 1
+    );
+  }
+
+
+  closeRecipe(): void {
+    this.selectedMeal.set(null);
+  }
+
+
+  increaseRecipeServings(): void {
+    this.recipeServings.update(
+      value =>
+        Math.min(
+          20,
+          value + 1
+        )
+    );
+  }
+
+
+  decreaseRecipeServings(): void {
+    this.recipeServings.update(
+      value =>
+        Math.max(
+          1,
+          value - 1
+        )
+    );
+  }
+
+
+  scaledQuantity(
+    ingredient: NutritionIngredient,
+    meal: NutritionMeal
+  ): number {
+
+    const originalServings =
+      meal.servings ?? 1;
+
+    return (
+      ingredient.quantity
+      * this.recipeServings()
+      / originalServings
+    );
+  }
+
+
+  planWithRecipeServings(
+    plan: NutritionPlan,
+    mealId: string,
+    servings: number
+  ): NutritionPlan {
+
+    const sourceMeal =
+      plan.days
+        .flatMap(day => day.meals)
+        .find(
+          meal =>
+            meal.mealId === mealId
+        );
+
+    if (!sourceMeal) {
+      return plan;
+    }
+
+    const originalServings =
+      sourceMeal.servings ?? 1;
+
+    const factor =
+      servings / originalServings;
+
+    return {
+      ...plan,
+
+      days:
+        plan.days.map(
+          day => ({
+            ...day,
+
+            meals:
+              day.meals.map(
+                meal => {
+
+                  if (
+                    meal.mealId !== mealId
+                  ) {
+                    return meal;
+                  }
+
+                  return {
+                    ...meal,
+
+                    servings,
+
+                    ingredients:
+                      meal.ingredients.map(
+                        ingredient => ({
+                          ...ingredient,
+
+                          quantity:
+                            Number(
+                              (
+                                ingredient.quantity
+                                * factor
+                              ).toFixed(4)
+                            )
+                        })
+                      )
+                  };
+                }
+              )
+          })
+        )
+    };
+  }
+
+
+  async saveRecipeServings():
+    Promise<void> {
+
+    const meal =
+      this.selectedMeal();
+
+    const plan =
+      this.activePlan();
+
+    if (!meal || !plan) {
+      return;
+    }
+
+    const servings =
+      this.recipeServings();
+
+    const originalServings =
+      meal.servings ?? 1;
+
+    if (
+      servings === originalServings
+    ) {
+      return;
+    }
+
+    const updatedPlan =
+      this.planWithRecipeServings(
+        plan,
+        meal.mealId,
+        servings
+      );
+
+    this.savingRecipe.set(true);
+    this.error.set(null);
+    this.message.set(null);
+
+    try {
+
+      const headers =
+        await this.authHeaders();
+
+      const saved =
+        await new Promise<NutritionPlan>(
+          (resolve, reject) => {
+
+            this.http
+              .put<NutritionPlan>(
+                `${this.apiUrl}/nutrition/plans/${encodeURIComponent(plan.planId)}`,
+                updatedPlan,
+                { headers }
+              )
+              .subscribe({
+                next: resolve,
+                error: reject
+              });
+          }
+        );
+
+      this.plans.update(
+        current => [
+          saved,
+          ...current.filter(
+            item =>
+              item.planId !==
+              saved.planId
+          )
+        ]
+      );
+
+      const savedMeal =
+        saved.days
+          .flatMap(day => day.meals)
+          .find(
+            item =>
+              item.mealId ===
+              meal.mealId
+          );
+
+      if (savedMeal) {
+        this.selectedMeal.set(
+          savedMeal
+        );
+      }
+
+      this.recipeServings.set(
+        servings
+      );
+
+      this.message.set(
+        'Raciones y cantidades actualizadas.'
+      );
+
+      if (
+        this.shoppingList().length
+      ) {
+        await this.loadShoppingList(
+          saved.planId
+        );
+      }
+
+    } catch (err: any) {
+
+      this.error.set(
+        err?.error?.detail ??
+        err?.message ??
+        'No se pudieron actualizar las raciones.'
+      );
+
+    } finally {
+      this.savingRecipe.set(false);
+    }
+  }
+
+
+  recipeTotalMinutes(
+    meal: NutritionMeal
+  ): number | undefined {
+
+    const prep =
+      meal.prepMinutes;
+
+    const cook =
+      meal.cookMinutes;
+
+    if (
+      prep === undefined &&
+      cook === undefined
+    ) {
+      return undefined;
+    }
+
+    return (
+      (prep ?? 0)
+      + (cook ?? 0)
+    );
+  }
+
+
+  hasRecipeDetails(
+    meal: NutritionMeal
+  ): boolean {
+
+    return Boolean(
+      meal.steps?.length ||
+      meal.prepMinutes !== undefined ||
+      meal.cookMinutes !== undefined ||
+      meal.notes
+    );
+  }
+
+
+  activePlan(): NutritionPlan | null {
+    return this.plans()[0] ?? null;
+  }
+
+
+  async selectSection(
+    section: NutritionSection
+  ): Promise<void> {
+
+    this.nutritionSection.set(section);
+    this.error.set(null);
+
+    if (section !== 'shopping') {
+      return;
+    }
+
+    const plan = this.activePlan();
+
+    if (!plan) {
+      this.shoppingList.set([]);
+      return;
+    }
+
+    await this.loadShoppingList(
+      plan.planId
+    );
+  }
+
+
+  async loadShoppingList(
+    planId: string
+  ): Promise<void> {
+
+    this.shoppingLoading.set(true);
+
+    try {
+      const headers =
+        await this.authHeaders();
+
+      const items =
+        await new Promise<
+          ShoppingListItem[]
+        >(
+          (resolve, reject) => {
+            this.http
+              .get<ShoppingListItem[]>(
+                `${this.apiUrl}/nutrition/plans/${planId}/shopping-list`,
+                { headers }
+              )
+              .subscribe({
+                next: resolve,
+                error: reject
+              });
+          }
+        );
+
+      this.shoppingList.set(items);
+
+      this.loadPurchasedItems(
+        planId,
+        items
+      );
+
+    } catch (err: any) {
+      this.error.set(
+        err?.error?.detail ??
+        err?.message ??
+        'No se pudo generar la lista de la compra.'
+      );
+    } finally {
+      this.shoppingLoading.set(false);
+    }
+  }
+
+
+  orderedDays(
+    plan: NutritionPlan
+  ): NutritionDay[] {
+
+    return [...plan.days].sort(
+      (a, b) =>
+        a.date.localeCompare(b.date)
+    );
+  }
+
+
+  weekDays(
+    plan: NutritionPlan
+  ): NutritionDay[] {
+
+    const existing =
+      new Map(
+        plan.days.map(
+          day => [
+            day.date,
+            day
+          ]
+        )
+      );
+
+    return Array.from(
+      { length: 7 },
+      (_, index) => {
+
+        const date =
+          this.addDays(
+            plan.weekStart,
+            index
+          );
+
+        return (
+          existing.get(date)
+          ?? {
+            date,
+            meals: []
+          }
+        );
+      }
+    );
+  }
+
+
+  weekRangeLabel(
+    plan: NutritionPlan
+  ): string {
+
+    const start =
+      this.calendarDate(plan.weekStart);
+
+    const end =
+      new Date(start);
+
+    end.setDate(
+      end.getDate() + 6
+    );
+
+    return (
+      `${this.shortDate(start)}`
+      + ' – '
+      + `${this.shortDate(end)}`
+    );
+  }
+
+
+  dayName(
+    dateValue: string
+  ): string {
+
+    const value =
+      this.calendarDate(dateValue)
+        .toLocaleDateString(
+          'es-ES',
+          {
+            weekday: 'long'
+          }
+        );
+
+    return (
+      value.charAt(0).toUpperCase()
+      + value.slice(1)
+    );
+  }
+
+
+  dayDate(
+    dateValue: string
+  ): string {
+
+    return this.shortDate(
+      this.calendarDate(dateValue)
+    );
+  }
+
+
+  isToday(
+    dateValue: string
+  ): boolean {
+
+    const now = new Date();
+
+    const today =
+      `${now.getFullYear()}-`
+      + `${String(
+          now.getMonth() + 1
+        ).padStart(2, '0')}-`
+      + `${String(
+          now.getDate()
+        ).padStart(2, '0')}`;
+
+    return dateValue === today;
+  }
+
+
+  mealCount(
+    plan: NutritionPlan
+  ): number {
+
+    return plan.days.reduce(
+      (total, day) =>
+        total + day.meals.length,
+      0
+    );
+  }
+
+
+  ingredientCount(
+    plan: NutritionPlan
+  ): number {
+
+    return plan.days.reduce(
+      (dayTotal, day) =>
+        dayTotal
+        + day.meals.reduce(
+            (mealTotal, meal) =>
+              mealTotal
+              + meal.ingredients.length,
+            0
+          ),
+      0
+    );
+  }
+
+
+  shoppingItemKey(
+    item: ShoppingListItem
+  ): string {
+
+    return [
+      item.name
+        .trim()
+        .toLocaleLowerCase('es-ES'),
+
+      item.unit
+        .trim()
+        .toLocaleLowerCase('es-ES'),
+
+      (item.productBrand ?? '')
+        .trim()
+        .toLocaleLowerCase('es-ES')
+    ].join('|');
+  }
+
+
+  isShoppingItemPurchased(
+    item: ShoppingListItem
+  ): boolean {
+
+    return this.purchasedItems()
+      .has(
+        this.shoppingItemKey(item)
+      );
+  }
+
+
+  toggleShoppingItem(
+    item: ShoppingListItem
+  ): void {
+
+    const plan =
+      this.activePlan();
+
+    if (!plan) {
+      return;
+    }
+
+    const key =
+      this.shoppingItemKey(item);
+
+    const next =
+      new Set(
+        this.purchasedItems()
+      );
+
+    if (next.has(key)) {
+      next.delete(key);
+    } else {
+      next.add(key);
+    }
+
+    this.purchasedItems.set(next);
+
+    this.persistPurchasedItems(
+      plan.planId,
+      next
+    );
+  }
+
+
+  purchasedCount(): number {
+
+    return this.shoppingList()
+      .filter(
+        item =>
+          this.isShoppingItemPurchased(
+            item
+          )
+      )
+      .length;
+  }
+
+
+  shoppingProgress(): number {
+
+    const total =
+      this.shoppingList().length;
+
+    if (!total) {
+      return 0;
+    }
+
+    return (
+      this.purchasedCount()
+      / total
+      * 100
+    );
+  }
+
+
+  clearPurchasedItems(): void {
+
+    const plan =
+      this.activePlan();
+
+    this.purchasedItems.set(
+      new Set()
+    );
+
+    if (!plan) {
+      return;
+    }
+
+    if (
+      'localStorage' in globalThis
+    ) {
+      globalThis.localStorage
+        .removeItem(
+          this.shoppingStorageKey(
+            plan.planId
+          )
+        );
+    }
+  }
+
+
+  shoppingSourceLabel(
+    source: ShoppingListSource
+  ): string {
+
+    const weekday =
+      this.dayName(source.date)
+        .slice(0, 3);
+
+    return (
+      `${weekday} `
+      + `${this.dayDate(source.date)}`
+      + ' · '
+      + `${this.mealLabel(
+          source.mealType
+        )}`
+      + ' · '
+      + source.mealName
+    );
+  }
+
+
+  private shoppingStorageKey(
+    planId: string
+  ): string {
+
+    return (
+      'gymos:nutrition:shopping:'
+      + planId
+    );
+  }
+
+
+  private persistPurchasedItems(
+    planId: string,
+    items: Set<string>
+  ): void {
+
+    if (
+      !('localStorage' in globalThis)
+    ) {
+      return;
+    }
+
+    globalThis.localStorage.setItem(
+      this.shoppingStorageKey(planId),
+      JSON.stringify(
+        [...items]
+      )
+    );
+  }
+
+
+  private loadPurchasedItems(
+    planId: string,
+    items: ShoppingListItem[]
+  ): void {
+
+    if (
+      !('localStorage' in globalThis)
+    ) {
+      this.purchasedItems.set(
+        new Set()
+      );
+      return;
+    }
+
+    try {
+
+      const raw =
+        globalThis.localStorage
+          .getItem(
+            this.shoppingStorageKey(
+              planId
+            )
+          );
+
+      const stored =
+        raw
+          ? JSON.parse(raw)
+          : [];
+
+      const validKeys =
+        new Set(
+          items.map(
+            item =>
+              this.shoppingItemKey(
+                item
+              )
+          )
+        );
+
+      const purchased =
+        Array.isArray(stored)
+          ? stored.filter(
+              key =>
+                typeof key === 'string'
+                && validKeys.has(key)
+            )
+          : [];
+
+      this.purchasedItems.set(
+        new Set(purchased)
+      );
+
+    } catch {
+
+      this.purchasedItems.set(
+        new Set()
+      );
+    }
+  }
+
+
+  shoppingGroups(): {
+    category: string;
+    items: ShoppingListItem[];
+  }[] {
+
+    const groups =
+      new Map<
+        string,
+        ShoppingListItem[]
+      >();
+
+    for (
+      const item
+      of this.shoppingList()
+    ) {
+      const category =
+        this.shoppingCategory(
+          item.name
+        );
+
+      const current =
+        groups.get(category) ?? [];
+
+      current.push(item);
+
+      groups.set(
+        category,
+        current
+      );
+    }
+
+    const order = [
+      'Fruta y verdura',
+      'Proteínas',
+      'Lácteos y refrigerados',
+      'Despensa',
+      'Otros'
+    ];
+
+    return order
+      .filter(
+        category =>
+          groups.has(category)
+      )
+      .map(
+        category => ({
+          category,
+          items:
+            groups.get(category) ?? []
+        })
+      );
+  }
+
+
+  private shoppingCategory(
+    name: string
+  ): string {
+
+    const value =
+      name
+        .normalize('NFD')
+        .replace(
+          /[\u0300-\u036f]/g,
+          ''
+        )
+        .toLowerCase();
+
+    const containsAny = (
+      values: string[]
+    ): boolean =>
+      values.some(
+        item => value.includes(item)
+      );
+
+    if (
+      containsAny([
+        'fresa',
+        'arand',
+        'mandarina',
+        'naranja',
+        'platano',
+        'sandia',
+        'melon',
+        'tomate',
+        'cebolla',
+        'pimiento',
+        'calabacin',
+        'zanahoria',
+        'brocoli',
+        'espinaca',
+        'lechuga',
+        'aguacate',
+        'patata',
+        'verdura',
+        'fruta'
+      ])
+    ) {
+      return 'Fruta y verdura';
+    }
+
+    if (
+      containsAny([
+        'pollo',
+        'pavo',
+        'ternera',
+        'cerdo',
+        'salmon',
+        'atun',
+        'merluza',
+        'pescado',
+        'huevo',
+        'tofu',
+        'gamba'
+      ])
+    ) {
+      return 'Proteínas';
+    }
+
+    if (
+      containsAny([
+        'leche',
+        'yogur',
+        'kefir',
+        'queso',
+        'skyr'
+      ])
+    ) {
+      return 'Lácteos y refrigerados';
+    }
+
+    if (
+      containsAny([
+        'arroz',
+        'pasta',
+        'avena',
+        'pan',
+        'lenteja',
+        'garbanzo',
+        'alubia',
+        'aceite',
+        'chia',
+        'lino',
+        'almendra',
+        'nuez',
+        'chocolate'
+      ])
+    ) {
+      return 'Despensa';
+    }
+
+    return 'Otros';
+  }
+
+
+  private calendarDate(
+    value: string
+  ): Date {
+
+    const [
+      year,
+      month,
+      day
+    ] = value
+      .split('-')
+      .map(Number);
+
+    return new Date(
+      year,
+      month - 1,
+      day,
+      12
+    );
+  }
+
+
+  private shortDate(
+    value: Date
+  ): string {
+
+    return value
+      .toLocaleDateString(
+        'es-ES',
+        {
+          day: 'numeric',
+          month: 'short'
+        }
+      )
+      .replace('.', '');
+  }
+
+
   downloadTemplate(): void {
 
     const workbook =
@@ -242,6 +1224,7 @@ export class Nutrition implements OnInit {
           'Día',
           'Comida',
           'Plato',
+          'Receta ID',
           'Ingrediente',
           'Producto / marca',
           'Cantidad',
@@ -254,6 +1237,32 @@ export class Nutrition implements OnInit {
           'Notas'
         ]
       ]);
+
+    const recipesSheet =
+      XLSX.utils.aoa_to_sheet([
+        [
+          'Receta ID',
+          'Plato',
+          'Raciones',
+          'Preparación min',
+          'Cocción min',
+          'Paso',
+          'Instrucción',
+          'Notas'
+        ]
+      ]);
+
+    recipesSheet['!cols'] = [
+      { wch: 22 },
+      { wch: 30 },
+      { wch: 12 },
+      { wch: 18 },
+      { wch: 15 },
+      { wch: 10 },
+      { wch: 55 },
+      { wch: 35 }
+    ];
+
 
     const listsSheet =
       XLSX.utils.aoa_to_sheet([
@@ -329,6 +1338,12 @@ export class Nutrition implements OnInit {
       workbook,
       planSheet,
       'Plan'
+    );
+
+    XLSX.utils.book_append_sheet(
+      workbook,
+      recipesSheet,
+      'Recetas'
     );
 
     XLSX.utils.book_append_sheet(
@@ -551,6 +1566,225 @@ export class Nutrition implements OnInit {
       }
     }
 
+    const recipeSheet =
+      workbook.Sheets['Recetas'];
+
+    const recipeMap =
+      new Map<
+        string,
+        {
+          recipeId: string;
+          name: string;
+          servings: number;
+          prepMinutes?: number;
+          cookMinutes?: number;
+          steps: {
+            order: number;
+            text: string;
+          }[];
+          notes?: string;
+        }
+      >();
+
+
+    if (recipeSheet) {
+
+      const recipeRows =
+        XLSX.utils.sheet_to_json<
+          Record<string, unknown>
+        >(
+          recipeSheet,
+          {
+            defval: ''
+          }
+        );
+
+
+      recipeRows.forEach(
+        (rawRecipe, index) => {
+
+          const rowNumber =
+            index + 2;
+
+          const row =
+            this.normalizeRow(
+              rawRecipe
+            );
+
+          const recipeId =
+            String(
+              row['receta id'] ?? ''
+            ).trim();
+
+          const name =
+            String(
+              row['plato'] ?? ''
+            ).trim();
+
+          const servings =
+            this.numberOrNull(
+              row['raciones']
+            );
+
+          const prepMinutes =
+            this.numberOrUndefined(
+              row['preparacion min']
+            );
+
+          const cookMinutes =
+            this.numberOrUndefined(
+              row['coccion min']
+            );
+
+          const step =
+            this.numberOrNull(
+              row['paso']
+            );
+
+          const instruction =
+            String(
+              row['instruccion'] ?? ''
+            ).trim();
+
+
+          if (!recipeId) {
+            issues.push({
+              sheet: 'Recetas',
+              row: rowNumber,
+              column: 'Receta ID',
+              message:
+                'Falta el identificador de la receta.'
+            });
+            return;
+          }
+
+          if (!name) {
+            issues.push({
+              sheet: 'Recetas',
+              row: rowNumber,
+              column: 'Plato',
+              message:
+                'Falta el nombre del plato.'
+            });
+            return;
+          }
+
+          if (
+            servings === null ||
+            servings <= 0
+          ) {
+            issues.push({
+              sheet: 'Recetas',
+              row: rowNumber,
+              column: 'Raciones',
+              message:
+                'Raciones debe ser mayor que 0.'
+            });
+            return;
+          }
+
+          if (
+            prepMinutes !== undefined &&
+            prepMinutes < 0
+          ) {
+            issues.push({
+              sheet: 'Recetas',
+              row: rowNumber,
+              column: 'Preparación min',
+              message:
+                'El tiempo no puede ser negativo.'
+            });
+            return;
+          }
+
+          if (
+            cookMinutes !== undefined &&
+            cookMinutes < 0
+          ) {
+            issues.push({
+              sheet: 'Recetas',
+              row: rowNumber,
+              column: 'Cocción min',
+              message:
+                'El tiempo no puede ser negativo.'
+            });
+            return;
+          }
+
+          if (
+            step === null ||
+            step < 1 ||
+            !Number.isInteger(step)
+          ) {
+            issues.push({
+              sheet: 'Recetas',
+              row: rowNumber,
+              column: 'Paso',
+              message:
+                'Paso debe ser un entero mayor que 0.'
+            });
+            return;
+          }
+
+          if (!instruction) {
+            issues.push({
+              sheet: 'Recetas',
+              row: rowNumber,
+              column: 'Instrucción',
+              message:
+                'Falta la instrucción del paso.'
+            });
+            return;
+          }
+
+
+          const key =
+            this.normalize(recipeId);
+
+          let recipe =
+            recipeMap.get(key);
+
+          if (!recipe) {
+            recipe = {
+              recipeId,
+              name,
+              servings,
+              prepMinutes,
+              cookMinutes,
+              steps: [],
+              notes:
+                this.optionalText(
+                  row['notas']
+                )
+            };
+
+            recipeMap.set(
+              key,
+              recipe
+            );
+          }
+
+
+          recipe.steps.push({
+            order: step,
+            text: instruction
+          });
+        }
+      );
+
+
+      for (
+        const recipe
+        of recipeMap.values()
+      ) {
+        recipe.steps.sort(
+          (a, b) =>
+            a.order - b.order
+        );
+      }
+    }
+
+
     const dayMap =
       new Map<number, NutritionDay>();
 
@@ -580,6 +1814,11 @@ export class Nutrition implements OnInit {
           String(
             row['plato'] ?? ''
           ).trim();
+
+        const recipeId =
+          this.optionalText(
+            row['receta id']
+          );
 
         const ingredientName =
           String(
@@ -718,11 +1957,44 @@ export class Nutrition implements OnInit {
           mealMap.get(mealKey);
 
         if (!meal) {
+
+          const recipe =
+            recipeId
+              ? recipeMap.get(
+                  this.normalize(
+                    recipeId
+                  )
+                )
+              : undefined;
+
           meal = {
             mealId:
               crypto.randomUUID(),
             type: mealType,
             name: dish,
+
+            recipeId:
+              recipe?.recipeId ??
+              recipeId ??
+              undefined,
+
+            servings:
+              recipe?.servings ?? 1,
+
+            prepMinutes:
+              recipe?.prepMinutes,
+
+            cookMinutes:
+              recipe?.cookMinutes,
+
+            steps:
+              recipe?.steps.map(
+                item => item.text
+              ) ?? [],
+
+            notes:
+              recipe?.notes,
+
             ingredients: []
           };
 

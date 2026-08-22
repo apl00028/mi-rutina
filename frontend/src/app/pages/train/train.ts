@@ -1,5 +1,6 @@
 import { Component, OnDestroy, OnInit, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { Router } from '@angular/router';
 import { HttpClient, HttpHeaders } from '@angular/common/http';
 import { environment } from '../../../environments/environment';
 import { AuthService } from '../../core/auth.service';
@@ -237,8 +238,32 @@ export class Train implements OnInit, OnDestroy {
     public settingsService:
       SettingsService,
     private workoutSessionState:
-      WorkoutSessionStateService
+      WorkoutSessionStateService,
+    private router: Router
   ) {}
+
+  changeTrainingDiscipline(
+    discipline: string
+  ): void {
+
+    const routes:
+      Record<string, string> = {
+        strength: '/entrenar',
+        swimming: '/entrenar/natacion',
+        cycling: '/entrenar/bicicleta',
+        running: '/entrenar/correr'
+      };
+
+    const target =
+      routes[discipline];
+
+    if (target) {
+      void this.router.navigateByUrl(
+        target
+      );
+    }
+  }
+
 
   async ngOnInit(): Promise<void> {
     this.workoutSessionState

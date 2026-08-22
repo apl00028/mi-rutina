@@ -158,22 +158,36 @@ async def delete_user_nutrition_plan(
 def build_shopping_list(
     plan: NutritionPlan,
 ) -> list[ShoppingListItem]:
+
     totals: dict[
-        tuple[str, str],
+        tuple[str, str, str],
         float,
     ] = {}
 
-    display_names: dict[
-        tuple[str, str],
-        str,
+    display: dict[
+        tuple[str, str, str],
+        dict[str, str | None],
+    ] = {}
+
+    sources: dict[
+        tuple[str, str, str],
+        list[dict[str, str]],
     ] = {}
 
     for day in plan.days:
         for meal in day.meals:
             for ingredient in meal.ingredients:
+
+                brand = (
+                    ingredient.productBrand.strip()
+                    if ingredient.productBrand
+                    else ""
+                )
+
                 key = (
                     ingredient.name.strip().casefold(),
                     ingredient.unit.strip().casefold(),
+                    brand.casefold(),
                 )
 
                 totals[key] = (
@@ -181,16 +195,39 @@ def build_shopping_list(
                     + ingredient.quantity
                 )
 
-                display_names.setdefault(
+                display.setdefault(
                     key,
-                    ingredient.name.strip(),
+                    {
+                        "name":
+                            ingredient.name.strip(),
+                        "unit":
+                            ingredient.unit.strip(),
+                        "productBrand":
+                            brand or None,
+                    },
                 )
+
+                source = {
+                    "date": day.date.isoformat(),
+                    "mealType": meal.type,
+                    "mealName": meal.name,
+                }
+
+                current_sources = sources.setdefault(
+                    key,
+                    [],
+                )
+
+                if source not in current_sources:
+                    current_sources.append(source)
 
     return [
         ShoppingListItem(
-            name=display_names[key],
-            unit=key[1],
+            name=str(display[key]["name"]),
+            unit=str(display[key]["unit"]),
             quantity=quantity,
+            productBrand=display[key]["productBrand"],
+            sources=sources.get(key, []),
         )
         for key, quantity in sorted(
             totals.items(),

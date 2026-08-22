@@ -81,6 +81,33 @@ class NutritionMeal(BaseModel):
     type: MealType
     name: str = Field(min_length=1)
 
+    # Optional stable recipe identifier.
+    # Old plans remain fully compatible.
+    recipeId: str | None = None
+
+    # Ingredient quantities correspond to
+    # this number of servings.
+    servings: float = Field(
+        default=1,
+        gt=0,
+    )
+
+    prepMinutes: int | None = Field(
+        default=None,
+        ge=0,
+    )
+
+    cookMinutes: int | None = Field(
+        default=None,
+        ge=0,
+    )
+
+    steps: list[str] = Field(
+        default_factory=list
+    )
+
+    notes: str | None = None
+
     ingredients: list[NutritionIngredient] = Field(
         default_factory=list
     )
@@ -150,7 +177,19 @@ class NutritionPlan(BaseModel):
         return self
 
 
+class ShoppingListSource(BaseModel):
+    date: date
+    mealType: MealType
+    mealName: str
+
+
 class ShoppingListItem(BaseModel):
     name: str
     unit: str
     quantity: float
+
+    productBrand: str | None = None
+
+    sources: list[ShoppingListSource] = Field(
+        default_factory=list
+    )

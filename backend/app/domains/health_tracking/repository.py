@@ -366,3 +366,103 @@ async def upsert_daily_checkin(
         )
 
     return data[0]
+
+
+async def list_body_measurements(
+    user: AuthenticatedUser,
+) -> list[dict[str, Any]]:
+    url, _ = _supabase_config()
+
+    async with httpx.AsyncClient(
+        timeout=10.0
+    ) as client:
+        response = await client.get(
+            (
+                f"{url}/rest/v1/"
+                "health_body_measurements"
+            ),
+            headers=_headers(user),
+            params={
+                "user_id": f"eq.{user.id}",
+                "order": "measurement_date.desc",
+            },
+        )
+
+    response.raise_for_status()
+    data = response.json()
+
+    if not isinstance(data, list):
+        raise RuntimeError(
+            "Unexpected Supabase response."
+        )
+
+    return data
+
+
+async def upsert_body_measurement(
+    user: AuthenticatedUser,
+    measurement_date: date,
+    payload: dict[str, Any],
+) -> dict[str, Any]:
+    url, _ = _supabase_config()
+
+    row = {
+        "user_id": user.id,
+        "measurement_date":
+            measurement_date.isoformat(),
+        "waist_cm":
+            payload.get("waistCm"),
+        "abdomen_cm":
+            payload.get("abdomenCm"),
+        "chest_cm":
+            payload.get("chestCm"),
+        "shoulders_cm":
+            payload.get("shouldersCm"),
+        "neck_cm":
+            payload.get("neckCm"),
+        "left_arm_cm":
+            payload.get("leftArmCm"),
+        "right_arm_cm":
+            payload.get("rightArmCm"),
+        "left_thigh_cm":
+            payload.get("leftThighCm"),
+        "right_thigh_cm":
+            payload.get("rightThighCm"),
+        "notes":
+            payload.get("notes"),
+    }
+
+    async with httpx.AsyncClient(
+        timeout=10.0
+    ) as client:
+        response = await client.post(
+            (
+                f"{url}/rest/v1/"
+                "health_body_measurements"
+            ),
+            headers=_headers(
+                user,
+                prefer=(
+                    "resolution=merge-duplicates,"
+                    "return=representation"
+                ),
+            ),
+            params={
+                "on_conflict":
+                    "user_id,measurement_date",
+            },
+            json=row,
+        )
+
+    response.raise_for_status()
+    data = response.json()
+
+    if (
+        not isinstance(data, list)
+        or len(data) != 1
+    ):
+        raise RuntimeError(
+            "Unexpected Supabase response."
+        )
+
+    return data[0]

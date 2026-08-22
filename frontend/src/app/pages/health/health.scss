@@ -401,3 +401,423 @@ select:focus {
   margin: 0;
   opacity: 0.7;
 }
+
+.metrics-subheading {
+  margin: 30px 0 14px;
+}
+
+.metrics-subheading h2 {
+  margin: 4px 0 0;
+}
+
+.metrics-subheading .eyebrow {
+  display: block;
+}
+
+.evolution-panel {
+  margin-top: 24px;
+}
+
+.chart-controls {
+  display: grid;
+  gap: 12px;
+  margin-bottom: 18px;
+}
+
+.chart-selector {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.chart-selector button {
+  border: 1px solid var(--border);
+  background: var(--card);
+  border-radius: 999px;
+  padding: 8px 12px;
+  cursor: pointer;
+}
+
+.chart-selector button.active {
+  border-color: var(--brand);
+  font-weight: 700;
+}
+
+.chart-summary,
+.chart-dates {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.health-chart {
+  height: 240px;
+  margin: 12px 0;
+}
+
+.health-chart svg {
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.chart-axis {
+  stroke: var(--border);
+  stroke-width: 0.7;
+}
+
+.chart-line {
+  stroke: currentColor;
+  stroke-width: 1.8;
+  vector-effect: non-scaling-stroke;
+}
+
+.chart-point {
+  fill: currentColor;
+}
+
+.chart-empty {
+  margin: 0;
+  color: var(--muted);
+}
+
+@media (min-width: 720px) {
+  .chart-controls {
+    grid-template-columns: 1fr auto;
+    align-items: center;
+  }
+}
+
+.registration-panel {
+  margin-bottom: 16px;
+}
+
+.entry-mode-picker {
+  display: grid;
+  gap: 7px;
+  max-width: 360px;
+  font-weight: 600;
+}
+
+.entry-mode-picker select {
+  width: 100%;
+}
+
+.state-mode-picker {
+  margin-bottom: 20px;
+}
+
+/* Scientific longitudinal chart */
+
+.evolution-panel {
+  margin-top: 28px;
+  overflow: hidden;
+}
+
+.scientific-chart-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+  margin-bottom: 22px;
+}
+
+.scientific-chart-header h2 {
+  margin: 4px 0 0;
+}
+
+.chart-period-selector,
+.chart-metric-selector {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.chart-period-selector button,
+.chart-metric-selector button {
+  appearance: none;
+  border: 1px solid transparent;
+  background: transparent;
+  border-radius: 999px;
+  padding: 7px 12px;
+  font: inherit;
+  font-size: 0.86rem;
+  cursor: pointer;
+  opacity: 0.66;
+  transition:
+    opacity 120ms ease,
+    border-color 120ms ease,
+    background 120ms ease;
+}
+
+.chart-period-selector button:hover,
+.chart-metric-selector button:hover {
+  opacity: 1;
+}
+
+.chart-period-selector button.active,
+.chart-metric-selector button.active {
+  opacity: 1;
+  border-color: var(--border);
+  background: var(--card);
+  font-weight: 700;
+}
+
+.chart-metric-selector {
+  padding-bottom: 18px;
+  margin-bottom: 20px;
+  border-bottom: 1px solid var(--border);
+}
+
+.chart-statistics {
+  display: grid;
+  grid-template-columns:
+    minmax(150px, 1.4fr)
+    minmax(130px, 1fr)
+    minmax(100px, 0.7fr);
+  gap: 24px;
+  align-items: end;
+  margin-bottom: 26px;
+}
+
+.chart-primary-stat,
+.chart-secondary-stat {
+  display: grid;
+  gap: 4px;
+}
+
+.chart-primary-stat span,
+.chart-secondary-stat span,
+.chart-secondary-stat small {
+  font-size: 0.78rem;
+  opacity: 0.62;
+}
+
+.chart-primary-stat strong {
+  font-size: clamp(2rem, 5vw, 3rem);
+  line-height: 1;
+  letter-spacing: -0.035em;
+  font-variant-numeric: tabular-nums;
+}
+
+.chart-secondary-stat strong {
+  font-size: 1.12rem;
+  line-height: 1.2;
+  font-variant-numeric: tabular-nums;
+}
+
+.scientific-chart {
+  display: grid;
+  grid-template-columns: 48px 1fr;
+  gap: 12px;
+  min-height: 255px;
+}
+
+.chart-y-axis {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  height: 220px;
+  padding: 0 0 1px;
+  text-align: right;
+}
+
+.chart-y-axis span {
+  font-size: 0.72rem;
+  line-height: 1;
+  opacity: 0.52;
+  font-variant-numeric: tabular-nums;
+}
+
+.chart-plot {
+  position: relative;
+  min-width: 0;
+  height: 252px;
+}
+
+.chart-plot svg {
+  display: block;
+  width: 100%;
+  height: 220px;
+  overflow: visible;
+}
+
+.chart-grid-line {
+  stroke: currentColor;
+  stroke-width: 0.22;
+  opacity: 0.12;
+  vector-effect: non-scaling-stroke;
+}
+
+.chart-data-line {
+  stroke: currentColor;
+  stroke-width: 1.7;
+  opacity: 0.92;
+  vector-effect: non-scaling-stroke;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+
+.chart-data-point {
+  fill: currentColor;
+  stroke: var(--card);
+  stroke-width: 0.45;
+  vector-effect: non-scaling-stroke;
+}
+
+.chart-x-axis {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 230px;
+  height: 22px;
+}
+
+.chart-x-axis span {
+  position: absolute;
+  transform: translateX(-50%);
+  white-space: nowrap;
+  font-size: 0.7rem;
+  opacity: 0.52;
+  font-variant-numeric: tabular-nums;
+}
+
+.chart-method-note {
+  max-width: 680px;
+  margin: 16px 0 0 60px;
+  font-size: 0.78rem;
+  line-height: 1.45;
+  opacity: 0.56;
+}
+
+.chart-empty-state {
+  display: grid;
+  gap: 5px;
+  padding: 30px 0 18px;
+}
+
+.chart-empty-state strong {
+  font-size: 1rem;
+}
+
+.chart-empty-state span {
+  font-size: 0.87rem;
+  opacity: 0.62;
+}
+
+@media (max-width: 700px) {
+
+  .scientific-chart-header {
+    display: grid;
+  }
+
+  .chart-statistics {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .chart-primary-stat {
+    grid-column: 1 / -1;
+  }
+
+  .scientific-chart {
+    grid-template-columns: 38px 1fr;
+    gap: 8px;
+  }
+
+  .chart-method-note {
+    margin-left: 46px;
+  }
+}
+
+
+/* Health metric exploration */
+
+.health-metric-family-selector {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 18px;
+
+  margin: 14px 0 16px;
+  padding: 14px 16px;
+
+  border: 1px solid var(--border);
+  border-radius: 12px;
+
+  background: var(--card);
+}
+
+.health-metric-family-selector label,
+.chart-metric-selector label,
+.history-metric-selector label {
+  display: block;
+
+  margin-bottom: 5px;
+
+  font-size: 0.72rem;
+  font-weight: 700;
+
+  opacity: 0.58;
+}
+
+.health-metric-family-selector select,
+.chart-metric-selector select,
+.history-metric-selector select {
+  min-width: 190px;
+
+  border: 1px solid var(--border);
+  border-radius: 999px;
+
+  padding: 8px 34px 8px 12px;
+
+  background: var(--card);
+  color: inherit;
+
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 700;
+
+  cursor: pointer;
+}
+
+.summary-grid {
+  grid-template-columns:
+    repeat(
+      auto-fit,
+      minmax(165px, 1fr)
+    );
+}
+
+.chart-metric-selector {
+  display: inline-block;
+  margin-bottom: 18px;
+}
+
+.health-history-heading {
+  align-items: end;
+}
+
+.history-metric-selector {
+  flex: 0 0 auto;
+}
+
+
+@media (max-width: 700px) {
+
+  .health-metric-family-selector,
+  .health-history-heading {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .health-metric-family-selector select,
+  .chart-metric-selector,
+  .chart-metric-selector select,
+  .history-metric-selector,
+  .history-metric-selector select {
+    width: 100%;
+    box-sizing: border-box;
+  }
+}

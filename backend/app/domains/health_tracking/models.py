@@ -121,6 +121,62 @@ class DailyCheckIn(DailyCheckInInput):
     updatedAt: str | None = None
 
 
+class BodyMeasurementInput(BaseModel):
+    waistCm: float | None = Field(
+        default=None,
+        ge=30,
+        le=250,
+    )
+    abdomenCm: float | None = Field(
+        default=None,
+        ge=30,
+        le=250,
+    )
+    chestCm: float | None = Field(
+        default=None,
+        ge=30,
+        le=250,
+    )
+    shouldersCm: float | None = Field(
+        default=None,
+        ge=30,
+        le=250,
+    )
+    neckCm: float | None = Field(
+        default=None,
+        ge=20,
+        le=100,
+    )
+    leftArmCm: float | None = Field(
+        default=None,
+        ge=10,
+        le=100,
+    )
+    rightArmCm: float | None = Field(
+        default=None,
+        ge=10,
+        le=100,
+    )
+    leftThighCm: float | None = Field(
+        default=None,
+        ge=20,
+        le=150,
+    )
+    rightThighCm: float | None = Field(
+        default=None,
+        ge=20,
+        le=150,
+    )
+    notes: str | None = None
+
+
+class BodyMeasurement(BodyMeasurementInput):
+    id: UUID
+    measurementDate: date
+    createdAt: str | None = None
+    updatedAt: str | None = None
+
+
 class WeightTrendSummary(BaseModel):
     currentWeightKg: float | None = None
     currentBodyFatPercent: float | None = Field(

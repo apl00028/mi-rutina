@@ -1,0 +1,77 @@
+<main class="endurance-page">
+
+  <header class="page-header">
+
+    <span class="eyebrow">
+      Entrenar
+    </span>
+
+    <div
+      class="training-discipline-selector"
+    >
+
+      <label for="discipline">
+        Disciplina
+      </label>
+
+      <select
+        id="discipline"
+        #disciplineSelect
+        [value]="discipline()"
+        (change)="
+          changeTrainingDiscipline(
+            disciplineSelect.value
+          )
+        "
+      >
+        <option value="strength">
+          Fuerza
+        </option>
+
+        <option value="swimming">
+          Natación
+        </option>
+
+        <option value="cycling">
+          Bicicleta
+        </option>
+
+        <option value="running">
+          Correr
+        </option>
+      </select>
+
+    </div>
+
+
+    <h1>
+      {{ disciplineLabel() }}
+    </h1>
+
+    <p>
+      {{ disciplineDescription() }}
+    </p>
+
+  </header>
+
+
+  <section class="discipline-card">
+
+    <span class="eyebrow">
+      Sesiones
+    </span>
+
+    <h2>
+      Registro de
+      {{ disciplineLabel() }}
+    </h2>
+
+    <p>
+      Aquí aparecerán las sesiones
+      realizadas y el registro de una
+      nueva actividad.
+    </p>
+
+  </section>
+
+</main>

@@ -33,7 +33,7 @@
       [class.active]="activeSection() === 'weekly'"
       (click)="activeSection.set('weekly')"
     >
-      Estado semanal
+      Estado
     </button>
   </nav>
 
@@ -58,295 +58,877 @@
   } @else {
 
     <section
+      class="panel registration-panel"
+      [class.health-section-hidden]="
+        activeSection() !== 'metrics'
+      "
+    >
+      <div class="panel-heading">
+        <div>
+          <span class="eyebrow">
+            Registrar
+          </span>
+
+          <h2>Nueva medición</h2>
+
+          <p>
+            Selecciona el tipo de datos que
+            quieres registrar.
+          </p>
+        </div>
+      </div>
+
+      <label class="entry-mode-picker">
+        Tipo de registro
+
+        <select
+          [value]="metricEntryMode()"
+          (change)="
+            metricEntryMode.set(
+              $any($event.target).value
+            )
+          "
+        >
+          <option value="weight">
+            Peso y composición
+          </option>
+
+          <option value="body">
+            Medidas corporales
+          </option>
+        </select>
+      </label>
+    </section>
+
+
+    <section
+      class="panel weight-entry-panel"
+      [class.health-section-hidden]="
+        activeSection() !== 'metrics'
+          || metricEntryMode() !== 'weight'
+      "
+    >
+
+      <div class="panel-heading">
+        <div>
+          <span class="eyebrow">
+            Seguimiento
+          </span>
+
+          <h2>Registrar medición</h2>
+        </div>
+      </div>
+
+      <form
+        class="form-grid"
+        (submit)="
+          $event.preventDefault();
+          saveWeight()
+        "
+      >
+
+        <label>
+          Fecha
+
+          <input
+            type="date"
+            [value]="weightDate()"
+            (input)="
+              weightDate.set(
+                $any($event.target).value
+              )
+            "
+          />
+        </label>
+
+
+        <label>
+          Peso (kg)
+
+          <input
+            type="number"
+            inputmode="decimal"
+            min="20"
+            max="350"
+            step="0.1"
+            placeholder="75.4"
+            [value]="weightKg()"
+            (input)="
+              weightKg.set(
+                $any($event.target).value
+              )
+            "
+          />
+        </label>
+
+
+        <details class="optional-metrics">
+          <summary>
+            Otras métricas opcionales
+          </summary>
+
+          <div class="optional-metrics-content">
+            <label>
+              Grasa corporal (%)
+
+              <input
+                type="number"
+                inputmode="decimal"
+                min="0"
+                max="100"
+                step="0.1"
+                placeholder="18.2"
+                [value]="bodyFatPercent()"
+                (input)="
+                  bodyFatPercent.set(
+                    $any($event.target).value
+                  )
+                "
+              />
+            </label>
+
+            <label>
+              Masa muscular (kg)
+
+              <input
+                type="number"
+                inputmode="decimal"
+                min="0"
+                max="250"
+                step="0.1"
+                placeholder="60.5"
+                [value]="muscleMassKg()"
+                (input)="
+                  muscleMassKg.set(
+                    $any($event.target).value
+                  )
+                "
+              />
+            </label>
+
+            <label>
+              Agua corporal (%)
+
+              <input
+                type="number"
+                inputmode="decimal"
+                min="0"
+                max="100"
+                step="0.1"
+                placeholder="57.3"
+                [value]="bodyWaterPercent()"
+                (input)="
+                  bodyWaterPercent.set(
+                    $any($event.target).value
+                  )
+                "
+              />
+            </label>
+
+            <label>
+              Grasa visceral
+
+              <input
+                type="number"
+                inputmode="decimal"
+                min="0"
+                step="0.1"
+                placeholder="5"
+                [value]="visceralFatIndex()"
+                (input)="
+                  visceralFatIndex.set(
+                    $any($event.target).value
+                  )
+                "
+              />
+            </label>
+
+            <p class="optional-hint">
+              Estas métricas son opcionales.
+              Úsalas principalmente para observar
+              tendencias. Más adelante podrán
+              sincronizarse desde la báscula.
+            </p>
+          </div>
+        </details>
+
+
+        <button
+          type="submit"
+          class="primary-button"
+          [disabled]="savingWeight()"
+        >
+          @if (savingWeight()) {
+            Guardando…
+          } @else {
+            Guardar medición
+          }
+        </button>
+
+      </form>
+
+    </section>
+
+
+
+    <section
+      class="panel body-measurements-panel"
+      [class.health-section-hidden]="
+        activeSection() !== 'metrics'
+          || metricEntryMode() !== 'body'
+      "
+    >
+      <div class="panel-heading">
+        <div>
+          <span class="eyebrow">
+            Composición corporal
+          </span>
+
+          <h2>Medidas corporales</h2>
+
+          <p>
+            Cintura semanal. El resto de perímetros
+            puede registrarse con menor frecuencia.
+          </p>
+        </div>
+      </div>
+
+      <form
+        class="form-grid"
+        (submit)="
+          $event.preventDefault();
+          saveBodyMeasurement()
+        "
+      >
+        <label>
+          Fecha
+
+          <input
+            type="date"
+            [value]="bodyMeasurementDate()"
+            (input)="
+              bodyMeasurementDate.set(
+                $any($event.target).value
+              )
+            "
+          />
+        </label>
+
+        <label>
+          Cintura (cm)
+
+          <input
+            type="number"
+            inputmode="decimal"
+            min="30"
+            max="250"
+            step="0.1"
+            placeholder="88"
+            [value]="waistMeasurementCm()"
+            (input)="
+              waistMeasurementCm.set(
+                $any($event.target).value
+              )
+            "
+          />
+        </label>
+
+        <details class="optional-metrics">
+          <summary>
+            Más perímetros corporales
+          </summary>
+
+          <div class="optional-metrics-content">
+
+            <label>
+              Abdomen (cm)
+
+              <input
+                type="number"
+                inputmode="decimal"
+                min="30"
+                max="250"
+                step="0.1"
+                [value]="abdomenCm()"
+                (input)="
+                  abdomenCm.set(
+                    $any($event.target).value
+                  )
+                "
+              />
+            </label>
+
+            <label>
+              Pecho (cm)
+
+              <input
+                type="number"
+                inputmode="decimal"
+                min="30"
+                max="250"
+                step="0.1"
+                [value]="chestCm()"
+                (input)="
+                  chestCm.set(
+                    $any($event.target).value
+                  )
+                "
+              />
+            </label>
+
+            <label>
+              Hombros (cm)
+
+              <input
+                type="number"
+                inputmode="decimal"
+                min="30"
+                max="250"
+                step="0.1"
+                [value]="shouldersCm()"
+                (input)="
+                  shouldersCm.set(
+                    $any($event.target).value
+                  )
+                "
+              />
+            </label>
+
+            <label>
+              Cuello (cm)
+
+              <input
+                type="number"
+                inputmode="decimal"
+                min="20"
+                max="100"
+                step="0.1"
+                [value]="neckCm()"
+                (input)="
+                  neckCm.set(
+                    $any($event.target).value
+                  )
+                "
+              />
+            </label>
+
+            <label>
+              Brazo izquierdo (cm)
+
+              <input
+                type="number"
+                inputmode="decimal"
+                min="10"
+                max="100"
+                step="0.1"
+                [value]="leftArmCm()"
+                (input)="
+                  leftArmCm.set(
+                    $any($event.target).value
+                  )
+                "
+              />
+            </label>
+
+            <label>
+              Brazo derecho (cm)
+
+              <input
+                type="number"
+                inputmode="decimal"
+                min="10"
+                max="100"
+                step="0.1"
+                [value]="rightArmCm()"
+                (input)="
+                  rightArmCm.set(
+                    $any($event.target).value
+                  )
+                "
+              />
+            </label>
+
+            <label>
+              Muslo izquierdo (cm)
+
+              <input
+                type="number"
+                inputmode="decimal"
+                min="20"
+                max="150"
+                step="0.1"
+                [value]="leftThighCm()"
+                (input)="
+                  leftThighCm.set(
+                    $any($event.target).value
+                  )
+                "
+              />
+            </label>
+
+            <label>
+              Muslo derecho (cm)
+
+              <input
+                type="number"
+                inputmode="decimal"
+                min="20"
+                max="150"
+                step="0.1"
+                [value]="rightThighCm()"
+                (input)="
+                  rightThighCm.set(
+                    $any($event.target).value
+                  )
+                "
+              />
+            </label>
+
+          </div>
+        </details>
+
+        <button
+          type="submit"
+          class="primary-button"
+          [disabled]="savingBodyMeasurement()"
+        >
+          @if (savingBodyMeasurement()) {
+            Guardando…
+          } @else {
+            Guardar medidas
+          }
+        </button>
+
+      </form>
+    </section>
+
+
+    <div
+      class="metrics-subheading"
+      [class.health-section-hidden]="
+        activeSection() !== 'metrics'
+      "
+    >
+      <span class="eyebrow">
+        Evolución
+      </span>
+      <h2>Resumen y tendencias</h2>
+    </div>
+
+
+    <div
+      class="health-metric-family-selector"
+      [class.health-section-hidden]="
+        activeSection() !== 'metrics'
+      "
+    >
+      <label for="health-metric-family">
+        Tipo de datos
+      </label>
+
+      <select
+        id="health-metric-family"
+        [value]="metricFamily()"
+        (change)="
+          setMetricFamily(
+            $any($event.target).value
+          )
+        "
+      >
+        <option value="composition">
+          Peso y composición
+        </option>
+
+        <option value="measurements">
+          Medidas corporales
+        </option>
+      </select>
+    </div>
+
+
+    <section
       class="summary-grid"
       [class.health-section-hidden]="
         activeSection() !== 'metrics'
       "
     >
 
-      <article class="metric-card">
-        <span>Peso actual</span>
+      @for (
+        metric of summaryMetrics();
+        track metric.key
+      ) {
 
-        <strong>
-          @if (
-            summary()?.currentWeightKg !==
-            undefined
-          ) {
+        <article class="metric-card">
+
+          <span>
             {{
-              summary()?.currentWeightKg
-                | number:'1.1-2'
-            }} kg
+              metric.key === 'weight'
+                ? 'Peso actual'
+                : metric.label
+            }}
+          </span>
+
+          <strong>
+            @if (
+              metric.value !== undefined
+            ) {
+              {{
+                metric.value
+                  | number:'1.1-2'
+              }}
+              {{ metric.unit }}
+            } @else {
+              —
+            }
+          </strong>
+
+
+          @if (metric.key === 'weight') {
+
+            @if (
+              summary()?.recentAverageKg !==
+              undefined
+            ) {
+              <small>
+                Media últimos 7 días:
+                {{
+                  summary()?.recentAverageKg
+                    | number:'1.1-2'
+                }}
+                kg
+              </small>
+            }
+
+            @if (hasTrend()) {
+              <small class="metric-trend">
+                {{
+                  trendArrow(
+                    summary()?.changeKg
+                  )
+                }}
+                Cambio 7 días:
+                {{
+                  summary()?.changeKg
+                    | number:'1.1-2'
+                }}
+                kg
+
+                @if (
+                  summary()?.changePercent !==
+                  undefined
+                ) {
+                  ({{
+                    summary()?.changePercent
+                      | number:'1.1-2'
+                  }} %)
+                }
+              </small>
+            } @else {
+              <small>
+                Aún faltan datos para tendencia
+              </small>
+            }
+
           } @else {
-            —
+
+            @if (
+              metric.change !== undefined
+            ) {
+              <small class="metric-trend">
+                {{
+                  trendArrow(
+                    metric.change,
+                    0.1
+                  )
+                }}
+                Cambio vs. anterior:
+                {{
+                  metric.change
+                    | number:'1.1-2'
+                }}
+                {{ metric.unit }}
+              </small>
+            } @else {
+              <small>
+                Aún faltan datos para tendencia
+              </small>
+            }
+
           }
-        </strong>
+
+        </article>
+
+      }
+
+    </section>
+
+
+    <section
+      class="panel evolution-panel"
+      [class.health-section-hidden]="
+        activeSection() !== 'metrics'
+      "
+    >
+
+      <div class="scientific-chart-header">
+
+        <div>
+          <span class="eyebrow">
+            Evolución
+          </span>
+
+          <h2>
+            Seguimiento longitudinal
+          </h2>
+        </div>
+
+        <div class="chart-period-selector">
+          <button
+            type="button"
+            [class.active]="chartPeriod() === 30"
+            (click)="chartPeriod.set(30)"
+          >
+            30 d
+          </button>
+
+          <button
+            type="button"
+            [class.active]="chartPeriod() === 90"
+            (click)="chartPeriod.set(90)"
+          >
+            90 d
+          </button>
+
+          <button
+            type="button"
+            [class.active]="chartPeriod() === 365"
+            (click)="chartPeriod.set(365)"
+          >
+            1 año
+          </button>
+
+          <button
+            type="button"
+            [class.active]="chartPeriod() === 'all'"
+            (click)="chartPeriod.set('all')"
+          >
+            Todo
+          </button>
+        </div>
+
+      </div>
+
+
+      <div class="chart-metric-selector">
+
+        <label for="chart-metric">
+          Métrica
+        </label>
+
+        <select
+          id="chart-metric"
+          [value]="chartMetric()"
+          (change)="
+            setChartMetric(
+              $any($event.target).value
+            )
+          "
+        >
+          @for (
+            metric of metricOptions();
+            track metric.key
+          ) {
+            <option
+              [value]="metric.key"
+            >
+              {{ metric.label }}
+            </option>
+          }
+        </select>
+
+      </div>
+
+
+      @if (chartSeries().length >= 2) {
+
+        <div class="chart-statistics">
+
+          <div class="chart-primary-stat">
+            <span>Último valor</span>
+
+            <strong>
+              {{
+                chartCurrentValue()
+                  | number:'1.1-2'
+              }}
+              {{ chartUnit() }}
+            </strong>
+          </div>
+
+          <div class="chart-secondary-stat">
+            <span>Cambio visible</span>
+
+            <strong>
+              {{
+                trendArrow(
+                  chartChange()
+                )
+              }}
+              {{
+                Math.abs(
+                  chartChange() ?? 0
+                )
+                  | number:'1.1-2'
+              }}
+              {{ chartChangeUnit() }}
+            </strong>
+
+            <small>
+              {{ chartVisibleRangeLabel() }}
+            </small>
+          </div>
+
+          <div class="chart-secondary-stat">
+            <span>Observaciones</span>
+
+            <strong>
+              {{ chartSeries().length }}
+            </strong>
+
+            <small>
+              mediciones
+            </small>
+          </div>
+
+        </div>
+
+
+        <div class="scientific-chart">
+
+          <div class="chart-y-axis">
+            @for (
+              tick of chartTicks();
+              track $index
+            ) {
+              <span>
+                {{
+                  tick
+                    | number:'1.0-1'
+                }}
+              </span>
+            }
+          </div>
+
+
+          <div class="chart-plot">
+
+            <svg
+              viewBox="0 0 100 100"
+              preserveAspectRatio="none"
+              role="img"
+              [attr.aria-label]="
+                'Evolución de '
+                + chartMetricLabel()
+              "
+            >
+
+              @for (
+                tick of chartTicks();
+                track $index;
+                let i = $index
+              ) {
+                <line
+                  x1="0"
+                  [attr.y1]="chartGridY(i)"
+                  x2="100"
+                  [attr.y2]="chartGridY(i)"
+                  class="chart-grid-line"
+                />
+              }
+
+              <polyline
+                [attr.points]="chartPoints()"
+                class="chart-data-line"
+                fill="none"
+              />
+
+              @for (
+                point of chartSeries();
+                track point.date
+              ) {
+                <circle
+                  [attr.cx]="chartX(point.date)"
+                  [attr.cy]="chartY(point.value)"
+                  r="0.75"
+                  class="chart-data-point"
+                >
+                  <title>
+                    {{
+                      formatChartDate(
+                        point.date
+                      )
+                    }}
+                    ·
+                    {{
+                      point.value
+                        | number:'1.1-2'
+                    }}
+                    {{ chartUnit() }}
+                  </title>
+                </circle>
+              }
+
+            </svg>
+
+
+            <div class="chart-x-axis">
+              @for (
+                tick of chartXAxisLabels();
+                track tick.date
+              ) {
+                <span
+                  [style.left.%]="tick.x"
+                >
+                  {{ tick.label }}
+                </span>
+              }
+            </div>
+
+          </div>
+
+        </div>
+
 
         @if (
-          summary()?.latestMeasurementDate
+          chartMetric() === 'bodyFat'
+          || chartMetric() === 'muscle'
         ) {
-          <small>
-            {{
-              summary()
-                ?.latestMeasurementDate
-            }}
-          </small>
+          <p class="chart-method-note">
+            La bioimpedancia puede variar por hidratación
+            y otras condiciones. Interpreta principalmente
+            la tendencia, no una medición aislada.
+          </p>
         }
-      </article>
 
+      } @else {
 
-      <article class="metric-card">
-        <span>Media últimos 7 días</span>
+        <div class="chart-empty-state">
+          <strong>
+            Todavía no hay suficiente información
+          </strong>
 
-        <strong>
-          @if (
-            summary()?.recentAverageKg !==
-            undefined
-          ) {
-            {{
-              summary()?.recentAverageKg
-                | number:'1.1-2'
-            }} kg
-          } @else {
-            —
-          }
-        </strong>
+          <span>
+            Necesitas al menos dos mediciones para
+            mostrar la evolución.
+          </span>
+        </div>
 
-        <small>
-          {{
-            summary()?.recentEntries ?? 0
-          }}
-          registros
-        </small>
-      </article>
-
-
-      <article class="metric-card">
-        <span>
-          Cambio vs. 7 días anteriores
-        </span>
-
-        <strong>
-          @if (hasTrend()) {
-            {{
-              summary()?.changeKg
-                | number:'1.1-2'
-            }} kg
-          } @else {
-            —
-          }
-        </strong>
-
-        @if (hasTrend()) {
-          <small>
-            {{
-              summary()?.changePercent
-                | number:'1.1-2'
-            }} %
-          </small>
-        } @else {
-          <small>
-            Aún faltan datos
-          </small>
-        }
-      </article>
-
-
-      <article class="metric-card">
-        <span>Grasa corporal</span>
-
-        <strong>
-          @if (
-            summary()
-              ?.currentBodyFatPercent !==
-            undefined
-          ) {
-            {{
-              summary()
-                ?.currentBodyFatPercent
-                | number:'1.1-2'
-            }} %
-          } @else {
-            —
-          }
-        </strong>
-
-        <small>
-          Última medición disponible
-        </small>
-      </article>
+      }
 
     </section>
 
 
     <div class="health-grid">
-
-      <section
-        class="panel"
-        [class.health-section-hidden]="
-          activeSection() !== 'metrics'
-        "
-      >
-
-        <div class="panel-heading">
-          <div>
-            <span class="eyebrow">
-              Seguimiento
-            </span>
-
-            <h2>Registrar peso</h2>
-          </div>
-        </div>
-
-        <form
-          class="form-grid"
-          (submit)="
-            $event.preventDefault();
-            saveWeight()
-          "
-        >
-
-          <label>
-            Fecha
-
-            <input
-              type="date"
-              [value]="weightDate()"
-              (input)="
-                weightDate.set(
-                  $any($event.target).value
-                )
-              "
-            />
-          </label>
-
-
-          <label>
-            Peso (kg)
-
-            <input
-              type="number"
-              inputmode="decimal"
-              min="20"
-              max="350"
-              step="0.1"
-              placeholder="75.4"
-              [value]="weightKg()"
-              (input)="
-                weightKg.set(
-                  $any($event.target).value
-                )
-              "
-            />
-          </label>
-
-
-          <details class="optional-metrics">
-            <summary>
-              Otras métricas opcionales
-            </summary>
-
-            <div class="optional-metrics-content">
-              <label>
-                Grasa corporal (%)
-
-                <input
-                  type="number"
-                  inputmode="decimal"
-                  min="0"
-                  max="100"
-                  step="0.1"
-                  placeholder="18.2"
-                  [value]="bodyFatPercent()"
-                  (input)="
-                    bodyFatPercent.set(
-                      $any($event.target).value
-                    )
-                  "
-                />
-              </label>
-
-              <label>
-                Masa muscular (kg)
-
-                <input
-                  type="number"
-                  inputmode="decimal"
-                  min="0"
-                  max="250"
-                  step="0.1"
-                  placeholder="60.5"
-                  [value]="muscleMassKg()"
-                  (input)="
-                    muscleMassKg.set(
-                      $any($event.target).value
-                    )
-                  "
-                />
-              </label>
-
-              <label>
-                Agua corporal (%)
-
-                <input
-                  type="number"
-                  inputmode="decimal"
-                  min="0"
-                  max="100"
-                  step="0.1"
-                  placeholder="57.3"
-                  [value]="bodyWaterPercent()"
-                  (input)="
-                    bodyWaterPercent.set(
-                      $any($event.target).value
-                    )
-                  "
-                />
-              </label>
-
-              <label>
-                Grasa visceral
-
-                <input
-                  type="number"
-                  inputmode="decimal"
-                  min="0"
-                  step="0.1"
-                  placeholder="5"
-                  [value]="visceralFatIndex()"
-                  (input)="
-                    visceralFatIndex.set(
-                      $any($event.target).value
-                    )
-                  "
-                />
-              </label>
-
-              <p class="optional-hint">
-                Estas métricas son opcionales.
-                Úsalas principalmente para observar
-                tendencias. Más adelante podrán
-                sincronizarse desde la báscula.
-              </p>
-            </div>
-          </details>
-
-
-          <button
-            type="submit"
-            class="primary-button"
-            [disabled]="savingWeight()"
-          >
-            @if (savingWeight()) {
-              Guardando…
-            } @else {
-              Guardar peso
-            }
-          </button>
-
-        </form>
-
-      </section>
-
 
       <section
         class="panel state-panel"
@@ -372,7 +954,34 @@
         </div>
 
 
-        <div class="state-block">
+        <label class="entry-mode-picker state-mode-picker">
+          Tipo de registro
+
+          <select
+            [value]="stateEntryMode()"
+            (change)="
+              stateEntryMode.set(
+                $any($event.target).value
+              )
+            "
+          >
+            <option value="daily">
+              Estado diario
+            </option>
+
+            <option value="weekly">
+              Resumen semanal
+            </option>
+          </select>
+        </label>
+
+
+        <div
+          class="state-block"
+          [class.health-section-hidden]="
+            stateEntryMode() !== 'daily'
+          "
+        >
 
           <div class="state-block-heading">
             <div>
@@ -476,7 +1085,12 @@
         </div>
 
 
-        <div class="state-block">
+        <div
+          class="state-block"
+          [class.health-section-hidden]="
+            stateEntryMode() !== 'weekly'
+          "
+        >
 
           <div class="state-block-heading">
             <div>
@@ -639,21 +1253,56 @@
       "
     >
 
-      <div class="panel-heading">
+      <div class="panel-heading health-history-heading">
+
         <div>
           <span class="eyebrow">
             Historial
           </span>
 
-          <h2>Últimos pesos</h2>
+          <h2>
+            Mediciones recientes
+          </h2>
         </div>
+
+
+        <div class="history-metric-selector">
+
+          <label for="history-metric">
+            Métrica
+          </label>
+
+          <select
+            id="history-metric"
+            [value]="historyMetric()"
+            (change)="
+              setHistoryMetric(
+                $any($event.target).value
+              )
+            "
+          >
+            @for (
+              metric of metricOptions();
+              track metric.key
+            ) {
+              <option
+                [value]="metric.key"
+              >
+                {{ metric.label }}
+              </option>
+            }
+          </select>
+
+        </div>
+
       </div>
 
 
-      @if (!weights().length) {
+      @if (!historySeries().length) {
 
         <p class="empty">
-          Todavía no hay pesos registrados.
+          Todavía no hay datos registrados
+          para esta métrica.
         </p>
 
       } @else {
@@ -661,66 +1310,72 @@
         <div class="weight-list">
 
           @for (
-            entry of weights().slice(0, 7);
-            track entry.id
+            entry of historySeries();
+            track entry.date
           ) {
+
             <div class="weight-row">
 
               <span>
-                {{ entry.measurementDate }}
+                {{ entry.date }}
               </span>
 
               <strong>
                 {{
-                  entry.weightKg
+                  entry.value
                     | number:'1.1-2'
                 }}
-                kg
+                {{
+                  metricUnit(
+                    historyMetric()
+                  )
+                }}
               </strong>
 
               <span>
-                @if (
-                  entry.bodyFatPercent !==
-                  undefined
-                ) {
-                  {{
-                    entry.bodyFatPercent
-                      | number:'1.1-2'
-                  }}
-                  % grasa
-                } @else {
-                  —
-                }
+                {{
+                  metricLabel(
+                    historyMetric()
+                  )
+                }}
               </span>
 
-              <button
-                type="button"
-                class="delete-weight-button"
-                [disabled]="
-                  deletingWeight() ===
-                  entry.measurementDate
-                "
-                (click)="
-                  deleteWeight(
-                    entry.measurementDate
-                  )
-                "
-                [attr.aria-label]="
-                  'Eliminar peso del '
-                  + entry.measurementDate
-                "
-              >
-                @if (
-                  deletingWeight() ===
-                  entry.measurementDate
-                ) {
-                  …
-                } @else {
-                  ×
-                }
-              </button>
+
+              @if (
+                historyMetric() === 'weight'
+              ) {
+
+                <button
+                  type="button"
+                  class="delete-weight-button"
+                  [disabled]="
+                    deletingWeight()
+                    === entry.date
+                  "
+                  (click)="
+                    deleteWeight(
+                      entry.date
+                    )
+                  "
+                  [attr.aria-label]="
+                    'Eliminar peso del '
+                    + entry.date
+                  "
+                >
+                  @if (
+                    deletingWeight()
+                    === entry.date
+                  ) {
+                    …
+                  } @else {
+                    ×
+                  }
+                </button>
+
+              }
 
             </div>
+
           }
 
         </div>

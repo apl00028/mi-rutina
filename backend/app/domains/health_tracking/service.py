@@ -3,6 +3,8 @@ from typing import Any
 
 from app.core.auth import AuthenticatedUser
 from app.domains.health_tracking.models import (
+    BodyMeasurement,
+    BodyMeasurementInput,
     DailyCheckIn,
     DailyCheckInInput,
     WeeklyCheckIn,
@@ -13,9 +15,11 @@ from app.domains.health_tracking.models import (
 )
 from app.domains.health_tracking.repository import (
     delete_weight_entry,
+    list_body_measurements,
     list_daily_checkins,
     list_weekly_checkins,
     list_weight_entries,
+    upsert_body_measurement,
     upsert_daily_checkin,
     upsert_weekly_checkin,
     upsert_weight_entry,
@@ -84,6 +88,41 @@ def checkin_row_to_model(
             row.get(
                 "diet_adherence_percent"
             ),
+        "notes":
+            row.get("notes"),
+        "createdAt":
+            row.get("created_at"),
+        "updatedAt":
+            row.get("updated_at"),
+    })
+
+
+def body_measurement_row_to_model(
+    row: dict[str, Any],
+) -> BodyMeasurement:
+    return BodyMeasurement.model_validate({
+        "id":
+            row["id"],
+        "measurementDate":
+            row["measurement_date"],
+        "waistCm":
+            row.get("waist_cm"),
+        "abdomenCm":
+            row.get("abdomen_cm"),
+        "chestCm":
+            row.get("chest_cm"),
+        "shouldersCm":
+            row.get("shoulders_cm"),
+        "neckCm":
+            row.get("neck_cm"),
+        "leftArmCm":
+            row.get("left_arm_cm"),
+        "rightArmCm":
+            row.get("right_arm_cm"),
+        "leftThighCm":
+            row.get("left_thigh_cm"),
+        "rightThighCm":
+            row.get("right_thigh_cm"),
         "notes":
             row.get("notes"),
         "createdAt":
@@ -181,6 +220,34 @@ async def save_user_weekly_checkin(
 
     return checkin_row_to_model(row)
 
+
+
+async def list_user_body_measurements(
+    user: AuthenticatedUser,
+) -> list[BodyMeasurement]:
+    rows = await list_body_measurements(user)
+
+    return [
+        body_measurement_row_to_model(row)
+        for row in rows
+    ]
+
+
+async def save_user_body_measurement(
+    user: AuthenticatedUser,
+    measurement_date: date,
+    request: BodyMeasurementInput,
+) -> BodyMeasurement:
+    row = await upsert_body_measurement(
+        user,
+        measurement_date,
+        request.model_dump(
+            mode="json",
+            exclude_none=True,
+        ),
+    )
+
+    return body_measurement_row_to_model(row)
 
 
 async def list_user_daily_checkins(

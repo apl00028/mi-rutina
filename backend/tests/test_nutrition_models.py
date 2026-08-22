@@ -157,3 +157,82 @@ def test_ingredient_can_store_verified_product_nutrition():
     assert parsed.nutritionPer100g is not None
     assert parsed.nutritionPer100g.protein == 23
 
+
+
+def test_meal_supports_recipe_details():
+    payload = valid_plan()
+
+    meal = payload[
+        "days"
+    ][0]["meals"][0]
+
+    meal.update({
+        "recipeId": "pollo-arroz",
+        "servings": 2,
+        "prepMinutes": 10,
+        "cookMinutes": 20,
+        "steps": [
+            "Cocer el arroz.",
+            "Cocinar el pollo.",
+            "Servir con las verduras.",
+        ],
+        "notes": (
+            "Arroz pesado en crudo."
+        ),
+    })
+
+    plan = NutritionPlan.model_validate(
+        payload
+    )
+
+    parsed = (
+        plan.days[0]
+        .meals[0]
+    )
+
+    assert parsed.recipeId == "pollo-arroz"
+    assert parsed.servings == 2
+    assert parsed.prepMinutes == 10
+    assert parsed.cookMinutes == 20
+    assert len(parsed.steps) == 3
+
+
+def test_old_meals_get_recipe_defaults():
+    plan = NutritionPlan.model_validate(
+        valid_plan()
+    )
+
+    meal = plan.days[0].meals[0]
+
+    assert meal.recipeId is None
+    assert meal.servings == 1
+    assert meal.prepMinutes is None
+    assert meal.cookMinutes is None
+    assert meal.steps == []
+
+
+def test_shopping_list_item_supports_sources():
+    from app.domains.nutrition.models import (
+        ShoppingListItem,
+    )
+
+    item = ShoppingListItem.model_validate({
+        "name": "Pechuga de pollo",
+        "unit": "g",
+        "quantity": 600,
+        "productBrand": "Mercadona",
+        "sources": [
+            {
+                "date": "2026-08-24",
+                "mealType": "lunch",
+                "mealName": "Pollo con arroz",
+            }
+        ],
+    })
+
+    assert item.productBrand == "Mercadona"
+    assert len(item.sources) == 1
+    assert (
+        item.sources[0].mealName
+        == "Pollo con arroz"
+    )

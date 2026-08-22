@@ -17,6 +17,8 @@ from app.domains.exercises.custom_repository import (
     SupabaseConfigError,
 )
 from app.domains.health_tracking.models import (
+    BodyMeasurement,
+    BodyMeasurementInput,
     DailyCheckIn,
     DailyCheckInInput,
     WeeklyCheckIn,
@@ -28,9 +30,11 @@ from app.domains.health_tracking.models import (
 from app.domains.health_tracking.service import (
     build_weight_trend,
     delete_user_weight_entry,
+    list_user_body_measurements,
     list_user_daily_checkins,
     list_user_weekly_checkins,
     list_user_weight_entries,
+    save_user_body_measurement,
     save_user_daily_checkin,
     save_user_weekly_checkin,
     save_user_weight_entry,
@@ -180,6 +184,52 @@ async def delete_weight(
             status.HTTP_204_NO_CONTENT
         )
     )
+
+
+@router.get(
+    "/body-measurements",
+    response_model=list[BodyMeasurement],
+    response_model_exclude_none=True,
+)
+async def list_body_measurements(
+    user: AuthenticatedUser = Depends(
+        require_user
+    ),
+) -> list[BodyMeasurement]:
+    try:
+        return await list_user_body_measurements(
+            user
+        )
+    except (
+        httpx.HTTPError,
+        RuntimeError,
+    ) as exc:
+        _raise_health_http_error(exc)
+
+
+@router.put(
+    "/body-measurements/{measurement_date}",
+    response_model=BodyMeasurement,
+    response_model_exclude_none=True,
+)
+async def save_body_measurement(
+    measurement_date: date,
+    request: BodyMeasurementInput,
+    user: AuthenticatedUser = Depends(
+        require_user
+    ),
+) -> BodyMeasurement:
+    try:
+        return await save_user_body_measurement(
+            user,
+            measurement_date,
+            request,
+        )
+    except (
+        httpx.HTTPError,
+        RuntimeError,
+    ) as exc:
+        _raise_health_http_error(exc)
 
 
 @router.get(

@@ -334,11 +334,27 @@ def test_shopping_list_is_derived_from_plan(
             "name": "Arroz basmati",
             "unit": "g",
             "quantity": 85.0,
+            "productBrand": "Hacendado",
+            "sources": [
+                {
+                    "date": "2026-08-24",
+                    "mealType": "lunch",
+                    "mealName": "Pollo con arroz",
+                }
+            ],
         },
         {
             "name": "Pechuga de pollo",
             "unit": "g",
             "quantity": 200.0,
+            "productBrand": "Mercadona",
+            "sources": [
+                {
+                    "date": "2026-08-24",
+                    "mealType": "lunch",
+                    "mealName": "Pollo con arroz",
+                }
+            ],
         },
     ]
 

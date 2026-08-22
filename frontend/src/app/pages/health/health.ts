@@ -40,6 +40,57 @@ interface WeightTrendSummary {
 }
 
 
+type HealthMetricFamily =
+  | 'composition'
+  | 'measurements';
+
+
+type HealthChartMetric =
+  | 'weight'
+  | 'bodyFat'
+  | 'muscle'
+  | 'bodyWater'
+  | 'visceralFat'
+  | 'waist'
+  | 'abdomen'
+  | 'chest'
+  | 'shoulders'
+  | 'neck'
+  | 'leftArm'
+  | 'rightArm'
+  | 'leftThigh'
+  | 'rightThigh';
+
+
+interface HealthMetricOption {
+  key: HealthChartMetric;
+  label: string;
+  unit: string;
+}
+
+type HealthChartPeriod =
+  | 30
+  | 90
+  | 365
+  | 'all';
+
+
+interface BodyMeasurement {
+  id: string;
+  measurementDate: string;
+  waistCm?: number;
+  abdomenCm?: number;
+  chestCm?: number;
+  shouldersCm?: number;
+  neckCm?: number;
+  leftArmCm?: number;
+  rightArmCm?: number;
+  leftThighCm?: number;
+  rightThighCm?: number;
+  notes?: string;
+}
+
+
 interface DailyCheckIn {
   id: string;
   measurementDate: string;
@@ -73,6 +124,8 @@ interface WeeklyCheckIn {
 })
 export class Health implements OnInit {
 
+  readonly Math = Math;
+
   private readonly apiUrl =
     environment.apiUrl;
 
@@ -83,14 +136,37 @@ export class Health implements OnInit {
     signal<WeeklyCheckIn[]>([]);
   dailyCheckins =
     signal<DailyCheckIn[]>([]);
+  bodyMeasurements =
+    signal<BodyMeasurement[]>([]);
 
   activeSection =
     signal<'metrics' | 'weekly'>('metrics');
+
+  metricEntryMode =
+    signal<'weight' | 'body'>('weight');
+
+  stateEntryMode =
+    signal<'daily' | 'weekly'>('daily');
+
+  metricFamily =
+    signal<HealthMetricFamily>(
+      'composition'
+    );
+
+  chartMetric =
+    signal<HealthChartMetric>('weight');
+
+  historyMetric =
+    signal<HealthChartMetric>('weight');
+
+  chartPeriod =
+    signal<HealthChartPeriod>(90);
 
   loading = signal(false);
   savingWeight = signal(false);
   savingCheckin = signal(false);
   savingDailyCheckin = signal(false);
+  savingBodyMeasurement = signal(false);
   deletingWeight = signal<string | null>(null);
 
   message = signal<string | null>(null);
@@ -105,6 +181,21 @@ export class Health implements OnInit {
   muscleMassKg = signal('');
   bodyWaterPercent = signal('');
   visceralFatIndex = signal('');
+
+  bodyMeasurementDate = signal(
+    this.localDate(new Date())
+  );
+
+  waistMeasurementCm = signal('');
+  abdomenCm = signal('');
+  chestCm = signal('');
+  shouldersCm = signal('');
+  neckCm = signal('');
+  leftArmCm = signal('');
+  rightArmCm = signal('');
+  leftThighCm = signal('');
+  rightThighCm = signal('');
+
 
   checkinWeekStart = signal(
     this.currentMonday()
@@ -164,7 +255,8 @@ export class Health implements OnInit {
         summary,
         weights,
         checkins,
-        dailyCheckins
+        dailyCheckins,
+        bodyMeasurements
       ] = await Promise.all([
         firstValueFrom(
           this.http.get<WeightTrendSummary>(
@@ -189,6 +281,12 @@ export class Health implements OnInit {
             `${this.apiUrl}/health/daily-checkins`,
             { headers }
           )
+        ),
+        firstValueFrom(
+          this.http.get<BodyMeasurement[]>(
+            `${this.apiUrl}/health/body-measurements`,
+            { headers }
+          )
         )
       ]);
 
@@ -196,6 +294,9 @@ export class Health implements OnInit {
       this.weights.set(weights);
       this.checkins.set(checkins);
       this.dailyCheckins.set(dailyCheckins);
+      this.bodyMeasurements.set(
+        bodyMeasurements
+      );
 
       const currentDaily =
         dailyCheckins.find(
@@ -479,6 +580,151 @@ export class Health implements OnInit {
   }
 
 
+  async saveBodyMeasurement(): Promise<void> {
+    this.error.set(null);
+    this.message.set(null);
+
+    const definitions = [
+      [
+        'waistCm',
+        this.waistMeasurementCm(),
+        30,
+        250,
+      ],
+      [
+        'abdomenCm',
+        this.abdomenCm(),
+        30,
+        250,
+      ],
+      [
+        'chestCm',
+        this.chestCm(),
+        30,
+        250,
+      ],
+      [
+        'shouldersCm',
+        this.shouldersCm(),
+        30,
+        250,
+      ],
+      [
+        'neckCm',
+        this.neckCm(),
+        20,
+        100,
+      ],
+      [
+        'leftArmCm',
+        this.leftArmCm(),
+        10,
+        100,
+      ],
+      [
+        'rightArmCm',
+        this.rightArmCm(),
+        10,
+        100,
+      ],
+      [
+        'leftThighCm',
+        this.leftThighCm(),
+        20,
+        150,
+      ],
+      [
+        'rightThighCm',
+        this.rightThighCm(),
+        20,
+        150,
+      ],
+    ] as const;
+
+    const payload: Record<string, number> = {};
+
+    for (
+      const [
+        key,
+        rawValue,
+        minimum,
+        maximum
+      ] of definitions
+    ) {
+      const text = rawValue.trim();
+
+      if (!text) {
+        continue;
+      }
+
+      const value = Number(text);
+
+      if (
+        !Number.isFinite(value)
+        || value < minimum
+        || value > maximum
+      ) {
+        this.error.set(
+          'Revisa las medidas corporales introducidas.'
+        );
+        return;
+      }
+
+      payload[key] = value;
+    }
+
+    if (!Object.keys(payload).length) {
+      this.error.set(
+        'Introduce al menos una medida corporal.'
+      );
+      return;
+    }
+
+    this.savingBodyMeasurement.set(true);
+
+    try {
+      const headers =
+        await this.authHeaders();
+
+      await firstValueFrom(
+        this.http.put(
+          (
+            `${this.apiUrl}/health/body-measurements/`
+            + this.bodyMeasurementDate()
+          ),
+          payload,
+          { headers }
+        )
+      );
+
+      await this.loadHealth();
+
+      this.waistMeasurementCm.set('');
+      this.abdomenCm.set('');
+      this.chestCm.set('');
+      this.shouldersCm.set('');
+      this.neckCm.set('');
+      this.leftArmCm.set('');
+      this.rightArmCm.set('');
+      this.leftThighCm.set('');
+      this.rightThighCm.set('');
+
+      this.message.set(
+        'Medidas corporales guardadas.'
+      );
+
+    } catch (err: any) {
+      this.error.set(
+        err?.error?.detail ??
+        err?.message ??
+        'No se pudieron guardar las medidas corporales.'
+      );
+    } finally {
+      this.savingBodyMeasurement.set(false);
+    }
+  }
+
+
   async saveDailyCheckin(): Promise<void> {
     this.error.set(null);
     this.message.set(null);
@@ -661,6 +907,973 @@ export class Health implements OnInit {
       value !== null
       && value !== undefined
     );
+  }
+
+
+  latestBodyFat(): number | undefined {
+    return this.latestWeightMetric(
+      'bodyFatPercent'
+    );
+  }
+
+
+  bodyFatTrend(): number | undefined {
+    return this.weightMetricTrend(
+      'bodyFatPercent'
+    );
+  }
+
+
+  latestMuscleMass(): number | undefined {
+    return this.latestWeightMetric(
+      'muscleMassKg'
+    );
+  }
+
+
+  muscleMassTrend(): number | undefined {
+    return this.weightMetricTrend(
+      'muscleMassKg'
+    );
+  }
+
+
+  latestWaist(): number | undefined {
+    const bodyEntries =
+      this.bodyMeasurements()
+        .filter(
+          item =>
+            typeof item.waistCm === 'number'
+        )
+        .sort(
+          (a, b) =>
+            b.measurementDate.localeCompare(
+              a.measurementDate
+            )
+        );
+
+    if (bodyEntries.length) {
+      return bodyEntries[0].waistCm;
+    }
+
+    const legacyEntries =
+      this.checkins()
+        .filter(
+          item =>
+            typeof item.waistCm === 'number'
+        )
+        .sort(
+          (a, b) =>
+            b.weekStart.localeCompare(
+              a.weekStart
+            )
+        );
+
+    return legacyEntries[0]?.waistCm;
+  }
+
+
+  waistTrend(): number | undefined {
+    const bodyEntries =
+      this.bodyMeasurements()
+        .filter(
+          item =>
+            typeof item.waistCm === 'number'
+        )
+        .sort(
+          (a, b) =>
+            b.measurementDate.localeCompare(
+              a.measurementDate
+            )
+        );
+
+    if (bodyEntries.length >= 2) {
+      return (
+        bodyEntries[0].waistCm!
+        - bodyEntries[1].waistCm!
+      );
+    }
+
+    const legacyEntries =
+      this.checkins()
+        .filter(
+          item =>
+            typeof item.waistCm === 'number'
+        )
+        .sort(
+          (a, b) =>
+            b.weekStart.localeCompare(
+              a.weekStart
+            )
+        );
+
+    if (legacyEntries.length < 2) {
+      return undefined;
+    }
+
+    return (
+      legacyEntries[0].waistCm!
+      - legacyEntries[1].waistCm!
+    );
+  }
+
+
+  private latestWeightMetric(
+    metric:
+      'bodyFatPercent'
+      | 'muscleMassKg'
+  ): number | undefined {
+
+    const entry =
+      this.weights()
+        .filter(
+          item =>
+            typeof item[metric] === 'number'
+        )
+        .sort(
+          (a, b) =>
+            b.measurementDate.localeCompare(
+              a.measurementDate
+            )
+        )[0];
+
+    return entry?.[metric];
+  }
+
+
+  private weightMetricTrend(
+    metric:
+      'bodyFatPercent'
+      | 'muscleMassKg'
+  ): number | undefined {
+
+    const entries =
+      this.weights()
+        .filter(
+          item =>
+            typeof item[metric] === 'number'
+        )
+        .sort(
+          (a, b) =>
+            b.measurementDate.localeCompare(
+              a.measurementDate
+            )
+        );
+
+    if (!entries.length) {
+      return undefined;
+    }
+
+    const anchor =
+      this.dayNumber(
+        entries[0].measurementDate
+      );
+
+    const recent =
+      entries.filter(item => {
+        const day =
+          this.dayNumber(
+            item.measurementDate
+          );
+
+        return (
+          day >= anchor - 6
+          && day <= anchor
+        );
+      });
+
+    const previous =
+      entries.filter(item => {
+        const day =
+          this.dayNumber(
+            item.measurementDate
+          );
+
+        return (
+          day >= anchor - 13
+          && day <= anchor - 7
+        );
+      });
+
+    if (
+      recent.length < 2
+      || previous.length < 2
+    ) {
+      return undefined;
+    }
+
+    const average = (
+      values: WeightEntry[]
+    ) =>
+      values.reduce(
+        (sum, item) =>
+          sum + (item[metric] as number),
+        0
+      ) / values.length;
+
+    return (
+      average(recent)
+      - average(previous)
+    );
+  }
+
+
+  private dayNumber(
+    dateValue: string
+  ): number {
+    return (
+      Date.parse(
+        `${dateValue}T00:00:00Z`
+      )
+      / 86_400_000
+    );
+  }
+
+
+  metricOptions(
+    family: HealthMetricFamily =
+      this.metricFamily()
+  ): HealthMetricOption[] {
+
+    if (family === 'composition') {
+      return [
+        {
+          key: 'weight',
+          label: 'Peso',
+          unit: 'kg'
+        },
+        {
+          key: 'bodyFat',
+          label: 'Grasa corporal',
+          unit: '%'
+        },
+        {
+          key: 'muscle',
+          label: 'Masa muscular',
+          unit: 'kg'
+        },
+        {
+          key: 'bodyWater',
+          label: 'Agua corporal',
+          unit: '%'
+        },
+        {
+          key: 'visceralFat',
+          label: 'Grasa visceral',
+          unit: ''
+        }
+      ];
+    }
+
+    return [
+      {
+        key: 'waist',
+        label: 'Cintura',
+        unit: 'cm'
+      },
+      {
+        key: 'abdomen',
+        label: 'Abdomen',
+        unit: 'cm'
+      },
+      {
+        key: 'chest',
+        label: 'Pecho',
+        unit: 'cm'
+      },
+      {
+        key: 'shoulders',
+        label: 'Hombros',
+        unit: 'cm'
+      },
+      {
+        key: 'neck',
+        label: 'Cuello',
+        unit: 'cm'
+      },
+      {
+        key: 'leftArm',
+        label: 'Brazo izquierdo',
+        unit: 'cm'
+      },
+      {
+        key: 'rightArm',
+        label: 'Brazo derecho',
+        unit: 'cm'
+      },
+      {
+        key: 'leftThigh',
+        label: 'Muslo izquierdo',
+        unit: 'cm'
+      },
+      {
+        key: 'rightThigh',
+        label: 'Muslo derecho',
+        unit: 'cm'
+      }
+    ];
+  }
+
+
+  setMetricFamily(
+    value: string
+  ): void {
+
+    if (
+      value !== 'composition' &&
+      value !== 'measurements'
+    ) {
+      return;
+    }
+
+    this.metricFamily.set(value);
+
+    const first =
+      this.metricOptions(value)[0];
+
+    this.chartMetric.set(first.key);
+    this.historyMetric.set(first.key);
+  }
+
+
+  setChartMetric(
+    value: string
+  ): void {
+
+    const metric =
+      this.metricOptions()
+        .find(
+          item =>
+            item.key === value
+        );
+
+    if (metric) {
+      this.chartMetric.set(
+        metric.key
+      );
+    }
+  }
+
+
+  setHistoryMetric(
+    value: string
+  ): void {
+
+    const metric =
+      this.metricOptions()
+        .find(
+          item =>
+            item.key === value
+        );
+
+    if (metric) {
+      this.historyMetric.set(
+        metric.key
+      );
+    }
+  }
+
+
+  metricLabel(
+    metric: HealthChartMetric
+  ): string {
+
+    const all = [
+      ...this.metricOptions(
+        'composition'
+      ),
+      ...this.metricOptions(
+        'measurements'
+      )
+    ];
+
+    return (
+      all.find(
+        item =>
+          item.key === metric
+      )?.label ?? metric
+    );
+  }
+
+
+  metricUnit(
+    metric: HealthChartMetric
+  ): string {
+
+    const all = [
+      ...this.metricOptions(
+        'composition'
+      ),
+      ...this.metricOptions(
+        'measurements'
+      )
+    ];
+
+    return (
+      all.find(
+        item =>
+          item.key === metric
+      )?.unit ?? ''
+    );
+  }
+
+
+  metricSeries(
+    metric: HealthChartMetric
+  ): {
+    date: string;
+    value: number;
+  }[] {
+
+    const entries: {
+      date: string;
+      value: number;
+    }[] = [];
+
+
+    const weightFields:
+      Partial<
+        Record<
+          HealthChartMetric,
+          keyof WeightEntry
+        >
+      > = {
+        weight: 'weightKg',
+        bodyFat: 'bodyFatPercent',
+        muscle: 'muscleMassKg',
+        bodyWater:
+          'bodyWaterPercent',
+        visceralFat:
+          'visceralFatIndex'
+      };
+
+
+    const measurementFields:
+      Partial<
+        Record<
+          HealthChartMetric,
+          keyof BodyMeasurement
+        >
+      > = {
+        waist: 'waistCm',
+        abdomen: 'abdomenCm',
+        chest: 'chestCm',
+        shoulders: 'shouldersCm',
+        neck: 'neckCm',
+        leftArm: 'leftArmCm',
+        rightArm: 'rightArmCm',
+        leftThigh: 'leftThighCm',
+        rightThigh: 'rightThighCm'
+      };
+
+
+    const weightField =
+      weightFields[metric];
+
+    if (weightField) {
+
+      for (
+        const item
+        of this.weights()
+      ) {
+
+        const value =
+          item[weightField];
+
+        if (
+          typeof value === 'number'
+        ) {
+          entries.push({
+            date:
+              item.measurementDate,
+            value
+          });
+        }
+      }
+    }
+
+
+    const measurementField =
+      measurementFields[metric];
+
+    if (measurementField) {
+
+      for (
+        const item
+        of this.bodyMeasurements()
+      ) {
+
+        const value =
+          item[measurementField];
+
+        if (
+          typeof value === 'number'
+        ) {
+          entries.push({
+            date:
+              item.measurementDate,
+            value
+          });
+        }
+      }
+    }
+
+
+    return entries.sort(
+      (a, b) =>
+        a.date.localeCompare(b.date)
+    );
+  }
+
+
+  metricLatest(
+    metric: HealthChartMetric
+  ): number | undefined {
+
+    const series =
+      this.metricSeries(metric);
+
+    return (
+      series.length
+        ? series[
+            series.length - 1
+          ].value
+        : undefined
+    );
+  }
+
+
+  metricChange(
+    metric: HealthChartMetric
+  ): number | undefined {
+
+    const series =
+      this.metricSeries(metric);
+
+    if (series.length < 2) {
+      return undefined;
+    }
+
+    return Number(
+      (
+        series[
+          series.length - 1
+        ].value
+        - series[
+            series.length - 2
+          ].value
+      ).toFixed(2)
+    );
+  }
+
+
+  summaryMetrics(): {
+    key: HealthChartMetric;
+    label: string;
+    unit: string;
+    value?: number;
+    change?: number;
+  }[] {
+
+    return this.metricOptions()
+      .map(
+        metric => ({
+          ...metric,
+          value:
+            this.metricLatest(
+              metric.key
+            ),
+          change:
+            this.metricChange(
+              metric.key
+            )
+        })
+      );
+  }
+
+
+  historySeries(): {
+    date: string;
+    value: number;
+  }[] {
+
+    return [
+      ...this.metricSeries(
+        this.historyMetric()
+      )
+    ]
+      .reverse()
+      .slice(0, 20);
+  }
+
+
+  chartSeries(): {
+    date: string;
+    value: number;
+  }[] {
+
+    const entries =
+      this.metricSeries(
+        this.chartMetric()
+      );
+
+    const period =
+      this.chartPeriod();
+
+    if (
+      period === 'all'
+      || entries.length === 0
+    ) {
+      return entries;
+    }
+
+    const latestDay =
+      this.dayNumber(
+        entries[
+          entries.length - 1
+        ].date
+      );
+
+    const cutoff =
+      latestDay - period + 1;
+
+    return entries.filter(
+      item =>
+        this.dayNumber(
+          item.date
+        ) >= cutoff
+    );
+  }
+
+
+  chartMetricLabel(): string {
+    return this.metricLabel(
+      this.chartMetric()
+    );
+  }
+
+
+  chartUnit(): string {
+    return this.metricUnit(
+      this.chartMetric()
+    );
+  }
+
+
+  chartCurrentValue(): number | undefined {
+    const series = this.chartSeries();
+
+    return series.length
+      ? series[series.length - 1].value
+      : undefined;
+  }
+
+
+  chartChange(): number | undefined {
+    const series = this.chartSeries();
+
+    if (series.length < 2) {
+      return undefined;
+    }
+
+    return Number(
+      (
+        series[series.length - 1].value
+        - series[0].value
+      ).toFixed(2)
+    );
+  }
+
+
+  chartChangeUnit(): string {
+    return (
+      this.chartMetric() === 'bodyFat'
+      || this.chartMetric() === 'bodyWater'
+        ? 'pp'
+        : this.chartMetric() === 'visceralFat'
+          ? 'puntos'
+          : this.chartUnit()
+    );
+  }
+
+
+  chartVisibleRangeLabel(): string {
+    const series = this.chartSeries();
+
+    if (!series.length) {
+      return '';
+    }
+
+    if (series.length === 1) {
+      return this.formatChartDate(
+        series[0].date
+      );
+    }
+
+    return (
+      this.formatChartDate(
+        series[0].date
+      )
+      + ' → '
+      + this.formatChartDate(
+        series[series.length - 1].date
+      )
+    );
+  }
+
+
+  chartMin(): number | undefined {
+    return this.chartDomain()?.min;
+  }
+
+
+  chartMax(): number | undefined {
+    return this.chartDomain()?.max;
+  }
+
+
+  chartTicks(): number[] {
+    const domain = this.chartDomain();
+
+    if (!domain) {
+      return [];
+    }
+
+    const steps = 4;
+
+    return Array.from(
+      { length: steps + 1 },
+      (_, index) =>
+        domain.max
+        - (
+            (
+              domain.max - domain.min
+            ) / steps
+          ) * index
+    );
+  }
+
+
+  chartGridY(index: number): number {
+    return 8 + index * 21;
+  }
+
+
+  chartX(dateValue: string): number {
+    const series = this.chartSeries();
+
+    if (series.length <= 1) {
+      return 50;
+    }
+
+    const first =
+      this.dayNumber(series[0].date);
+
+    const last =
+      this.dayNumber(
+        series[series.length - 1].date
+      );
+
+    const current =
+      this.dayNumber(dateValue);
+
+    if (last === first) {
+      return 50;
+    }
+
+    return (
+      3
+      + (
+          (current - first)
+          / (last - first)
+        ) * 94
+    );
+  }
+
+
+  chartY(value: number): number {
+    const domain = this.chartDomain();
+
+    if (!domain) {
+      return 50;
+    }
+
+    const range =
+      domain.max - domain.min;
+
+    if (range <= 0) {
+      return 50;
+    }
+
+    return (
+      8
+      + (
+          (domain.max - value)
+          / range
+        ) * 84
+    );
+  }
+
+
+  chartPoints(): string {
+    return this.chartSeries()
+      .map(
+        item =>
+          `${this.chartX(item.date)},`
+          + `${this.chartY(item.value)}`
+      )
+      .join(' ');
+  }
+
+
+  chartXAxisLabels(): {
+    date: string;
+    label: string;
+    x: number;
+  }[] {
+    const series = this.chartSeries();
+
+    if (!series.length) {
+      return [];
+    }
+
+    const wanted =
+      Math.min(series.length, 5);
+
+    if (wanted === 1) {
+      return [{
+        date: series[0].date,
+        label: this.formatChartDate(
+          series[0].date
+        ),
+        x: 50
+      }];
+    }
+
+    const indices =
+      Array.from(
+        { length: wanted },
+        (_, index) =>
+          Math.round(
+            index
+            * (series.length - 1)
+            / (wanted - 1)
+          )
+      );
+
+    return [
+      ...new Set(indices)
+    ].map(index => ({
+      date: series[index].date,
+      label: this.formatChartDate(
+        series[index].date
+      ),
+      x: this.chartX(
+        series[index].date
+      )
+    }));
+  }
+
+
+  formatChartDate(
+    dateValue: string
+  ): string {
+    const [
+      yearText,
+      monthText,
+      dayText
+    ] = dateValue.split('-');
+
+    const months = [
+      'ene',
+      'feb',
+      'mar',
+      'abr',
+      'may',
+      'jun',
+      'jul',
+      'ago',
+      'sep',
+      'oct',
+      'nov',
+      'dic'
+    ];
+
+    const month =
+      months[
+        Number(monthText) - 1
+      ] ?? '';
+
+    const year =
+      Number(yearText);
+
+    const currentYear =
+      new Date().getFullYear();
+
+    return (
+      `${Number(dayText)} ${month}`
+      + (
+          year !== currentYear
+            ? ` ${year}`
+            : ''
+        )
+    );
+  }
+
+
+  private chartDomain(): {
+    min: number;
+    max: number;
+  } | null {
+    const values =
+      this.chartSeries().map(
+        item => item.value
+      );
+
+    if (!values.length) {
+      return null;
+    }
+
+    const rawMin =
+      Math.min(...values);
+
+    const rawMax =
+      Math.max(...values);
+
+    const range =
+      rawMax - rawMin;
+
+    const padding =
+      range === 0
+        ? Math.max(
+            Math.abs(rawMin) * 0.01,
+            0.5
+          )
+        : Math.max(
+            range * 0.12,
+            0.25
+          );
+
+    return {
+      min: rawMin - padding,
+      max: rawMax + padding
+    };
+  }
+
+
+  trendArrow(
+    value: number | null | undefined,
+    threshold = 0.05
+  ): string {
+    if (
+      value === null
+      || value === undefined
+      || Math.abs(value) < threshold
+    ) {
+      return '→';
+    }
+
+    return value > 0 ? '↑' : '↓';
   }
 
 

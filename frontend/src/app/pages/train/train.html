@@ -859,6 +859,38 @@
             Entrenar
           </span>
 
+          <div class="training-discipline-selector">
+            <label for="training-discipline">
+              Disciplina
+            </label>
+
+            <select
+              id="training-discipline"
+              #disciplineSelect
+              (change)="
+                changeTrainingDiscipline(
+                  disciplineSelect.value
+                )
+              "
+            >
+              <option value="strength" selected>
+                Fuerza
+              </option>
+
+              <option value="swimming">
+                Natación
+              </option>
+
+              <option value="cycling">
+                Bicicleta
+              </option>
+
+              <option value="running">
+                Correr
+              </option>
+            </select>
+          </div>
+
           <h1>
             Elige tu sesión
           </h1>

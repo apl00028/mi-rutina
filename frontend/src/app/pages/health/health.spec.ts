@@ -132,6 +132,10 @@ describe('Health', () => {
       `${environment.apiUrl}/health/daily-checkins`
     ).flush([]);
 
+    http.expectOne(
+      `${environment.apiUrl}/health/body-measurements`
+    ).flush([]);
+
     await flushPromises();
     await fixture.whenStable();
     await flushPromises();
@@ -165,13 +169,16 @@ describe('Health', () => {
           ?.replace(/\s+/g, ' ');
 
       expect(text)
-        .toContain('Peso actual');
+        .toContain('Resumen y tendencias');
+
+      expect(text)
+        .toContain('Peso');
 
       expect(text)
         .toContain('75.4 kg');
 
       expect(text)
-        .toContain('Media últimos 7 días');
+        .toContain('75.5 kg');
 
       expect(text)
         .toContain('75.5 kg');
@@ -224,6 +231,10 @@ describe('Health', () => {
         }
       ]);
 
+      http.expectOne(
+        `${environment.apiUrl}/health/body-measurements`
+      ).flush([]);
+
       await flushPromises();
       await fixture.whenStable();
       await flushPromises();
@@ -246,6 +257,162 @@ describe('Health', () => {
 
       expect(component.dailyAdherence())
         .toBe('90');
+    }
+  );
+
+
+  it(
+    'calculates body composition and waist trends',
+    () => {
+
+      component.weights.set([
+        {
+          id: 'w1',
+          measurementDate: '2026-08-22',
+          weightKg: 75,
+          bodyFatPercent: 18,
+          muscleMassKg: 60,
+          source: 'manual'
+        },
+        {
+          id: 'w2',
+          measurementDate: '2026-08-21',
+          weightKg: 75,
+          bodyFatPercent: 18.2,
+          muscleMassKg: 60.2,
+          source: 'manual'
+        },
+        {
+          id: 'w3',
+          measurementDate: '2026-08-15',
+          weightKg: 76,
+          bodyFatPercent: 19,
+          muscleMassKg: 59.5,
+          source: 'manual'
+        },
+        {
+          id: 'w4',
+          measurementDate: '2026-08-14',
+          weightKg: 76,
+          bodyFatPercent: 19.2,
+          muscleMassKg: 59.7,
+          source: 'manual'
+        }
+      ]);
+
+      component.checkins.set([
+        {
+          id: 'c1',
+          weekStart: '2026-08-17',
+          waistCm: 88
+        },
+        {
+          id: 'c2',
+          weekStart: '2026-08-10',
+          waistCm: 89.5
+        }
+      ]);
+
+      expect(component.latestBodyFat())
+        .toBe(18);
+
+      expect(component.bodyFatTrend())
+        .toBeCloseTo(-1);
+
+      expect(component.latestMuscleMass())
+        .toBe(60);
+
+      expect(component.muscleMassTrend())
+        .toBeCloseTo(0.5);
+
+      expect(component.latestWaist())
+        .toBe(88);
+
+      expect(component.waistTrend())
+        .toBeCloseTo(-1.5);
+    }
+  );
+
+
+  it(
+    'builds chart series for health metrics',
+    () => {
+
+      component.weights.set([
+        {
+          id: 'w1',
+          measurementDate: '2026-08-01',
+          weightKg: 76,
+          bodyFatPercent: 19,
+          source: 'manual'
+        },
+        {
+          id: 'w2',
+          measurementDate: '2026-08-22',
+          weightKg: 75,
+          bodyFatPercent: 18,
+          source: 'manual'
+        }
+      ]);
+
+      component.bodyMeasurements.set([
+        {
+          id: 'b1',
+          measurementDate: '2026-08-01',
+          waistCm: 90
+        },
+        {
+          id: 'b2',
+          measurementDate: '2026-08-22',
+          waistCm: 88
+        }
+      ]);
+
+      component.chartMetric.set('weight');
+
+      expect(component.chartSeries())
+        .toEqual([
+          {
+            date: '2026-08-01',
+            value: 76
+          },
+          {
+            date: '2026-08-22',
+            value: 75
+          }
+        ]);
+
+      component.chartMetric.set('waist');
+
+      expect(component.chartSeries())
+        .toEqual([
+          {
+            date: '2026-08-01',
+            value: 90
+          },
+          {
+            date: '2026-08-22',
+            value: 88
+          }
+        ]);
+
+      expect(component.chartUnit())
+        .toBe('cm');
+    }
+  );
+
+
+  it(
+    'returns the correct trend direction',
+    () => {
+      expect(component.trendArrow(-0.5))
+        .toBe('↓');
+
+      expect(component.trendArrow(0.5))
+        .toBe('↑');
+
+      expect(component.trendArrow(0.01))
+        .toBe('→');
     }
   );
 
@@ -336,6 +503,79 @@ describe('Health', () => {
       expect(component.message())
         .toBe(
           'Peso registrado correctamente.'
+        );
+    }
+  );
+
+
+  it(
+    'saves body measurements and reloads health data',
+    async () => {
+
+      component.bodyMeasurementDate.set(
+        '2026-08-24'
+      );
+
+      component.waistMeasurementCm.set('88');
+      component.leftArmCm.set('36');
+      component.rightArmCm.set('36.5');
+      component.leftThighCm.set('58');
+      component.rightThighCm.set('58.5');
+
+      const savePromise =
+        component.saveBodyMeasurement();
+
+      await flushPromises();
+
+      const request =
+        http.expectOne(
+          (
+            `${environment.apiUrl}`
+            + '/health/body-measurements/'
+            + '2026-08-24'
+          )
+        );
+
+      expect(request.request.method)
+        .toBe('PUT');
+
+      expect(request.request.body)
+        .toEqual({
+          waistCm: 88,
+          leftArmCm: 36,
+          rightArmCm: 36.5,
+          leftThighCm: 58,
+          rightThighCm: 58.5
+        });
+
+      request.flush({
+        id: 'body-1',
+        measurementDate:
+          '2026-08-24',
+        waistCm: 88,
+        leftArmCm: 36,
+        rightArmCm: 36.5,
+        leftThighCm: 58,
+        rightThighCm: 58.5
+      });
+
+      await flushHealthLoad();
+
+      await savePromise;
+
+      expect(
+        component.waistMeasurementCm()
+      ).toBe('');
+
+      expect(component.leftArmCm())
+        .toBe('');
+
+      expect(component.rightArmCm())
+        .toBe('');
+
+      expect(component.message())
+        .toBe(
+          'Medidas corporales guardadas.'
         );
     }
   );

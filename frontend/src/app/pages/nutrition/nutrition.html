@@ -1,4 +1,5 @@
 <section class="nutrition-page">
+
   <header class="nutrition-header">
     <div>
       <span class="eyebrow">
@@ -8,31 +9,50 @@
       <h1>Nutrición</h1>
 
       <p>
-        Importa un plan semanal generado con la
-        plantilla de GymOS.
+        Tu planificación semanal,
+        organizada para consultar,
+        preparar y comprar.
       </p>
     </div>
-
-    <div class="nutrition-actions">
-      <button
-        type="button"
-        class="template-button"
-        (click)="downloadTemplate()"
-      >
-        Descargar plantilla
-      </button>
-
-      <label class="import-button">
-        Importar Excel
-
-        <input
-          type="file"
-          accept=".xlsx"
-          (change)="importExcel($event)"
-        />
-      </label>
-    </div>
   </header>
+
+
+  <nav
+    class="nutrition-tabs"
+    aria-label="Secciones de nutrición"
+  >
+
+    <button
+      type="button"
+      [class.active]="
+        nutritionSection() === 'week'
+      "
+      (click)="selectSection('week')"
+    >
+      Semana
+    </button>
+
+    <button
+      type="button"
+      [class.active]="
+        nutritionSection() === 'plan'
+      "
+      (click)="selectSection('plan')"
+    >
+      Plan
+    </button>
+
+    <button
+      type="button"
+      [class.active]="
+        nutritionSection() === 'shopping'
+      "
+      (click)="selectSection('shopping')"
+    >
+      Lista de la compra
+    </button>
+
+  </nav>
 
 
   @if (error()) {
@@ -48,216 +68,1012 @@
   }
 
 
-  @if (importIssues().length) {
-    <section class="issues-card">
-      <h2>
-        El archivo necesita revisión
-      </h2>
+  @if (
+    nutritionSection() === 'week'
+  ) {
 
-      @for (
-        issue of importIssues();
-        track $index
-      ) {
-        <div class="issue">
-          <strong>
-            {{ issue.sheet }}
-            @if (issue.row) {
-              · fila {{ issue.row }}
-            }
-            @if (issue.column) {
-              · {{ issue.column }}
-            }
-          </strong>
+    @if (activePlan(); as plan) {
 
-          <span>
-            {{ issue.message }}
-          </span>
-        </div>
-      }
-    </section>
-  }
+      <section class="week-heading-card">
 
-
-  @if (preview(); as plan) {
-    <section class="preview-card">
-      <div class="preview-heading">
         <div>
           <span class="eyebrow">
-            Vista previa
+            Plan activo
           </span>
 
           <h2>
-            Semana {{ plan.weekStart }}
+            Semana
+            {{ weekRangeLabel(plan) }}
           </h2>
 
           <p>
-            Objetivo:
-            {{ goalLabel(plan.goal) }}
+            {{
+              goalLabel(plan.goal)
+            }}
           </p>
         </div>
 
-        <button
-          type="button"
-          class="save-button"
-          [disabled]="saving()"
-          (click)="savePreview()"
-        >
-          @if (saving()) {
-            Guardando…
-          } @else {
-            Importar plan
-          }
-        </button>
-      </div>
 
-      @for (
-        day of plan.days;
-        track day.date
-      ) {
-        <article class="day-card">
-          <h3>
-            {{ day.date }}
-          </h3>
+        @if (plan.targets) {
+          <div class="nutrition-targets">
 
-          @for (
-            meal of day.meals;
-            track meal.mealId
-          ) {
-            <div class="meal">
-              <div class="meal-heading">
-                <span>
-                  {{ mealLabel(meal.type) }}
-                </span>
-
+            @if (
+              plan.targets.calorieTarget
+            ) {
+              <div>
+                <span>Calorías</span>
                 <strong>
-                  {{ meal.name }}
+                  {{
+                    plan.targets.calorieTarget
+                      | number:'1.0-0'
+                  }}
+                  kcal
                 </strong>
               </div>
+            }
 
-              <div class="ingredients">
+            @if (
+              plan.targets.proteinTarget
+            ) {
+              <div>
+                <span>Proteína</span>
+                <strong>
+                  {{
+                    plan.targets.proteinTarget
+                      | number:'1.0-0'
+                  }}
+                  g
+                </strong>
+              </div>
+            }
+
+            @if (
+              plan.targets.carbTarget
+            ) {
+              <div>
+                <span>Carbohidratos</span>
+                <strong>
+                  {{
+                    plan.targets.carbTarget
+                      | number:'1.0-0'
+                  }}
+                  g
+                </strong>
+              </div>
+            }
+
+            @if (
+              plan.targets.fatTarget
+            ) {
+              <div>
+                <span>Grasas</span>
+                <strong>
+                  {{
+                    plan.targets.fatTarget
+                      | number:'1.0-0'
+                  }}
+                  g
+                </strong>
+              </div>
+            }
+
+          </div>
+        }
+
+      </section>
+
+
+      <section class="week-calendar">
+
+        @for (
+          day of weekDays(plan);
+          track day.date
+        ) {
+
+          <article
+            class="nutrition-day-card"
+            [class.today]="
+              isToday(day.date)
+            "
+          >
+
+            <header class="day-heading">
+
+              <div>
+                <span>
+                  {{ dayDate(day.date) }}
+                </span>
+
+                <h3>
+                  {{ dayName(day.date) }}
+                </h3>
+              </div>
+
+              @if (isToday(day.date)) {
+                <span class="today-label">
+                  Hoy
+                </span>
+              }
+
+            </header>
+
+
+            @if (day.meals.length) {
+
+              <div class="day-meals">
+
                 @for (
-                  ingredient
-                  of meal.ingredients;
-                  track ingredient.ingredientId
+                  meal of day.meals;
+                  track meal.mealId
                 ) {
-                  <div class="ingredient">
-                    <div>
-                      <strong>
-                        {{ ingredient.name }}
-                      </strong>
 
-                      @if (
-                        ingredient.productBrand
-                      ) {
-                        <span>
-                          {{ ingredient.productBrand }}
+                  <article class="calendar-meal-card">
+
+                    <div class="meal-card-heading">
+
+                      <div>
+                        <span class="meal-type">
+                          {{
+                            mealLabel(
+                              meal.type
+                            )
+                          }}
                         </span>
-                      }
+
+                        <strong>
+                          {{ meal.name }}
+                        </strong>
+                      </div>
+
+                      <button
+                        type="button"
+                        class="recipe-open-button"
+                        (click)="openRecipe(meal)"
+                      >
+                        Ver receta
+                      </button>
+
                     </div>
 
-                    <span>
-                      {{ ingredient.quantity }}
-                      {{ ingredient.unit }}
-                    </span>
-                  </div>
-                }
-              </div>
-            </div>
-          }
-        </article>
-      }
-    </section>
-  }
 
+                    <div class="meal-quick-ingredients">
 
-  @if (!preview() && !importIssues().length) {
-    @if (plans().length) {
-      @if (plans()[0]; as plan) {
-        <section class="preview-card">
-          <div class="preview-heading">
-            <div>
-              <span class="eyebrow">
-                Plan actual
-              </span>
+                      @for (
+                        ingredient
+                        of meal.ingredients;
+                        track ingredient.ingredientId
+                      ) {
 
-              <h2>
-                Semana {{ plan.weekStart }}
-              </h2>
+                        <div class="meal-quick-ingredient">
 
-              <p>
-                Objetivo:
-                {{ goalLabel(plan.goal) }}
-              </p>
-            </div>
-          </div>
-
-          @for (
-            day of plan.days;
-            track day.date
-          ) {
-            <article class="day-card">
-              <h3>
-                {{ day.date }}
-              </h3>
-
-              @for (
-                meal of day.meals;
-                track meal.mealId
-              ) {
-                <div class="meal">
-                  <div class="meal-heading">
-                    <span>
-                      {{ mealLabel(meal.type) }}
-                    </span>
-
-                    <strong>
-                      {{ meal.name }}
-                    </strong>
-                  </div>
-
-                  <div class="ingredients">
-                    @for (
-                      ingredient of meal.ingredients;
-                      track ingredient.ingredientId
-                    ) {
-                      <div class="ingredient">
-                        <div>
-                          <strong>
+                          <span>
                             {{ ingredient.name }}
+                          </span>
+
+                          <strong>
+                            {{
+                              ingredient.quantity
+                                | number:'1.0-2'
+                            }}
+                            {{ ingredient.unit }}
                           </strong>
 
-                          @if (ingredient.productBrand) {
-                            <span>
-                              {{ ingredient.productBrand }}
-                            </span>
-                          }
                         </div>
 
-                        <span>
-                          {{ ingredient.quantity }}
-                          {{ ingredient.unit }}
-                        </span>
-                      </div>
-                    }
-                  </div>
-                </div>
-              }
-            </article>
-          }
-        </section>
-      }
+                      }
+
+                    </div>
+
+                  </article>
+
+                }
+
+              </div>
+
+            } @else {
+
+              <p class="day-empty">
+                Sin comidas registradas.
+              </p>
+
+            }
+
+          </article>
+
+        }
+
+      </section>
+
     } @else {
+
       <section class="empty-card">
+        <span class="eyebrow">
+          Sin planificación
+        </span>
+
         <h2>
-          Importa tu planificación
+          Todavía no hay un plan activo
         </h2>
 
         <p>
-          ChatGPT puede modificar la plantilla
-          semanal y GymOS validará el archivo antes
-          de guardarlo.
+          Importa tu planificación para
+          visualizar aquí toda la semana.
         </p>
+
+        <button
+          type="button"
+          class="primary-button"
+          (click)="selectSection('plan')"
+        >
+          Ir a Plan
+        </button>
       </section>
+
     }
+
   }
+
+
+  @if (
+    nutritionSection() === 'plan'
+  ) {
+
+    <section class="plan-management-card">
+
+      <div class="plan-management-copy">
+        <span class="eyebrow">
+          Plan nutricional
+        </span>
+
+        <h2>
+          Registrar planificación
+        </h2>
+
+        <p>
+          Descarga la plantilla GymOS,
+          complétala o modifícala y vuelve
+          a importarla para validarla.
+        </p>
+      </div>
+
+
+      <div class="nutrition-actions">
+
+        <button
+          type="button"
+          class="secondary-button"
+          (click)="downloadTemplate()"
+        >
+          Descargar plantilla
+        </button>
+
+        <label class="import-button">
+          Importar Excel
+
+          <input
+            type="file"
+            accept=".xlsx"
+            (change)="importExcel($event)"
+          />
+        </label>
+
+      </div>
+
+    </section>
+
+
+    @if (importIssues().length) {
+
+      <section class="issues-card">
+
+        <span class="eyebrow">
+          Validación
+        </span>
+
+        <h2>
+          El archivo necesita revisión
+        </h2>
+
+        @for (
+          issue of importIssues();
+          track $index
+        ) {
+
+          <div class="issue">
+
+            <strong>
+              {{ issue.sheet }}
+
+              @if (issue.row) {
+                · fila {{ issue.row }}
+              }
+
+              @if (issue.column) {
+                · {{ issue.column }}
+              }
+            </strong>
+
+            <span>
+              {{ issue.message }}
+            </span>
+
+          </div>
+
+        }
+
+      </section>
+
+    }
+
+
+    @if (preview(); as plan) {
+
+      <section class="plan-preview-card">
+
+        <div class="plan-preview-heading">
+
+          <div>
+            <span class="eyebrow">
+              Vista previa
+            </span>
+
+            <h2>
+              Semana
+              {{ weekRangeLabel(plan) }}
+            </h2>
+
+            <p>
+              {{
+                goalLabel(plan.goal)
+              }}
+              ·
+              {{ mealCount(plan) }}
+              comidas
+              ·
+              {{ ingredientCount(plan) }}
+              ingredientes
+            </p>
+          </div>
+
+
+          <button
+            type="button"
+            class="primary-button"
+            [disabled]="saving()"
+            (click)="savePreview()"
+          >
+            @if (saving()) {
+              Guardando…
+            } @else {
+              Activar plan
+            }
+          </button>
+
+        </div>
+
+
+        <div class="preview-days">
+
+          @for (
+            day of orderedDays(plan);
+            track day.date
+          ) {
+
+            <div class="preview-day">
+
+              <strong>
+                {{ dayName(day.date) }}
+              </strong>
+
+              <span>
+                {{ day.meals.length }}
+                comidas
+              </span>
+
+            </div>
+
+          }
+
+        </div>
+
+      </section>
+
+    } @else {
+
+      @if (activePlan(); as plan) {
+
+        <section class="current-plan-card">
+
+          <div>
+            <span class="eyebrow">
+              Plan actual
+            </span>
+
+            <h2>
+              Semana
+              {{ weekRangeLabel(plan) }}
+            </h2>
+
+            <p>
+              {{
+                goalLabel(plan.goal)
+              }}
+            </p>
+          </div>
+
+
+          <div class="plan-stats">
+
+            <div>
+              <strong>
+                {{ plan.days.length }}
+              </strong>
+              <span>Días</span>
+            </div>
+
+            <div>
+              <strong>
+                {{ mealCount(plan) }}
+              </strong>
+              <span>Comidas</span>
+            </div>
+
+            <div>
+              <strong>
+                {{ ingredientCount(plan) }}
+              </strong>
+              <span>Ingredientes</span>
+            </div>
+
+          </div>
+
+        </section>
+
+      }
+
+    }
+
+  }
+
+
+  @if (
+    nutritionSection() === 'shopping'
+  ) {
+
+    @if (activePlan(); as plan) {
+
+      <section class="shopping-heading">
+
+        <div>
+          <span class="eyebrow">
+            Lista de la compra
+          </span>
+
+          <h2>
+            Semana
+            {{ weekRangeLabel(plan) }}
+          </h2>
+
+          <p>
+            Ingredientes agregados para
+            toda la planificación semanal.
+          </p>
+        </div>
+
+
+        <button
+          type="button"
+          class="secondary-button"
+          [disabled]="shoppingLoading()"
+          (click)="loadShoppingList(plan.planId)"
+        >
+          Actualizar
+        </button>
+
+      </section>
+
+
+      @if (shoppingLoading()) {
+
+        <section class="empty-card">
+          <p>
+            Generando lista de la compra…
+          </p>
+        </section>
+
+      } @else {
+
+        @if (shoppingList().length) {
+
+          <section class="shopping-progress-card">
+
+            <div class="shopping-progress-copy">
+              <strong>
+                {{ purchasedCount() }}
+                de
+                {{ shoppingList().length }}
+              </strong>
+
+              <span>
+                productos comprados
+              </span>
+            </div>
+
+            <div
+              class="shopping-progress-track"
+              aria-hidden="true"
+            >
+              <span
+                [style.width.%]="
+                  shoppingProgress()
+                "
+              ></span>
+            </div>
+
+            @if (purchasedCount()) {
+              <button
+                type="button"
+                class="shopping-reset-button"
+                (click)="clearPurchasedItems()"
+              >
+                Desmarcar todo
+              </button>
+            }
+
+          </section>
+
+
+          <section class="shopping-grid">
+
+            @for (
+              group of shoppingGroups();
+              track group.category
+            ) {
+
+              <article class="shopping-category">
+
+                <header>
+                  <h3>
+                    {{ group.category }}
+                  </h3>
+
+                  <span>
+                    {{ group.items.length }}
+                  </span>
+                </header>
+
+
+                @for (
+                  item of group.items;
+                  track
+                    item.name
+                    + item.unit
+                    + item.productBrand
+                ) {
+
+                  <div
+                    class="shopping-item"
+                    [class.purchased]="
+                      isShoppingItemPurchased(
+                        item
+                      )
+                    "
+                  >
+
+                    <label class="shopping-check">
+
+                      <input
+                        type="checkbox"
+                        [checked]="
+                          isShoppingItemPurchased(
+                            item
+                          )
+                        "
+                        [attr.aria-label]="
+                          'Marcar '
+                          + item.name
+                          + ' como comprado'
+                        "
+                        (change)="
+                          toggleShoppingItem(
+                            item
+                          )
+                        "
+                      />
+
+                      <span
+                        class="shopping-checkbox"
+                        aria-hidden="true"
+                      ></span>
+
+                    </label>
+
+
+                    <div class="shopping-item-main">
+
+                      <div class="shopping-item-title">
+
+                        <strong>
+                          {{ item.name }}
+                        </strong>
+
+                        <span class="shopping-quantity">
+                          {{
+                            item.quantity
+                              | number:'1.0-2'
+                          }}
+                          {{ item.unit }}
+                        </span>
+
+                      </div>
+
+
+                      @if (item.productBrand) {
+
+                        <span class="shopping-brand">
+                          {{ item.productBrand }}
+                        </span>
+
+                      }
+
+
+                      @if (item.sources.length) {
+
+                        <div class="shopping-sources">
+
+                          @for (
+                            source of item.sources;
+                            track
+                              source.date
+                              + source.mealName
+                          ) {
+
+                            <span>
+                              {{
+                                shoppingSourceLabel(
+                                  source
+                                )
+                              }}
+                            </span>
+
+                          }
+
+                        </div>
+
+                      }
+
+                    </div>
+
+                  </div>
+
+                }
+
+              </article>
+
+            }
+
+          </section>
+
+        } @else {
+
+          <section class="empty-card">
+
+            <h2>
+              Lista vacía
+            </h2>
+
+            <p>
+              El plan actual todavía no
+              contiene ingredientes.
+            </p>
+
+          </section>
+
+        }
+
+      }
+
+    } @else {
+
+      <section class="empty-card">
+
+        <h2>
+          No hay un plan activo
+        </h2>
+
+        <p>
+          Primero necesitas registrar
+          una planificación semanal.
+        </p>
+
+        <button
+          type="button"
+          class="primary-button"
+          (click)="selectSection('plan')"
+        >
+          Ir a Plan
+        </button>
+
+      </section>
+
+    }
+
+  }
+
+
+
+  @if (selectedMeal(); as meal) {
+
+    <div
+      class="recipe-modal-layer"
+      (click)="closeRecipe()"
+    >
+
+      <article
+        class="recipe-modal"
+        role="dialog"
+        aria-modal="true"
+        [attr.aria-label]="meal.name"
+        (click)="$event.stopPropagation()"
+      >
+
+        <header class="recipe-modal-header">
+
+          <div>
+            <span class="eyebrow">
+              Receta
+            </span>
+
+            <h2>
+              {{ meal.name }}
+            </h2>
+
+            <div class="recipe-meta">
+
+              @if (
+                recipeTotalMinutes(meal);
+                as total
+              ) {
+                <span>
+                  {{ total }} min
+                </span>
+              }
+
+              @if (
+                meal.prepMinutes !== undefined
+              ) {
+                <span>
+                  Prep.
+                  {{ meal.prepMinutes }}
+                  min
+                </span>
+              }
+
+              @if (
+                meal.cookMinutes !== undefined
+              ) {
+                <span>
+                  Cocción
+                  {{ meal.cookMinutes }}
+                  min
+                </span>
+              }
+
+            </div>
+
+          </div>
+
+
+          <button
+            type="button"
+            class="recipe-close-button"
+            aria-label="Cerrar receta"
+            (click)="closeRecipe()"
+          >
+            ×
+          </button>
+
+        </header>
+
+
+        <section class="recipe-servings">
+
+          <div>
+            <span>Raciones</span>
+
+            <small>
+              Las cantidades se ajustan
+              automáticamente
+            </small>
+          </div>
+
+          <div class="serving-control">
+
+            <button
+              type="button"
+              (click)="decreaseRecipeServings()"
+            >
+              −
+            </button>
+
+            <strong>
+              {{ recipeServings() }}
+            </strong>
+
+            <button
+              type="button"
+              (click)="increaseRecipeServings()"
+            >
+              +
+            </button>
+
+          </div>
+
+          <button
+            type="button"
+            class="save-servings-button"
+            [disabled]="
+              savingRecipe()
+              || recipeServings()
+                === (meal.servings ?? 1)
+            "
+            (click)="saveRecipeServings()"
+          >
+            @if (savingRecipe()) {
+              Guardando…
+            } @else {
+              Actualizar plan
+            }
+          </button>
+
+        </section>
+
+
+        <section class="recipe-section">
+
+          <div class="recipe-section-heading">
+            <span class="eyebrow">
+              Ingredientes
+            </span>
+
+            <h3>
+              Lo que necesitas
+            </h3>
+          </div>
+
+
+          <div class="recipe-ingredient-list">
+
+            @for (
+              ingredient
+              of meal.ingredients;
+              track ingredient.ingredientId
+            ) {
+
+              <div class="recipe-ingredient">
+
+                <div>
+                  <strong>
+                    {{ ingredient.name }}
+                  </strong>
+
+                  @if (
+                    ingredient.productBrand
+                  ) {
+                    <small>
+                      {{
+                        ingredient.productBrand
+                      }}
+                    </small>
+                  }
+
+                  @if (
+                    ingredient.measurementBasis
+                  ) {
+                    <small>
+                      {{
+                        ingredient.measurementBasis
+                      }}
+                    </small>
+                  }
+                </div>
+
+                <span>
+                  {{
+                    scaledQuantity(
+                      ingredient,
+                      meal
+                    )
+                      | number:'1.0-2'
+                  }}
+                  {{ ingredient.unit }}
+                </span>
+
+              </div>
+
+            }
+
+          </div>
+
+        </section>
+
+
+        @if (meal.steps?.length) {
+
+          <section class="recipe-section">
+
+            <div class="recipe-section-heading">
+              <span class="eyebrow">
+                Preparación
+              </span>
+
+              <h3>
+                Paso a paso
+              </h3>
+            </div>
+
+
+            <ol class="recipe-steps">
+
+              @for (
+                step of meal.steps;
+                track $index
+              ) {
+
+                <li>
+                  <span>
+                    {{ $index + 1 }}
+                  </span>
+
+                  <p>
+                    {{ step }}
+                  </p>
+                </li>
+
+              }
+
+            </ol>
+
+          </section>
+
+        } @else {
+
+          <section class="recipe-section recipe-no-steps">
+
+            <span class="eyebrow">
+              Preparación
+            </span>
+
+            <p>
+              Este plan todavía no incluye
+              instrucciones de preparación.
+            </p>
+
+          </section>
+
+        }
+
+
+        @if (meal.notes) {
+
+          <section class="recipe-notes">
+
+            <span class="eyebrow">
+              Notas
+            </span>
+
+            <p>
+              {{ meal.notes }}
+            </p>
+
+          </section>
+
+        }
+
+      </article>
+
+    </div>
+
+  }
+
 </section>

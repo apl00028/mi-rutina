@@ -84,6 +84,52 @@ export const routes: Routes = [
     ]
   },
   {
+    path: 'entrenar/natacion',
+    loadComponent: () =>
+      import(
+        './pages/endurance/endurance'
+      ).then(
+        module => module.Endurance
+      ),
+    data: {
+      discipline: 'swimming'
+    },
+    canActivate: [
+      accessGuard
+    ]
+  },
+  {
+    path: 'entrenar/bicicleta',
+    loadComponent: () =>
+      import(
+        './pages/endurance/endurance'
+      ).then(
+        module => module.Endurance
+      ),
+    data: {
+      discipline: 'cycling'
+    },
+    canActivate: [
+      accessGuard
+    ]
+  },
+  {
+    path: 'entrenar/correr',
+    loadComponent: () =>
+      import(
+        './pages/endurance/endurance'
+      ).then(
+        module => module.Endurance
+      ),
+    data: {
+      discipline: 'running'
+    },
+    canActivate: [
+      accessGuard
+    ]
+  },
+
+  {
     path: 'rutinas',
     loadComponent: () =>
       import(

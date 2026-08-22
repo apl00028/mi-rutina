@@ -821,3 +821,53 @@ select:focus {
     box-sizing: border-box;
   }
 }
+
+
+/* Health data export */
+
+.health-tabs .health-export-button {
+  margin-left: auto;
+
+  border: 1px solid var(--border);
+  border-radius: 9px;
+
+  padding: 8px 13px;
+
+  background: var(--card);
+  color: inherit;
+
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 700;
+
+  cursor: pointer;
+
+  transition:
+    border-color 0.15s ease,
+    background 0.15s ease;
+}
+
+.health-tabs
+.health-export-button:hover:not(:disabled) {
+  border-color: var(--brand);
+}
+
+.health-tabs
+.health-export-button:disabled {
+  cursor: wait;
+  opacity: 0.45;
+}
+
+
+@media (max-width: 700px) {
+
+  .health-tabs {
+    flex-wrap: wrap;
+  }
+
+  .health-tabs
+  .health-export-button {
+    margin-left: auto;
+  }
+}
+

@@ -4,6 +4,7 @@ import {
   signal
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import * as XLSX from 'xlsx';
 import {
   HttpClient,
   HttpHeaders
@@ -1858,6 +1859,309 @@ export class Health implements OnInit {
       min: rawMin - padding,
       max: rawMax + padding
     };
+  }
+
+
+  buildHealthExportWorkbook():
+    XLSX.WorkBook {
+
+    const workbook =
+      XLSX.utils.book_new();
+
+    const sortByDate = <
+      T extends {
+        measurementDate: string
+      }
+    >(
+      values: T[]
+    ): T[] =>
+      [...values].sort(
+        (a, b) =>
+          a.measurementDate
+            .localeCompare(
+              b.measurementDate
+            )
+      );
+
+
+    const allMetrics = [
+      ...this.metricOptions(
+        'composition'
+      ).map(
+        metric => ({
+          family:
+            'Peso y composición',
+          ...metric
+        })
+      ),
+
+      ...this.metricOptions(
+        'measurements'
+      ).map(
+        metric => ({
+          family:
+            'Medidas corporales',
+          ...metric
+        })
+      )
+    ];
+
+
+    const summaryRows = [
+      [
+        'GymOS Health Export',
+        'Versión 1'
+      ],
+      [
+        'Exportado',
+        new Date().toISOString()
+      ],
+      [],
+      [
+        'Familia',
+        'Métrica',
+        'Último valor',
+        'Unidad',
+        'Cambio vs anterior'
+      ],
+
+      ...allMetrics.map(
+        metric => [
+          metric.family,
+          metric.label,
+          this.metricLatest(
+            metric.key
+          ) ?? '',
+          metric.unit,
+          this.metricChange(
+            metric.key
+          ) ?? ''
+        ]
+      ),
+
+      [],
+      [
+        'Peso - media últimos 7 días',
+        this.summary()
+          ?.recentAverageKg ?? '',
+        'kg'
+      ],
+      [
+        'Peso - media período anterior',
+        this.summary()
+          ?.previousAverageKg ?? '',
+        'kg'
+      ],
+      [
+        'Peso - cambio entre períodos',
+        this.summary()
+          ?.changeKg ?? '',
+        'kg'
+      ],
+      [
+        'Peso - cambio porcentual',
+        this.summary()
+          ?.changePercent ?? '',
+        '%'
+      ]
+    ];
+
+
+    const weightRows = [
+      [
+        'Fecha',
+        'Peso (kg)',
+        'Grasa corporal (%)',
+        'Masa muscular (kg)',
+        'Agua corporal (%)',
+        'Índice grasa visceral',
+        'Origen',
+        'Notas'
+      ],
+
+      ...sortByDate(
+        this.weights()
+      ).map(
+        item => [
+          item.measurementDate,
+          item.weightKg,
+          item.bodyFatPercent ?? '',
+          item.muscleMassKg ?? '',
+          item.bodyWaterPercent ?? '',
+          item.visceralFatIndex ?? '',
+          item.source,
+          item.notes ?? ''
+        ]
+      )
+    ];
+
+
+    const bodyRows = [
+      [
+        'Fecha',
+        'Cintura (cm)',
+        'Abdomen (cm)',
+        'Pecho (cm)',
+        'Hombros (cm)',
+        'Cuello (cm)',
+        'Brazo izquierdo (cm)',
+        'Brazo derecho (cm)',
+        'Muslo izquierdo (cm)',
+        'Muslo derecho (cm)',
+        'Notas'
+      ],
+
+      ...sortByDate(
+        this.bodyMeasurements()
+      ).map(
+        item => [
+          item.measurementDate,
+          item.waistCm ?? '',
+          item.abdomenCm ?? '',
+          item.chestCm ?? '',
+          item.shouldersCm ?? '',
+          item.neckCm ?? '',
+          item.leftArmCm ?? '',
+          item.rightArmCm ?? '',
+          item.leftThighCm ?? '',
+          item.rightThighCm ?? '',
+          item.notes ?? ''
+        ]
+      )
+    ];
+
+
+    const dailyRows = [
+      [
+        'Fecha',
+        'Hambre (1-5)',
+        'Adherencia nutricional (%)',
+        'Notas'
+      ],
+
+      ...sortByDate(
+        this.dailyCheckins()
+      ).map(
+        item => [
+          item.measurementDate,
+          item.hunger ?? '',
+          item.dietAdherencePercent
+            ?? '',
+          item.notes ?? ''
+        ]
+      )
+    ];
+
+
+    const weeklyRows = [
+      [
+        'Semana',
+        'Fatiga (1-5)',
+        'Hambre (1-5)',
+        'Recuperación (1-5)',
+        'Motivación (1-5)',
+        'Cintura legacy (cm)',
+        'Adherencia nutricional (%)',
+        'Notas'
+      ],
+
+      ...[...this.checkins()]
+        .sort(
+          (a, b) =>
+            a.weekStart.localeCompare(
+              b.weekStart
+            )
+        )
+        .map(
+          item => [
+            item.weekStart,
+            item.fatigue ?? '',
+            item.hunger ?? '',
+            item.recovery ?? '',
+            item.motivation ?? '',
+            item.waistCm ?? '',
+            item.dietAdherencePercent
+              ?? '',
+            item.notes ?? ''
+          ]
+        )
+    ];
+
+
+    const sheets = [
+      [
+        'Resumen',
+        summaryRows
+      ],
+      [
+        'Peso y composición',
+        weightRows
+      ],
+      [
+        'Medidas corporales',
+        bodyRows
+      ],
+      [
+        'Estado diario',
+        dailyRows
+      ],
+      [
+        'Estado semanal',
+        weeklyRows
+      ]
+    ] as const;
+
+
+    for (
+      const [name, rows]
+      of sheets
+    ) {
+
+      const sheet =
+        XLSX.utils.aoa_to_sheet(
+          rows
+        );
+
+      sheet['!cols'] =
+        Array.from(
+          {
+            length:
+              Math.max(
+                ...rows.map(
+                  row => row.length
+                )
+              )
+          },
+          () => ({
+            wch: 22
+          })
+        );
+
+      XLSX.utils.book_append_sheet(
+        workbook,
+        sheet,
+        name
+      );
+    }
+
+    return workbook;
+  }
+
+
+  exportHealthData(): void {
+
+    const workbook =
+      this.buildHealthExportWorkbook();
+
+    const today =
+      new Date()
+        .toISOString()
+        .slice(0, 10);
+
+    XLSX.writeFile(
+      workbook,
+      `gymos-health-${today}.xlsx`
+    );
   }
 
 

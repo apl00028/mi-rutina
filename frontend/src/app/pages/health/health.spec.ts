@@ -736,4 +736,38 @@ describe('Health', () => {
     }
   );
 
+
+  it(
+    'builds a complete health export workbook',
+    () => {
+
+      const workbook =
+        component
+          .buildHealthExportWorkbook();
+
+      expect(
+        workbook.SheetNames
+      ).toEqual([
+        'Resumen',
+        'Peso y composición',
+        'Medidas corporales',
+        'Estado diario',
+        'Estado semanal'
+      ]);
+
+      expect(
+        workbook.Sheets[
+          'Peso y composición'
+        ]
+      ).toBeTruthy();
+
+      expect(
+        workbook.Sheets[
+          'Medidas corporales'
+        ]
+      ).toBeTruthy();
+    }
+  );
+
+
 });

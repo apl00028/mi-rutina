@@ -13,6 +13,7 @@
         que ayudará a adaptar entrenamiento y nutrición.
       </p>
     </div>
+
   </header>
 
 
@@ -34,6 +35,15 @@
       (click)="activeSection.set('weekly')"
     >
       Estado
+    </button>
+
+    <button
+      type="button"
+      class="health-export-button"
+      [disabled]="loading()"
+      (click)="exportHealthData()"
+    >
+      Exportar para análisis
     </button>
   </nav>
 

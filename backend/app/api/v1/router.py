@@ -5,7 +5,7 @@ from app.domains.analytics.router import (
     router as analytics_router,
 )
 from app.domains.exercises.router import router as exercises_router
-from app.domains.health.router import router as health_router
+from app.domains.health.router import router as system_health_router
 from app.domains.account.router import router as account_router
 from app.domains.routines.router import router as routines_router
 from app.domains.workouts.router import (
@@ -15,6 +15,7 @@ from app.domains.onboarding.router import (
     router as onboarding_router,
 )
 from app.domains.nutrition.router import router as nutrition_router
+from app.domains.health_tracking.router import router as health_tracking_router
 
 
 router = APIRouter(
@@ -22,7 +23,7 @@ router = APIRouter(
 )
 
 router.include_router(
-    health_router
+    system_health_router
 )
 
 router.include_router(
@@ -55,4 +56,8 @@ router.include_router(
 
 router.include_router(
     nutrition_router
+)
+
+router.include_router(
+    health_tracking_router
 )

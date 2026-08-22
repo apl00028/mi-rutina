@@ -108,6 +108,18 @@ export const routes: Routes = [
     ]
   },
   {
+    path: 'salud',
+    loadComponent: () =>
+      import(
+        './pages/health/health'
+      ).then(
+        module => module.Health
+      ),
+    canActivate: [
+      accessGuard
+    ]
+  },
+  {
     path: 'ajustes',
     loadComponent: () =>
       import(

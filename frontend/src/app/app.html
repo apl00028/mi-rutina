@@ -129,6 +129,28 @@
           }
         </a>
 
+        <a
+          routerLink="/salud"
+          routerLinkActive="active"
+          [attr.aria-current]="
+            isCurrentRoute('/salud')
+              ? 'page'
+              : null
+          "
+          title="Salud"
+        >
+          <span class="nav-icon">
+            ♡
+          </span>
+
+          @if (sidebarExpanded()) {
+            <span class="nav-label">
+              Salud
+            </span>
+          }
+        </a>
+
+
       </nav>
 
       <div class="sidebar-footer">
@@ -303,6 +325,34 @@
                 }
               </a>
 
+
+              <a
+                routerLink="/salud"
+                routerLinkActive="active"
+                [attr.aria-current]="
+                  isCurrentRoute('/salud')
+                    ? 'page'
+                    : null
+                "
+                (click)="closeMobileNav()"
+              >
+                <span
+                  class="nav-icon"
+                  aria-hidden="true"
+                >
+                  ♡
+                </span>
+
+                <span class="nav-label">
+                  Salud
+                </span>
+
+                @if (isCurrentRoute('/salud')) {
+                  <span class="active-marker">
+                    Actual
+                  </span>
+                }
+              </a>
 
               <a
                 routerLink="/ajustes"
@@ -633,6 +683,28 @@
 
         <span class="nav-label">
           Nutrición
+        </span>
+      </a>
+
+      <a
+        routerLink="/salud"
+        routerLinkActive="active"
+        [attr.aria-current]="
+          isCurrentRoute('/salud')
+            ? 'page'
+            : null
+        "
+        aria-label="Ir a Salud"
+      >
+        <span
+          class="nav-icon"
+          aria-hidden="true"
+        >
+          ♡
+        </span>
+
+        <span class="nav-label">
+          Salud
         </span>
       </a>
 

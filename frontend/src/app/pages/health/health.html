@@ -1,0 +1,506 @@
+<section class="health-page">
+
+  <header class="health-header">
+    <div>
+      <span class="eyebrow">
+        GymOS
+      </span>
+
+      <h1>Salud</h1>
+
+      <p>
+        Sigue tu evolución y registra el contexto
+        que ayudará a adaptar entrenamiento y nutrición.
+      </p>
+    </div>
+  </header>
+
+
+  @if (error()) {
+    <div class="message error">
+      {{ error() }}
+    </div>
+  }
+
+  @if (message()) {
+    <div class="message success">
+      {{ message() }}
+    </div>
+  }
+
+
+  @if (loading()) {
+    <section class="panel">
+      Cargando datos de salud…
+    </section>
+  } @else {
+
+    <section class="summary-grid">
+
+      <article class="metric-card">
+        <span>Peso actual</span>
+
+        <strong>
+          @if (
+            summary()?.currentWeightKg !==
+            undefined
+          ) {
+            {{
+              summary()?.currentWeightKg
+                | number:'1.1-2'
+            }} kg
+          } @else {
+            —
+          }
+        </strong>
+
+        @if (
+          summary()?.latestMeasurementDate
+        ) {
+          <small>
+            {{
+              summary()
+                ?.latestMeasurementDate
+            }}
+          </small>
+        }
+      </article>
+
+
+      <article class="metric-card">
+        <span>Media últimos 7 días</span>
+
+        <strong>
+          @if (
+            summary()?.recentAverageKg !==
+            undefined
+          ) {
+            {{
+              summary()?.recentAverageKg
+                | number:'1.1-2'
+            }} kg
+          } @else {
+            —
+          }
+        </strong>
+
+        <small>
+          {{
+            summary()?.recentEntries ?? 0
+          }}
+          registros
+        </small>
+      </article>
+
+
+      <article class="metric-card">
+        <span>
+          Cambio vs. 7 días anteriores
+        </span>
+
+        <strong>
+          @if (hasTrend()) {
+            {{
+              summary()?.changeKg
+                | number:'1.1-2'
+            }} kg
+          } @else {
+            —
+          }
+        </strong>
+
+        @if (hasTrend()) {
+          <small>
+            {{
+              summary()?.changePercent
+                | number:'1.1-2'
+            }} %
+          </small>
+        } @else {
+          <small>
+            Aún faltan datos
+          </small>
+        }
+      </article>
+
+
+      <article class="metric-card">
+        <span>Grasa corporal</span>
+
+        <strong>
+          @if (
+            summary()
+              ?.currentBodyFatPercent !==
+            undefined
+          ) {
+            {{
+              summary()
+                ?.currentBodyFatPercent
+                | number:'1.1-2'
+            }} %
+          } @else {
+            —
+          }
+        </strong>
+
+        <small>
+          Última medición disponible
+        </small>
+      </article>
+
+    </section>
+
+
+    <div class="health-grid">
+
+      <section class="panel">
+
+        <div class="panel-heading">
+          <div>
+            <span class="eyebrow">
+              Seguimiento
+            </span>
+
+            <h2>Registrar peso</h2>
+          </div>
+        </div>
+
+        <form
+          class="form-grid"
+          (submit)="
+            $event.preventDefault();
+            saveWeight()
+          "
+        >
+
+          <label>
+            Fecha
+
+            <input
+              type="date"
+              [value]="weightDate()"
+              (input)="
+                weightDate.set(
+                  $any($event.target).value
+                )
+              "
+            />
+          </label>
+
+
+          <label>
+            Peso (kg)
+
+            <input
+              type="number"
+              inputmode="decimal"
+              min="20"
+              max="350"
+              step="0.1"
+              placeholder="75.4"
+              [value]="weightKg()"
+              (input)="
+                weightKg.set(
+                  $any($event.target).value
+                )
+              "
+            />
+          </label>
+
+
+          <details class="optional-metrics">
+            <summary>
+              Otras métricas opcionales
+            </summary>
+
+            <div class="optional-metrics-content">
+              <label>
+                Grasa corporal (%)
+
+                <input
+                  type="number"
+                  inputmode="decimal"
+                  min="0"
+                  max="100"
+                  step="0.1"
+                  placeholder="18.2"
+                  [value]="bodyFatPercent()"
+                  (input)="
+                    bodyFatPercent.set(
+                      $any($event.target).value
+                    )
+                  "
+                />
+              </label>
+
+              <p class="optional-hint">
+                Regístrala solo si dispones
+                de una medición.
+              </p>
+            </div>
+          </details>
+
+
+          <button
+            type="submit"
+            class="primary-button"
+            [disabled]="savingWeight()"
+          >
+            @if (savingWeight()) {
+              Guardando…
+            } @else {
+              Guardar peso
+            }
+          </button>
+
+        </form>
+
+      </section>
+
+
+      <section class="panel">
+
+        <div class="panel-heading">
+          <div>
+            <span class="eyebrow">
+              Semana
+            </span>
+
+            <h2>Check-in semanal</h2>
+
+            <p>
+              Semana del
+              {{ checkinWeekStart() }}
+            </p>
+          </div>
+        </div>
+
+
+        <form
+          class="form-grid"
+          (submit)="
+            $event.preventDefault();
+            saveCheckin()
+          "
+        >
+
+          <label>
+            Fatiga
+
+            <select
+              [value]="fatigue()"
+              (change)="
+                fatigue.set(
+                  $any($event.target).value
+                )
+              "
+            >
+              <option value="">
+                Selecciona
+              </option>
+              <option value="1">
+                1 · Muy baja
+              </option>
+              <option value="2">2</option>
+              <option value="3">
+                3 · Media
+              </option>
+              <option value="4">4</option>
+              <option value="5">
+                5 · Muy alta
+              </option>
+            </select>
+          </label>
+
+
+          <label>
+            Hambre
+
+            <select
+              [value]="hunger()"
+              (change)="
+                hunger.set(
+                  $any($event.target).value
+                )
+              "
+            >
+              <option value="">
+                Selecciona
+              </option>
+              <option value="1">
+                1 · Muy baja
+              </option>
+              <option value="2">2</option>
+              <option value="3">
+                3 · Media
+              </option>
+              <option value="4">4</option>
+              <option value="5">
+                5 · Muy alta
+              </option>
+            </select>
+          </label>
+
+
+          <label>
+            Recuperación
+
+            <select
+              [value]="recovery()"
+              (change)="
+                recovery.set(
+                  $any($event.target).value
+                )
+              "
+            >
+              <option value="">
+                Selecciona
+              </option>
+              <option value="1">
+                1 · Muy mala
+              </option>
+              <option value="2">2</option>
+              <option value="3">
+                3 · Normal
+              </option>
+              <option value="4">4</option>
+              <option value="5">
+                5 · Excelente
+              </option>
+            </select>
+          </label>
+
+
+          <label>
+            Adherencia nutricional (%)
+
+            <input
+              type="number"
+              min="0"
+              max="100"
+              step="1"
+              placeholder="90"
+              [value]="adherence()"
+              (input)="
+                adherence.set(
+                  $any($event.target).value
+                )
+              "
+            />
+          </label>
+
+
+          <button
+            type="submit"
+            class="primary-button"
+            [disabled]="savingCheckin()"
+          >
+            @if (savingCheckin()) {
+              Guardando…
+            } @else {
+              Guardar check-in
+            }
+          </button>
+
+        </form>
+
+      </section>
+
+    </div>
+
+
+    <section class="panel history-panel">
+
+      <div class="panel-heading">
+        <div>
+          <span class="eyebrow">
+            Historial
+          </span>
+
+          <h2>Últimos pesos</h2>
+        </div>
+      </div>
+
+
+      @if (!weights().length) {
+
+        <p class="empty">
+          Todavía no hay pesos registrados.
+        </p>
+
+      } @else {
+
+        <div class="weight-list">
+
+          @for (
+            entry of weights().slice(0, 7);
+            track entry.id
+          ) {
+            <div class="weight-row">
+
+              <span>
+                {{ entry.measurementDate }}
+              </span>
+
+              <strong>
+                {{
+                  entry.weightKg
+                    | number:'1.1-2'
+                }}
+                kg
+              </strong>
+
+              <span>
+                @if (
+                  entry.bodyFatPercent !==
+                  undefined
+                ) {
+                  {{
+                    entry.bodyFatPercent
+                      | number:'1.1-2'
+                  }}
+                  % grasa
+                } @else {
+                  —
+                }
+              </span>
+
+              <button
+                type="button"
+                class="delete-weight-button"
+                [disabled]="
+                  deletingWeight() ===
+                  entry.measurementDate
+                "
+                (click)="
+                  deleteWeight(
+                    entry.measurementDate
+                  )
+                "
+                [attr.aria-label]="
+                  'Eliminar peso del '
+                  + entry.measurementDate
+                "
+              >
+                @if (
+                  deletingWeight() ===
+                  entry.measurementDate
+                ) {
+                  …
+                } @else {
+                  ×
+                }
+              </button>
+
+            </div>
+          }
+
+        </div>
+
+      }
+
+    </section>
+
+  }
+
+</section>

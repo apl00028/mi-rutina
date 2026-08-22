@@ -264,6 +264,8 @@ describe('App', () => {
       .toEqual([accessGuard]);
     expect(routeByPath.get('nutricion')?.canActivate)
       .toEqual([accessGuard]);
+    expect(routeByPath.get('salud')?.canActivate)
+      .toEqual([accessGuard]);
     expect(routeByPath.get('ajustes')?.canActivate)
       .toEqual([accessGuard]);
     expect(routeByPath.get('ajustes/cuenta')?.canActivate)
@@ -297,7 +299,7 @@ describe('App', () => {
         )
       ) as HTMLAnchorElement[];
 
-    expect(links).toHaveLength(4);
+    expect(links).toHaveLength(5);
     expect(
       links.map(link =>
         link.textContent
@@ -308,7 +310,8 @@ describe('App', () => {
       '⌂ Inicio',
       '◫ Entrenar',
       '☷ Planificación',
-      '◉ Nutrición'
+      '◉ Nutrición',
+      '♡ Salud'
     ]);
     expect(
       links.map(link =>
@@ -318,7 +321,8 @@ describe('App', () => {
       '/',
       '/entrenar',
       '/rutinas',
-      '/nutricion'
+      '/nutricion',
+      '/salud'
     ]);
     expect(
       fixture.nativeElement.querySelector(
@@ -498,6 +502,7 @@ describe('App', () => {
       '/entrenar',
       '/rutinas',
       '/nutricion',
+      '/salud',
       '/ajustes'
     ]);
     expect(

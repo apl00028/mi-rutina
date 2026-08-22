@@ -886,7 +886,7 @@
 
     display: grid;
     grid-template-columns:
-      repeat(3, minmax(0, 1fr));
+      repeat(5, minmax(0, 1fr));
     gap: 4px;
 
     box-sizing: border-box;

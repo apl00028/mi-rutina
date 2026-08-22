@@ -1,0 +1,327 @@
+.health-page {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 32px;
+}
+
+.health-header {
+  margin-bottom: 24px;
+}
+
+.health-header h1,
+.panel h2,
+.health-header p,
+.panel p {
+  margin-top: 0;
+}
+
+.health-header p {
+  max-width: 680px;
+  color: var(--gymos-text-muted);
+}
+
+.eyebrow {
+  display: block;
+  margin-bottom: 6px;
+
+  color: var(--gymos-text-muted);
+
+  font-size: 0.76rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.summary-grid {
+  display: grid;
+  grid-template-columns:
+    repeat(4, minmax(0, 1fr));
+
+  gap: 14px;
+
+  margin-bottom: 20px;
+}
+
+.metric-card,
+.panel {
+  border:
+    1px solid var(--gymos-border);
+
+  border-radius: 14px;
+
+  background: var(--gymos-surface);
+}
+
+.metric-card {
+  display: grid;
+  gap: 8px;
+
+  padding: 18px;
+}
+
+.metric-card > span {
+  color: var(--gymos-text-muted);
+
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.metric-card strong {
+  color: var(--gymos-text);
+
+  font-size: 1.5rem;
+  line-height: 1;
+}
+
+.metric-card small {
+  color: var(--gymos-text-muted);
+}
+
+.health-grid {
+  display: grid;
+  grid-template-columns:
+    repeat(2, minmax(0, 1fr));
+
+  gap: 20px;
+}
+
+.panel {
+  padding: 20px;
+}
+
+.panel-heading {
+  margin-bottom: 18px;
+}
+
+.panel-heading h2 {
+  margin-bottom: 4px;
+}
+
+.panel-heading p {
+  margin-bottom: 0;
+
+  color: var(--gymos-text-muted);
+}
+
+.form-grid {
+  display: grid;
+  gap: 14px;
+}
+
+label {
+  display: grid;
+  gap: 7px;
+
+  color: var(--gymos-text);
+
+  font-size: 0.86rem;
+  font-weight: 700;
+}
+
+.optional {
+  color: var(--gymos-text-muted);
+
+  font-size: 0.72rem;
+  font-weight: 500;
+}
+
+input,
+select {
+  width: 100%;
+  min-height: 44px;
+
+  box-sizing: border-box;
+
+  padding: 9px 11px;
+
+  border:
+    1px solid var(--gymos-border);
+
+  border-radius: 9px;
+
+  background: var(--gymos-bg);
+  color: var(--gymos-text);
+
+  font: inherit;
+}
+
+input:focus,
+select:focus {
+  outline:
+    2px solid var(--gymos-accent);
+
+  outline-offset: 1px;
+}
+
+.primary-button {
+  min-height: 44px;
+
+  border: 0;
+  border-radius: 10px;
+
+  background: var(--gymos-accent);
+  color: var(--gymos-accent-contrast);
+
+  font: inherit;
+  font-weight: 800;
+
+  cursor: pointer;
+}
+
+.primary-button:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+
+.history-panel {
+  margin-top: 20px;
+}
+
+.weight-list {
+  display: grid;
+}
+
+.weight-row {
+  display: grid;
+  grid-template-columns:
+    minmax(0, 1fr)
+    auto
+    minmax(90px, auto);
+
+  align-items: center;
+  gap: 16px;
+
+  padding: 12px 0;
+
+  border-top:
+    1px solid var(--gymos-border);
+}
+
+.weight-row:first-child {
+  border-top: 0;
+}
+
+.weight-row > span {
+  color: var(--gymos-text-muted);
+
+  font-size: 0.88rem;
+}
+
+.weight-row > span:last-child {
+  text-align: right;
+}
+
+.empty {
+  margin-bottom: 0;
+
+  color: var(--gymos-text-muted);
+}
+
+.message {
+  margin-bottom: 18px;
+
+  padding: 12px 14px;
+
+  border-radius: 10px;
+}
+
+.message.error {
+  border:
+    1px solid var(--gymos-danger);
+
+  color: var(--gymos-danger);
+}
+
+.message.success {
+  border:
+    1px solid var(--gymos-accent);
+}
+
+@media (max-width: 900px) {
+  .summary-grid {
+    grid-template-columns:
+      repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 700px) {
+  .health-page {
+    padding: 20px 16px;
+  }
+
+  .health-grid,
+  .summary-grid {
+    grid-template-columns:
+      minmax(0, 1fr);
+  }
+
+  .weight-row {
+    grid-template-columns:
+      minmax(0, 1fr)
+      auto;
+  }
+
+  .weight-row > span:last-child {
+    grid-column: 1 / -1;
+    text-align: left;
+  }
+}
+
+.optional-metrics {
+  grid-column: 1 / -1;
+
+  border: 1px solid var(--gymos-border);
+  border-radius: 10px;
+
+  background: var(--gymos-surface-muted);
+}
+
+.optional-metrics summary {
+  padding: 14px 16px;
+
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.optional-metrics-content {
+  display: grid;
+  gap: 8px;
+
+  padding: 0 16px 16px;
+}
+
+.optional-hint {
+  margin: 0;
+
+  color: var(--gymos-text-muted);
+  font-size: 0.82rem;
+}
+
+.delete-weight-button {
+  width: 34px;
+  height: 34px;
+
+  display: grid;
+  place-items: center;
+
+  border: 1px solid var(--gymos-border);
+  border-radius: 9px;
+
+  background: transparent;
+  color: var(--gymos-text-muted);
+
+  font: inherit;
+  font-size: 1.2rem;
+  cursor: pointer;
+}
+
+.delete-weight-button:hover {
+  border-color: var(--gymos-danger);
+  background: var(--gymos-danger-bg);
+  color: var(--gymos-danger);
+}
+
+.delete-weight-button:disabled {
+  opacity: 0.5;
+  cursor: wait;
+}

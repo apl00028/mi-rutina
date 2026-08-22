@@ -1,5 +1,115 @@
-<section class="routines-page">
-  <h1>Planificación</h1>
+<section
+  class="routines-page"
+  [class.routine-only]="
+    trainingView() === 'routine'
+  "
+  [class.analysis-only]="
+    trainingView() === 'analysis'
+  "
+>
+
+  <header class="training-hub-header">
+
+    <span class="eyebrow">
+      Entrenar
+    </span>
+
+    <div class="training-hub-controls">
+
+      <div
+        class="training-discipline-selector"
+      >
+        <label for="routine-discipline">
+          Disciplina
+        </label>
+
+        <select
+          id="routine-discipline"
+          #disciplineSelect
+          (change)="
+            changeTrainingDiscipline(
+              disciplineSelect.value
+            )
+          "
+        >
+          <option
+            value="strength"
+            selected
+          >
+            Fuerza
+          </option>
+
+          <option value="swimming">
+            Natación
+          </option>
+
+          <option value="cycling">
+            Bicicleta
+          </option>
+
+          <option value="running">
+            Correr
+          </option>
+        </select>
+      </div>
+
+
+      <nav
+        class="training-view-tabs"
+        aria-label="Vista de entrenamiento"
+      >
+        <button
+          type="button"
+          (click)="
+            openTrainingSection(
+              'sessions'
+            )
+          "
+        >
+          Sesiones
+        </button>
+
+        <button
+          type="button"
+          [class.active]="
+            trainingView() === 'routine'
+          "
+          (click)="
+            openTrainingSection(
+              'routine'
+            )
+          "
+        >
+          Rutina
+        </button>
+
+        <button
+          type="button"
+          [class.active]="
+            trainingView() === 'analysis'
+          "
+          (click)="
+            openTrainingSection(
+              'analysis'
+            )
+          "
+        >
+          Análisis
+        </button>
+      </nav>
+
+    </div>
+
+
+    <h1>
+      {{
+        trainingView() === 'analysis'
+          ? 'Análisis de entrenamiento'
+          : 'Gestionar rutina'
+      }}
+    </h1>
+
+  </header>
 
   @if (saveMessage()) {
     <p class="success-message">
@@ -127,27 +237,8 @@
   }
 
   @if (!creating()) {
-    <details class="routine-management">
-      <summary class="routine-management-summary">
-        <span class="management-icon">
-          ☰
-        </span>
+    <section class="routine-management routine-management-direct">
 
-        <span class="management-content">
-          <strong>
-            Gestionar rutina
-          </strong>
-
-          <span>
-            Crear, importar, generar plantillas
-            o exportar tus registros de entrenamiento.
-          </span>
-        </span>
-
-        <span class="management-chevron">
-          ›
-        </span>
-      </summary>
 
       <div class="routine-actions">
         <button
@@ -259,10 +350,13 @@
           </span>
         </button>
       </div>
-    </details>
+    </section>
   }
 
-<details class="routine-management analysis-management">
+<details
+  class="routine-management analysis-management"
+  [open]="trainingView() === 'analysis'"
+>
   <summary class="routine-management-summary">
     <span class="management-icon">
       📊
@@ -744,8 +838,12 @@
               </div>
             }
 
-            <div class="analysis-table">
-              <div class="analysis-table-row analysis-table-head">
+            <div
+              class="analysis-table analysis-history-table"
+            >
+              <div
+                class="analysis-table-row analysis-table-head"
+              >
                 <span>Fecha</span>
                 <span>Peso máximo</span>
                 <span>Mejor e1RM</span>
@@ -753,6 +851,10 @@
                 <span>Reps totales</span>
                 <span>Series válidas</span>
                 <span>RIR</span>
+                <span
+                  class="analysis-delete-heading"
+                  aria-hidden="true"
+                ></span>
               </div>
 
               @for (
@@ -796,6 +898,38 @@
                         point.rir
                       )
                     }}
+                  </span>
+
+                  <span class="analysis-delete-cell">
+                    <button
+                      type="button"
+                      class="analysis-delete-record"
+                      [attr.data-analytics-delete]="
+                        point.workoutId
+                      "
+                      [disabled]="
+                        deletingAnalyticsRecord() ===
+                        point.workoutId + ':' +
+                        selectedAnalyticsExerciseId()
+                      "
+                      (click)="
+                        deleteAnalyticsRecord(point)
+                      "
+                      [attr.aria-label]="
+                        'Eliminar registro del '
+                        + formatDate(point.date)
+                      "
+                    >
+                      @if (
+                        deletingAnalyticsRecord() ===
+                        point.workoutId + ':' +
+                        selectedAnalyticsExerciseId()
+                      ) {
+                        …
+                      } @else {
+                        ×
+                      }
+                    </button>
                   </span>
                 </div>
               }

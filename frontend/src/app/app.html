@@ -88,27 +88,6 @@
         </a>
 
         <a
-          routerLink="/rutinas"
-          routerLinkActive="active"
-          [attr.aria-current]="
-            isCurrentRoute('/rutinas')
-              ? 'page'
-              : null
-          "
-          title="Planificación"
-        >
-          <span class="nav-icon">
-            ☷
-          </span>
-
-          @if (sidebarExpanded()) {
-            <span class="nav-label">
-              Planificación
-            </span>
-          }
-        </a>
-
-        <a
           routerLink="/nutricion"
           routerLinkActive="active"
           [attr.aria-current]="
@@ -263,34 +242,6 @@
                 </span>
 
                 @if (isCurrentRoute('/entrenar')) {
-                  <span class="active-marker">
-                    Actual
-                  </span>
-                }
-              </a>
-
-              <a
-                routerLink="/rutinas"
-                routerLinkActive="active"
-                [attr.aria-current]="
-                  isCurrentRoute('/rutinas')
-                    ? 'page'
-                    : null
-                "
-                (click)="closeMobileNav()"
-              >
-                <span
-                  class="nav-icon"
-                  aria-hidden="true"
-                >
-                  ☷
-                </span>
-
-                <span class="nav-label">
-                  Planificación
-                </span>
-
-                @if (isCurrentRoute('/rutinas')) {
                   <span class="active-marker">
                     Actual
                   </span>
@@ -639,28 +590,6 @@
 
         <span class="nav-label">
           Entrenar
-        </span>
-      </a>
-
-      <a
-        routerLink="/rutinas"
-        routerLinkActive="active"
-        [attr.aria-current]="
-          isCurrentRoute('/rutinas')
-            ? 'page'
-            : null
-        "
-        aria-label="Ir a Planificación"
-      >
-        <span
-          class="nav-icon"
-          aria-hidden="true"
-        >
-          ☷
-        </span>
-
-        <span class="nav-label">
-          Planificación
         </span>
       </a>
 

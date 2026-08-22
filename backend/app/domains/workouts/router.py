@@ -7,6 +7,7 @@ from app.domains.exercises.custom_repository import SupabaseConfigError
 from app.domains.workouts.service import (
     create_user_workout,
     delete_user_workout,
+    delete_user_workout_exercise_record,
     get_user_workout_by_id,
     list_user_workouts,
     replace_user_workout,
@@ -132,3 +133,34 @@ async def delete_workout(
         raise HTTPException(status_code=404, detail="Workout not found")
 
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.delete(
+    "/workouts/{workout_id}/exercises/{exercise_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def delete_workout_exercise_record(
+    workout_id: str,
+    exercise_id: str,
+    user: AuthenticatedUser = Depends(require_user),
+) -> Response:
+    try:
+        deleted = (
+            await delete_user_workout_exercise_record(
+                user,
+                workout_id,
+                exercise_id,
+            )
+        )
+    except (httpx.HTTPError, RuntimeError) as exc:
+        _raise_workouts_http_error(exc)
+
+    if not deleted:
+        raise HTTPException(
+            status_code=404,
+            detail="Workout exercise record not found",
+        )
+
+    return Response(
+        status_code=status.HTTP_204_NO_CONTENT
+    )

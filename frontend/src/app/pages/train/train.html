@@ -891,6 +891,40 @@
             </select>
           </div>
 
+          <nav
+            class="training-view-tabs"
+            aria-label="Vista de entrenamiento"
+          >
+            <button
+              type="button"
+              class="active"
+            >
+              Sesiones
+            </button>
+
+            <button
+              type="button"
+              (click)="
+                openTrainingSection(
+                  'routine'
+                )
+              "
+            >
+              Rutina
+            </button>
+
+            <button
+              type="button"
+              (click)="
+                openTrainingSection(
+                  'analysis'
+                )
+              "
+            >
+              Análisis
+            </button>
+          </nav>
+
           <h1>
             Elige tu sesión
           </h1>

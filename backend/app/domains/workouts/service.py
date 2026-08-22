@@ -109,3 +109,50 @@ async def replace_user_workout(
         return None
 
     return workout_row_to_model(row)
+
+
+async def delete_user_workout_exercise_record(
+    user: AuthenticatedUser,
+    workout_id: str,
+    exercise_id: str,
+) -> bool:
+    row = await get_workout_by_id(
+        user,
+        workout_id,
+    )
+
+    if row is None:
+        return False
+
+    workout = workout_row_to_model(row)
+
+    remaining_sets = [
+        workout_set
+        for workout_set in workout.sets
+        if workout_set.exerciseId != exercise_id
+    ]
+
+    if len(remaining_sets) == len(workout.sets):
+        return False
+
+    # No dejamos workouts vacíos porque Analytics
+    # los contaría como entrenamientos realizados.
+    if not remaining_sets:
+        return await delete_workout(
+            user,
+            workout_id,
+        )
+
+    updated = workout.model_copy(
+        update={
+            "sets": remaining_sets
+        }
+    )
+
+    replaced = await replace_workout(
+        user,
+        workout_id,
+        workout_to_storage_payload(updated),
+    )
+
+    return replaced is not None

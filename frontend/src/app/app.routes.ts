@@ -130,16 +130,39 @@ export const routes: Routes = [
   },
 
   {
-    path: 'rutinas',
+    path: 'entrenar/rutina',
     loadComponent: () =>
       import(
         './pages/routines/routines'
       ).then(
         module => module.Routines
       ),
+    data: {
+      trainingView: 'routine'
+    },
     canActivate: [
       accessGuard
     ]
+  },
+  {
+    path: 'entrenar/analisis',
+    loadComponent: () =>
+      import(
+        './pages/routines/routines'
+      ).then(
+        module => module.Routines
+      ),
+    data: {
+      trainingView: 'analysis'
+    },
+    canActivate: [
+      accessGuard
+    ]
+  },
+  {
+    path: 'rutinas',
+    redirectTo: 'entrenar/rutina',
+    pathMatch: 'full'
   },
   {
     path: 'nutricion',

@@ -1,5 +1,9 @@
 import { Component, OnInit, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import {
+  ActivatedRoute,
+  Router
+} from '@angular/router';
 import { HttpClient, HttpHeaders } from '@angular/common/http';
 import { environment } from '../../../environments/environment';
 import * as XLSX from 'xlsx';
@@ -95,6 +99,11 @@ interface ImportValidationResult {
   autocorrections: ImportIssue[];
 }
 
+type TrainingView =
+  | 'routine'
+  | 'analysis';
+
+
 type TrainingAnalyticsPeriod =
   '4w' | '3m' | '6m' | 'all';
 
@@ -178,6 +187,9 @@ interface ChartPoint {
   styleUrl: './routines.scss'
 })
 export class Routines implements OnInit {
+  trainingView =
+    signal<TrainingView>('routine');
+
   exercises = signal<Exercise[]>([]);
   loadingExercises = signal(false);
   error = signal<string | null>(null);
@@ -215,6 +227,9 @@ export class Routines implements OnInit {
   selectedAnalyticsExerciseId =
     signal<string | null>(null);
 
+  deletingAnalyticsRecord =
+    signal<string | null>(null);
+
   sessions = signal<RoutineSessionDraft[]>([
     {
       sessionId: crypto.randomUUID(),
@@ -230,14 +245,70 @@ export class Routines implements OnInit {
 
   constructor(
     private http: HttpClient,
-    public auth: AuthService
+    public auth: AuthService,
+    private route: ActivatedRoute,
+    private router: Router
   ) {}
 
   async ngOnInit(): Promise<void> {
+
+    const view =
+      this.route.snapshot.data[
+        'trainingView'
+      ];
+
+    this.trainingView.set(
+      view === 'analysis'
+        ? 'analysis'
+        : 'routine'
+    );
+
     await Promise.all([
       this.loadExercises(),
       this.loadTrainingAnalytics()
     ]);
+  }
+
+
+  changeTrainingDiscipline(
+    discipline: string
+  ): void {
+
+    const routes:
+      Record<string, string> = {
+        strength: '/entrenar',
+        swimming:
+          '/entrenar/natacion',
+        cycling:
+          '/entrenar/bicicleta',
+        running:
+          '/entrenar/correr'
+      };
+
+    const target =
+      routes[discipline];
+
+    if (target) {
+      void this.router.navigateByUrl(
+        target
+      );
+    }
+  }
+
+
+  openTrainingSection(
+    section: 'sessions' | 'routine' | 'analysis'
+  ): void {
+
+    const routes = {
+      sessions: '/entrenar',
+      routine: '/entrenar/rutina',
+      analysis: '/entrenar/analisis'
+    };
+
+    void this.router.navigateByUrl(
+      routes[section]
+    );
   }
 
   private async getAuthHeaders(): Promise<HttpHeaders> {
@@ -649,6 +720,87 @@ export class Routines implements OnInit {
       )
       .join(' ');
   }
+
+  async deleteAnalyticsRecord(
+    point: ExerciseProgressPoint
+  ): Promise<void> {
+
+    const exerciseId =
+      this.selectedAnalyticsExerciseId();
+
+    if (
+      !exerciseId ||
+      this.deletingAnalyticsRecord()
+    ) {
+      return;
+    }
+
+    const exerciseName =
+      this.selectedProgress()?.name ??
+      'este ejercicio';
+
+    const confirmed =
+      window.confirm(
+        `¿Eliminar el registro de ${exerciseName} ` +
+        `del ${this.formatDate(point.date)}? ` +
+        'Se eliminarán únicamente las series de este ' +
+        'ejercicio en ese entrenamiento.'
+      );
+
+    if (!confirmed) {
+      return;
+    }
+
+    const deletionKey =
+      `${point.workoutId}:${exerciseId}`;
+
+    this.deletingAnalyticsRecord.set(
+      deletionKey
+    );
+
+    this.analysisError.set(null);
+
+    try {
+      const headers =
+        await this.getAuthHeaders();
+
+      await new Promise<void>(
+        (resolve, reject) => {
+          this.http
+            .delete<void>(
+              `${this.apiUrl}/workouts/` +
+              `${encodeURIComponent(point.workoutId)}` +
+              `/exercises/` +
+              `${encodeURIComponent(exerciseId)}`,
+              {
+                headers
+              }
+            )
+            .subscribe({
+              next: () => resolve(),
+              error: reject
+            });
+        }
+      );
+
+      await this.loadTrainingAnalytics();
+
+    } catch (err: any) {
+
+      this.analysisError.set(
+        err?.error?.detail ??
+        err?.message ??
+        'No se pudo eliminar el registro.'
+      );
+
+    } finally {
+
+      this.deletingAnalyticsRecord.set(
+        null
+      );
+    }
+  }
+
 
   selectAnalyticsExercise(
     event: Event

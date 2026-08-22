@@ -242,6 +242,22 @@ export class Train implements OnInit, OnDestroy {
     private router: Router
   ) {}
 
+  openTrainingSection(
+    section: 'sessions' | 'routine' | 'analysis'
+  ): void {
+
+    const routes = {
+      sessions: '/entrenar',
+      routine: '/entrenar/rutina',
+      analysis: '/entrenar/analisis'
+    };
+
+    void this.router.navigateByUrl(
+      routes[section]
+    );
+  }
+
+
   changeTrainingDiscipline(
     discipline: string
   ): void {

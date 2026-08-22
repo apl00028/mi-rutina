@@ -16,6 +16,9 @@ import {
   TestBed
 } from '@angular/core/testing';
 import {
+  provideRouter
+} from '@angular/router';
+import {
   afterEach,
   beforeEach,
   describe,
@@ -66,6 +69,7 @@ describe('Routines training analytics', () => {
       providers: [
         provideHttpClient(),
         provideHttpClientTesting(),
+        provideRouter([]),
         {
           provide: AuthService,
           useValue: {
@@ -1048,7 +1052,7 @@ describe('Routines training analytics', () => {
       pageText(fixture);
 
     expect(text).toContain(
-      'Planificación'
+      'Gestionar rutina'
     );
     expect(text).not.toContain(
       'Rutinas'

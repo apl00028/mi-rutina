@@ -260,8 +260,23 @@ describe('App', () => {
       .toEqual([accessGuard]);
     expect(routeByPath.get('entrenar')?.canActivate)
       .toEqual([accessGuard]);
-    expect(routeByPath.get('rutinas')?.canActivate)
-      .toEqual([accessGuard]);
+    expect(
+      routeByPath.get(
+        'entrenar/rutina'
+      )?.canActivate
+    ).toEqual([accessGuard]);
+
+    expect(
+      routeByPath.get(
+        'entrenar/analisis'
+      )?.canActivate
+    ).toEqual([accessGuard]);
+
+    expect(
+      routeByPath.get(
+        'rutinas'
+      )?.redirectTo
+    ).toBe('entrenar/rutina');
     expect(routeByPath.get('nutricion')?.canActivate)
       .toEqual([accessGuard]);
     expect(routeByPath.get('salud')?.canActivate)
@@ -299,7 +314,7 @@ describe('App', () => {
         )
       ) as HTMLAnchorElement[];
 
-    expect(links).toHaveLength(5);
+    expect(links).toHaveLength(4);
     expect(
       links.map(link =>
         link.textContent
@@ -309,7 +324,6 @@ describe('App', () => {
     ).toEqual([
       '⌂ Inicio',
       '◫ Entrenar',
-      '☷ Planificación',
       '◉ Nutrición',
       '♡ Salud'
     ]);
@@ -320,7 +334,6 @@ describe('App', () => {
     ).toEqual([
       '/',
       '/entrenar',
-      '/rutinas',
       '/nutricion',
       '/salud'
     ]);
@@ -459,12 +472,12 @@ describe('App', () => {
     button.click();
     fixture.detectChanges();
 
-    const routinesLink =
+    const nutritionLink =
       fixture.nativeElement.querySelector(
-        '.mobile-nav-menu a[href="/rutinas"]'
+        '.mobile-nav-menu a[href="/nutricion"]'
       ) as HTMLAnchorElement;
 
-    routinesLink.click();
+    nutritionLink.click();
     fixture.detectChanges();
 
     expect(
@@ -476,7 +489,7 @@ describe('App', () => {
 
   it('renders mobile brand navigation with the correct routes and active state', async () => {
     const fixture =
-      await createReadyApp('/rutinas');
+      await createReadyApp('/entrenar');
 
     const button =
       fixture.nativeElement.querySelector(
@@ -500,7 +513,6 @@ describe('App', () => {
     ).toEqual([
       '/',
       '/entrenar',
-      '/rutinas',
       '/nutricion',
       '/salud',
       '/ajustes'
@@ -511,7 +523,7 @@ describe('App', () => {
           ?.replace(/\s+/g, ' ')
           .trim()
       )
-    ).toContain('☷ Planificación Actual');
+    ).toContain('◫ Entrenar Actual');
 
     const activeLink =
       fixture.nativeElement.querySelector(
@@ -519,7 +531,7 @@ describe('App', () => {
       ) as HTMLAnchorElement;
 
     expect(activeLink.getAttribute('href'))
-      .toBe('/rutinas');
+      .toBe('/entrenar');
     expect(activeLink.getAttribute('aria-current'))
       .toBe('page');
     expect(activeLink.textContent).toContain('Actual');

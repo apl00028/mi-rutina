@@ -125,6 +125,17 @@ interface ShoppingListItem {
 }
 
 
+interface NutritionMealCompletion {
+  id: string;
+  planId: string;
+  mealDate: string;
+  mealId: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+
+
 @Component({
   selector: 'app-nutrition',
   standalone: true,
@@ -160,6 +171,15 @@ export class Nutrition implements OnInit {
   shoppingLoading =
     signal(false);
 
+  selectedNutritionDate =
+    signal('');
+
+  mealCompletions =
+    signal<NutritionMealCompletion[]>([]);
+
+  savingMealCompletion =
+    signal<string | null>(null);
+
 
   purchasedItems =
     signal<Set<string>>(
@@ -187,6 +207,17 @@ export class Nutrition implements OnInit {
 
   async ngOnInit(): Promise<void> {
     await this.loadPlans();
+
+    this.selectDefaultNutritionDay();
+
+    const plan =
+      this.activePlan();
+
+    if (plan) {
+      await this.loadMealCompletions(
+        plan.planId
+      );
+    }
   }
 
 
@@ -596,6 +627,432 @@ export class Nutrition implements OnInit {
   }
 
 
+  async loadMealCompletions(
+    planId: string
+  ): Promise<void> {
+
+    try {
+      const headers =
+        await this.authHeaders();
+
+      const items =
+        await new Promise<
+          NutritionMealCompletion[]
+        >(
+          (resolve, reject) => {
+            this.http
+              .get<NutritionMealCompletion[]>(
+                (
+                  `${this.apiUrl}`
+                  + `/nutrition/plans/`
+                  + `${encodeURIComponent(planId)}`
+                  + `/meal-completions`
+                ),
+                { headers }
+              )
+              .subscribe({
+                next: resolve,
+                error: reject
+              });
+          }
+        );
+
+      this.mealCompletions.set(
+        items
+      );
+
+    } catch (err: any) {
+      this.error.set(
+        err?.error?.detail ??
+        err?.message ??
+        'No se pudo cargar el seguimiento de comidas.'
+      );
+    }
+  }
+
+
+  private todayDate(): string {
+
+    const now = new Date();
+
+    return (
+      `${now.getFullYear()}-`
+      + `${String(
+          now.getMonth() + 1
+        ).padStart(2, '0')}-`
+      + `${String(
+          now.getDate()
+        ).padStart(2, '0')}`
+    );
+  }
+
+
+  selectDefaultNutritionDay(): void {
+
+    const plan =
+      this.activePlan();
+
+    if (!plan) {
+      this.selectedNutritionDate.set('');
+      return;
+    }
+
+    const days =
+      this.weekDays(plan);
+
+    const today =
+      this.todayDate();
+
+    const selected =
+      days.some(
+        day => day.date === today
+      )
+        ? today
+        : days[0]?.date ?? '';
+
+    this.selectedNutritionDate.set(
+      selected
+    );
+  }
+
+
+  selectedNutritionDay(
+    plan: NutritionPlan
+  ): NutritionDay | null {
+
+    const days =
+      this.weekDays(plan);
+
+    return (
+      days.find(
+        day =>
+          day.date ===
+          this.selectedNutritionDate()
+      )
+      ?? days[0]
+      ?? null
+    );
+  }
+
+
+  selectNutritionDay(
+    value: string
+  ): void {
+
+    this.selectedNutritionDate.set(
+      value
+    );
+  }
+
+
+  shiftNutritionDay(
+    plan: NutritionPlan,
+    offset: number
+  ): void {
+
+    const days =
+      this.weekDays(plan);
+
+    const current =
+      this.selectedNutritionDay(plan);
+
+    if (!current) {
+      return;
+    }
+
+    const index =
+      days.findIndex(
+        day =>
+          day.date === current.date
+      );
+
+    const target =
+      days[index + offset];
+
+    if (target) {
+      this.selectedNutritionDate.set(
+        target.date
+      );
+    }
+  }
+
+
+  canShiftNutritionDay(
+    plan: NutritionPlan,
+    offset: number
+  ): boolean {
+
+    const days =
+      this.weekDays(plan);
+
+    const current =
+      this.selectedNutritionDay(plan);
+
+    if (!current) {
+      return false;
+    }
+
+    const index =
+      days.findIndex(
+        day =>
+          day.date === current.date
+      );
+
+    return Boolean(
+      days[index + offset]
+    );
+  }
+
+
+  isFutureNutritionDay(
+    dateValue: string
+  ): boolean {
+
+    return (
+      dateValue >
+      this.todayDate()
+    );
+  }
+
+
+  isMealCompleted(
+    mealId: string
+  ): boolean {
+
+    return this.mealCompletions()
+      .some(
+        item =>
+          item.mealId === mealId
+      );
+  }
+
+
+  completedMealsForDay(
+    day: NutritionDay
+  ): number {
+
+    return day.meals.filter(
+      meal =>
+        this.isMealCompleted(
+          meal.mealId
+        )
+    ).length;
+  }
+
+
+  dayMealAdherencePercent(
+    day: NutritionDay
+  ): number {
+
+    if (!day.meals.length) {
+      return 0;
+    }
+
+    return Math.round(
+      this.completedMealsForDay(day)
+      / day.meals.length
+      * 100
+    );
+  }
+
+
+  plannedElapsedMeals(
+    plan: NutritionPlan
+  ): number {
+
+    const today =
+      this.todayDate();
+
+    return this.weekDays(plan)
+      .filter(
+        day =>
+          day.date <= today
+      )
+      .reduce(
+        (total, day) =>
+          total + day.meals.length,
+        0
+      );
+  }
+
+
+  completedWeekMeals(
+    plan: NutritionPlan
+  ): number {
+
+    const today =
+      this.todayDate();
+
+    return this.weekDays(plan)
+      .filter(
+        day =>
+          day.date <= today
+      )
+      .reduce(
+        (total, day) =>
+          total
+          + this.completedMealsForDay(
+              day
+            ),
+        0
+      );
+  }
+
+
+  weekMealAdherencePercent(
+    plan: NutritionPlan
+  ): number {
+
+    const planned =
+      this.plannedElapsedMeals(plan);
+
+    if (!planned) {
+      return 0;
+    }
+
+    return Math.round(
+      this.completedWeekMeals(plan)
+      / planned
+      * 100
+    );
+  }
+
+
+  private mealCompletionKey(
+    planId: string,
+    mealId: string
+  ): string {
+
+    return (
+      planId
+      + ':'
+      + mealId
+    );
+  }
+
+
+  async toggleMealCompletion(
+    plan: NutritionPlan,
+    day: NutritionDay,
+    meal: NutritionMeal
+  ): Promise<void> {
+
+    if (
+      this.isFutureNutritionDay(
+        day.date
+      )
+    ) {
+      return;
+    }
+
+    const key =
+      this.mealCompletionKey(
+        plan.planId,
+        meal.mealId
+      );
+
+    if (this.savingMealCompletion()) {
+      return;
+    }
+
+    this.savingMealCompletion.set(
+      key
+    );
+
+    this.error.set(null);
+
+    try {
+      const headers =
+        await this.authHeaders();
+
+      const url =
+        (
+          `${this.apiUrl}`
+          + `/nutrition/plans/`
+          + `${encodeURIComponent(plan.planId)}`
+          + `/meal-completions/`
+          + `${encodeURIComponent(meal.mealId)}`
+        );
+
+      if (
+        this.isMealCompleted(
+          meal.mealId
+        )
+      ) {
+
+        await new Promise<void>(
+          (resolve, reject) => {
+            this.http
+              .delete<void>(
+                url,
+                { headers }
+              )
+              .subscribe({
+                next: () =>
+                  resolve(),
+                error: reject
+              });
+          }
+        );
+
+        this.mealCompletions.update(
+          current =>
+            current.filter(
+              item =>
+                item.mealId
+                !== meal.mealId
+            )
+        );
+
+      } else {
+
+        const saved =
+          await new Promise<
+            NutritionMealCompletion
+          >(
+            (resolve, reject) => {
+              this.http
+                .put<NutritionMealCompletion>(
+                  url,
+                  {},
+                  { headers }
+                )
+                .subscribe({
+                  next: resolve,
+                  error: reject
+                });
+            }
+          );
+
+        this.mealCompletions.update(
+          current => [
+            saved,
+            ...current.filter(
+              item =>
+                item.mealId
+                !== saved.mealId
+            )
+          ]
+        );
+      }
+
+    } catch (err: any) {
+
+      this.error.set(
+        err?.error?.detail ??
+        err?.message ??
+        'No se pudo actualizar la comida.'
+      );
+
+    } finally {
+
+      this.savingMealCompletion.set(
+        null
+      );
+    }
+  }
+
+
   orderedDays(
     plan: NutritionPlan
   ): NutritionDay[] {
@@ -699,18 +1156,10 @@ export class Nutrition implements OnInit {
     dateValue: string
   ): boolean {
 
-    const now = new Date();
-
-    const today =
-      `${now.getFullYear()}-`
-      + `${String(
-          now.getMonth() + 1
-        ).padStart(2, '0')}-`
-      + `${String(
-          now.getDate()
-        ).padStart(2, '0')}`;
-
-    return dateValue === today;
+    return (
+      dateValue ===
+      this.todayDate()
+    );
   }
 
 

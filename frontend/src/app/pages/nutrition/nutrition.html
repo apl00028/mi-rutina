@@ -163,15 +163,121 @@
       </section>
 
 
-      <section class="week-calendar">
+      <section class="nutrition-day-view">
 
-        @for (
-          day of weekDays(plan);
-          track day.date
+        <div class="nutrition-day-navigation">
+
+          <button
+            type="button"
+            class="day-arrow"
+            aria-label="Día anterior"
+            [disabled]="
+              !canShiftNutritionDay(
+                plan,
+                -1
+              )
+            "
+            (click)="
+              shiftNutritionDay(
+                plan,
+                -1
+              )
+            "
+          >
+            ‹
+          </button>
+
+
+          <label class="nutrition-day-selector">
+            <span>Día</span>
+
+            <select
+              [value]="
+                selectedNutritionDay(plan)
+                  ?.date ?? ''
+              "
+              (change)="
+                selectNutritionDay(
+                  $any($event.target).value
+                )
+              "
+            >
+              @for (
+                optionDay of weekDays(plan);
+                track optionDay.date
+              ) {
+                <option
+                  [value]="optionDay.date"
+                >
+                  {{
+                    dayName(optionDay.date)
+                  }}
+                  ·
+                  {{
+                    dayDate(optionDay.date)
+                  }}
+                  {{
+                    optionDay.meals.length
+                    &&
+                    completedMealsForDay(
+                      optionDay
+                    )
+                    === optionDay.meals.length
+                      ? '✓'
+                      : ''
+                  }}
+                </option>
+              }
+            </select>
+          </label>
+
+
+          <button
+            type="button"
+            class="day-arrow"
+            aria-label="Día siguiente"
+            [disabled]="
+              !canShiftNutritionDay(
+                plan,
+                1
+              )
+            "
+            (click)="
+              shiftNutritionDay(
+                plan,
+                1
+              )
+            "
+          >
+            ›
+          </button>
+
+        </div>
+
+
+        <div class="nutrition-adherence-summary">
+          <span>
+            Adherencia esta semana
+          </span>
+
+          <strong>
+            {{ completedWeekMeals(plan) }}
+            /
+            {{ plannedElapsedMeals(plan) }}
+            comidas
+            ·
+            {{ weekMealAdherencePercent(plan) }} %
+          </strong>
+        </div>
+
+
+        @if (
+          selectedNutritionDay(plan);
+          as day
         ) {
 
           <article
-            class="nutrition-day-card"
+            class="nutrition-day-card nutrition-day-card-selected"
             [class.today]="
               isToday(day.date)
             "
@@ -189,11 +295,34 @@
                 </h3>
               </div>
 
-              @if (isToday(day.date)) {
-                <span class="today-label">
-                  Hoy
+
+              <div class="day-heading-actions">
+
+                <span class="day-meal-progress">
+                  {{
+                    completedMealsForDay(
+                      day
+                    )
+                  }}
+                  /
+                  {{ day.meals.length }}
+                  comidas
+                  ·
+                  {{
+                    dayMealAdherencePercent(
+                      day
+                    )
+                  }}
+                  %
                 </span>
-              }
+
+                @if (isToday(day.date)) {
+                  <span class="today-label">
+                    Hoy
+                  </span>
+                }
+
+              </div>
 
             </header>
 
@@ -207,7 +336,9 @@
                   track meal.mealId
                 ) {
 
-                  <article class="calendar-meal-card">
+                  <article
+                    class="calendar-meal-card"
+                  >
 
                     <div class="meal-card-heading">
 
@@ -225,13 +356,63 @@
                         </strong>
                       </div>
 
-                      <button
-                        type="button"
-                        class="recipe-open-button"
-                        (click)="openRecipe(meal)"
-                      >
-                        Ver receta
-                      </button>
+                      <div class="meal-card-actions">
+
+                        <button
+                          type="button"
+                          class="meal-completion-button"
+                          [class.completed]="
+                            isMealCompleted(
+                              meal.mealId
+                            )
+                          "
+                          [disabled]="
+                            isFutureNutritionDay(
+                              day.date
+                            )
+                            ||
+                            savingMealCompletion()
+                              ===
+                              plan.planId
+                              + ':'
+                              + meal.mealId
+                          "
+                          (click)="
+                            toggleMealCompletion(
+                              plan,
+                              day,
+                              meal
+                            )
+                          "
+                        >
+                          @if (
+                            savingMealCompletion()
+                              ===
+                              plan.planId
+                              + ':'
+                              + meal.mealId
+                          ) {
+                            …
+                          } @else if (
+                            isMealCompleted(
+                              meal.mealId
+                            )
+                          ) {
+                            ✓ Hecha
+                          } @else {
+                            Marcar
+                          }
+                        </button>
+
+                        <button
+                          type="button"
+                          class="recipe-open-button"
+                          (click)="openRecipe(meal)"
+                        >
+                          Ver receta
+                        </button>
+
+                      </div>
 
                     </div>
 
@@ -241,10 +422,13 @@
                       @for (
                         ingredient
                         of meal.ingredients;
-                        track ingredient.ingredientId
+                        track
+                          ingredient.ingredientId
                       ) {
 
-                        <div class="meal-quick-ingredient">
+                        <div
+                          class="meal-quick-ingredient"
+                        >
 
                           <span>
                             {{ ingredient.name }}
@@ -283,6 +467,7 @@
         }
 
       </section>
+
 
     } @else {
 

@@ -677,7 +677,8 @@ p {
   border-left:
     1px solid var(--border);
 
-  background: var(--card);
+  background: var(--bg);
+  box-shadow: -18px 0 40px rgb(0 0 0 / 18%);
 }
 
 .recipe-modal-header {
@@ -1345,5 +1346,209 @@ input:checked
     border-left: 0;
     border-top:
       1px solid var(--border);
+  }
+}
+
+
+/* Daily nutrition navigation */
+
+.nutrition-day-view {
+  display: grid;
+  gap: 16px;
+}
+
+.nutrition-day-navigation {
+  display: flex;
+  align-items: end;
+  justify-content: center;
+  gap: 10px;
+}
+
+.nutrition-day-selector {
+  display: grid;
+  gap: 6px;
+
+  min-width: min(360px, 70vw);
+}
+
+.nutrition-day-selector > span {
+  color: var(--gymos-text-muted);
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.nutrition-day-selector select {
+  width: 100%;
+
+  padding: 10px 38px 10px 13px;
+
+  border: 1px solid var(--gymos-border);
+  border-radius: 10px;
+
+  background: var(--gymos-surface);
+  color: var(--gymos-text);
+
+  font: inherit;
+  font-weight: 700;
+}
+
+.day-arrow {
+  width: 42px;
+  height: 42px;
+
+  display: grid;
+  place-items: center;
+
+  border: 1px solid var(--gymos-border);
+  border-radius: 10px;
+
+  background: var(--gymos-surface);
+  color: var(--gymos-text);
+
+  font-size: 1.5rem;
+  cursor: pointer;
+}
+
+.day-arrow:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+
+.nutrition-adherence-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+
+  padding: 12px 14px;
+
+  border: 1px solid var(--gymos-border);
+  border-radius: 12px;
+
+  background: var(--gymos-surface-muted);
+}
+
+.nutrition-adherence-summary span {
+  color: var(--gymos-text-muted);
+  font-size: 0.85rem;
+}
+
+.nutrition-day-card-selected {
+  width: 100%;
+  max-width: 820px;
+
+  margin-inline: auto;
+}
+
+.day-heading-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.day-followed-button {
+  padding: 8px 12px;
+
+  border: 1px solid var(--gymos-border);
+  border-radius: 999px;
+
+  background: var(--gymos-surface);
+  color: var(--gymos-text-muted);
+
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 700;
+
+  cursor: pointer;
+}
+
+.day-followed-button.followed {
+  border-color: #4caf70;
+  background: rgb(76 175 112 / 12%);
+  color: #267a45;
+}
+
+.day-followed-button:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+
+@media (max-width: 650px) {
+  .nutrition-day-navigation {
+    align-items: end;
+  }
+
+  .nutrition-day-selector {
+    min-width: 0;
+    flex: 1;
+  }
+
+  .nutrition-adherence-summary {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .day-heading-actions {
+    align-items: flex-end;
+    flex-direction: column;
+  }
+}
+
+
+/* Individual meal adherence */
+
+.meal-card-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 0 0 auto;
+}
+
+.meal-completion-button {
+  min-width: 74px;
+  padding: 7px 11px;
+
+  border: 1px solid var(--border);
+  border-radius: 999px;
+
+  background: transparent;
+  color: inherit;
+
+  font: inherit;
+  font-size: 0.76rem;
+  font-weight: 700;
+
+  cursor: pointer;
+}
+
+.meal-completion-button:hover:not(:disabled) {
+  border-color: var(--brand);
+}
+
+.meal-completion-button.completed {
+  border-color: #4caf70;
+  background: rgb(76 175 112 / 14%);
+  color: #75d394;
+}
+
+.meal-completion-button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.day-meal-progress {
+  white-space: nowrap;
+}
+
+@media (max-width: 650px) {
+  .meal-card-heading {
+    gap: 10px;
+  }
+
+  .meal-card-actions {
+    align-items: flex-end;
+    flex-direction: column;
+    gap: 5px;
   }
 }

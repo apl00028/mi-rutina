@@ -177,6 +177,15 @@ class NutritionPlan(BaseModel):
         return self
 
 
+class NutritionMealCompletion(BaseModel):
+    id: UUID
+    planId: UUID
+    mealDate: date
+    mealId: str = Field(min_length=1)
+    createdAt: str | None = None
+    updatedAt: str | None = None
+
+
 class ShoppingListSource(BaseModel):
     date: date
     mealType: MealType

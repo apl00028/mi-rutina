@@ -322,15 +322,20 @@ async def upsert_daily_checkin(
             user.id,
         "measurement_date":
             measurement_date.isoformat(),
-        "hunger":
-            payload.get("hunger"),
-        "diet_adherence_percent":
-            payload.get(
-                "dietAdherencePercent"
-            ),
-        "notes":
-            payload.get("notes"),
     }
+
+    field_map = {
+        "hunger":
+            "hunger",
+        "dietAdherencePercent":
+            "diet_adherence_percent",
+        "notes":
+            "notes",
+    }
+
+    for source, target in field_map.items():
+        if source in payload:
+            row[target] = payload[source]
 
     async with httpx.AsyncClient(
         timeout=10.0

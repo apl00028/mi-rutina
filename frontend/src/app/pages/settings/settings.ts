@@ -176,6 +176,72 @@ export class SettingsHub {
         </div>
 
         <div class="settings-field">
+          <span>Contraseña</span>
+
+          <small>
+            Crea o cambia tu contraseña para poder entrar
+            también con tu email, aunque normalmente uses Google.
+          </small>
+
+          <div class="settings-password-form">
+            <input
+              type="password"
+              autocomplete="new-password"
+              placeholder="Nueva contraseña"
+              [value]="newPassword()"
+              (input)="
+                newPassword.set(
+                  $any($event.target).value
+                )
+              "
+            />
+
+            <input
+              type="password"
+              autocomplete="new-password"
+              placeholder="Repetir contraseña"
+              [value]="confirmPassword()"
+              (input)="
+                confirmPassword.set(
+                  $any($event.target).value
+                )
+              "
+            />
+
+            <button
+              type="button"
+              class="settings-action"
+              [disabled]="savingPassword()"
+              (click)="savePassword()"
+            >
+              @if (savingPassword()) {
+                Guardando…
+              } @else {
+                Crear / cambiar contraseña
+              }
+            </button>
+          </div>
+
+          @if (passwordMessage()) {
+            <p
+              class="settings-status settings-status-success"
+              role="status"
+            >
+              {{ passwordMessage() }}
+            </p>
+          }
+
+          @if (passwordError()) {
+            <p
+              class="settings-status settings-status-error"
+              role="alert"
+            >
+              {{ passwordError() }}
+            </p>
+          }
+        </div>
+
+        <div class="settings-field">
           <span>Acceso con dispositivo</span>
 
           <strong>
@@ -361,7 +427,7 @@ export class SettingsHub {
       <p class="settings-note">
         El acceso con dispositivo no sustituye tus otros
         métodos de acceso. Podrás seguir entrando con
-        Google o mediante enlace de correo.
+        Google o con tu email y contraseña.
       </p>
     </section>
   `,
@@ -369,6 +435,22 @@ export class SettingsHub {
 })
 export class SettingsAccount
   implements OnInit {
+
+  readonly newPassword =
+    signal('');
+
+  readonly confirmPassword =
+    signal('');
+
+  readonly savingPassword =
+    signal(false);
+
+  readonly passwordMessage =
+    signal<string | null>(null);
+
+  readonly passwordError =
+    signal<string | null>(null);
+
 
   readonly passkeySupported =
     signal(false);
@@ -449,6 +531,64 @@ export class SettingsAccount
       user?.email?.split('@')[0] ??
       'Usuario'
     );
+  }
+
+
+  async savePassword():
+    Promise<void> {
+    if (this.savingPassword()) {
+      return;
+    }
+
+    const password =
+      this.newPassword();
+
+    const confirmation =
+      this.confirmPassword();
+
+    this.passwordMessage.set(null);
+    this.passwordError.set(null);
+
+    if (password.length < 8) {
+      this.passwordError.set(
+        'La contraseña debe tener al menos 8 caracteres.'
+      );
+      return;
+    }
+
+    if (password !== confirmation) {
+      this.passwordError.set(
+        'Las contraseñas no coinciden.'
+      );
+      return;
+    }
+
+    this.savingPassword.set(true);
+
+    try {
+      await this.auth.updatePassword(
+        password
+      );
+
+      this.newPassword.set('');
+      this.confirmPassword.set('');
+
+      this.passwordMessage.set(
+        'Contraseña guardada correctamente.'
+      );
+    } catch (error: unknown) {
+      const candidate =
+        error as {
+          message?: string;
+        };
+
+      this.passwordError.set(
+        candidate.message?.trim() ||
+        'No se pudo guardar la contraseña.'
+      );
+    } finally {
+      this.savingPassword.set(false);
+    }
   }
 
 

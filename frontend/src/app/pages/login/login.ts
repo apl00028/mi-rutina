@@ -36,6 +36,12 @@ export class Login {
   email =
     signal('');
 
+  password =
+    signal('');
+
+  passwordLoading =
+    signal(false);
+
   loading =
     signal(false);
 
@@ -199,6 +205,52 @@ export class Login {
       this.passkeyLoading.set(
         false
       );
+    }
+  }
+
+
+  async signInWithPassword(
+    event: Event
+  ): Promise<void> {
+    event.preventDefault();
+
+    const email =
+      this.email().trim();
+
+    const password =
+      this.password();
+
+    if (!email || !password) {
+      return;
+    }
+
+    this.passwordLoading.set(true);
+    this.message.set(null);
+    this.error.set(null);
+
+    try {
+      await this.auth.signInWithPassword(
+        email,
+        password
+      );
+
+      const me =
+        await this.auth.resolveAccess();
+
+      await this.navigateAfterLogin(
+        me
+      );
+    } catch (err: unknown) {
+      this.error.set(
+        this.authErrorMessage(
+          err,
+          this.language() === 'es'
+            ? 'Email o contraseña incorrectos.'
+            : 'Incorrect email or password.'
+        )
+      );
+    } finally {
+      this.passwordLoading.set(false);
     }
   }
 

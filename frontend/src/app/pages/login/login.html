@@ -65,36 +65,6 @@
       </p>
     </div>
 
-    @if (passkeySupported()) {
-      <button
-        class="passkey-button"
-        type="button"
-        (click)="signInWithPasskey()"
-        [disabled]="passkeyLoading()"
-      >
-        <span
-          class="passkey-icon"
-          aria-hidden="true"
-        >
-          ◉
-        </span>
-
-        {{
-          passkeyLoading()
-            ? (
-                language() === 'es'
-                  ? 'Verificando...'
-                  : 'Verifying...'
-              )
-            : (
-                language() === 'es'
-                  ? 'Entrar con dispositivo'
-                  : 'Sign in with device'
-              )
-        }}
-      </button>
-    }
-
     <div class="login-methods">
       <button
         class="google-button"
@@ -138,11 +108,9 @@
 
     <form
       class="email-form"
-      (submit)="sendMagicLink($event)"
+      (submit)="signInWithPassword($event)"
     >
-      <label>
-        Email
-      </label>
+      <label>Email</label>
 
       <input
         type="email"
@@ -150,32 +118,46 @@
         placeholder="you@example.com"
         required
         [value]="email()"
-        (input)="
-          email.set(
-            $any($event.target).value
-          )
-        "
+        (input)="email.set($any($event.target).value)"
+      />
+
+      <label>
+        {{
+          language() === 'es'
+            ? 'Contraseña'
+            : 'Password'
+        }}
+      </label>
+
+      <input
+        type="password"
+        autocomplete="current-password"
+        required
+        [value]="password()"
+        (input)="password.set($any($event.target).value)"
       />
 
       <button
         class="primary-button"
         type="submit"
-        [disabled]="loading()"
+        [disabled]="passwordLoading()"
       >
         {{
-          loading()
+          passwordLoading()
             ? (
                 language() === 'es'
-                  ? 'Enviando...'
-                  : 'Sending...'
+                  ? 'Entrando...'
+                  : 'Signing in...'
               )
             : (
                 language() === 'es'
-                  ? 'Enviar enlace de acceso'
-                  : 'Send sign-in link'
+                  ? 'Iniciar sesión'
+                  : 'Sign in'
               )
         }}
       </button>
+
+
     </form>
 
     @if (message()) {

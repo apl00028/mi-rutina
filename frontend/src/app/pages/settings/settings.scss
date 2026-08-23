@@ -434,3 +434,31 @@
   }
 }
 }
+
+.settings-password-form {
+  display: grid;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.settings-password-form input {
+  width: 100%;
+  min-height: 44px;
+  box-sizing: border-box;
+
+  padding: 0 12px;
+
+  border: 1px solid var(--gymos-border-strong);
+  border-radius: 10px;
+
+  background: var(--gymos-surface);
+  color: var(--gymos-text);
+
+  font: inherit;
+  font-size: 0.9rem;
+}
+
+.settings-password-form input:focus {
+  outline: 3px solid rgb(37 99 235 / 18%);
+  outline-offset: 1px;
+}

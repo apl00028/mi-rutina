@@ -21,6 +21,18 @@ import {
   environment
 } from '../../environments/environment';
 
+import {
+  Capacitor
+} from '@capacitor/core';
+
+import {
+  App
+} from '@capacitor/app';
+
+import {
+  Browser
+} from '@capacitor/browser';
+
 
 export interface GymOSMe {
   user_id: string;
@@ -62,6 +74,7 @@ export class AuthService {
           persistSession: true,
           autoRefreshToken: true,
           detectSessionInUrl: true,
+          flowType: 'pkce',
 
           experimental: {
             passkey: true
@@ -92,6 +105,7 @@ export class AuthService {
     private http: HttpClient
   ) {
     this.initialize();
+    void this.initializeNativeAuth();
   }
 
 
@@ -153,11 +167,213 @@ export class AuthService {
   }
 
 
+  private isNativeApp():
+    boolean {
+    return Capacitor.isNativePlatform();
+  }
+
+
+  private loginRedirect(
+    method: 'google' | 'email'
+  ): string {
+    if (this.isNativeApp()) {
+      return (
+        'com.adrianpelaez.gymos://login' +
+        `?method=${method}`
+      );
+    }
+
+    return (
+      `${window.location.origin}/login` +
+      (
+        method === 'google'
+          ? '?oauth=google'
+          : ''
+      )
+    );
+  }
+
+
+  private async initializeNativeAuth():
+    Promise<void> {
+    if (!this.isNativeApp()) {
+      return;
+    }
+
+    await App.addListener(
+      'appUrlOpen',
+      event => {
+        void this.handleNativeAuthUrl(
+          event.url
+        );
+      }
+    );
+
+    const launchUrl =
+      await App.getLaunchUrl();
+
+    if (launchUrl?.url) {
+      await this.handleNativeAuthUrl(
+        launchUrl.url
+      );
+    }
+  }
+
+
+  private async handleNativeAuthUrl(
+    url: string
+  ): Promise<void> {
+    if (
+      !url.startsWith(
+        'com.adrianpelaez.gymos://login'
+      )
+    ) {
+      return;
+    }
+
+    const parsed =
+      new URL(url);
+
+    const errorDescription =
+      parsed.searchParams.get(
+        'error_description'
+      );
+
+    if (errorDescription) {
+      sessionStorage.setItem(
+        'gymos-native-auth-error',
+        errorDescription
+      );
+
+      window.location.replace(
+        '/login?native=1'
+      );
+
+      return;
+    }
+
+    const code =
+      parsed.searchParams.get('code');
+
+    if (code) {
+      const {
+        error
+      } =
+        await this.client.auth
+          .exchangeCodeForSession(code);
+
+      if (error) {
+        sessionStorage.setItem(
+          'gymos-native-auth-error',
+          error.message
+        );
+
+        window.location.replace(
+          '/login?native=1'
+        );
+
+        return;
+      }
+    } else {
+      const fragment =
+        new URLSearchParams(
+          parsed.hash.replace(/^#/, '')
+        );
+
+      const accessToken =
+        fragment.get('access_token');
+
+      const refreshToken =
+        fragment.get('refresh_token');
+
+      if (
+        accessToken &&
+        refreshToken
+      ) {
+        const {
+          error
+        } =
+          await this.client.auth.setSession({
+            access_token: accessToken,
+            refresh_token: refreshToken
+          });
+
+        if (error) {
+          sessionStorage.setItem(
+            'gymos-native-auth-error',
+            error.message
+          );
+
+          window.location.replace(
+            '/login?native=1'
+          );
+
+          return;
+        }
+      }
+    }
+
+    window.location.replace(
+      '/login?native=1'
+    );
+  }
+
+
+  consumeNativeAuthError():
+    string | null {
+    const value =
+      sessionStorage.getItem(
+        'gymos-native-auth-error'
+      );
+
+    sessionStorage.removeItem(
+      'gymos-native-auth-error'
+    );
+
+    return value;
+  }
+
+
+  async signInWithPassword(
+    email: string,
+    password: string
+  ): Promise<void> {
+    const {
+      error
+    } =
+      await this.client.auth
+        .signInWithPassword({
+          email,
+          password
+        });
+
+    if (error) {
+      throw error;
+    }
+  }
+
+
+  async updatePassword(
+    password: string
+  ): Promise<void> {
+    const {
+      error
+    } =
+      await this.client.auth.updateUser({
+        password
+      });
+
+    if (error) {
+      throw error;
+    }
+  }
+
+
   async signInWithMagicLink(
     email: string
   ): Promise<void> {
     const redirectTo =
-      `${window.location.origin}/login`;
+      this.loginRedirect('email');
 
     const {
       error
@@ -180,21 +396,35 @@ export class AuthService {
   async signInWithGoogle():
     Promise<void> {
     const redirectTo =
-      `${window.location.origin}/login?oauth=google`;
+      this.loginRedirect('google');
+
+    const native =
+      this.isNativeApp();
 
     const {
+      data,
       error
     } =
       await this.client.auth.signInWithOAuth({
         provider: 'google',
 
         options: {
-          redirectTo
+          redirectTo,
+          skipBrowserRedirect: native
         }
       });
 
     if (error) {
       throw error;
+    }
+
+    if (
+      native &&
+      data.url
+    ) {
+      await Browser.open({
+        url: data.url
+      });
     }
   }
 

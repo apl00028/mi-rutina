@@ -48,6 +48,9 @@ describe(
       signInWithPasskey:
         vi.fn(),
 
+      signInWithPassword:
+        vi.fn(),
+
       resolveAccess:
         vi.fn(),
 
@@ -90,6 +93,11 @@ describe(
         );
 
       authMock.signInWithPasskey
+        .mockResolvedValue(
+          undefined
+        );
+
+      authMock.signInWithPassword
         .mockResolvedValue(
           undefined
         );
@@ -156,83 +164,8 @@ describe(
 
 
     it(
-      'shows device sign-in when passkeys are supported',
+      'does not expose passkey sign-in on the primary login screen',
       async () => {
-        const fixture =
-          TestBed.createComponent(
-            Login
-          );
-
-        fixture.detectChanges();
-
-        await fixture.whenStable();
-
-        fixture.detectChanges();
-
-        const button =
-          fixture.nativeElement
-            .querySelector(
-              '.passkey-button'
-            ) as
-              HTMLButtonElement | null;
-
-        expect(
-          button
-        ).not.toBeNull();
-
-        expect(
-          button?.textContent
-            ?.replace(
-              /\s+/g,
-              ' '
-            )
-            .trim()
-        ).toBe(
-          '◉ Entrar con dispositivo'
-        );
-      }
-    );
-
-
-    it(
-      'signs in with a passkey and follows the normal GymOS access flow',
-      async () => {
-        const fixture =
-          TestBed.createComponent(
-            Login
-          );
-
-        const component =
-          fixture.componentInstance;
-
-        await component
-          .signInWithPasskey();
-
-        expect(
-          authMock.signInWithPasskey
-        ).toHaveBeenCalledOnce();
-
-        expect(
-          authMock.resolveAccess
-        ).toHaveBeenCalledOnce();
-
-        expect(
-          routerMock.navigateByUrl
-        ).toHaveBeenCalledWith(
-          '/'
-        );
-      }
-    );
-
-
-    it(
-      'hides device sign-in when passkeys are not supported',
-      async () => {
-        authMock.isPasskeySupported
-          .mockReturnValue(
-            false
-          );
-
         const fixture =
           TestBed.createComponent(
             Login
@@ -250,6 +183,80 @@ describe(
               '.passkey-button'
             )
         ).toBeNull();
+      }
+    );
+
+
+    it(
+      'signs in with email and password and follows the GymOS access flow',
+      async () => {
+        const fixture =
+          TestBed.createComponent(
+            Login
+          );
+
+        const component =
+          fixture.componentInstance;
+
+        component.email.set(
+          'test@example.com'
+        );
+
+        component.password.set(
+          'secret-password'
+        );
+
+        await component.signInWithPassword(
+          new Event('submit')
+        );
+
+        expect(
+          authMock.signInWithPassword
+        ).toHaveBeenCalledWith(
+          'test@example.com',
+          'secret-password'
+        );
+
+        expect(
+          authMock.resolveAccess
+        ).toHaveBeenCalledOnce();
+
+        expect(
+          routerMock.navigateByUrl
+        ).toHaveBeenCalledWith(
+          '/'
+        );
+      }
+    );
+
+
+    it(
+      'renders email and password fields',
+      async () => {
+        const fixture =
+          TestBed.createComponent(
+            Login
+          );
+
+        fixture.detectChanges();
+
+        await fixture.whenStable();
+
+        fixture.detectChanges();
+
+        expect(
+          fixture.nativeElement
+            .querySelector(
+              'input[type="email"]'
+            )
+        ).not.toBeNull();
+
+        expect(
+          fixture.nativeElement
+            .querySelector(
+              'input[type="password"]'
+            )
+        ).not.toBeNull();
       }
     );
   }

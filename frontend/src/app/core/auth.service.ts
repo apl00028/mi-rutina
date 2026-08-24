@@ -275,10 +275,7 @@ export class AuthService {
     method: 'google' | 'email'
   ): string {
     if (this.isNativeApp()) {
-      return (
-        'com.adrianpelaez.gymos://login' +
-        `?method=${method}`
-      );
+      return 'com.adrianpelaez.gymos://login';
     }
 
     return (

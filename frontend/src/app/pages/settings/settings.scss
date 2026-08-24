@@ -462,3 +462,269 @@
   outline: 3px solid rgb(37 99 235 / 18%);
   outline-offset: 1px;
 }
+
+
+/* GYMOS SETTINGS MOBILE UX V1 */
+
+@media (max-width: 600px) {
+
+  /*
+   * Página
+   */
+
+  .settings-page {
+    padding:
+      18px
+      18px
+      112px;
+  }
+
+
+  /*
+   * Volver:
+   * mismo peso visual que el resto
+   * de la navegación móvil.
+   */
+
+  .settings-back {
+    min-height: 40px;
+
+    gap: 8px;
+
+    margin-bottom: 8px;
+
+    font-size: 0.9rem;
+  }
+
+  .settings-back-icon {
+    width: 40px;
+    height: 40px;
+
+    border-radius: 11px;
+
+    font-size: 1.25rem;
+  }
+
+
+  /*
+   * Títulos
+   */
+
+  .settings-header {
+    margin-bottom: 12px;
+  }
+
+  .settings-header h1 {
+    font-size: 1.7rem;
+    line-height: 1.05;
+  }
+
+
+  /*
+   * Hub principal
+   */
+
+  .settings-list,
+  .settings-panel {
+    border-radius: 15px;
+  }
+
+  .settings-row {
+    min-height: 66px;
+
+    grid-template-columns:
+      34px
+      minmax(0, 1fr)
+      16px;
+
+    gap: 10px;
+
+    padding:
+      10px
+      12px;
+  }
+
+  .settings-icon {
+    width: 34px;
+    height: 34px;
+
+    border-radius: 9px;
+  }
+
+  .settings-copy {
+    gap: 2px;
+  }
+
+  .settings-copy strong {
+    font-size: 0.92rem;
+  }
+
+  .settings-copy span {
+    font-size: 0.73rem;
+    line-height: 1.3;
+  }
+
+
+  /*
+   * Campos de las subpantallas
+   */
+
+  .settings-field,
+  .settings-toggle-row {
+    min-height: 0;
+
+    padding:
+      11px
+      12px;
+  }
+
+  .settings-field {
+    gap: 4px;
+  }
+
+  .settings-field > span {
+    font-size: 0.76rem;
+  }
+
+  .settings-field strong {
+    font-size: 0.92rem;
+  }
+
+  .settings-field small,
+  .settings-toggle-row small {
+    font-size: 0.73rem;
+    line-height: 1.35;
+  }
+
+
+  /*
+   * Formularios
+   */
+
+  .settings-password-form {
+    gap: 7px;
+
+    margin-top: 5px;
+  }
+
+  .settings-password-form input {
+    min-height: 42px;
+
+    padding:
+      0
+      10px;
+
+    font-size: 0.84rem;
+  }
+
+  .settings-action,
+  .settings-danger-action {
+    min-height: 40px;
+
+    padding:
+      8px
+      11px;
+
+    font-size: 0.8rem;
+  }
+
+
+  /*
+   * Passkeys:
+   * información y acción en una fila,
+   * no una tarjeta enorme.
+   */
+
+  .passkey-list {
+    gap: 7px;
+  }
+
+  .passkey-item {
+    grid-template-columns:
+      minmax(0, 1fr)
+      auto;
+
+    align-items: center;
+
+    gap: 8px;
+
+    padding:
+      10px;
+
+    border-radius: 10px;
+  }
+
+  .passkey-copy {
+    gap: 1px;
+  }
+
+  .passkey-copy strong {
+    font-size: 0.82rem;
+  }
+
+  .passkey-copy small {
+    font-size: 0.68rem;
+  }
+
+  .passkey-item
+  .settings-danger-action {
+    width: auto;
+
+    margin: 0;
+
+    min-height: 36px;
+
+    padding:
+      7px
+      9px;
+
+    font-size: 0.72rem;
+  }
+
+
+  /*
+   * Segmentados
+   */
+
+  .segmented-control {
+    gap: 4px;
+
+    padding: 3px;
+  }
+
+  .segmented-control button {
+    min-height: 38px;
+
+    font-size: 0.82rem;
+  }
+
+
+  /*
+   * Toggles de Entrenamiento/Apariencia
+   */
+
+  .settings-toggle-row {
+    gap: 10px;
+  }
+
+  .settings-toggle-row strong {
+    font-size: 0.9rem;
+  }
+
+  .switch {
+    flex-shrink: 0;
+  }
+
+
+  /*
+   * Nota inferior
+   */
+
+  .settings-note {
+    margin-top: 10px;
+
+    font-size: 0.7rem;
+    line-height: 1.35;
+  }
+
+}

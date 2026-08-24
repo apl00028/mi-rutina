@@ -38,6 +38,18 @@ import {
 } from './train';
 
 
+beforeAll(() => {
+  Object.defineProperty(
+    HTMLElement.prototype,
+    'scrollIntoView',
+    {
+      configurable: true,
+      value: vi.fn()
+    }
+  );
+});
+
+
 describe('Train first workout flow', () => {
   let http:
     HttpTestingController;
@@ -402,7 +414,7 @@ describe('Train first workout flow', () => {
       'Press banca con mancuernas'
     );
     expect(text).toContain('6-10');
-    expect(text).toContain('120s');
+    expect(text).toContain('2 min');
     expect(text).not.toContain(
       'Última vez'
     );
@@ -5311,8 +5323,7 @@ describe('Train first workout flow', () => {
 
     expect(
       component.restTimer()
-        ?.finished
-    ).toBe(true);
+    ).toBeNull();
 
     http.expectNone(
       `${environment.apiUrl}/workouts/workout-1`
@@ -5368,12 +5379,11 @@ describe('Train first workout flow', () => {
     );
 
     expect(
-      component.restTimerLabel()
-    ).toBe('00:00');
-    expect(
       component.restTimer()
-        ?.finished
-    ).toBe(true);
+    ).toBeNull();
+    expect(
+      component.restTimerLabel()
+    ).toBe('');
 
     await vi.advanceTimersByTimeAsync(
       2_000

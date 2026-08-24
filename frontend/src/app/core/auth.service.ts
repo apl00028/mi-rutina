@@ -170,7 +170,7 @@ export class AuthService {
           Capacitor.isNativePlatform()
         ) {
           console.info(
-            `[GymOS auth] ${event}: ` +
+            `[Aptus auth] ${event}: ` +
             (
               session
                 ? 'session'
@@ -279,7 +279,7 @@ export class AuthService {
     method: 'google' | 'email'
   ): string {
     if (this.isNativeApp()) {
-      return 'com.adrianpelaez.gymos://login';
+      return 'com.adrianpelaez.aptus://login';
     }
 
     return (
@@ -323,10 +323,10 @@ export class AuthService {
     url: string
   ): Promise<void> {
     const loginUrl =
-      'com.adrianpelaez.gymos://login';
+      'com.adrianpelaez.aptus://login';
 
     const recoveryUrl =
-      'com.adrianpelaez.gymos://reset-password';
+      'com.adrianpelaez.aptus://reset-password';
 
     const isLogin =
       url.startsWith(loginUrl);
@@ -494,7 +494,7 @@ export class AuthService {
   ): Promise<void> {
     const redirectTo =
       this.isNativeApp()
-        ? 'com.adrianpelaez.gymos://reset-password'
+        ? 'com.adrianpelaez.aptus://reset-password'
         : `${window.location.origin}/login?recovery=1`;
 
     const {

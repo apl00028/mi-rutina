@@ -203,7 +203,7 @@ describe(
 
 
     it(
-      'does not expose passkey sign-in on the primary login screen',
+      'exposes passkey sign-in when passkeys are supported',
       async () => {
         const fixture =
           TestBed.createComponent(
@@ -221,13 +221,13 @@ describe(
             .querySelector(
               '.passkey-button'
             )
-        ).toBeNull();
+        ).not.toBeNull();
       }
     );
 
 
     it(
-      'signs in with email and password and follows the GymOS access flow',
+      'signs in with email and password and follows the Aptus access flow',
       async () => {
         const fixture =
           TestBed.createComponent(

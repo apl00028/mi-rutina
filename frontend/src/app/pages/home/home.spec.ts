@@ -105,7 +105,7 @@ describe('Home', () => {
         ).replace(/\s+/g, ' ');
 
       expect(text).toContain(
-        'Tu día en GymOS'
+        'Tu día en Aptus'
       );
 
       expect(text).toContain(

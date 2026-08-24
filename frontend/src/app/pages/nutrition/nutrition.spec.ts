@@ -67,7 +67,7 @@ describe('Nutrition import', () => {
     const config =
       XLSX.utils.aoa_to_sheet([
         [
-          'GymOS · Plantilla nutrición',
+          'Aptus · Plantilla nutrición',
           'Valor'
         ],
         [
@@ -159,7 +159,7 @@ describe('Nutrition import', () => {
 
 
   it(
-    'imports a valid GymOS nutrition workbook',
+    'imports a valid Aptus nutrition workbook',
     () => {
       const fixture =
         TestBed.createComponent(

@@ -1922,7 +1922,7 @@ export class Health implements OnInit {
 
     const summaryRows = [
       [
-        'GymOS Health Export',
+        'Aptus Health Export',
         'Versión 1'
       ],
       [
@@ -2224,10 +2224,10 @@ export class Health implements OnInit {
 
       await Share.share({
         title:
-          'GymOS · Datos de salud',
+          'Aptus · Datos de salud',
 
         text:
-          'Exportación de datos de salud de GymOS',
+          'Exportación de datos de salud de Aptus',
 
         url:
           result.uri,

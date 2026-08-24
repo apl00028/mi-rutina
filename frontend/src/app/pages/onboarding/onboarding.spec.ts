@@ -535,7 +535,7 @@ describe('Onboarding completion flow', () => {
     failedRequest.flush(
       {
         detail:
-          'Could not complete GymOS onboarding'
+          'Could not complete Aptus onboarding'
       },
       {
         status: 502,
@@ -552,7 +552,7 @@ describe('Onboarding completion flow', () => {
         .componentInstance
         .completeError()
     ).toBe(
-      'Could not complete GymOS onboarding'
+      'Could not complete Aptus onboarding'
     );
     expect(
       fixture

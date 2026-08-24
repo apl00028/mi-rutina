@@ -1,4 +1,4 @@
-package com.adrianpelaez.gymos;
+package com.adrianpelaez.aptus;
 
 import android.os.Build;
 import android.os.CancellationSignal;

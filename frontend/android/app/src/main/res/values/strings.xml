@@ -1,7 +1,7 @@
 <?xml version='1.0' encoding='utf-8'?>
 <resources>
-    <string name="app_name">GymOS</string>
-    <string name="title_activity_main">GymOS</string>
-    <string name="package_name">com.adrianpelaez.gymos</string>
-    <string name="custom_url_scheme">com.adrianpelaez.gymos</string>
+    <string name="app_name">Aptus</string>
+    <string name="title_activity_main">Aptus</string>
+    <string name="package_name">com.adrianpelaez.aptus</string>
+    <string name="custom_url_scheme">com.adrianpelaez.aptus</string>
 </resources>

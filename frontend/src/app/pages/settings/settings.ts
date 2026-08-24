@@ -23,6 +23,20 @@ import {
   AuthService
 } from '../../core/auth.service';
 
+import {
+  HealthConnect
+} from '../../core/health-connect.plugin';
+
+import type {
+  HealthConnectPermissionStatus,
+  HealthConnectSnapshot,
+  HealthConnectExerciseSessions
+} from '../../core/health-connect.plugin';
+
+import {
+  Capacitor
+} from '@capacitor/core';
+
 
 const settingsSections = [
   {
@@ -170,7 +184,7 @@ export class SettingsHub {
           </strong>
 
           <small>
-            Informativo. GymOS todavía no tiene un flujo
+            Informativo. Aptus todavía no tiene un flujo
             para cambiar email desde la app.
           </small>
         </div>
@@ -249,7 +263,7 @@ export class SettingsHub {
           </strong>
 
           <small>
-            Permite entrar en GymOS usando la seguridad
+            Permite entrar en Aptus usando la seguridad
             de tu dispositivo: huella, reconocimiento
             facial, PIN o llave de seguridad.
           </small>
@@ -684,7 +698,7 @@ export class SettingsAccount
     const confirmed =
       window.confirm(
         `¿Eliminar el acceso de ${displayName}? ` +
-        'Ya no podrás usar esta passkey para entrar en GymOS.'
+        'Ya no podrás usar esta passkey para entrar en Aptus.'
       );
 
     if (!confirmed) {
@@ -780,7 +794,7 @@ export class SettingsAccount
       case 'passkey_disabled':
         return (
           'El acceso con passkey todavía no está ' +
-          'habilitado en GymOS.'
+          'habilitado en Aptus.'
         );
 
       case 'too_many_passkeys':
@@ -1252,6 +1266,7 @@ export class SettingsAppearance {
         <h1>Datos</h1>
       </header>
 
+
       <section class="settings-panel">
         <div class="settings-field">
           <span>
@@ -1269,16 +1284,866 @@ export class SettingsAppearance {
         </div>
       </section>
 
+
+      <section class="settings-panel">
+        <div class="settings-field">
+          <span>
+            Datos de salud
+          </span>
+
+          <strong>
+            Health Connect
+          </strong>
+
+          <small>
+            Aptus puede leer los datos que Garmin Connect
+            comparte con Health Connect.
+            Esta prueba es solo de lectura y todavía
+            no guarda estos datos en Aptus.
+          </small>
+
+          @if (
+            healthConnectAvailable() === null
+          ) {
+            <small>
+              Comprobando disponibilidad…
+            </small>
+          } @else if (
+            healthConnectAvailable() === false
+          ) {
+            <p
+              class="
+                settings-status
+                settings-status-muted
+              "
+            >
+              Health Connect no está disponible
+              en este dispositivo.
+            </p>
+          } @else {
+            <p
+              class="
+                settings-status
+                settings-status-success
+              "
+            >
+              {{
+                healthConnectPermissions()
+                  ?.allGranted
+                    ? 'Conectado'
+                    : 'Permisos pendientes'
+              }}
+            </p>
+
+            <div
+              class="settings-password-form"
+            >
+              <button
+                type="button"
+                class="settings-action"
+                [disabled]="
+                  healthConnectLoading()
+                "
+                (click)="
+                  openHealthConnectPermissions()
+                "
+              >
+                Conectar / revisar permisos
+              </button>
+
+              <button
+                type="button"
+                class="settings-action"
+                [disabled]="
+                  healthConnectLoading()
+                "
+                (click)="
+                  refreshHealthConnect()
+                "
+              >
+                @if (
+                  healthConnectLoading()
+                ) {
+                  Comprobando…
+                } @else {
+                  Comprobar permisos
+                }
+              </button>
+
+              @if (
+                healthConnectPermissions()
+                  ?.allGranted
+              ) {
+                <button
+                  type="button"
+                  class="settings-action"
+                  [disabled]="
+                    healthConnectLoading()
+                  "
+                  (click)="
+                    readHealthConnectData()
+                  "
+                >
+                  Leer datos ahora
+                </button>
+
+                <button
+                  type="button"
+                  class="settings-action"
+                  [disabled]="
+                    healthConnectLoading()
+                  "
+                  (click)="
+                    readGarminExerciseSessions()
+                  "
+                >
+                  Leer actividades Garmin
+                </button>
+              }
+            </div>
+
+            @if (
+              healthConnectPermissions()
+            ) {
+              <small>
+                Pasos:
+                {{
+                  permissionLabel(
+                    healthConnectPermissions()
+                      ?.steps
+                  )
+                }}
+                · Actividades:
+                {{
+                  permissionLabel(
+                    healthConnectPermissions()
+                      ?.exercise
+                  )
+                }}
+                · FC reposo:
+                {{
+                  permissionLabel(
+                    healthConnectPermissions()
+                      ?.restingHeartRate
+                  )
+                }}
+                · Sueño:
+                {{
+                  permissionLabel(
+                    healthConnectPermissions()
+                      ?.sleep
+                  )
+                }}
+                · Peso:
+                {{
+                  permissionLabel(
+                    healthConnectPermissions()
+                      ?.weight
+                  )
+                }}
+                · Grasa:
+                {{
+                  permissionLabel(
+                    healthConnectPermissions()
+                      ?.bodyFat
+                  )
+                }}
+              </small>
+            }
+          }
+
+          @if (healthConnectMessage()) {
+            <p
+              class="
+                settings-status
+                settings-status-success
+              "
+              role="status"
+            >
+              {{ healthConnectMessage() }}
+            </p>
+          }
+
+          @if (healthConnectError()) {
+            <p
+              class="
+                settings-status
+                settings-status-error
+              "
+              role="alert"
+            >
+              {{ healthConnectError() }}
+            </p>
+          }
+        </div>
+
+
+        @if (healthConnectSnapshot()) {
+          <div class="settings-field">
+            <span>
+              Última lectura
+            </span>
+
+            <strong>
+              Datos disponibles
+            </strong>
+
+            <small>
+              Los valores siguientes proceden
+              directamente de Health Connect.
+            </small>
+          </div>
+
+
+          <div class="settings-field">
+            <span>Pasos hoy</span>
+
+            <strong>
+              {{
+                healthConnectSnapshot()
+                  ?.stepsToday ?? '—'
+              }}
+            </strong>
+
+            <small>
+              Origen:
+              {{
+                sourceListLabel(
+                  healthConnectSnapshot()
+                    ?.stepsSources
+                )
+              }}
+            </small>
+          </div>
+
+
+          <div class="settings-field">
+            <span>
+              Frecuencia cardiaca en reposo
+            </span>
+
+            <strong>
+              @if (
+                healthConnectSnapshot()
+                  ?.restingHeartRate !==
+                  undefined
+              ) {
+                {{
+                  healthConnectSnapshot()
+                    ?.restingHeartRate
+                }}
+                ppm
+              } @else {
+                —
+              }
+            </strong>
+
+            <small>
+              Origen:
+              {{
+                sourceLabel(
+                  healthConnectSnapshot()
+                    ?.restingHeartRateSource
+                )
+              }}
+            </small>
+          </div>
+
+
+          <div class="settings-field">
+            <span>
+              Último sueño
+            </span>
+
+            <strong>
+              {{
+                sleepLabel(
+                  healthConnectSnapshot()
+                    ?.sleepMinutes
+                )
+              }}
+            </strong>
+
+            <small>
+              Origen:
+              {{
+                sourceLabel(
+                  healthConnectSnapshot()
+                    ?.sleepSource
+                )
+              }}
+            </small>
+          </div>
+
+
+          <div class="settings-field">
+            <span>
+              Último peso
+            </span>
+
+            <strong>
+              @if (
+                healthConnectSnapshot()
+                  ?.weightKg !==
+                  undefined
+              ) {
+                {{
+                  numberLabel(
+                    healthConnectSnapshot()
+                      ?.weightKg
+                  )
+                }}
+                kg
+              } @else {
+                —
+              }
+            </strong>
+
+            <small>
+              Origen:
+              {{
+                sourceLabel(
+                  healthConnectSnapshot()
+                    ?.weightSource
+                )
+              }}
+            </small>
+          </div>
+
+
+          <div class="settings-field">
+            <span>
+              Grasa corporal
+            </span>
+
+            <strong>
+              @if (
+                healthConnectSnapshot()
+                  ?.bodyFatPercentage !==
+                  undefined
+              ) {
+                {{
+                  numberLabel(
+                    healthConnectSnapshot()
+                      ?.bodyFatPercentage
+                  )
+                }}
+                %
+              } @else {
+                —
+              }
+            </strong>
+
+            <small>
+              Origen:
+              {{
+                sourceLabel(
+                  healthConnectSnapshot()
+                    ?.bodyFatSource
+                )
+              }}
+            </small>
+          </div>
+        }
+
+        @if (healthConnectExerciseSessions()) {
+          <div class="settings-field">
+            <span>
+              Actividades Garmin
+            </span>
+
+            <strong>
+              {{
+                healthConnectExerciseSessions()
+                  ?.count ?? 0
+              }}
+              sesiones encontradas
+            </strong>
+
+            <small>
+              Últimos
+              {{
+                healthConnectExerciseSessions()
+                  ?.lookbackDays
+              }}
+              días · datos de diagnóstico,
+              todavía no guardados.
+            </small>
+          </div>
+
+          @for (
+            session of
+              healthConnectExerciseSessions()
+                ?.sessions ?? [];
+            track $index
+          ) {
+            <div class="settings-field">
+              <span>
+                Exercise type:
+                {{ session.exerciseType }}
+              </span>
+
+              <strong>
+                {{
+                  session.title ||
+                  'Sesión Garmin'
+                }}
+              </strong>
+
+              <small>
+                {{ session.startTime }}
+                →
+                {{ session.endTime }}
+              </small>
+
+              <small>
+                Duración:
+                {{ session.durationMinutes }}
+                min
+                · laps:
+                {{ session.lapCount }}
+                · segments:
+                {{ session.segmentCount }}
+                · route:
+                {{
+                  session.hasRoute
+                    ? 'sí'
+                    : 'no'
+                }}
+              </small>
+
+              <small>
+                Origen:
+                {{
+                  sourceLabel(
+                    session.sourcePackage
+                  )
+                }}
+              </small>
+
+              @if (session.notes) {
+                <small>
+                  Notas:
+                  {{ session.notes }}
+                </small>
+              }
+            </div>
+          }
+        }
+      </section>
+
+
       <p class="settings-note">
-        Exportar datos, borrar cuenta e importaciones
-        avanzadas no se muestran todavía porque no existe
-        un flujo real conectado para esas acciones.
+        Aptus no modifica ningún dato de Garmin
+        ni de Health Connect.
       </p>
     </section>
   `,
   styleUrl: './settings.scss'
 })
-export class SettingsData {}
+export class SettingsData
+  implements OnInit {
+
+  readonly healthConnectAvailable =
+    signal<boolean | null>(
+      null
+    );
+
+
+  readonly healthConnectPermissions =
+    signal<
+      HealthConnectPermissionStatus
+      | null
+    >(
+      null
+    );
+
+
+  readonly healthConnectSnapshot =
+    signal<
+      HealthConnectSnapshot
+      | null
+    >(
+      null
+    );
+
+
+  readonly healthConnectExerciseSessions =
+    signal<
+      HealthConnectExerciseSessions
+      | null
+    >(
+      null
+    );
+
+
+  readonly healthConnectLoading =
+    signal(false);
+
+
+  readonly healthConnectMessage =
+    signal<string | null>(
+      null
+    );
+
+
+  readonly healthConnectError =
+    signal<string | null>(
+      null
+    );
+
+
+  async ngOnInit():
+    Promise<void> {
+    await this.refreshHealthConnect();
+  }
+
+
+  private isNativeAndroid():
+    boolean {
+    return (
+      Capacitor.isNativePlatform() &&
+      Capacitor.getPlatform() ===
+        'android'
+    );
+  }
+
+
+  async refreshHealthConnect():
+    Promise<void> {
+    this.healthConnectError.set(
+      null
+    );
+
+    this.healthConnectMessage.set(
+      null
+    );
+
+
+    if (!this.isNativeAndroid()) {
+      this.healthConnectAvailable.set(
+        false
+      );
+
+      return;
+    }
+
+
+    this.healthConnectLoading.set(
+      true
+    );
+
+
+    try {
+      const availability =
+        await HealthConnect
+          .isAvailable();
+
+      this.healthConnectAvailable.set(
+        availability.supported
+      );
+
+
+      if (!availability.supported) {
+        this.healthConnectPermissions.set(
+          null
+        );
+
+        return;
+      }
+
+
+      const permissions =
+        await HealthConnect
+          .permissionStatus();
+
+      this.healthConnectPermissions.set(
+        permissions
+      );
+
+    } catch (error: unknown) {
+      this.healthConnectAvailable.set(
+        false
+      );
+
+      this.healthConnectError.set(
+        this.healthConnectErrorMessage(
+          error,
+          'No se pudo comprobar Health Connect.'
+        )
+      );
+
+    } finally {
+      this.healthConnectLoading.set(
+        false
+      );
+    }
+  }
+
+
+  async openHealthConnectPermissions():
+    Promise<void> {
+    this.healthConnectError.set(
+      null
+    );
+
+    this.healthConnectMessage.set(
+      null
+    );
+
+
+    try {
+      await HealthConnect
+        .openPermissions();
+
+      this.healthConnectMessage.set(
+        'Revisa los permisos de Aptus y, al volver, pulsa "Comprobar permisos".'
+      );
+
+    } catch (error: unknown) {
+      this.healthConnectError.set(
+        this.healthConnectErrorMessage(
+          error,
+          'No se pudo abrir Health Connect.'
+        )
+      );
+    }
+  }
+
+
+  async readHealthConnectData():
+    Promise<void> {
+    if (
+      this.healthConnectLoading()
+    ) {
+      return;
+    }
+
+
+    this.healthConnectLoading.set(
+      true
+    );
+
+    this.healthConnectMessage.set(
+      null
+    );
+
+    this.healthConnectError.set(
+      null
+    );
+
+
+    try {
+      const snapshot =
+        await HealthConnect
+          .readSnapshot();
+
+      this.healthConnectSnapshot.set(
+        snapshot
+      );
+
+      this.healthConnectMessage.set(
+        'Lectura completada. Estos datos todavía no se han guardado en Aptus.'
+      );
+
+    } catch (error: unknown) {
+      this.healthConnectError.set(
+        this.healthConnectErrorMessage(
+          error,
+          'No se pudieron leer los datos de Health Connect.'
+        )
+      );
+
+    } finally {
+      this.healthConnectLoading.set(
+        false
+      );
+    }
+  }
+
+
+  async readGarminExerciseSessions():
+    Promise<void> {
+    if (
+      this.healthConnectLoading()
+    ) {
+      return;
+    }
+
+    this.healthConnectLoading.set(
+      true
+    );
+
+    this.healthConnectMessage.set(
+      null
+    );
+
+    this.healthConnectError.set(
+      null
+    );
+
+    try {
+      const result =
+        await HealthConnect
+          .readGarminExerciseSessions();
+
+      this.healthConnectExerciseSessions.set(
+        result
+      );
+
+      this.healthConnectMessage.set(
+        `${result.count} actividades Garmin encontradas. ` +
+        'Todavía no se han guardado en Aptus.'
+      );
+
+    } catch (error: unknown) {
+      this.healthConnectError.set(
+        this.healthConnectErrorMessage(
+          error,
+          'No se pudieron leer las actividades Garmin.'
+        )
+      );
+
+    } finally {
+      this.healthConnectLoading.set(
+        false
+      );
+    }
+  }
+
+
+  permissionLabel(
+    granted:
+      | boolean
+      | undefined
+  ): string {
+    return granted
+      ? 'OK'
+      : 'pendiente';
+  }
+
+
+  sleepLabel(
+    minutes:
+      | number
+      | undefined
+  ): string {
+    if (
+      minutes === undefined
+    ) {
+      return '—';
+    }
+
+    const hours =
+      Math.floor(
+        minutes / 60
+      );
+
+    const remainingMinutes =
+      Math.round(
+        minutes % 60
+      );
+
+    return (
+      `${hours} h ` +
+      `${remainingMinutes} min`
+    );
+  }
+
+
+  numberLabel(
+    value:
+      | number
+      | undefined
+  ): string {
+    if (
+      value === undefined ||
+      !Number.isFinite(value)
+    ) {
+      return '—';
+    }
+
+    return new Intl.NumberFormat(
+      'es-ES',
+      {
+        maximumFractionDigits: 1
+      }
+    ).format(value);
+  }
+
+
+  sourceListLabel(
+    sources:
+      | string[]
+      | undefined
+  ): string {
+    if (
+      !sources ||
+      sources.length === 0
+    ) {
+      return 'Health Connect';
+    }
+
+    return [
+      ...new Set(
+        sources.map(
+          source =>
+            this.sourceLabel(
+              source
+            )
+        )
+      )
+    ].join(', ');
+  }
+
+
+  sourceLabel(
+    source:
+      | string
+      | undefined
+  ): string {
+    if (!source) {
+      return 'Health Connect';
+    }
+
+    const normalized =
+      source.toLowerCase();
+
+    if (
+      normalized.includes(
+        'garmin'
+      )
+    ) {
+      return 'Garmin Connect';
+    }
+
+    if (
+      normalized.includes(
+        'samsung'
+      )
+    ) {
+      return 'Samsung Health';
+    }
+
+    return source;
+  }
+
+
+  private healthConnectErrorMessage(
+    error: unknown,
+    fallback: string
+  ): string {
+    const candidate =
+      error as {
+        message?: string;
+      };
+
+    return (
+      candidate.message?.trim() ||
+      fallback
+    );
+  }
+}
 
 
 @Component({

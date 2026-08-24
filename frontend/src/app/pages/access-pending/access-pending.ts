@@ -121,8 +121,8 @@ export class AccessPending
       ) {
         this.statusMessage.set(
           this.language() === 'es'
-            ? 'Tu cuenta continúa suspendida. Si crees que se trata de un error, contacta con el administrador de GymOS.'
-            : 'Your account remains suspended. If you think this is a mistake, contact the GymOS administrator.'
+            ? 'Tu cuenta continúa suspendida. Si crees que se trata de un error, contacta con el administrador de Aptus.'
+            : 'Your account remains suspended. If you think this is a mistake, contact the Aptus administrator.'
         );
       }
 

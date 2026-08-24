@@ -199,8 +199,8 @@ export class Login {
         this.authErrorMessage(
           err,
           this.language() === 'es'
-            ? 'No se pudo comprobar tu acceso a GymOS.'
-            : 'Your GymOS access could not be verified.'
+            ? 'No se pudo comprobar tu acceso a Aptus.'
+            : 'Your Aptus access could not be verified.'
         )
       );
     } finally {
@@ -556,8 +556,8 @@ export class Login {
     void {
     this.message.set(
       this.language() === 'es'
-        ? 'El acceso a GymOS está actualmente disponible mediante invitación.'
-        : 'GymOS access is currently invitation-only.'
+        ? 'El acceso a Aptus está actualmente disponible mediante invitación.'
+        : 'Aptus access is currently invitation-only.'
     );
 
     this.error.set(null);
@@ -591,8 +591,8 @@ export class Login {
       case 'webauthn_credential_not_found':
         return (
           this.language() === 'es'
-            ? 'No se encontró una passkey de GymOS en este dispositivo.'
-            : 'No GymOS passkey was found on this device.'
+            ? 'No se encontró una passkey de Aptus en este dispositivo.'
+            : 'No Aptus passkey was found on this device.'
         );
 
       case 'webauthn_challenge_expired':

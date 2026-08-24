@@ -238,12 +238,12 @@ describe('App', () => {
     expect(app).toBeTruthy();
   });
 
-  it('should render the GymOS shell', async () => {
+  it('should render the Aptus shell', async () => {
     const fixture = TestBed.createComponent(App);
     fixture.detectChanges();
     await fixture.whenStable();
     const compiled = fixture.nativeElement as HTMLElement;
-    expect(compiled.textContent).toContain('GymOS');
+    expect(compiled.textContent).toContain('Aptus');
     expect(compiled.textContent).toContain('Inicio');
   });
 
@@ -803,7 +803,7 @@ describe('App', () => {
       fixture.nativeElement.textContent;
 
     expect(text).toContain(
-      'Conectando con GymOS…'
+      'Conectando con Aptus…'
     );
     expect(text).not.toContain(
       'El servidor puede tardar'
@@ -822,10 +822,10 @@ describe('App', () => {
     const text =
       fixture.nativeElement.textContent;
 
-    expect(text).toContain('GymOS');
+    expect(text).toContain('Aptus');
     expect(text).toContain('Inicio');
     expect(text).not.toContain(
-      'Conectando con GymOS…'
+      'Conectando con Aptus…'
     );
   });
 
@@ -851,7 +851,7 @@ describe('App', () => {
       fixture.nativeElement.textContent;
 
     expect(text).toContain(
-      'No se pudo conectar con GymOS'
+      'No se pudo conectar con Aptus'
     );
     expect(text).toContain('Reintentar');
   });
@@ -888,11 +888,11 @@ describe('App', () => {
       .toHaveBeenCalledTimes(2);
     expect(
       fixture.nativeElement.textContent
-    ).toContain('Conectando con GymOS…');
+    ).toContain('Conectando con Aptus…');
     expect(
       fixture.nativeElement.textContent
     ).not.toContain(
-      'No se pudo conectar con GymOS'
+      'No se pudo conectar con Aptus'
     );
   });
 
@@ -957,7 +957,7 @@ describe('App', () => {
       'Pantalla de login'
     );
     expect(text).not.toContain(
-      'Conectando con GymOS…'
+      'Conectando con Aptus…'
     );
   });
 

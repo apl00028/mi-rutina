@@ -154,7 +154,7 @@ export class App implements OnDestroy {
   }
 
 
-  private async loadGymOSUser():
+  private async loadAptusUser():
     Promise<void> {
 
     const sessionStartedAt =
@@ -216,7 +216,7 @@ export class App implements OnDestroy {
       startedAt === undefined
     ) {
       console.info(
-        `[GymOS startup] ${phase}: ` +
+        `[Aptus startup] ${phase}: ` +
         `${Math.round(now)} ms total`
       );
 
@@ -224,7 +224,7 @@ export class App implements OnDestroy {
     }
 
     console.info(
-      `[GymOS startup] ${phase}: ` +
+      `[Aptus startup] ${phase}: ` +
       `${Math.round(now - startedAt)} ms ` +
       `(${Math.round(now)} ms total)`
     );
@@ -284,7 +284,7 @@ export class App implements OnDestroy {
     attempt: number
   ): Promise<void> {
     try {
-      await this.loadGymOSUser();
+      await this.loadAptusUser();
 
       if (
         this.initializationAttempt !==

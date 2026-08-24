@@ -5,7 +5,7 @@
     ],
     "target": {
       "namespace": "android_app",
-      "package_name": "com.adrianpelaez.gymos",
+      "package_name": "com.adrianpelaez.aptus",
       "sha256_cert_fingerprints": [
         "72:6F:D1:28:A7:66:4F:E6:C5:50:38:D8:23:FE:EB:4B:0F:28:4D:7F:76:41:5F:20:0F:37:96:B0:8C:BF:E1:17"
       ]

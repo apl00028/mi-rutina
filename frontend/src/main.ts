@@ -23,7 +23,7 @@ if (
   Capacitor.isNativePlatform()
 ) {
   console.info(
-    `[GymOS startup] JavaScript ready: ` +
+    `[Aptus startup] JavaScript ready: ` +
     `${Math.round(performance.now())} ms total`
   );
 }
@@ -38,7 +38,7 @@ bootstrapApplication(
       Capacitor.isNativePlatform()
     ) {
       console.info(
-        `[GymOS startup] Angular ready: ` +
+        `[Aptus startup] Angular ready: ` +
         `${Math.round(performance.now())} ms total`
       );
     }

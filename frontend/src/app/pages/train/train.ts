@@ -1421,7 +1421,7 @@ export class Train implements OnInit, OnDestroy {
         title:
           'Progresa sin subir kg',
         reason:
-          'La última vez llegaste a la parte alta del rango, pero GymOS no tiene una carga comparable para este ejercicio.'
+          'La última vez llegaste a la parte alta del rango, pero Aptus no tiene una carga comparable para este ejercicio.'
       };
     }
 
@@ -1463,7 +1463,7 @@ export class Train implements OnInit, OnDestroy {
     const empty =
       this.emptyTodayPerformance(
         'Datos insuficientes',
-        'GymOS necesita al menos 3 exposiciones recientes y 2 series válidas hoy.'
+        'Aptus necesita al menos 3 exposiciones recientes y 2 series válidas hoy.'
       );
 
     if (

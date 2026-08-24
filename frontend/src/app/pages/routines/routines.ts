@@ -1772,7 +1772,7 @@ export class Routines implements OnInit {
         sheet: '_GymOS',
         column: 'templateVersion',
         message:
-          `El archivo declara templateVersion "${metadata['templateVersion']}". GymOS aplicará normalización segura antes de validar.`
+          `El archivo declara templateVersion "${metadata['templateVersion']}". Aptus aplicará normalización segura antes de validar.`
       });
     }
 
@@ -2145,7 +2145,7 @@ export class Routines implements OnInit {
             row: excelRow,
             column: '_GymOS exercise',
             message:
-              'Falta el ID canónico. GymOS no identifica ejercicios únicamente por nombre.'
+              'Falta el ID canónico. Aptus no identifica ejercicios únicamente por nombre.'
           });
         } else {
           canonicalExercise =
@@ -2160,7 +2160,7 @@ export class Routines implements OnInit {
               row: excelRow,
               column: '_GymOS exercise',
               message:
-                `El ID "${exerciseId}" no existe en el catálogo actual de GymOS.`
+                `El ID "${exerciseId}" no existe en el catálogo actual de Aptus.`
             });
           }
         }
@@ -2177,7 +2177,7 @@ export class Routines implements OnInit {
             row: excelRow,
             column: 'Ejercicio',
             message:
-              `"${suppliedName}" no coincide con "${exerciseId}". GymOS utilizará el nombre canónico "${canonicalExercise.name}".`
+              `"${suppliedName}" no coincide con "${exerciseId}". Aptus utilizará el nombre canónico "${canonicalExercise.name}".`
           });
         }
 
@@ -2553,7 +2553,7 @@ export class Routines implements OnInit {
 
     const instructions = [
       [
-        'Plantilla de Rutina GymOS',
+        'Plantilla de Rutina Aptus',
         'Versión 2'
       ],
       [
@@ -2602,7 +2602,7 @@ export class Routines implements OnInit {
       ],
       [
         'Importación',
-        'GymOS volverá a validar todos los IDs contra su catálogo actual.'
+        'Aptus volverá a validar todos los IDs contra su catálogo actual.'
       ],
       [
         'Activación',
@@ -2765,7 +2765,7 @@ export class Routines implements OnInit {
 
     XLSX.writeFile(
       workbook,
-      'GymOS_plantilla_rutina_v2.xlsx'
+      'Aptus_plantilla_rutina_v2.xlsx'
     );
   }
 
@@ -3191,7 +3191,7 @@ export class Routines implements OnInit {
 
       XLSX.writeFile(
         workbook,
-        `GymOS_registros_${label}.xlsx`
+        `Aptus_registros_${label}.xlsx`
       );
 
       this.exportRecordsOpen.set(false);

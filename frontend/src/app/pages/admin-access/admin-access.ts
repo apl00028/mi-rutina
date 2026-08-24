@@ -205,7 +205,7 @@ export class AdminAccess
 
       this.feedback.set(
         newStatus === 'active'
-          ? `${email} tiene ahora acceso a GymOS.`
+          ? `${email} tiene ahora acceso a Aptus.`
           : `La solicitud de ${email} ha sido rechazada.`
       );
 

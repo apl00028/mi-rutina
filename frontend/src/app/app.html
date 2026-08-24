@@ -644,6 +644,29 @@
         </span>
       </a>
 
+
+      <a
+        routerLink="/ajustes"
+        routerLinkActive="active"
+        [attr.aria-current]="
+          isCurrentRoute('/ajustes')
+            ? 'page'
+            : null
+        "
+        aria-label="Ir a Ajustes"
+      >
+        <span
+          class="nav-icon"
+          aria-hidden="true"
+        >
+          ⚙
+        </span>
+
+        <span class="nav-label">
+          Ajustes
+        </span>
+      </a>
+
     </nav>
   </div>
 }

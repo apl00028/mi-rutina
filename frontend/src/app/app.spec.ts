@@ -314,7 +314,7 @@ describe('App', () => {
         )
       ) as HTMLAnchorElement[];
 
-    expect(links).toHaveLength(4);
+    expect(links).toHaveLength(5);
     expect(
       links.map(link =>
         link.textContent
@@ -325,7 +325,8 @@ describe('App', () => {
       '⌂ Inicio',
       '◫ Entrenar',
       '◉ Nutrición',
-      '♡ Salud'
+      '♡ Salud',
+      '⚙ Ajustes'
     ]);
     expect(
       links.map(link =>
@@ -335,7 +336,8 @@ describe('App', () => {
       '/',
       '/entrenar',
       '/nutricion',
-      '/salud'
+      '/salud',
+      '/ajustes'
     ]);
     expect(
       fixture.nativeElement.querySelector(

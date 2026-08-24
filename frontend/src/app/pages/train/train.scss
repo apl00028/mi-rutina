@@ -1130,12 +1130,12 @@ button:disabled {
   appearance: none;
   min-width: 145px;
 
-  border: 1px solid var(--border);
+  border: 1px solid var(--gymos-border);
   border-radius: 999px;
 
   padding: 9px 38px 9px 15px;
 
-  background: var(--card);
+  background: var(--gymos-surface);
   color: inherit;
 
   font: inherit;
@@ -1169,10 +1169,10 @@ button:disabled {
 
   padding: 3px;
 
-  border: 1px solid var(--border);
+  border: 1px solid var(--gymos-border);
   border-radius: 999px;
 
-  background: var(--card);
+  background: var(--gymos-surface);
 
   vertical-align: middle;
 }
@@ -1195,7 +1195,7 @@ button:disabled {
 }
 
 .training-view-tabs button.active {
-  background: var(--border);
+  background: var(--gymos-surface-hover);
   opacity: 1;
 }
 
@@ -1206,5 +1206,577 @@ button:disabled {
 @media (max-width: 700px) {
   .training-view-tabs {
     margin-left: 0;
+  }
+}
+
+
+/* GYMOS MOBILE TRAINING UX V1 */
+
+@media (max-width: 600px) {
+
+  /*
+   * Reducimos espacio vertical que no aporta
+   * información durante el entrenamiento.
+   */
+
+  .page-header,
+  .workout-header {
+    gap: 10px;
+    margin-bottom: 16px;
+  }
+
+  .page-header .muted,
+  .workout-header .muted {
+    display: none;
+  }
+
+  .page-header h1,
+  .workout-header h1 {
+    margin-bottom: 0;
+
+    font-size: 2rem;
+    line-height: 1.08;
+  }
+
+
+  /*
+   * Selector de disciplina
+   */
+
+  .training-discipline-selector {
+    margin:
+      4px
+      0
+      8px;
+  }
+
+  .training-discipline-selector select {
+    min-width: 132px;
+    min-height: 42px;
+
+    padding:
+      8px
+      36px
+      8px
+      14px;
+
+    border:
+      1px solid
+      var(--gymos-border);
+
+    border-radius: 12px;
+
+    background:
+      var(--gymos-surface);
+  }
+
+
+  /*
+   * Sesiones / Rutina / Análisis
+   *
+   * En móvil funciona mejor como segmented
+   * control que como tres textos separados.
+   */
+
+  .training-view-tabs {
+    width: 100%;
+
+    display: grid;
+    grid-template-columns:
+      repeat(3, minmax(0, 1fr));
+
+    box-sizing: border-box;
+
+    margin:
+      5px
+      0
+      18px;
+
+    padding: 3px;
+
+    border:
+      1px solid
+      var(--gymos-border);
+
+    border-radius: 12px;
+
+    background:
+      var(--gymos-surface);
+  }
+
+  .training-view-tabs button {
+    min-height: 40px;
+
+    padding: 7px 8px;
+
+    border-radius: 9px;
+
+    font-size: 0.82rem;
+  }
+
+  .training-view-tabs button.active {
+    background:
+      var(--gymos-surface-hover);
+
+    opacity: 1;
+  }
+
+
+  /*
+   * Tarjeta de selección de sesión
+   */
+
+  .session-card {
+    padding: 14px;
+
+    border-radius: 14px;
+  }
+
+  .session-card > header {
+    align-items: center;
+  }
+
+  .session-card h2 {
+    margin: 0;
+
+    font-size: 1.15rem;
+    line-height: 1.25;
+  }
+
+  .exercise-count {
+    padding: 5px 8px;
+
+    font-size: 0.72rem;
+  }
+
+
+  /*
+   * En móvil la acción principal debe aparecer
+   * antes que el detalle de ejercicios.
+   */
+
+  .start-button {
+    order: 2;
+
+    min-height: 50px;
+
+    margin-top: 14px;
+
+    font-size: 0.95rem;
+  }
+
+  .session-exercises {
+    order: 3;
+
+    margin:
+      12px
+      0
+      0;
+  }
+
+  .session-exercise {
+    padding: 9px 0;
+  }
+
+  .session-exercise strong {
+    font-size: 0.9rem;
+  }
+
+  .session-exercise span {
+    font-size: 0.78rem;
+  }
+
+
+  /*
+   * Entrenamiento activo
+   */
+
+  .workout-header .status-pill {
+    width: auto;
+
+    justify-self: start;
+
+    padding: 6px 10px;
+
+    font-size: 0.76rem;
+  }
+
+  .exercise-stack {
+    gap: 10px;
+  }
+
+  .exercise-toggle {
+    padding: 12px 14px;
+  }
+
+  .exercise-title {
+    font-size: 0.96rem;
+  }
+
+  .sets-badge {
+    padding: 5px 8px;
+
+    font-size: 0.72rem;
+  }
+
+
+  /*
+   * Barra inferior del entrenamiento.
+   *
+   * Antes los tres botones ocupaban casi
+   * media pantalla.
+   */
+
+  .train-page {
+    padding-bottom: 170px;
+  }
+
+  .workout-actions {
+    grid-template-columns:
+      minmax(0, 1.35fr)
+      minmax(0, 1fr);
+
+    gap: 8px;
+
+    padding:
+      9px
+      12px
+      max(
+        9px,
+        env(safe-area-inset-bottom)
+      );
+
+    border-radius:
+      14px
+      14px
+      0
+      0;
+  }
+
+  .workout-actions > .autosave-status,
+  .workout-actions > .rest-timer {
+    grid-column: 1 / -1;
+  }
+
+  .workout-actions > .finish-button {
+    grid-column: 1;
+
+    order: 2;
+
+    min-height: 48px;
+
+    padding: 8px;
+
+    font-size: 0.9rem;
+  }
+
+  .workout-actions > .secondary-button {
+    grid-column: 2;
+
+    order: 3;
+
+    min-height: 48px;
+
+    padding: 8px;
+
+    font-size: 0.82rem;
+  }
+
+  .workout-actions > .cancel-workout-button {
+    grid-column: 1 / -1;
+
+    order: 4;
+
+    min-height: 28px;
+
+    padding: 2px 8px;
+
+    font-size: 0.74rem;
+  }
+
+  .workout-actions > .autosave-status {
+    min-height: 14px;
+
+    font-size: 0.7rem;
+  }
+}
+
+
+/* GYMOS MOBILE TRAINING UX V2 */
+
+@media (max-width: 600px) {
+
+  /*
+   * Cabecera más compacta durante una sesión.
+   */
+
+  .workout-header h1 {
+    font-size: clamp(
+      1.7rem,
+      7vw,
+      2rem
+    );
+
+    line-height: 1.08;
+  }
+
+  .workout-header {
+    margin-bottom: 14px;
+  }
+
+
+  /*
+   * Una serie cerrada debe ocupar una única fila.
+   *
+   * Antes:
+   * Serie 1
+   * siguiente
+   * Siguiente
+   *
+   * Ahora:
+   * 1  Serie 1        Siguiente
+   */
+
+  .set-summary-row {
+    grid-template-columns:
+      34px
+      minmax(0, 1fr)
+      auto;
+
+    align-items: center;
+
+    gap: 10px;
+
+    padding:
+      10px
+      12px;
+  }
+
+  .set-summary-row .set-state {
+    grid-column: auto;
+
+    justify-self: end;
+  }
+
+  .set-row:not(.completed)
+  .set-summary-copy > span {
+    display: none;
+  }
+
+  .set-summary-copy {
+    gap: 0;
+  }
+
+  .set-summary-copy strong {
+    font-size: 0.9rem;
+  }
+
+  .set-state {
+    padding:
+      4px
+      7px;
+
+    font-size: 0.67rem;
+  }
+
+
+  /*
+   * Serie abierta:
+   * hacemos los valores algo más cómodos
+   * para introducirlos con el pulgar.
+   */
+
+  .set-inputs input {
+    min-height: 50px;
+
+    font-size: 1.08rem;
+    font-weight: 750;
+  }
+
+  .set-inputs label > span {
+    font-size: 0.68rem;
+  }
+
+  .complete-set-button {
+    min-height: 50px;
+  }
+
+
+  /*
+   * Footer de sesión.
+   *
+   * Guardado + Cancelar comparten la primera
+   * línea. Finalizar + Salir comparten la segunda.
+   */
+
+  .workout-actions {
+    grid-template-columns:
+      minmax(0, 1.3fr)
+      minmax(0, 1fr);
+
+    padding:
+      8px
+      12px
+      max(
+        8px,
+        env(safe-area-inset-bottom)
+      );
+
+    gap: 6px 8px;
+  }
+
+  .workout-actions
+  > .autosave-status {
+    grid-column: 1;
+    grid-row: 1;
+
+    align-self: center;
+
+    min-height: 0;
+
+    font-size: 0.69rem;
+  }
+
+  .workout-actions
+  > .cancel-workout-button {
+    grid-column: 2;
+    grid-row: 1;
+
+    justify-self: end;
+
+    width: auto;
+
+    min-height: 24px;
+
+    padding: 2px 4px;
+
+    font-size: 0.69rem;
+  }
+
+  .workout-actions
+  > .finish-button {
+    grid-column: 1;
+    grid-row: 2;
+
+    order: initial;
+
+    min-height: 46px;
+  }
+
+  .workout-actions
+  > .secondary-button {
+    grid-column: 2;
+    grid-row: 2;
+
+    order: initial;
+
+    min-height: 46px;
+  }
+
+
+  /*
+   * Muy importante en móvil:
+   *
+   * cuando aparece el teclado numérico,
+   * ocultamos temporalmente el footer para
+   * que no tape la serie que estamos editando.
+   */
+
+  .active-workout:has(.set-inputs input:focus)
+    .workout-actions {
+      opacity: 0;
+
+      pointer-events: none;
+
+      transform:
+        translateY(
+          calc(100% + 20px)
+        );
+  }
+
+  .workout-actions {
+    transition:
+      opacity 140ms ease,
+      transform 140ms ease;
+  }
+
+}
+
+
+/* GYMOS MOBILE TRAINING UX V3 */
+
+@media (max-width: 600px) {
+
+  /*
+   * Cabecera de entrenamiento compacta.
+   */
+
+  .active-workout .workout-header {
+    display: grid;
+
+    grid-template-columns:
+      minmax(0, 1fr)
+      auto;
+
+    align-items: center;
+
+    gap: 10px;
+
+    margin-bottom: 14px;
+  }
+
+  .active-workout
+  .workout-header
+  .eyebrow {
+    display: none;
+  }
+
+  .active-workout
+  .workout-header
+  h1 {
+    margin: 0;
+
+    font-size:
+      clamp(
+        1.35rem,
+        6vw,
+        1.65rem
+      );
+
+    line-height: 1.12;
+
+    letter-spacing: -0.02em;
+  }
+
+  .active-workout
+  .workout-header
+  .status-pill {
+    grid-column: 2;
+    grid-row: 1;
+
+    justify-self: end;
+
+    margin: 0;
+
+    padding: 5px 9px;
+
+    font-size: 0.7rem;
+  }
+
+
+  /*
+   * Evitar que Android coloque la serie
+   * debajo del topbar al abrir teclado.
+   */
+
+  .set-row.set-expanded {
+    scroll-margin-top: 90px;
+    scroll-margin-bottom: 28px;
+  }
+
+  .active-workout:has(.set-inputs input:focus)
+  .set-row.set-expanded {
+    scroll-margin-top: 96px;
+    scroll-margin-bottom: 32px;
   }
 }

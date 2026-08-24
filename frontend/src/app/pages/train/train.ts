@@ -281,6 +281,46 @@ export class Train implements OnInit, OnDestroy {
   }
 
 
+  keepWorkoutInputVisible(
+    event: FocusEvent
+  ): void {
+    const input =
+      event.target;
+
+    if (
+      !(input instanceof HTMLElement)
+    ) {
+      return;
+    }
+
+    window.setTimeout(
+      () => {
+        if (
+          document.activeElement !== input
+        ) {
+          return;
+        }
+
+        const setRow =
+          input.closest('.set-row');
+
+        if (
+          !(setRow instanceof HTMLElement)
+        ) {
+          return;
+        }
+
+        setRow.scrollIntoView({
+          behavior: 'smooth',
+          block: 'center',
+          inline: 'nearest'
+        });
+      },
+      300
+    );
+  }
+
+
   async ngOnInit(): Promise<void> {
     this.workoutSessionState
       .setChecking();
@@ -2452,6 +2492,32 @@ export class Train implements OnInit, OnDestroy {
     exerciseId: string,
     setIndex: number
   ): void {
+    /*
+     * Si el usuario abre manualmente una serie
+     * pendiente durante el descanso, entendemos
+     * que ha decidido continuar antes de tiempo.
+     *
+     * Cancelamos solo el temporizador; no usamos
+     * skipRestTimer() para evitar navegación
+     * automática adicional.
+     */
+    const openingSet =
+      !this.isSetExpanded(
+        exerciseId,
+        setIndex
+      );
+
+    if (
+      openingSet &&
+      this.restTimer() &&
+      !this.isSetCompleted(
+        exerciseId,
+        setIndex
+      )
+    ) {
+      this.clearRestTimer();
+    }
+
     const exercise =
       this.findSessionExercise(
         exerciseId

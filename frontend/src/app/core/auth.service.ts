@@ -18,6 +18,10 @@ import {
 } from '@supabase/supabase-js';
 
 import {
+  Passkey
+} from './passkey.plugin';
+
+import {
   environment
 } from '../../environments/environment';
 
@@ -589,8 +593,24 @@ export class AuthService {
    * Passkeys / WebAuthn
    */
 
+  private isNativeAndroid():
+    boolean {
+    return (
+      Capacitor.isNativePlatform() &&
+      Capacitor.getPlatform() ===
+        'android'
+    );
+  }
+
+
   isPasskeySupported():
     boolean {
+    if (
+      this.isNativeAndroid()
+    ) {
+      return true;
+    }
+
     if (
       typeof window === 'undefined' ||
       typeof navigator === 'undefined'
@@ -603,6 +623,20 @@ export class AuthService {
       'PublicKeyCredential' in window &&
       !!navigator.credentials
     );
+  }
+
+
+  private async assertNativePasskeySupported():
+    Promise<void> {
+    const support =
+      await Passkey.isSupported();
+
+    if (!support.supported) {
+      throw new Error(
+        `Las passkeys requieren Android ${support.minimumSdkInt} ` +
+        `o superior. Este dispositivo usa SDK ${support.sdkInt}.`
+      );
+    }
   }
 
 
@@ -622,11 +656,93 @@ export class AuthService {
       );
     }
 
+
+    /*
+     * Android nativo:
+     *
+     * Supabase genera el challenge y las opciones WebAuthn.
+     * Android Credential Manager ejecuta la ceremonia.
+     * Supabase verifica la credencial resultante.
+     */
+    if (
+      this.isNativeAndroid()
+    ) {
+      await this.assertNativePasskeySupported();
+
+      const {
+        data: startData,
+        error: startError
+      } =
+        await this.client.auth.passkey
+          .startRegistration();
+
+      if (startError) {
+        throw startError;
+      }
+
+      if (!startData) {
+        throw new Error(
+          'Supabase no devolvió opciones para registrar la passkey.'
+        );
+      }
+
+      const nativeResult =
+        await Passkey.createCredential({
+          requestJson:
+            JSON.stringify(
+              startData.options
+            )
+        });
+
+      let credential;
+
+      try {
+        credential =
+          JSON.parse(
+            nativeResult.credentialJson
+          );
+      } catch {
+        throw new Error(
+          'Android devolvió una respuesta de passkey no válida.'
+        );
+      }
+
+      const {
+        data,
+        error
+      } =
+        await this.client.auth.passkey
+          .verifyRegistration({
+            challengeId:
+              startData.challenge_id,
+
+            credential
+          });
+
+      if (error) {
+        throw error;
+      }
+
+      if (!data) {
+        throw new Error(
+          'Supabase no pudo completar el registro de la passkey.'
+        );
+      }
+
+      return data;
+    }
+
+
+    /*
+     * Navegador:
+     * mantenemos el flujo WebAuthn de supabase-js.
+     */
     const {
       data,
       error
     } =
-      await this.client.auth.registerPasskey();
+      await this.client.auth
+        .registerPasskey();
 
     if (error) {
       throw error;
@@ -644,11 +760,99 @@ export class AuthService {
       );
     }
 
+
+    /*
+     * Android nativo
+     */
+    if (
+      this.isNativeAndroid()
+    ) {
+      await this.assertNativePasskeySupported();
+
+      const {
+        data: startData,
+        error: startError
+      } =
+        await this.client.auth.passkey
+          .startAuthentication();
+
+      if (startError) {
+        throw startError;
+      }
+
+      if (!startData) {
+        throw new Error(
+          'Supabase no devolvió opciones para autenticar la passkey.'
+        );
+      }
+
+      const nativeResult =
+        await Passkey.getCredential({
+          requestJson:
+            JSON.stringify(
+              startData.options
+            )
+        });
+
+      let credential;
+
+      try {
+        credential =
+          JSON.parse(
+            nativeResult.credentialJson
+          );
+      } catch {
+        throw new Error(
+          'Android devolvió una respuesta de autenticación no válida.'
+        );
+      }
+
+      const {
+        data,
+        error
+      } =
+        await this.client.auth.passkey
+          .verifyAuthentication({
+            challengeId:
+              startData.challenge_id,
+
+            credential
+          });
+
+      if (error) {
+        throw error;
+      }
+
+      if (!data) {
+        throw new Error(
+          'Supabase no pudo completar la autenticación con passkey.'
+        );
+      }
+
+      this.session.set(
+        data.session ?? null
+      );
+
+      this.user.set(
+        data.user ?? null
+      );
+
+      this.me.set(null);
+      this.meRequest = null;
+
+      return;
+    }
+
+
+    /*
+     * Navegador
+     */
     const {
       data,
       error
     } =
-      await this.client.auth.signInWithPasskey();
+      await this.client.auth
+        .signInWithPasskey();
 
     if (error) {
       throw error;

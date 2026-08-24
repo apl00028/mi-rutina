@@ -1,0 +1,14 @@
+[
+  {
+    "relation": [
+      "delegate_permission/common.get_login_creds"
+    ],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.adrianpelaez.gymos",
+      "sha256_cert_fingerprints": [
+        "79:57:4A:2B:FE:AD:5A:C5:05:EE:24:82:0C:25:05:21:1B:48:36:E0:C8:C7:D1:F9:19:4F:0D:B8:72:F7:89:86"
+      ]
+    }
+  }
+]

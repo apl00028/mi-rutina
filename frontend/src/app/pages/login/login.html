@@ -165,6 +165,33 @@
     <div
       class="login-methods"
     >
+      @if (passkeySupported()) {
+      <button
+        class="passkey-button"
+        type="button"
+        (click)="signInWithPasskey()"
+        [disabled]="passkeyLoading()"
+      >
+        <span class="passkey-icon">
+          P
+        </span>
+
+        {{
+          passkeyLoading()
+            ? (
+                language() === 'es'
+                  ? 'Comprobando...'
+                  : 'Checking...'
+              )
+            : (
+                language() === 'es'
+                  ? 'Continuar con passkey'
+                  : 'Continue with passkey'
+              )
+        }}
+      </button>
+      }
+
       <button
         class="google-button"
         type="button"

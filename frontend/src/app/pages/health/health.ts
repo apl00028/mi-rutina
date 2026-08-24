@@ -4,6 +4,19 @@ import {
   signal
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
+
+import {
+  Capacitor
+} from '@capacitor/core';
+
+import {
+  Directory,
+  Filesystem
+} from '@capacitor/filesystem';
+
+import {
+  Share
+} from '@capacitor/share';
 import * as XLSX from 'xlsx';
 import {
   HttpClient,
@@ -2148,20 +2161,94 @@ export class Health implements OnInit {
   }
 
 
-  exportHealthData(): void {
+  async exportHealthData():
+    Promise<void> {
 
-    const workbook =
-      this.buildHealthExportWorkbook();
+    this.error.set(null);
+    this.message.set(null);
 
-    const today =
-      new Date()
-        .toISOString()
-        .slice(0, 10);
+    try {
 
-    XLSX.writeFile(
-      workbook,
-      `gymos-health-${today}.xlsx`
-    );
+      const workbook =
+        this.buildHealthExportWorkbook();
+
+      const today =
+        new Date()
+          .toISOString()
+          .slice(0, 10);
+
+      const fileName =
+        `gymos-health-${today}.xlsx`;
+
+
+      /*
+       * Navegador:
+       * descarga convencional.
+       */
+      if (!Capacitor.isNativePlatform()) {
+
+        XLSX.writeFile(
+          workbook,
+          fileName
+        );
+
+        return;
+      }
+
+
+      /*
+       * Android/iOS:
+       * generamos el XLSX en base64,
+       * lo guardamos en caché y abrimos
+       * el diálogo nativo de compartir.
+       */
+      const data =
+        XLSX.write(
+          workbook,
+          {
+            bookType: 'xlsx',
+            type: 'base64',
+            compression: true
+          }
+        );
+
+
+      const result =
+        await Filesystem.writeFile({
+          path: fileName,
+          data,
+          directory: Directory.Cache,
+          recursive: true
+        });
+
+
+      await Share.share({
+        title:
+          'GymOS · Datos de salud',
+
+        text:
+          'Exportación de datos de salud de GymOS',
+
+        url:
+          result.uri,
+
+        dialogTitle:
+          'Exportar datos de salud'
+      });
+
+
+    } catch (err: any) {
+
+      console.error(
+        'Health export failed',
+        err
+      );
+
+      this.error.set(
+        err?.message ??
+        'No se pudo exportar el archivo de salud.'
+      );
+    }
   }
 
 

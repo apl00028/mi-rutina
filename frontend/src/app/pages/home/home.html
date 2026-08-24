@@ -1,3 +1,173 @@
-<p>home works!</p>
-<h1>Inicio</h1>
-<p>Resumen de GymOS.</p>
+<main class="home-page">
+
+  <header class="home-header">
+    <span class="home-eyebrow">
+      Hoy
+    </span>
+
+    <h1>
+      Tu día en GymOS
+    </h1>
+
+    <p>
+      {{ todayLabel }}
+    </p>
+  </header>
+
+
+  @if (loading()) {
+
+    <section class="home-card loading-card">
+      <span class="card-kicker">
+        Actualizando
+      </span>
+
+      <strong>
+        Preparando tu resumen…
+      </strong>
+    </section>
+
+  } @else {
+
+    <button
+      type="button"
+      class="home-card training-card"
+      (click)="go('/entrenar')"
+    >
+      <span class="card-top">
+        <span class="card-kicker">
+          Entrenamiento
+        </span>
+
+        <span
+          class="status-badge"
+          [class.active]="
+            hasActiveWorkout()
+          "
+        >
+          {{
+            hasActiveWorkout()
+              ? 'En curso'
+              : 'Disponible'
+          }}
+        </span>
+      </span>
+
+      <strong class="card-title">
+        {{
+          hasActiveWorkout()
+            ? 'Continúa tu entrenamiento'
+            : '¿Entrenamos?'
+        }}
+      </strong>
+
+      <span class="card-description">
+        {{
+          hasActiveWorkout()
+            ? 'Tienes una sesión sin terminar.'
+            : 'Abre Entrenar y elige tu sesión.'
+        }}
+      </span>
+
+      <span class="card-action">
+        {{
+          hasActiveWorkout()
+            ? 'Continuar'
+            : 'Ir a Entrenar'
+        }}
+        →
+      </span>
+    </button>
+
+
+    <section class="home-grid">
+
+      <button
+        type="button"
+        class="home-card"
+        (click)="go('/nutricion')"
+      >
+        <span class="card-kicker">
+          Nutrición
+        </span>
+
+        @if (
+          todayMealsTotal() !== null &&
+          todayMealsTotal()! > 0
+        ) {
+
+          <strong class="metric-value">
+            {{ todayMealsCompleted() ?? 0 }}
+            /
+            {{ todayMealsTotal() }}
+          </strong>
+
+          <span class="metric-label">
+            comidas de hoy
+          </span>
+
+          <span
+            class="progress-track"
+            aria-hidden="true"
+          >
+            <span
+              class="progress-value"
+              [style.width.%]="
+                nutritionProgress()
+              "
+            ></span>
+          </span>
+
+        } @else {
+
+          <strong class="empty-value">
+            Sin comidas para hoy
+          </strong>
+
+          <span class="metric-label">
+            Consulta tu planificación.
+          </span>
+
+        }
+
+        <span class="card-action">
+          Ver nutrición →
+        </span>
+      </button>
+
+
+      <button
+        type="button"
+        class="home-card"
+        (click)="go('/salud')"
+      >
+        <span class="card-kicker">
+          Salud
+        </span>
+
+        <strong class="metric-value">
+          {{ weightLabel() }}
+        </strong>
+
+        <span class="metric-label">
+          {{ weightTrendLabel() }}
+        </span>
+
+        <span class="card-action">
+          Ver salud →
+        </span>
+      </button>
+
+    </section>
+
+
+    @if (error()) {
+      <p class="dashboard-warning">
+        Algunos datos no se pudieron
+        actualizar.
+      </p>
+    }
+
+  }
+
+</main>

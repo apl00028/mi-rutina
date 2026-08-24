@@ -3,8 +3,17 @@
  */
 
 import {
+  HttpClient
+} from '@angular/common/http';
+
+import {
+  Router
+} from '@angular/router';
+
+import {
   TestBed
 } from '@angular/core/testing';
+
 import {
   beforeEach,
   describe,
@@ -13,58 +22,111 @@ import {
 } from 'vitest';
 
 import {
+  AuthService
+} from '../../core/auth.service';
+
+import {
   SettingsService
 } from '../../core/settings.service';
+
 import {
   Home
 } from './home';
 
+
 describe('Home', () => {
+
   beforeEach(async () => {
+
     localStorage.removeItem(
       'gymos-settings-v1'
     );
+
     document.documentElement.className = '';
 
     await TestBed.configureTestingModule({
+
       imports: [
         Home
+      ],
+
+      providers: [
+
+        {
+          provide: AuthService,
+          useValue: {
+            getAccessToken:
+              async () => null
+          }
+        },
+
+        {
+          provide: HttpClient,
+          useValue: {}
+        },
+
+        {
+          provide: Router,
+          useValue: {
+            navigateByUrl:
+              async () => true
+          }
+        }
+
       ]
+
     }).compileComponents();
   });
 
-  it('renders the home content with the safe default theme', () => {
-    TestBed.inject(
-      SettingsService
-    );
 
-    const fixture =
-      TestBed.createComponent(
-        Home
+  it(
+    'renders the mobile home dashboard',
+    async () => {
+
+      TestBed.inject(
+        SettingsService
       );
 
-    fixture.detectChanges();
+      const fixture =
+        TestBed.createComponent(
+          Home
+        );
 
-    const text =
-      (
-        fixture.nativeElement
-          .textContent ?? ''
-      ).replace(/\s+/g, ' ');
+      fixture.detectChanges();
 
-    expect(text).toContain(
-      'home works!'
-    );
-    expect(text).toContain('Inicio');
-    expect(text).toContain(
-      'Resumen de GymOS.'
-    );
-    expect(
-      document.documentElement.classList
-        .contains('gymos-theme-system')
-    ).toBe(true);
-    expect(
-      document.documentElement.classList
-        .contains('gymos-theme-dark')
-    ).toBe(false);
-  });
+      await fixture.whenStable();
+
+      fixture.detectChanges();
+
+      const text =
+        (
+          fixture.nativeElement
+            .textContent ?? ''
+        ).replace(/\s+/g, ' ');
+
+      expect(text).toContain(
+        'Tu día en GymOS'
+      );
+
+      expect(text).toContain(
+        'Entrenamiento'
+      );
+
+      expect(text).toContain(
+        'Nutrición'
+      );
+
+      expect(text).toContain(
+        'Salud'
+      );
+
+      expect(
+        document.documentElement
+          .classList
+          .contains(
+            'gymos-theme-system'
+          )
+      ).toBe(true);
+    }
+  );
 });

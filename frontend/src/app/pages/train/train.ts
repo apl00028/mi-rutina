@@ -2641,6 +2641,86 @@ export class Train implements OnInit, OnDestroy {
   }
 
 
+  private advanceAfterRest(): void {
+    const session =
+      this.activeSession();
+
+    if (!session) {
+      return;
+    }
+
+    /*
+     * Buscar el primer set todavía no completado.
+     *
+     * No usamos restorableWorkoutContext():
+     * ese método está pensado para restaurar un
+     * formulario que ya tenía datos introducidos.
+     *
+     * Aquí queremos avanzar incluso hacia un set
+     * completamente nuevo y todavía vacío.
+     */
+    for (const exercise of session.exercises) {
+      for (
+        let setIndex = 0;
+        setIndex < exercise.sets;
+        setIndex += 1
+      ) {
+        if (
+          this.isSetCompleted(
+            exercise.exerciseId,
+            setIndex
+          )
+        ) {
+          continue;
+        }
+
+        this.expandedExerciseId.set(
+          exercise.exerciseId
+        );
+
+        this.expandedSetKey.set(
+          this.setExpansionKey(
+            exercise.exerciseId,
+            setIndex
+          )
+        );
+
+        /*
+         * Esperamos a que Angular renderice
+         * el ejercicio/serie que acabamos de abrir.
+         */
+        window.setTimeout(
+          () => {
+            const expandedSet =
+              document.querySelector(
+                '.set-row.set-expanded'
+              );
+
+            if (
+              expandedSet instanceof HTMLElement
+            ) {
+              expandedSet.scrollIntoView({
+                behavior: 'smooth',
+                block: 'center',
+                inline: 'nearest'
+              });
+            }
+          },
+          80
+        );
+
+        return;
+      }
+    }
+
+    /*
+     * No quedan sets pendientes.
+     */
+    this.expandedExerciseId.set(null);
+    this.expandedSetKey.set(null);
+  }
+
+
   private syncExpandedWorkoutStep(): void {
     const context =
       this.restorableWorkoutContext();
@@ -3525,22 +3605,17 @@ export class Train implements OnInit, OnDestroy {
 
 
   skipRestTimer(): void {
-    const timer =
-      this.restTimer();
-
-    if (!timer) {
+    if (!this.restTimer()) {
       return;
     }
 
-    this.restTimer.set({
-      ...timer,
-      endsAt:
-        Date.now(),
-      remainingSeconds: 0,
-      finished: true
-    });
-
-    this.clearRestTimerInterval();
+    /*
+     * Saltar significa continuar inmediatamente:
+     * eliminamos por completo el descanso antes
+     * de calcular cuál es el siguiente set.
+     */
+    this.clearRestTimer();
+    this.advanceAfterRest();
   }
 
 

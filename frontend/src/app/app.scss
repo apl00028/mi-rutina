@@ -990,3 +990,45 @@
     width: min(300px, calc(100vw - 24px));
   }
 }
+
+.global-init-progress {
+  width: min(100%, 640px);
+  height: 4px;
+
+  overflow: hidden;
+
+  border-radius: 999px;
+
+  background: var(--gymos-surface-muted);
+}
+
+.global-init-progress span {
+  width: 38%;
+  height: 100%;
+
+  display: block;
+
+  border-radius: inherit;
+
+  background: var(--gymos-accent);
+
+  animation:
+    global-init-progress 1.15s ease-in-out infinite;
+}
+
+@keyframes global-init-progress {
+  from {
+    transform: translateX(-110%);
+  }
+
+  to {
+    transform: translateX(290%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .global-init-progress span {
+    width: 100%;
+    animation: none;
+  }
+}

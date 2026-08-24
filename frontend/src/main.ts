@@ -19,11 +19,30 @@ import {
 } from './app/app';
 
 
+if (
+  Capacitor.isNativePlatform()
+) {
+  console.info(
+    `[GymOS startup] JavaScript ready: ` +
+    `${Math.round(performance.now())} ms total`
+  );
+}
+
+
 bootstrapApplication(
   App,
   appConfig
 )
   .then(() => {
+    if (
+      Capacitor.isNativePlatform()
+    ) {
+      console.info(
+        `[GymOS startup] Angular ready: ` +
+        `${Math.round(performance.now())} ms total`
+      );
+    }
+
     if (
       !Capacitor.isNativePlatform()
     ) {

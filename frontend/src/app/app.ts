@@ -18,6 +18,10 @@ import {
 } from 'rxjs';
 
 import {
+  Capacitor
+} from '@capacitor/core';
+
+import {
   AuthService,
   GymOSMe
 } from './core/auth.service';
@@ -74,6 +78,8 @@ export class App implements OnDestroy {
     signal(false);
 
   private initializationAttempt = 0;
+  private protectedShellInitializationStarted =
+    false;
   private wakeMessageTimer:
     ReturnType<typeof setTimeout> | null = null;
   private initializationTimeoutTimer:
@@ -93,7 +99,13 @@ export class App implements OnDestroy {
   ) {
     this.syncRouteState();
 
-    this.startInitialization();
+    if (this.isStandalonePage()) {
+      this.initializationState.set(
+        'ready'
+      );
+    } else {
+      this.startInitialization();
+    }
 
     this.router.events
       .pipe(
@@ -106,7 +118,12 @@ export class App implements OnDestroy {
       .subscribe(() => {
         this.syncRouteState();
 
-        this.startInitialization();
+        if (
+          !this.isStandalonePage() &&
+          !this.protectedShellInitializationStarted
+        ) {
+          this.startInitialization();
+        }
       });
   }
 
@@ -140,13 +157,24 @@ export class App implements OnDestroy {
   private async loadGymOSUser():
     Promise<void> {
 
+    const sessionStartedAt =
+      performance.now();
+
     const session =
       await this.auth.waitForSession();
+
+    this.logStartup(
+      'Supabase session',
+      sessionStartedAt
+    );
 
     if (!session) {
       this.gymosMe.set(null);
       return;
     }
+
+    const meStartedAt =
+      performance.now();
 
     try {
       const me =
@@ -154,9 +182,52 @@ export class App implements OnDestroy {
 
       this.gymosMe.set(me);
 
+      this.logStartup(
+        '/api/v1/me',
+        meStartedAt
+      );
+
     } catch {
       this.gymosMe.set(null);
+
+      this.logStartup(
+        '/api/v1/me FAILED',
+        meStartedAt
+      );
     }
+  }
+
+
+  private logStartup(
+    phase: string,
+    startedAt?: number
+  ): void {
+
+    if (
+      !Capacitor.isNativePlatform()
+    ) {
+      return;
+    }
+
+    const now =
+      performance.now();
+
+    if (
+      startedAt === undefined
+    ) {
+      console.info(
+        `[GymOS startup] ${phase}: ` +
+        `${Math.round(now)} ms total`
+      );
+
+      return;
+    }
+
+    console.info(
+      `[GymOS startup] ${phase}: ` +
+      `${Math.round(now - startedAt)} ms ` +
+      `(${Math.round(now)} ms total)`
+    );
   }
 
 
@@ -171,6 +242,9 @@ export class App implements OnDestroy {
       this.initializationState.set('ready');
       return;
     }
+
+    this.protectedShellInitializationStarted =
+      true;
 
     this.initializationState.set(
       'initializing'
@@ -222,6 +296,10 @@ export class App implements OnDestroy {
       this.initializationState.set('ready');
       this.showServerWakeMessage.set(false);
       this.clearInitializationTimers();
+
+      this.logStartup(
+        'Protected shell ready'
+      );
     } catch {
       if (
         this.initializationAttempt ===
@@ -373,6 +451,8 @@ export class App implements OnDestroy {
     await this.auth.signOut();
 
     this.gymosMe.set(null);
+    this.protectedShellInitializationStarted =
+      false;
     this.userMenuOpen.set(false);
     this.mobileNavOpen.set(false);
 

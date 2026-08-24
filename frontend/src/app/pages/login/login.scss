@@ -687,3 +687,58 @@
     font-size: 24px;
   }
 }
+
+.forgot-password-button {
+  width: 100%;
+
+  padding: 4px 8px;
+
+  border: 0;
+
+  background: transparent;
+  color: var(--gymos-accent-text);
+
+  font: inherit;
+  font-size: 0.84rem;
+  font-weight: 700;
+
+  cursor: pointer;
+}
+
+.forgot-password-button:hover:not(:disabled) {
+  text-decoration: underline;
+}
+
+.forgot-password-button:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.forgot-password-button:focus-visible {
+  outline: 3px solid rgb(37 99 235 / 22%);
+  outline-offset: 2px;
+}
+
+.recovery-copy {
+  display: grid;
+  gap: 4px;
+
+  margin-bottom: 4px;
+}
+
+.recovery-copy strong {
+  color: var(--gymos-text);
+
+  font-size: 1rem;
+}
+
+.recovery-copy small {
+  color: var(--gymos-text-muted);
+
+  font-size: 0.84rem;
+  line-height: 1.4;
+}
+
+.login-card [hidden] {
+  display: none !important;
+}

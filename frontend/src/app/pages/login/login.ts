@@ -51,6 +51,22 @@ export class Login {
   passkeyLoading =
     signal(false);
 
+  readonly resetLoading =
+    signal(false);
+
+  readonly recoveryMode =
+    signal(false);
+
+  readonly recoveryPassword =
+    signal('');
+
+  readonly recoveryConfirmPassword =
+    signal('');
+
+  readonly recoveryLoading =
+    signal(false);
+
+
   readonly passkeySupported =
     signal(false);
 
@@ -81,25 +97,80 @@ export class Login {
       );
 
     const oauthReturn =
-      params.get('oauth') === 'google';
+      params.get('oauth') ===
+      'google';
+
+    const recoveryReturn =
+      params.get('recovery') ===
+      '1';
+
+    if (recoveryReturn) {
+      this.recoveryMode.set(
+        true
+      );
+    }
+
+    const nativeError =
+      this.auth.consumeNativeAuthError();
+
+    if (nativeError) {
+      this.error.set(
+        nativeError
+      );
+    }
 
     const session =
       await this.auth.waitForSession();
 
     if (!session) {
-      if (oauthReturn) {
+      if (
+        !this.error() &&
+        (
+          oauthReturn ||
+          recoveryReturn
+        )
+      ) {
         this.error.set(
           this.language() === 'es'
-            ? 'No se pudo completar el acceso.'
-            : 'Sign-in could not be completed.'
+            ? (
+                recoveryReturn
+                  ? 'El enlace de recuperación no es válido o ha caducado.'
+                  : 'No se pudo completar el acceso.'
+              )
+            : (
+                recoveryReturn
+                  ? 'The recovery link is invalid or has expired.'
+                  : 'Sign-in could not be completed.'
+              )
         );
+      }
 
+      if (recoveryReturn) {
+        this.recoveryMode.set(
+          false
+        );
+      }
+
+      if (
+        oauthReturn ||
+        recoveryReturn
+      ) {
         window.history.replaceState(
           {},
           document.title,
           '/login'
         );
       }
+
+      return;
+    }
+
+    if (recoveryReturn) {
+      window.history.replaceState(
+        {},
+        document.title,
+        '/login'
+      );
 
       return;
     }
@@ -111,7 +182,6 @@ export class Login {
       await this.navigateAfterLogin(
         me
       );
-
     } catch (err: unknown) {
       this.error.set(
         this.authErrorMessage(
@@ -121,7 +191,6 @@ export class Login {
             : 'Your GymOS access could not be verified.'
         )
       );
-
     } finally {
       if (oauthReturn) {
         window.history.replaceState(
@@ -203,6 +272,146 @@ export class Login {
 
     } finally {
       this.passkeyLoading.set(
+        false
+      );
+    }
+  }
+
+
+  async sendPasswordReset(
+    event: Event
+  ): Promise<void> {
+    event.preventDefault();
+
+    if (this.resetLoading()) {
+      return;
+    }
+
+    const email =
+      this.email().trim();
+
+    this.message.set(null);
+    this.error.set(null);
+
+    if (!email) {
+      this.error.set(
+        this.language() === 'es'
+          ? 'Introduce tu email para recuperar la contraseña.'
+          : 'Enter your email to reset your password.'
+      );
+
+      return;
+    }
+
+    this.resetLoading.set(
+      true
+    );
+
+    try {
+      await this.auth.requestPasswordReset(
+        email
+      );
+
+      this.message.set(
+        this.language() === 'es'
+          ? 'Si existe una cuenta con ese email, recibirás un enlace para cambiar la contraseña.'
+          : 'If an account exists for that email, you will receive a password reset link.'
+      );
+    } catch (err: unknown) {
+      this.error.set(
+        this.authErrorMessage(
+          err,
+          this.language() === 'es'
+            ? 'No se pudo solicitar la recuperación de contraseña.'
+            : 'Password recovery could not be requested.'
+        )
+      );
+    } finally {
+      this.resetLoading.set(
+        false
+      );
+    }
+  }
+
+
+  async completePasswordRecovery(
+    event: Event
+  ): Promise<void> {
+    event.preventDefault();
+
+    if (this.recoveryLoading()) {
+      return;
+    }
+
+    const password =
+      this.recoveryPassword();
+
+    const confirmation =
+      this.recoveryConfirmPassword();
+
+    this.message.set(null);
+    this.error.set(null);
+
+    if (password.length < 8) {
+      this.error.set(
+        this.language() === 'es'
+          ? 'La contraseña debe tener al menos 8 caracteres.'
+          : 'The password must contain at least 8 characters.'
+      );
+
+      return;
+    }
+
+    if (
+      password !==
+      confirmation
+    ) {
+      this.error.set(
+        this.language() === 'es'
+          ? 'Las contraseñas no coinciden.'
+          : 'The passwords do not match.'
+      );
+
+      return;
+    }
+
+    this.recoveryLoading.set(
+      true
+    );
+
+    try {
+      await this.auth.updatePassword(
+        password
+      );
+
+      await this.auth.signOut();
+
+      this.recoveryPassword.set('');
+      this.recoveryConfirmPassword.set('');
+      this.recoveryMode.set(false);
+
+      this.message.set(
+        this.language() === 'es'
+          ? 'Contraseña actualizada. Ya puedes iniciar sesión.'
+          : 'Password updated. You can now sign in.'
+      );
+
+      window.history.replaceState(
+        {},
+        document.title,
+        '/login'
+      );
+    } catch (err: unknown) {
+      this.error.set(
+        this.authErrorMessage(
+          err,
+          this.language() === 'es'
+            ? 'No se pudo cambiar la contraseña.'
+            : 'The password could not be changed.'
+        )
+      );
+    } finally {
+      this.recoveryLoading.set(
         false
       );
     }

@@ -45,10 +45,22 @@ describe(
       waitForSession:
         vi.fn(),
 
+      consumeNativeAuthError:
+        vi.fn(),
+
       signInWithPasskey:
         vi.fn(),
 
       signInWithPassword:
+        vi.fn(),
+
+      requestPasswordReset:
+        vi.fn(),
+
+      updatePassword:
+        vi.fn(),
+
+      signOut:
         vi.fn(),
 
       resolveAccess:
@@ -92,12 +104,32 @@ describe(
           null
         );
 
+      authMock.consumeNativeAuthError
+        .mockReturnValue(
+          null
+        );
+
       authMock.signInWithPasskey
         .mockResolvedValue(
           undefined
         );
 
       authMock.signInWithPassword
+        .mockResolvedValue(
+          undefined
+        );
+
+      authMock.requestPasswordReset
+        .mockResolvedValue(
+          undefined
+        );
+
+      authMock.updatePassword
+        .mockResolvedValue(
+          undefined
+        );
+
+      authMock.signOut
         .mockResolvedValue(
           undefined
         );
@@ -226,9 +258,12 @@ describe(
         ).toHaveBeenCalledWith(
           '/'
         );
+
+        expect(
+          authMock.signOut
+        ).not.toHaveBeenCalled();
       }
     );
-
 
     it(
       'renders email and password fields',
@@ -257,6 +292,88 @@ describe(
               'input[type="password"]'
             )
         ).not.toBeNull();
+      }
+    );
+
+
+    it(
+      'requests a password reset for the entered email',
+      async () => {
+        const fixture =
+          TestBed.createComponent(
+            Login
+          );
+
+        const component =
+          fixture.componentInstance;
+
+        component.email.set(
+          'test@example.com'
+        );
+
+        await component.sendPasswordReset(
+          new Event('click')
+        );
+
+        expect(
+          authMock.requestPasswordReset
+        ).toHaveBeenCalledWith(
+          'test@example.com'
+        );
+      }
+    );
+
+
+    it(
+      'updates the password during recovery and returns to sign-in',
+      async () => {
+        const fixture =
+          TestBed.createComponent(
+            Login
+          );
+
+        const component =
+          fixture.componentInstance;
+
+        component.recoveryMode.set(
+          true
+        );
+
+        component.recoveryPassword.set(
+          'new-password'
+        );
+
+        component.recoveryConfirmPassword.set(
+          'new-password'
+        );
+
+        await component.completePasswordRecovery(
+          new Event('submit')
+        );
+
+        expect(
+          authMock.updatePassword
+        ).toHaveBeenCalledWith(
+          'new-password'
+        );
+
+        expect(
+          authMock.signOut
+        ).toHaveBeenCalledOnce();
+
+        expect(
+          authMock.resolveAccess
+        ).not.toHaveBeenCalled();
+
+        expect(
+          component.recoveryMode()
+        ).toBe(false);
+
+        expect(
+          component.message()
+        ).toBe(
+          'Contraseña actualizada. Ya puedes iniciar sesión.'
+        );
       }
     );
   }

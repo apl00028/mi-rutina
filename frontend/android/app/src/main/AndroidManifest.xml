@@ -30,6 +30,10 @@
                 <data
                     android:scheme="@string/custom_url_scheme"
                     android:host="login" />
+
+                <data
+                    android:scheme="@string/custom_url_scheme"
+                    android:host="reset-password" />
             </intent-filter>
 
         </activity>

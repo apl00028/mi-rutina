@@ -1,7 +1,10 @@
 <main class="login-page">
   <section class="login-card">
 
-    <div class="language-switch">
+    <div
+      class="language-switch"
+      [hidden]="recoveryMode()"
+    >
       <button
         type="button"
         [class.active]="language() === 'es'"
@@ -21,7 +24,10 @@
       </button>
     </div>
 
-    <header class="brand-header">
+    <header
+      class="brand-header"
+      [hidden]="recoveryMode()"
+    >
       <div class="brand-mark">
         G
       </div>
@@ -39,7 +45,11 @@
       </div>
     </header>
 
-    <div class="login-intro">
+    @if (!recoveryMode()) {
+    <div
+      class="login-intro"
+      [hidden]="recoveryMode()"
+    >
       <span class="eyebrow">
         {{
           language() === 'es'
@@ -64,8 +74,97 @@
         }}
       </p>
     </div>
+    }
 
-    <div class="login-methods">
+    @if (recoveryMode()) {
+    <form
+      class="email-form recovery-form"
+      (submit)="completePasswordRecovery($event)"
+    >
+      <div class="recovery-copy">
+        <strong>
+          {{
+            language() === 'es'
+              ? 'Crea una nueva contraseña'
+              : 'Create a new password'
+          }}
+        </strong>
+
+        <small>
+          {{
+            language() === 'es'
+              ? 'Introduce la nueva contraseña que quieres usar en GymOS.'
+              : 'Enter the new password you want to use in GymOS.'
+          }}
+        </small>
+      </div>
+
+      <label>
+        {{
+          language() === 'es'
+            ? 'Nueva contraseña'
+            : 'New password'
+        }}
+      </label>
+
+      <input
+        type="password"
+        autocomplete="new-password"
+        required
+        minlength="8"
+        [value]="recoveryPassword()"
+        (input)="
+          recoveryPassword.set(
+            $any($event.target).value
+          )
+        "
+      />
+
+      <label>
+        {{
+          language() === 'es'
+            ? 'Repetir contraseña'
+            : 'Confirm password'
+        }}
+      </label>
+
+      <input
+        type="password"
+        autocomplete="new-password"
+        required
+        minlength="8"
+        [value]="recoveryConfirmPassword()"
+        (input)="
+          recoveryConfirmPassword.set(
+            $any($event.target).value
+          )
+        "
+      />
+
+      <button
+        class="primary-button"
+        type="submit"
+        [disabled]="recoveryLoading()"
+      >
+        {{
+          recoveryLoading()
+            ? (
+                language() === 'es'
+                  ? 'Guardando...'
+                  : 'Saving...'
+              )
+            : (
+                language() === 'es'
+                  ? 'Guardar nueva contraseña'
+                  : 'Save new password'
+              )
+        }}
+      </button>
+    </form>
+    } @else {
+    <div
+      class="login-methods"
+    >
       <button
         class="google-button"
         type="button"
@@ -92,7 +191,9 @@
       </button>
     </div>
 
-    <div class="divider">
+    <div
+      class="divider"
+    >
       <span></span>
 
       <small>
@@ -158,7 +259,29 @@
       </button>
 
 
+
+      <button
+        type="button"
+        class="forgot-password-button"
+        [disabled]="resetLoading()"
+        (click)="sendPasswordReset($event)"
+      >
+        {{
+          resetLoading()
+            ? (
+                language() === 'es'
+                  ? 'Enviando...'
+                  : 'Sending...'
+              )
+            : (
+                language() === 'es'
+                  ? '¿Has olvidado tu contraseña?'
+                  : 'Forgot your password?'
+              )
+        }}
+      </button>
     </form>
+    }
 
     @if (message()) {
       <div
@@ -178,7 +301,11 @@
       </div>
     }
 
-    <footer class="access-note">
+    @if (!recoveryMode()) {
+    <footer
+      class="access-note"
+      [hidden]="recoveryMode()"
+    >
       <span>
         {{
           language() === 'es'
@@ -199,5 +326,6 @@
         }}
       </button>
     </footer>
+    }
   </section>
 </main>

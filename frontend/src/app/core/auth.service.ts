@@ -223,99 +223,125 @@ export class AuthService {
   private async handleNativeAuthUrl(
     url: string
   ): Promise<void> {
+    const loginUrl =
+      'com.adrianpelaez.gymos://login';
+
+    const recoveryUrl =
+      'com.adrianpelaez.gymos://reset-password';
+
+    const isLogin =
+      url.startsWith(loginUrl);
+
+    const isRecovery =
+      url.startsWith(recoveryUrl);
+
     if (
-      !url.startsWith(
-        'com.adrianpelaez.gymos://login'
-      )
+      !isLogin &&
+      !isRecovery
     ) {
       return;
     }
 
-    const parsed =
-      new URL(url);
+    try {
+      const parsed =
+        new URL(url);
 
-    const errorDescription =
-      parsed.searchParams.get(
-        'error_description'
-      );
-
-    if (errorDescription) {
-      sessionStorage.setItem(
-        'gymos-native-auth-error',
-        errorDescription
-      );
-
-      window.location.replace(
-        '/login?native=1'
-      );
-
-      return;
-    }
-
-    const code =
-      parsed.searchParams.get('code');
-
-    if (code) {
-      const {
-        error
-      } =
-        await this.client.auth
-          .exchangeCodeForSession(code);
-
-      if (error) {
-        sessionStorage.setItem(
-          'gymos-native-auth-error',
-          error.message
+      const authError =
+        parsed.searchParams.get(
+          'error_description'
+        ) ??
+        parsed.searchParams.get(
+          'error'
         );
 
-        window.location.replace(
-          '/login?native=1'
+      if (authError) {
+        throw new Error(
+          authError
         );
-
-        return;
       }
-    } else {
-      const fragment =
-        new URLSearchParams(
-          parsed.hash.replace(/^#/, '')
+
+      const code =
+        parsed.searchParams.get(
+          'code'
         );
 
-      const accessToken =
-        fragment.get('access_token');
+      if (code) {
+        const {
+          error
+        } =
+          await this.client.auth
+            .exchangeCodeForSession(
+              code
+            );
 
-      const refreshToken =
-        fragment.get('refresh_token');
+        if (error) {
+          throw error;
+        }
+      } else {
+        const hash =
+          new URLSearchParams(
+            parsed.hash.replace(
+              /^#/,
+              ''
+            )
+          );
 
-      if (
-        accessToken &&
-        refreshToken
-      ) {
+        const accessToken =
+          hash.get(
+            'access_token'
+          );
+
+        const refreshToken =
+          hash.get(
+            'refresh_token'
+          );
+
+        if (
+          !accessToken ||
+          !refreshToken
+        ) {
+          throw new Error(
+            'No se recibieron credenciales de autenticación.'
+          );
+        }
+
         const {
           error
         } =
           await this.client.auth.setSession({
-            access_token: accessToken,
-            refresh_token: refreshToken
+            access_token:
+              accessToken,
+            refresh_token:
+              refreshToken
           });
 
         if (error) {
-          sessionStorage.setItem(
-            'gymos-native-auth-error',
-            error.message
-          );
-
-          window.location.replace(
-            '/login?native=1'
-          );
-
-          return;
+          throw error;
         }
       }
-    }
 
-    window.location.replace(
-      '/login?native=1'
-    );
+      window.location.replace(
+        isRecovery
+          ? '/login?recovery=1'
+          : '/login?native=1'
+      );
+    } catch (error: unknown) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : 'No se pudo completar la autenticación.';
+
+      sessionStorage.setItem(
+        'gymos-native-auth-error',
+        message
+      );
+
+      window.location.replace(
+        isRecovery
+          ? '/login?recovery=1'
+          : '/login?native=1'
+      );
+    }
   }
 
 
@@ -346,6 +372,30 @@ export class AuthService {
           email,
           password
         });
+
+    if (error) {
+      throw error;
+    }
+  }
+
+
+  async requestPasswordReset(
+    email: string
+  ): Promise<void> {
+    const redirectTo =
+      this.isNativeApp()
+        ? 'com.adrianpelaez.gymos://reset-password'
+        : `${window.location.origin}/login?recovery=1`;
+
+    const {
+      error
+    } =
+      await this.client.auth.resetPasswordForEmail(
+        email,
+        {
+          redirectTo
+        }
+      );
 
     if (error) {
       throw error;

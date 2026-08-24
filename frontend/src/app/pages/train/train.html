@@ -83,7 +83,7 @@
                           <span>
                             Descanso
                             <strong>
-                              {{ exercise.restSeconds }}s
+                              {{ restDurationLabel(exercise.restSeconds) }}
                             </strong>
                           </span>
                         }
@@ -994,7 +994,7 @@
 
                           @if (exercise.restSeconds) {
                             ·
-                            {{ exercise.restSeconds }}s
+                            {{ restDurationLabel(exercise.restSeconds) }}
                           }
                         </span>
                       }

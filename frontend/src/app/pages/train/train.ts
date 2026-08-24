@@ -652,6 +652,46 @@ export class Train implements OnInit, OnDestroy {
   }
 
 
+  restDurationLabel(
+    seconds: number | null | undefined
+  ): string {
+    const value =
+      Number(seconds);
+
+    if (
+      !Number.isFinite(value) ||
+      value <= 0
+    ) {
+      return '';
+    }
+
+    const totalSeconds =
+      Math.floor(value);
+
+    const minutes =
+      Math.floor(totalSeconds / 60);
+
+    const remainingSeconds =
+      totalSeconds % 60;
+
+    if (
+      minutes > 0 &&
+      remainingSeconds > 0
+    ) {
+      return (
+        `${minutes} min ` +
+        `${remainingSeconds} s`
+      );
+    }
+
+    if (minutes > 0) {
+      return `${minutes} min`;
+    }
+
+    return `${remainingSeconds} s`;
+  }
+
+
   restTimerLabel(): string {
     const timer =
       this.restTimer();
@@ -3538,12 +3578,13 @@ export class Train implements OnInit, OnDestroy {
       );
 
     if (remainingSeconds <= 0) {
-      this.restTimer.set({
-        ...timer,
-        remainingSeconds: 0,
-        finished: true
-      });
-      this.clearRestTimerInterval();
+      /*
+       * El descanso ha terminado de forma natural.
+       * Usamos el mismo flujo que al pulsar Saltar:
+       * cerrar temporizador y avanzar al siguiente set.
+       */
+      this.clearRestTimer();
+      this.advanceAfterRest();
       return;
     }
 

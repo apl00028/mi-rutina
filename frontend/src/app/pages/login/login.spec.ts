@@ -39,6 +39,9 @@ describe(
   'Login',
   () => {
     const authMock = {
+      nativeLoginCompleted:
+        signal(0),
+
       isPasskeySupported:
         vi.fn(),
 
@@ -92,6 +95,10 @@ describe(
 
       languageMock.language.set(
         'es'
+      );
+
+      authMock.nativeLoginCompleted.set(
+        0
       );
 
       authMock.isPasskeySupported

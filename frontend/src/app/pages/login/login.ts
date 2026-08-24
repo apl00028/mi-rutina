@@ -1,5 +1,6 @@
 import {
   Component,
+  effect,
   inject,
   signal
 } from '@angular/core';
@@ -85,7 +86,18 @@ export class Login {
       this.auth.isPasskeySupported()
     );
 
-    this.handleLoginState();
+    effect(() => {
+      const completed =
+        this.auth.nativeLoginCompleted();
+
+      if (completed === 0) {
+        return;
+      }
+
+      void this.handleLoginState();
+    });
+
+    void this.handleLoginState();
   }
 
 

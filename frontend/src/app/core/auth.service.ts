@@ -97,71 +97,169 @@ export class AuthService {
     signal(true);
 
 
+  nativeLoginCompleted =
+    signal(0);
+
+
   private meRequest:
     Promise<GymOSMe> | null = null;
+
+
+  private authReadyPromise!:
+    Promise<Session | null>;
+
+  private resolveAuthReady:
+    (session: Session | null) => void =
+      () => {};
+
+  private authReadyResolved =
+    false;
 
 
   constructor(
     private http: HttpClient
   ) {
+    this.authReadyPromise =
+      new Promise<Session | null>(
+        resolve => {
+          this.resolveAuthReady =
+            resolve;
+        }
+      );
+
     this.initialize();
+
     void this.initializeNativeAuth();
   }
 
 
-  private async initialize():
-    Promise<void> {
-    try {
-      const {
-        data,
-        error
-      } =
-        await this.client.auth.getSession();
+  private initialize():
+    void {
 
-      if (error) {
-        throw error;
-      }
+    /*
+     * Important:
+     * subscribe before any native OAuth/deep-link work.
+     *
+     * INITIAL_SESSION is Supabase's authoritative
+     * signal that persisted auth has been restored.
+     */
+    this.client.auth.onAuthStateChange(
+      (event, session) => {
 
-      this.session.set(
-        data.session ?? null
-      );
+        this.applySession(
+          session
+        );
 
-      this.user.set(
-        data.session?.user ?? null
-      );
-
-      this.client.auth.onAuthStateChange(
-        (_event, session) => {
-          this.session.set(
+        if (
+          event === 'INITIAL_SESSION' ||
+          (
+            event === 'SIGNED_IN' &&
+            !!session
+          )
+        ) {
+          this.finishAuthInitialization(
             session
           );
+        }
 
-          this.user.set(
-            session?.user ?? null
+        if (
+          Capacitor.isNativePlatform()
+        ) {
+          console.info(
+            `[GymOS auth] ${event}: ` +
+            (
+              session
+                ? 'session'
+                : 'no-session'
+            )
           );
+        }
+      }
+    );
 
-          if (!session) {
-            this.me.set(null);
-            this.meRequest = null;
+    /*
+     * Fast path when a persisted session is
+     * already immediately available.
+     *
+     * A null result does NOT mark auth ready:
+     * INITIAL_SESSION will confirm that state.
+     */
+    void this.client.auth
+      .getSession()
+      .then(
+        ({
+          data,
+          error
+        }) => {
+
+          if (error) {
+            return;
+          }
+
+          if (data.session) {
+            this.applySession(
+              data.session
+            );
+
+            this.finishAuthInitialization(
+              data.session
+            );
           }
         }
       );
-    } finally {
-      this.loading.set(false);
+  }
+
+
+  private applySession(
+    session: Session | null
+  ): void {
+
+    this.session.set(
+      session
+    );
+
+    this.user.set(
+      session?.user ?? null
+    );
+
+    if (!session) {
+      this.me.set(null);
+      this.meRequest = null;
     }
+  }
+
+
+  private finishAuthInitialization(
+    session: Session | null
+  ): void {
+
+    if (
+      this.authReadyResolved
+    ) {
+      return;
+    }
+
+    this.authReadyResolved =
+      true;
+
+    this.loading.set(false);
+
+    this.resolveAuthReady(
+      session
+    );
   }
 
 
   async waitForSession():
     Promise<Session | null> {
-    while (this.loading()) {
-      await new Promise(resolve =>
-        setTimeout(
-          resolve,
-          25
-        )
-      );
+
+    if (
+      !this.loading()
+    ) {
+      return this.session();
     }
+
+    await this.authReadyPromise;
 
     return this.session();
   }
@@ -320,10 +418,21 @@ export class AuthService {
         }
       }
 
-      window.location.replace(
-        isRecovery
-          ? '/login?recovery=1'
-          : '/login?native=1'
+      if (isRecovery) {
+        window.location.replace(
+          '/login?recovery=1'
+        );
+
+        return;
+      }
+
+      /*
+       * OAuth nativo ya ha creado la sesión.
+       * No recargamos la WebView: avisamos
+       * al Login actual para que continúe.
+       */
+      this.nativeLoginCompleted.update(
+        value => value + 1
       );
     } catch (error: unknown) {
       const message =

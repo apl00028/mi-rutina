@@ -39,6 +39,9 @@ export const DEFAULT_SETTINGS:
 };
 
 const STORAGE_KEY =
+  'aptus-settings-v1';
+
+const LEGACY_STORAGE_KEY =
   'gymos-settings-v1';
 
 @Injectable({
@@ -114,18 +117,36 @@ export class SettingsService {
   private readSettings():
     AptusSettings {
     try {
-      const raw =
+      const current =
         localStorage.getItem(
           STORAGE_KEY
         );
+
+      const legacy =
+        localStorage.getItem(
+          LEGACY_STORAGE_KEY
+        );
+
+      const raw =
+        current ?? legacy;
 
       if (!raw) {
         return DEFAULT_SETTINGS;
       }
 
-      return this.normalize(
-        JSON.parse(raw)
-      );
+      const settings =
+        this.normalize(
+          JSON.parse(raw)
+        );
+
+      if (!current && legacy) {
+        localStorage.setItem(
+          STORAGE_KEY,
+          JSON.stringify(settings)
+        );
+      }
+
+      return settings;
 
     } catch {
       return DEFAULT_SETTINGS;

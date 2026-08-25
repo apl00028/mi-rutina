@@ -39,7 +39,7 @@ describe('Home', () => {
   beforeEach(async () => {
 
     localStorage.removeItem(
-      'gymos-settings-v1'
+      'aptus-settings-v1'
     );
 
     document.documentElement.className = '';

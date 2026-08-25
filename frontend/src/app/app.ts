@@ -52,9 +52,32 @@ type AppInitializationState =
 export class App implements OnDestroy {
 
   sidebarExpanded = signal(
-    localStorage.getItem(
-      'aptus-sidebar-expanded'
-    ) !== 'false'
+    (() => {
+      const current =
+        localStorage.getItem(
+          'aptus-sidebar-expanded'
+        );
+
+      const legacy =
+        localStorage.getItem(
+          'gymos-sidebar-expanded'
+        );
+
+      const stored =
+        current ?? legacy;
+
+      if (
+        current === null &&
+        legacy !== null
+      ) {
+        localStorage.setItem(
+          'aptus-sidebar-expanded',
+          legacy
+        );
+      }
+
+      return stored !== 'false';
+    })()
   );
 
   userMenuOpen =

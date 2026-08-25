@@ -47,6 +47,9 @@ describe('Settings pages', () => {
 
   beforeEach(async () => {
     localStorage.removeItem(
+      'aptus-settings-v1'
+    );
+    localStorage.removeItem(
       'gymos-settings-v1'
     );
     document.documentElement.className = '';
@@ -144,6 +147,47 @@ describe('Settings pages', () => {
       ]
     }).compileComponents();
   });
+
+  it('migrates legacy GymOS settings to Aptus storage', () => {
+  localStorage.removeItem('aptus-settings-v1');
+
+  localStorage.setItem(
+    'gymos-settings-v1',
+    JSON.stringify({
+      units: 'lb',
+      showRir: false,
+      automaticRestTimer: false,
+      confirmBeforeFinish: false,
+      theme: 'dark',
+      textSize: 'large',
+      reduceMotion: true
+    })
+  );
+
+  const service =
+    new SettingsService();
+
+  expect(service.settings()).toMatchObject({
+    units: 'lb',
+    showRir: false,
+    automaticRestTimer: false,
+    confirmBeforeFinish: false,
+    theme: 'dark',
+    textSize: 'large',
+    reduceMotion: true
+  });
+
+  expect(
+    JSON.parse(
+      localStorage.getItem(
+        'aptus-settings-v1'
+      ) ?? '{}'
+    )
+  ).toMatchObject({
+    units: 'lb',
+    theme: 'dark'
+  });
+});
 
 
   afterEach(() => {
@@ -279,7 +323,7 @@ describe('Settings pages', () => {
     expect(
       JSON.parse(
         localStorage.getItem(
-          'gymos-settings-v1'
+          'aptus-settings-v1'
         ) ?? '{}'
       ).showRir
     ).toBe(false);
@@ -454,7 +498,7 @@ describe('Settings pages', () => {
     expect(
       JSON.parse(
         localStorage.getItem(
-          'gymos-settings-v1'
+          'aptus-settings-v1'
         ) ?? '{}'
       ).theme
     ).toBe('light');

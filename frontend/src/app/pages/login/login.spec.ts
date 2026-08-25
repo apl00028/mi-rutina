@@ -385,3 +385,40 @@ describe(
     );
   }
 );
+describe(
+  'LanguageService migration',
+  () => {
+    beforeEach(() => {
+      localStorage.removeItem(
+        'aptus-language'
+      );
+
+      localStorage.removeItem(
+        'gymos-language'
+      );
+    });
+
+    it(
+      'migrates legacy GymOS language to Aptus storage',
+      () => {
+        localStorage.setItem(
+          'gymos-language',
+          'en'
+        );
+
+        const service =
+          new LanguageService();
+
+        expect(
+          service.language()
+        ).toBe('en');
+
+        expect(
+          localStorage.getItem(
+            'aptus-language'
+          )
+        ).toBe('en');
+      }
+    );
+  }
+);

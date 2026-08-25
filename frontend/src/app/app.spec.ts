@@ -112,7 +112,7 @@ describe('App', () => {
       vi.fn()
         .mockResolvedValue(null);
     localStorage.removeItem(
-      'gymos-settings-v1'
+      'aptus-settings-v1'
     );
 
     await TestBed.configureTestingModule({
@@ -1140,4 +1140,38 @@ describe('App', () => {
       )
     ).toBeNull();
   });
+
+  it('migrates legacy GymOS sidebar state to Aptus storage', () => {
+    localStorage.removeItem(
+      'aptus-sidebar-expanded'
+    );
+
+    localStorage.setItem(
+      'gymos-sidebar-expanded',
+      'false'
+    );
+
+    const fixture =
+      TestBed.createComponent(App);
+
+    expect(
+      fixture.componentInstance
+        .sidebarExpanded()
+    ).toBe(false);
+
+    expect(
+      localStorage.getItem(
+        'aptus-sidebar-expanded'
+      )
+    ).toBe('false');
+
+    localStorage.removeItem(
+      'gymos-sidebar-expanded'
+    );
+
+    localStorage.removeItem(
+      'aptus-sidebar-expanded'
+    );
+  });
+
 });

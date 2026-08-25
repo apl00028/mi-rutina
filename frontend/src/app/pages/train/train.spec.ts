@@ -88,7 +88,7 @@ describe('Train first workout flow', () => {
       );
 
     localStorage.removeItem(
-      'gymos-settings-v1'
+      'aptus-settings-v1'
     );
 
     vi.spyOn(

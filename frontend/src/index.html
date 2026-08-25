@@ -10,6 +10,7 @@
     (() => {
       try {
         const raw =
+          localStorage.getItem('aptus-settings-v1') ??
           localStorage.getItem('gymos-settings-v1');
         const theme =
           raw

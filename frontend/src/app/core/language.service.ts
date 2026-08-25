@@ -13,6 +13,9 @@ export type AppLanguage =
 })
 export class LanguageService {
   private readonly storageKey =
+    'aptus-language';
+
+  private readonly legacyStorageKey =
     'gymos-language';
 
   readonly language =
@@ -46,17 +49,31 @@ export class LanguageService {
 
   private readInitialLanguage():
     AppLanguage {
-    const stored =
+    const current =
       localStorage.getItem(
         this.storageKey
       );
 
-    if (stored === 'en') {
-      return 'en';
-    }
+    const legacy =
+      localStorage.getItem(
+        this.legacyStorageKey
+      );
 
-    if (stored === 'es') {
-      return 'es';
+    const stored =
+      current ?? legacy;
+
+    if (
+      stored === 'en' ||
+      stored === 'es'
+    ) {
+      if (!current && legacy) {
+        localStorage.setItem(
+          this.storageKey,
+          stored
+        );
+      }
+
+      return stored;
     }
 
     const browserLanguage =

@@ -48,11 +48,14 @@ def completed_set(
     rir=2,
     completed_at="2026-08-10T09:30:00Z",
     record_type=None,
+    set_type="working",
+    set_index=0,
 ):
     payload = {
         "setId": set_id,
         "exerciseId": exercise_id,
-        "setIndex": 0,
+        "setIndex": set_index,
+        "setType": set_type,
         "weight": weight,
         "reps": reps,
         "rir": rir,
@@ -690,3 +693,56 @@ def test_training_analytics_does_not_decline_from_one_outlier(monkeypatch):
     )
 
     assert result.exercises[0].trend == "stable"
+
+
+def test_training_analytics_ignores_warmup_sets(monkeypatch):
+    async def fake_list_workouts(_user):
+        return [
+            row(
+                "workout-warmup",
+                sets=[
+                    completed_set(
+                        "warmup-1",
+                        "bench-press",
+                        weight=40,
+                        reps=10,
+                        set_type="warmup",
+                        set_index=-1,
+                    ),
+                    completed_set(
+                        "working-1",
+                        "bench-press",
+                        weight=100,
+                        reps=5,
+                    ),
+                ],
+            )
+        ]
+
+    monkeypatch.setattr(
+        service,
+        "list_workouts",
+        fake_list_workouts,
+    )
+
+    result = run(
+        service.get_training_analytics(
+            user(),
+            period="4w",
+            now=datetime(
+                2026,
+                8,
+                20,
+                tzinfo=UTC,
+            ),
+        )
+    )
+
+    assert result.summary.workouts == 1
+    assert result.summary.completedSets == 1
+    assert result.summary.uniqueExercises == 1
+    assert result.summary.totalVolume == 500
+
+    assert len(result.exercises) == 1
+    assert result.exercises[0].completedSets == 1
+    assert result.exercises[0].maxWeight == 100

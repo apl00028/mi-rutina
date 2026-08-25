@@ -394,6 +394,264 @@ describe('Train first workout flow', () => {
   }
 
 
+
+  it('adds warmup sets with negative indices without colliding with working sets', async () => {
+    const fixture =
+      await createLoadedTrain([
+        activeWorkout()
+      ]);
+
+    const component =
+      fixture.componentInstance;
+
+    vi.spyOn(
+      component as any,
+      'scheduleAutosave'
+    ).mockImplementation(() => {});
+
+    component.addWarmupSet(
+      'dumbbell-bench-press'
+    );
+
+    component.addWarmupSet(
+      'dumbbell-bench-press'
+    );
+
+    const warmups =
+      component.warmupSets(
+        'dumbbell-bench-press'
+      );
+
+    expect(warmups).toHaveLength(2);
+
+    expect(
+      warmups.map(set => set.setIndex)
+    ).toEqual([
+      -1,
+      -2
+    ]);
+
+    expect(
+      warmups.every(
+        set =>
+          set.setType === 'warmup'
+      )
+    ).toBe(true);
+
+    expect(
+      component.getCurrentSet(
+        'dumbbell-bench-press',
+        0
+      )
+    ).toBeNull();
+
+    component.updateSet(
+      'dumbbell-bench-press',
+      0,
+      'weight',
+      '80'
+    );
+
+    expect(
+      component.getCurrentSet(
+        'dumbbell-bench-press',
+        0
+      )?.setType
+    ).toBeUndefined();
+
+    expect(
+      component.getCurrentSet(
+        'dumbbell-bench-press',
+        0
+      )?.weight
+    ).toBe(80);
+    (component as any)
+      .cancelAutosaveTimer();
+
+    // Avoid ngOnDestroy starting a persistence request
+    // after the TestBed injector has been destroyed.
+    (component as any).persistedEditVersion =
+      (component as any).workoutEditVersion;
+
+  });
+
+
+  it('updates and removes warmup sets independently from working sets', async () => {
+    const fixture =
+      await createLoadedTrain([
+        activeWorkout()
+      ]);
+
+    const component =
+      fixture.componentInstance;
+
+    vi.spyOn(
+      component as any,
+      'scheduleAutosave'
+    ).mockImplementation(() => {});
+
+    component.addWarmupSet(
+      'dumbbell-bench-press'
+    );
+
+    const warmup =
+      component.warmupSets(
+        'dumbbell-bench-press'
+      )[0];
+
+    expect(warmup).toBeTruthy();
+
+    component.updateWarmupSet(
+      warmup.setId,
+      'weight',
+      '40'
+    );
+
+    component.updateWarmupSet(
+      warmup.setId,
+      'reps',
+      '12'
+    );
+
+    expect(
+      component.warmupSets(
+        'dumbbell-bench-press'
+      )[0]
+    ).toMatchObject({
+      setType: 'warmup',
+      setIndex: -1,
+      weight: 40,
+      reps: 12
+    });
+
+    component.toggleWarmupCompleted(
+      warmup.setId
+    );
+
+    expect(
+      component.warmupSets(
+        'dumbbell-bench-press'
+      )[0].completedAt
+    ).toBeTruthy();
+
+    component.toggleWarmupCompleted(
+      warmup.setId
+    );
+
+    expect(
+      component.warmupSets(
+        'dumbbell-bench-press'
+      )[0].completedAt
+    ).toBeNull();
+
+    component.updateSet(
+      'dumbbell-bench-press',
+      0,
+      'weight',
+      '80'
+    );
+
+    expect(
+      component.getCurrentSet(
+        'dumbbell-bench-press',
+        0
+      )?.weight
+    ).toBe(80);
+
+    component.removeWarmupSet(
+      warmup.setId
+    );
+
+    expect(
+      component.warmupSets(
+        'dumbbell-bench-press'
+      )
+    ).toHaveLength(0);
+
+    expect(
+      component.getCurrentSet(
+        'dumbbell-bench-press',
+        0
+      )?.weight
+    ).toBe(80);
+    (component as any)
+      .cancelAutosaveTimer();
+
+    // Avoid ngOnDestroy starting a persistence request
+    // after the TestBed injector has been destroyed.
+    (component as any).persistedEditVersion =
+      (component as any).workoutEditVersion;
+
+  });
+
+
+  it('does not count completed warmups as working-set progress', async () => {
+    const workout = {
+      ...activeWorkout(),
+      sets: [
+        {
+          setId:
+            'warmup-set-1',
+          exerciseId:
+            'dumbbell-bench-press',
+          setIndex:
+            -1,
+          setType:
+            'warmup',
+          weight:
+            40,
+          reps:
+            10,
+          rir:
+            null,
+          durationSeconds:
+            null,
+          completedAt:
+            '2026-08-20T15:00:00Z'
+        }
+      ]
+    };
+
+    const fixture =
+      await createLoadedTrain([
+        workout
+      ]);
+
+    const component =
+      fixture.componentInstance;
+
+    const exercise =
+      component.activeSession()!
+        .exercises[0];
+
+    expect(
+      component.completedSetCount(
+        exercise
+      )
+    ).toBe(0);
+
+    expect(
+      component.exerciseProgressLabel(
+        exercise
+      )
+    ).toBe('0 / 2');
+
+    expect(
+      component.exerciseProgressSignal(
+        exercise
+      )
+    ).toBe('');
+    (component as any)
+      .cancelAutosaveTimer();
+
+    // Avoid ngOnDestroy starting a persistence request
+    // after the TestBed injector has been destroyed.
+    (component as any).persistedEditVersion =
+      (component as any).workoutEditVersion;
+
+  });
+
+
   it('renders the first training screen with active routine and no history', async () => {
     const fixture =
       await createLoadedTrain();

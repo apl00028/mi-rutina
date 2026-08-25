@@ -206,6 +206,155 @@
                 </section>
                 }
 
+              <section class="warmup-section">
+                <div class="warmup-header">
+                  <div>
+                    <span class="warmup-title">
+                      Calentamiento
+                    </span>
+                    <small>
+                      No cuenta para volumen ni progresión
+                    </small>
+                  </div>
+
+                  <button
+                    type="button"
+                    class="warmup-add-button"
+                    (click)="addWarmupSet(
+                      exercise.exerciseId
+                    )"
+                  >
+                    + Añadir serie
+                  </button>
+                </div>
+
+                @if (
+                  warmupSets(
+                    exercise.exerciseId
+                  ).length
+                ) {
+                  <div class="warmup-list">
+                    @for (
+                      warmup of warmupSets(
+                        exercise.exerciseId
+                      );
+                      track warmup.setId;
+                      let warmupIndex = $index
+                    ) {
+                      <div
+                        class="warmup-row"
+                        [class.completed]="
+                          !!warmup.completedAt
+                        "
+                      >
+                        <span class="warmup-number">
+                          C{{ warmupIndex + 1 }}
+                        </span>
+
+                        @if (supportsWeight(exercise)) {
+                          <label class="warmup-input">
+                            <span>Kg</span>
+                            <input
+                              type="number"
+                              min="0"
+                              inputmode="decimal"
+                              [value]="
+                                warmup.weight ?? ''
+                              "
+                              (input)="
+                                updateWarmupSet(
+                                  warmup.setId,
+                                  'weight',
+                                  $any($event.target).value
+                                )
+                              "
+                            />
+                          </label>
+                        }
+
+                        @if (
+                          !isDurationExercise(
+                            exercise
+                          )
+                        ) {
+                          <label class="warmup-input">
+                            <span>Reps</span>
+                            <input
+                              type="number"
+                              min="0"
+                              inputmode="numeric"
+                              [value]="
+                                warmup.reps ?? ''
+                              "
+                              (input)="
+                                updateWarmupSet(
+                                  warmup.setId,
+                                  'reps',
+                                  $any($event.target).value
+                                )
+                              "
+                            />
+                          </label>
+                        } @else {
+                          <label class="warmup-input">
+                            <span>Seg</span>
+                            <input
+                              type="number"
+                              min="0"
+                              inputmode="numeric"
+                              [value]="
+                                warmup.durationSeconds ?? ''
+                              "
+                              (input)="
+                                updateWarmupSet(
+                                  warmup.setId,
+                                  'durationSeconds',
+                                  $any($event.target).value
+                                )
+                              "
+                            />
+                          </label>
+                        }
+
+                        <button
+                          type="button"
+                          class="warmup-complete-button"
+                          [attr.aria-label]="
+                            warmup.completedAt
+                              ? 'Desmarcar calentamiento'
+                              : 'Completar calentamiento'
+                          "
+                          (click)="
+                            toggleWarmupCompleted(
+                              warmup.setId
+                            )
+                          "
+                        >
+                          {{
+                            warmup.completedAt
+                              ? '✓'
+                              : '○'
+                          }}
+                        </button>
+
+                        <button
+                          type="button"
+                          class="warmup-remove-button"
+                          aria-label="Eliminar calentamiento"
+                          (click)="
+                            removeWarmupSet(
+                              warmup.setId
+                            )
+                          "
+                        >
+                          ×
+                        </button>
+                      </div>
+                    }
+                  </div>
+                }
+              </section>
+
               <div class="sets-list">
                 @for (
                   setNumber of [].constructor(exercise.sets);

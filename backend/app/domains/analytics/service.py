@@ -464,6 +464,9 @@ async def get_training_analytics(
         summary.workouts += 1
 
         for workout_set in workout.sets:
+            if workout_set.setType == "warmup":
+                continue
+
             if not workout_set.exerciseId:
                 continue
 

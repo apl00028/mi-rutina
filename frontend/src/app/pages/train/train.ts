@@ -54,6 +54,7 @@ interface WorkoutSetInput {
   setId: string;
   exerciseId: string;
   setIndex: number;
+  setType?: 'working' | 'warmup';
   weight?: number | null;
   reps?: number | null;
   rir?: number | null;
@@ -1002,6 +1003,7 @@ export class Train implements OnInit, OnDestroy {
               .filter(
                 set =>
                   set.exerciseId === exerciseId &&
+                  this.isWorkingSet(set) &&
                   Boolean(set.completedAt) &&
                   Number.isInteger(set.setIndex) &&
                   (
@@ -1063,6 +1065,16 @@ export class Train implements OnInit, OnDestroy {
         );
 
     return histories;
+  }
+
+
+  private isWorkingSet(
+    set: WorkoutSetInput
+  ): boolean {
+    return (
+      set.setType === undefined ||
+      set.setType === 'working'
+    );
   }
 
 
@@ -2311,6 +2323,7 @@ export class Train implements OnInit, OnDestroy {
       .filter(
         set =>
           set.exerciseId === exerciseId &&
+          this.isWorkingSet(set) &&
           Boolean(set.completedAt)
       )
       .sort(
@@ -2324,8 +2337,14 @@ export class Train implements OnInit, OnDestroy {
   private exerciseMetrics(
     sets: WorkoutSetInput[]
   ): ExerciseProgressMetrics {
+    const workingSets =
+      sets.filter(
+        set =>
+          this.isWorkingSet(set)
+      );
+
     const validWeights =
-      sets
+      workingSets
         .map(set => set.weight)
         .filter(
           (
@@ -2337,7 +2356,7 @@ export class Train implements OnInit, OnDestroy {
         );
 
     const validReps =
-      sets
+      workingSets
         .map(set => set.reps)
         .filter(
           (
@@ -2349,7 +2368,7 @@ export class Train implements OnInit, OnDestroy {
         );
 
     const weightedSets =
-      sets.filter(
+      workingSets.filter(
         set =>
           set.weight !== null &&
           set.weight !== undefined &&
@@ -2362,7 +2381,7 @@ export class Train implements OnInit, OnDestroy {
       );
 
     const volume =
-      weightedSets.length === sets.length &&
+      weightedSets.length === workingSets.length &&
       weightedSets.length > 0
         ? weightedSets.reduce(
             (total, set) =>
@@ -2388,7 +2407,7 @@ export class Train implements OnInit, OnDestroy {
           : null,
       volume,
       bestSet:
-        this.bestSet(sets)
+        this.bestSet(workingSets)
     };
   }
 
@@ -2456,6 +2475,7 @@ export class Train implements OnInit, OnDestroy {
     return workout.sets.filter(
       set =>
         set.exerciseId === exercise.exerciseId &&
+        this.isWorkingSet(set) &&
         Boolean(set.completedAt)
     ).length;
   }
@@ -3026,6 +3046,227 @@ export class Train implements OnInit, OnDestroy {
       this.workoutLoading.set(false);
     }
   }
+
+  warmupSets(
+    exerciseId: string
+  ): WorkoutSetInput[] {
+    const workout = this.activeWorkout();
+
+    if (!workout) {
+      return [];
+    }
+
+    return workout.sets
+      .filter(
+        set =>
+          set.exerciseId === exerciseId &&
+          set.setType === 'warmup'
+      )
+      .sort(
+        (a, b) =>
+          b.setIndex - a.setIndex
+      );
+  }
+
+
+  addWarmupSet(
+    exerciseId: string
+  ): void {
+    const workout = this.activeWorkout();
+
+    if (
+      !workout ||
+      this.cancellingWorkout()
+    ) {
+      return;
+    }
+
+    const warmups =
+      this.warmupSets(exerciseId);
+
+    const nextIndex =
+      warmups.length === 0
+        ? -1
+        : Math.min(
+            ...warmups.map(
+              set => set.setIndex
+            )
+          ) - 1;
+
+    const warmup: WorkoutSetInput = {
+      setId: crypto.randomUUID(),
+      exerciseId,
+      setIndex: nextIndex,
+      setType: 'warmup',
+      weight: null,
+      reps: null,
+      rir: null,
+      durationSeconds: null
+    };
+
+    this.activeWorkout.set({
+      ...workout,
+      sets: [
+        ...workout.sets,
+        warmup
+      ]
+    });
+
+    this.markWorkoutEdited();
+  }
+
+
+  removeWarmupSet(
+    setId: string
+  ): void {
+    const workout = this.activeWorkout();
+
+    if (
+      !workout ||
+      this.cancellingWorkout()
+    ) {
+      return;
+    }
+
+    const exists =
+      workout.sets.some(
+        set =>
+          set.setId === setId &&
+          set.setType === 'warmup'
+      );
+
+    if (!exists) {
+      return;
+    }
+
+    this.activeWorkout.set({
+      ...workout,
+      sets:
+        workout.sets.filter(
+          set =>
+            !(
+              set.setId === setId &&
+              set.setType === 'warmup'
+            )
+        )
+    });
+
+    this.markWorkoutEdited();
+  }
+
+
+  toggleWarmupCompleted(
+    setId: string
+  ): void {
+    const workout = this.activeWorkout();
+
+    if (
+      !workout ||
+      this.cancellingWorkout()
+    ) {
+      return;
+    }
+
+    const warmup =
+      workout.sets.find(
+        set =>
+          set.setId === setId &&
+          set.setType === 'warmup'
+      );
+
+    if (!warmup) {
+      return;
+    }
+
+    this.activeWorkout.set({
+      ...workout,
+      sets:
+        workout.sets.map(
+          set =>
+            set.setId === setId &&
+            set.setType === 'warmup'
+              ? {
+                  ...set,
+                  completedAt:
+                    set.completedAt
+                      ? null
+                      : new Date().toISOString()
+                }
+              : set
+        )
+    });
+
+    this.markWorkoutEdited();
+  }
+
+
+  updateWarmupSet(
+    setId: string,
+    field:
+      | 'weight'
+      | 'reps'
+      | 'durationSeconds',
+    value: string
+  ): void {
+    const workout = this.activeWorkout();
+
+    if (
+      !workout ||
+      this.cancellingWorkout()
+    ) {
+      return;
+    }
+
+    const numericValue =
+      value === ''
+        ? null
+        : Number(value);
+
+    if (
+      numericValue !== null &&
+      (
+        Number.isNaN(numericValue) ||
+        numericValue < 0
+      )
+    ) {
+      return;
+    }
+
+    const exists =
+      workout.sets.some(
+        set =>
+          set.setId === setId &&
+          set.setType === 'warmup'
+      );
+
+    if (!exists) {
+      return;
+    }
+
+    this.activeWorkout.set({
+      ...workout,
+      sets:
+        workout.sets.map(
+          set =>
+            set.setId === setId &&
+            set.setType === 'warmup'
+              ? {
+                  ...set,
+                  [field]: numericValue
+                }
+              : set
+        )
+    });
+
+    this.markWorkoutEdited();
+  }
+
+
+  private markWorkoutEdited(): void {
+    this.workoutEditVersion += 1;
+    this.scheduleAutosave();
+  }
+
 
   updateSet(
     exerciseId: string,

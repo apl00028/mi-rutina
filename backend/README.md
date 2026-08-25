@@ -1,61 +1,100 @@
-# GymOS Coach API — v4.0.0
+# Aptus API
 
-Este backend mantiene las credenciales de IA fuera de GitHub Pages y ofrece
-un contrato común para redactar mensajes del Coach con las reglas de GymOS
-como fuente de verdad.
+Backend FastAPI de Aptus.
+
+Gestiona autenticación, lógica de dominio, acceso a datos y servicios utilizados por el frontend Angular y la aplicación Android.
+
+## Stack
+
+- Python 3.12
+- FastAPI
+- Pydantic
+- Supabase
+- pytest
 
 ## Ejecución local
 
-1. Copia `.env.example` como `.env`.
-2. Configura `AI_PROVIDER` como `rules`, `gemini`, `openai` u `ollama`.
-3. Añade en el servidor la clave y el modelo del proveedor elegido. No copies
-   claves en el frontend.
-4. Configura `SUPABASE_URL` y `SUPABASE_PUBLISHABLE_KEY` para validar las
-   sesiones recibidas.
-5. Instala dependencias:
+    cp .env.example .env
+    pip install -r requirements.txt
+    uvicorn main:app --reload --port 8080
 
-```bash
-pip install -r requirements.txt
-```
-
-6. Ejecuta:
-
-```bash
-uvicorn main:app --reload --port 8080
-```
-
-7. En el modo desarrollador de GymOS configura la URL pública del backend.
+Configura en .env las variables necesarias de Supabase y, cuando corresponda, del proveedor de IA.
 
 ## Estructura
 
-- `main.py`: arranque FastAPI, CORS, `/health` runtime y montaje de routers.
-- `app/core/`: autenticación y limitación de peticiones.
-- `app/api/v1/router.py`: agregador estable de rutas versionadas.
-- `app/domains/`: módulos por dominio con routers, servicios, repositorios y
-  modelos propios.
+- main.py: arranque de FastAPI, CORS y montaje de routers
+- app/api/v1/: API versionada principal
+- app/core/: autenticación, seguridad y utilidades compartidas
+- app/domains/: lógica organizada por dominio
+- app/data/: datos utilizados por servicios del backend
+- tests/: tests del backend
 
-Los endpoints legacy usados por la experiencia estática (`app.js`,
-`workout-analysis.js`, `index.html` y `service-worker.js`) siguen activos y se
-mantienen fuera del prefijo `/api/v1` cuando el frontend actual los consume así.
+## API
 
-## Endpoints
+La funcionalidad principal de Aptus se publica bajo:
 
-- `GET /health`: estado público, sin secretos.
-- `GET /api/v1/health`: estado público versionado.
-- `GET /ai/status`: proveedor, modelo y comprobación de conexión; requiere sesión.
-- `POST /workout-analysis`: redacción opcional sobre el análisis estructurado;
-  requiere sesión y aplica límites por usuario.
-- `POST /coach/chat`
-- `POST /coach/review`
+    /api/v1
 
-Si el proveedor no está disponible, `/workout-analysis` conserva el resultado
-de las reglas y devuelve `analysis_source: "local_fallback"`.
+Incluye recursos relacionados con:
+
+- cuenta
+- ejercicios
+- rutinas
+- entrenamientos
+- analítica
+- salud
+- nutrición
+- onboarding
+- administración
+
+Health checks:
+
+    GET /health
+    GET /api/v1/health
+
+## Coach e IA
+
+Actualmente siguen disponibles endpoints específicos fuera de /api/v1:
+
+    POST /coach/chat
+    POST /coach/review
+    GET  /ai/status
+    POST /workout-analysis
+
+Su permanencia se evaluará independientemente de la retirada del antiguo frontend estático.
+
+## Autenticación
+
+El frontend utiliza sesiones de Supabase y envía el token correspondiente al backend.
+
+Las credenciales privadas y las claves de servicios externos deben permanecer únicamente en el servidor.
+
+## Supabase
+
+Los esquemas y políticas SQL se encuentran en:
+
+    database/supabase/
+
+Algunos tests verifican estos archivos, por lo que al ejecutar pytest mediante Docker conviene montar el repositorio completo.
+
+## Catálogo de ejercicios
+
+El backend carga actualmente el catálogo desde:
+
+    app/data/exercise_domain.json
+
+La generación y mantenimiento de este catálogo se consolidará para retirar las últimas dependencias heredadas del sistema anterior.
+
+## Tests
+
+Desde la raíz del repositorio:
+
+    docker run --rm -v "$PWD:/repo" -w /repo/backend aptus-backend-test pytest -q
 
 ## Seguridad
 
-Las claves solo deben existir como variables de entorno del servidor. El
-frontend envía un token de sesión de Supabase y únicamente los datos mínimos
-del análisis: ejercicio, carga, repeticiones, RIR, estado y recomendación.
-
-Para producción con varias réplicas, sustituye el limitador diario en memoria
-por un almacén compartido.
+- Variables sensibles mediante entorno
+- Autenticación en recursos privados
+- Políticas RLS en Supabase
+- CORS limitado a orígenes autorizados en producción
+- Ninguna clave privada debe incluirse en el frontend

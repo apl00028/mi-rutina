@@ -1,104 +1,69 @@
-# GymOS
+# Aptus
 
-GymOS es una aplicación web progresiva (PWA) diseñada para centralizar el entrenamiento, el seguimiento de la salud y el acompañamiento mediante inteligencia artificial.
+Aptus es una aplicación personal de entrenamiento, salud y rendimiento.
 
-El objetivo del proyecto es ofrecer una experiencia similar a la de un entrenador personal, donde toda la información del usuario se sincroniza entre dispositivos y evoluciona con el tiempo.
+## Arquitectura
 
-## Estado del proyecto
-
-🚧 Release candidate en preparación
-
-Versión actual: v4.2.0-rc.2 (local, sin publicar)
+- Frontend: Angular + TypeScript + Capacitor
+- Android: Capacitor + Health Connect
+- Backend: FastAPI + Pydantic
+- Autenticación y persistencia: Supabase
+- API principal: /api/v1
 
 ## Funcionalidades
 
-### Cuenta personal
+- Rutinas y entrenamiento de fuerza
+- Registro de peso, repeticiones, RIR y duración
+- Series de calentamiento y molestias
+- Descansos configurables
+- Historial, e1RM y análisis de progreso
+- Seguimiento de salud y composición corporal
+- Nutrición
+- Integración con Health Connect
+- Preparación de fuerza, natación, ciclismo y carrera
 
-- Registro e inicio de sesión mediante Supabase
-- Sincronización entre dispositivos
-- Datos privados por usuario
-- Recuperación de contraseña
+## Estructura
 
-### Entrenamiento
+- frontend/: aplicación Angular y Android
+- backend/: API FastAPI
+- database/supabase/: esquema y políticas RLS
+- docs/: documentación técnica
+- assets/: recursos
+- scripts/: utilidades de mantenimiento
 
-- Rutinas canónicas de 2 a 6 sesiones
-- Registro de ejercicios
-- Historial de entrenamientos
-- Seguimiento de cargas
-- Registro de RIR
-- Cronómetro integrado
+## Desarrollo
 
-### Perfil deportivo
+Frontend:
 
-- Cuestionario inicial
-- Objetivos personales
-- Nivel de experiencia
-- Equipamiento disponible
-- Lesiones y limitaciones
-- Disponibilidad semanal
+    cd frontend
+    npm install
+    npm start
 
-### Salud
+Tests frontend:
 
-- Peso corporal
-- Composición corporal
-- Métricas de salud
-- Seguimiento temporal
+    cd frontend
+    npm test -- --watch=false
 
-### IA
+Backend:
 
-- Coach inteligente
-- Adaptación de entrenamientos
-- Recomendaciones personalizadas
-- Explicación de decisiones
-- Ajustes según progreso
+    cd backend
+    pip install -r requirements.txt
+    uvicorn main:app --reload --port 8080
 
-## Tecnologías
+Tests backend con Docker:
 
-- HTML5
-- CSS3
-- JavaScript (Vanilla)
-- Supabase
-- FastAPI (backend IA)
-- OpenAI API
+    docker run --rm -v "$PWD:/repo" -w /repo/backend aptus-backend-test pytest -q
 
-## Hoja de ruta
+## Compatibilidad
 
-### v4
+Algunos formatos conservan identificadores históricos como _GymOS únicamente para mantener compatibilidad con datos existentes.
 
-- [x] Sistema de cuentas
-- [x] Sincronización
-- [x] Perfil deportivo
-- [x] Onboarding
-- [ ] Personalización avanzada
-- [x] Accesibilidad estructural y reducción de movimiento
+## Seguridad
 
-### v5
+Las credenciales privadas permanecen en el backend. Supabase autentica a los usuarios y las tablas privadas utilizan políticas RLS.
 
-- [ ] Coach IA conversacional
-- [ ] Nutrición inteligente
-- [ ] Planificación semanal
-- [ ] Análisis automático del progreso
-- [ ] Importación desde Apple Health
-- [ ] Importación desde Google Fit
-- [ ] Integración con Garmin
+Consulta SECURITY.md para más información.
 
-### Futuro
+## Estado
 
-- Wearables
-- Smartwatch
-- Entrenamientos adaptativos
-- Detección automática de estancamientos
-- Predicción de rendimiento
-- Integración con dispositivos de gimnasio
-
-## Instalación
-
-```bash
-git clone https://github.com/apl00028/mi-rutina.git
-```
-
-Abrir `index.html` o desplegar mediante GitHub Pages.
-
-## Licencia
-
-Proyecto personal en desarrollo.
+Proyecto personal en desarrollo activo.

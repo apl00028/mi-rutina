@@ -124,7 +124,7 @@ describe('Home', () => {
         document.documentElement
           .classList
           .contains(
-            'gymos-theme-system'
+            'aptus-theme-system'
           )
       ).toBe(true);
     }

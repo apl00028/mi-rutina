@@ -53,7 +53,7 @@ export class App implements OnDestroy {
 
   sidebarExpanded = signal(
     localStorage.getItem(
-      'gymos-sidebar-expanded'
+      'aptus-sidebar-expanded'
     ) !== 'false'
   );
 
@@ -370,7 +370,7 @@ export class App implements OnDestroy {
     this.sidebarExpanded.set(next);
 
     localStorage.setItem(
-      'gymos-sidebar-expanded',
+      'aptus-sidebar-expanded',
       String(next)
     );
   }

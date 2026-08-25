@@ -308,19 +308,19 @@ describe('Settings pages', () => {
       .toBe('dark');
     expect(
       document.documentElement.classList
-        .contains('gymos-theme-dark')
+        .contains('aptus-theme-dark')
     ).toBe(true);
     expect(
       document.documentElement.classList
-        .contains('gymos-theme-light')
+        .contains('aptus-theme-light')
     ).toBe(false);
     expect(
       document.documentElement.classList
-        .contains('gymos-text-large')
+        .contains('aptus-text-large')
     ).toBe(true);
     expect(
       document.documentElement.classList
-        .contains('gymos-reduce-motion')
+        .contains('aptus-reduce-motion')
     ).toBe(true);
 
     const fresh =
@@ -334,7 +334,7 @@ describe('Settings pages', () => {
       });
     expect(
       document.documentElement.classList
-        .contains('gymos-theme-dark')
+        .contains('aptus-theme-dark')
     ).toBe(true);
   });
 
@@ -349,11 +349,11 @@ describe('Settings pages', () => {
       .toBe('system');
     expect(
       document.documentElement.classList
-        .contains('gymos-theme-system')
+        .contains('aptus-theme-system')
     ).toBe(true);
     expect(
       document.documentElement.classList
-        .contains('gymos-theme-dark')
+        .contains('aptus-theme-dark')
     ).toBe(false);
   });
 
@@ -371,11 +371,11 @@ describe('Settings pages', () => {
 
     expect(
       document.documentElement.classList
-        .contains('gymos-theme-system')
+        .contains('aptus-theme-system')
     ).toBe(true);
     expect(
       document.documentElement.classList
-        .contains('gymos-theme-dark')
+        .contains('aptus-theme-dark')
     ).toBe(false);
   });
 
@@ -396,11 +396,11 @@ describe('Settings pages', () => {
       .toBe('dark');
     expect(
       document.documentElement.classList
-        .contains('gymos-theme-dark')
+        .contains('aptus-theme-dark')
     ).toBe(true);
     expect(
       document.documentElement.classList
-        .contains('gymos-theme-system')
+        .contains('aptus-theme-system')
     ).toBe(false);
   });
 
@@ -449,7 +449,7 @@ describe('Settings pages', () => {
 
     expect(
       document.documentElement.classList
-        .contains('gymos-theme-light')
+        .contains('aptus-theme-light')
     ).toBe(true);
     expect(
       JSON.parse(
@@ -466,7 +466,7 @@ describe('Settings pages', () => {
       .toBe('light');
     expect(
       document.documentElement.classList
-        .contains('gymos-theme-light')
+        .contains('aptus-theme-light')
     ).toBe(true);
   });
 

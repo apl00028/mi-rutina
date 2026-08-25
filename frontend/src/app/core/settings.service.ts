@@ -187,26 +187,26 @@ export class SettingsService {
       document.documentElement;
 
     root.classList.remove(
-      'gymos-theme-system',
-      'gymos-theme-light',
-      'gymos-theme-dark',
-      'gymos-text-small',
-      'gymos-text-normal',
-      'gymos-text-large',
-      'gymos-reduce-motion'
+      'aptus-theme-system',
+      'aptus-theme-light',
+      'aptus-theme-dark',
+      'aptus-text-small',
+      'aptus-text-normal',
+      'aptus-text-large',
+      'aptus-reduce-motion'
     );
 
     root.classList.add(
-      `gymos-theme-${settings.theme}`
+      `aptus-theme-${settings.theme}`
     );
 
     root.classList.add(
-      `gymos-text-${settings.textSize}`
+      `aptus-text-${settings.textSize}`
     );
 
     if (this.effectiveReduceMotion()) {
       root.classList.add(
-        'gymos-reduce-motion'
+        'aptus-reduce-motion'
       );
     }
   }

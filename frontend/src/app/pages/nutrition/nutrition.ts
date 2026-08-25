@@ -1803,7 +1803,7 @@ export class Nutrition implements OnInit {
 
     XLSX.writeFile(
       workbook,
-      'gymos-plantilla-nutricion-v1.xlsx'
+      'aptus-plantilla-nutricion-v1.xlsx'
     );
   }
 

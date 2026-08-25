@@ -44,11 +44,11 @@
   color-scheme: light;
 }
 
-html.gymos-theme-light {
+html.aptus-theme-light {
   color-scheme: light;
 }
 
-html.gymos-theme-dark {
+html.aptus-theme-dark {
   --aptus-bg: #0b1120;
   --aptus-surface: #111827;
   --aptus-surface-muted: #1f2937;
@@ -94,7 +94,7 @@ html.gymos-theme-dark {
 }
 
 @media (prefers-color-scheme: dark) {
-  html.gymos-theme-system {
+  html.aptus-theme-system {
     --aptus-bg: #0b1120;
     --aptus-surface: #111827;
     --aptus-surface-muted: #1f2937;
@@ -140,11 +140,11 @@ html.gymos-theme-dark {
   }
 }
 
-html.gymos-text-small {
+html.aptus-text-small {
   --aptus-font-scale: 0.94;
 }
 
-html.gymos-text-large {
+html.aptus-text-large {
   --aptus-font-scale: 1.08;
 }
 
@@ -158,9 +158,9 @@ body {
     calc(16px * var(--aptus-font-scale));
 }
 
-html.gymos-reduce-motion *,
-html.gymos-reduce-motion *::before,
-html.gymos-reduce-motion *::after {
+html.aptus-reduce-motion *,
+html.aptus-reduce-motion *::before,
+html.aptus-reduce-motion *::after {
   animation-duration: 0.001ms !important;
   animation-iteration-count: 1 !important;
   scroll-behavior: auto !important;

@@ -2178,7 +2178,7 @@ export class Health implements OnInit {
           .slice(0, 10);
 
       const fileName =
-        `gymos-health-${today}.xlsx`;
+        `aptus-health-${today}.xlsx`;
 
 
       /*

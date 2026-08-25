@@ -4,7 +4,7 @@ set -euo pipefail
 
 cd "$(dirname "$0")/.."
 
-WIN="/mnt/c/Users/apelaezl/AndroidStudioProjects/GymOS"
+WIN="/mnt/c/Users/apelaezl/AndroidStudioProjects/Aptus"
 
 echo "=== Building Angular ==="
 npm run build
@@ -58,7 +58,7 @@ from pathlib import Path
 
 p = Path(
     "/mnt/c/Users/apelaezl/"
-    "AndroidStudioProjects/GymOS/"
+    "AndroidStudioProjects/Aptus/"
     "capacitor.settings.gradle"
 )
 
@@ -86,7 +86,7 @@ python3 - <<'PYFIX'
 from pathlib import Path
 
 p = Path(
-    "/mnt/c/Users/apelaezl/AndroidStudioProjects/GymOS/"
+    "/mnt/c/Users/apelaezl/AndroidStudioProjects/Aptus/"
     "capacitor.settings.gradle"
 )
 

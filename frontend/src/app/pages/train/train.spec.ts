@@ -1218,6 +1218,115 @@ describe('Train first workout flow', () => {
   });
 
 
+
+  it('confirms a correction without uncompleting the set and advances to the next pending set', async () => {
+    const fixture =
+      await createLoadedTrain([
+        {
+          ...activeWorkout(),
+          sets: [
+            historySet(0, {
+              weight: 80,
+              reps: 8,
+              rir: 2,
+              completedAt:
+                '2026-08-20T15:05:00Z'
+            })
+          ]
+        }
+      ]);
+
+    const component =
+      fixture.componentInstance;
+
+    vi.spyOn(
+      component as any,
+      'scheduleAutosave'
+    ).mockImplementation(() => {});
+
+    const originalCompletedAt =
+      component.getCurrentSet(
+        'dumbbell-bench-press',
+        0
+      )?.completedAt;
+
+    component.startSetCorrection(
+      'dumbbell-bench-press',
+      0
+    );
+
+    expect(
+      component.isCorrectingSet(
+        'dumbbell-bench-press',
+        0
+      )
+    ).toBe(true);
+
+    component.updateSet(
+      'dumbbell-bench-press',
+      0,
+      'weight',
+      '82.5'
+    );
+
+    component.updateSet(
+      'dumbbell-bench-press',
+      0,
+      'reps',
+      '9'
+    );
+
+    component.confirmSetCorrection(
+      'dumbbell-bench-press',
+      0
+    );
+
+    const corrected =
+      component.getCurrentSet(
+        'dumbbell-bench-press',
+        0
+      );
+
+    expect(corrected?.weight)
+      .toBe(82.5);
+
+    expect(corrected?.reps)
+      .toBe(9);
+
+    expect(corrected?.completedAt)
+      .toBe(originalCompletedAt);
+
+    expect(
+      component.isSetCompleted(
+        'dumbbell-bench-press',
+        0
+      )
+    ).toBe(true);
+
+    expect(
+      component.isCorrectingSet(
+        'dumbbell-bench-press',
+        0
+      )
+    ).toBe(false);
+
+    expect(
+      component.isSetExpanded(
+        'dumbbell-bench-press',
+        1
+      )
+    ).toBe(true);
+
+    (component as any)
+      .cancelAutosaveTimer();
+
+    (component as any)
+      .persistedEditVersion =
+        (component as any)
+          .workoutEditVersion;
+  });
+
+
   it('lets a completed set reopen for corrections', async () => {
     const fixture =
       await createLoadedTrain([
@@ -1616,14 +1725,21 @@ describe('Train first workout flow', () => {
     completedSummary?.click();
     fixture.detectChanges();
 
-    const completedButton =
-      fixture
-        .nativeElement
-        .querySelector(
-          'button[aria-label="Desmarcar serie completada de Press banca con mancuernas, serie 1"]'
-        ) as HTMLButtonElement | null;
+    const buttons =
+      Array.from(
+        fixture.nativeElement.querySelectorAll(
+          'button'
+        ) as NodeListOf<HTMLButtonElement>
+      );
 
-    expect(completedButton)
+    const correctButton =
+      buttons.find(
+        button =>
+          button.textContent?.trim() ===
+          'Corregir'
+      );
+
+    expect(correctButton)
       .toBeTruthy();
   });
 

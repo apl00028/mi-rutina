@@ -218,6 +218,8 @@ export class Train implements OnInit, OnDestroy {
     signal<string | null>(null);
   expandedSetKey =
     signal<string | null>(null);
+  correctingSetKey =
+    signal<string | null>(null);
 
   email = signal('');
   loginLoading = signal(false);
@@ -2610,6 +2612,76 @@ export class Train implements OnInit, OnDestroy {
         ? null
         : key
     );
+  }
+
+
+  isCorrectingSet(
+    exerciseId: string,
+    setIndex: number
+  ): boolean {
+    return (
+      this.correctingSetKey() ===
+      this.setExpansionKey(
+        exerciseId,
+        setIndex
+      )
+    );
+  }
+
+
+  startSetCorrection(
+    exerciseId: string,
+    setIndex: number
+  ): void {
+    if (
+      !this.isSetCompleted(
+        exerciseId,
+        setIndex
+      )
+    ) {
+      return;
+    }
+
+    const key =
+      this.setExpansionKey(
+        exerciseId,
+        setIndex
+      );
+
+    this.correctingSetKey.set(key);
+    this.expandedExerciseId.set(
+      exerciseId
+    );
+    this.expandedSetKey.set(key);
+  }
+
+
+  confirmSetCorrection(
+    exerciseId: string,
+    setIndex: number
+  ): void {
+    if (
+      !this.isCorrectingSet(
+        exerciseId,
+        setIndex
+      )
+    ) {
+      return;
+    }
+
+    /*
+     * Los valores ya se actualizan mediante
+     * updateSet() y su autosave.
+     *
+     * No llamamos a completeSet():
+     * - no cambiamos completedAt
+     * - no iniciamos otro descanso
+     * - no desmarcamos la serie
+     */
+    this.correctingSetKey.set(null);
+    this.expandedSetKey.set(null);
+
+    this.advanceAfterRest();
   }
 
 

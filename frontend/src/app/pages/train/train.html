@@ -587,6 +587,36 @@
                     </button>
 
                     @if (
+                      isSetCompleted(
+                        exercise.exerciseId,
+                        $index
+                      ) &&
+                      !isSetExpanded(
+                        exercise.exerciseId,
+                        $index
+                      )
+                    ) {
+                      <button
+                        type="button"
+                        class="correct-set-button"
+                        (click)="
+                          toggleSet(
+                            exercise.exerciseId,
+                            $index
+                          )
+                        "
+                        [attr.aria-label]="
+                          'Corregir ' +
+                          exercise.name +
+                          ', serie ' +
+                          ($index + 1)
+                        "
+                      >
+                        Corregir
+                      </button>
+                    }
+
+                    @if (
                       isSetExpanded(
                         exercise.exerciseId,
                         $index
@@ -912,42 +942,70 @@
                       </div>
                     }
 
-                    <button
-                      type="button"
-                      class="complete-set-button"
-                      (click)="completeSet(
+                    @if (
+                      isSetCompleted(
                         exercise.exerciseId,
                         $index
-                      )"
-                      [disabled]="
-                        workoutLoading() ||
-                        cancellingWorkout()
-                      "
-                      [attr.aria-label]="
-                        (
-                          isSetCompleted(
-                            exercise.exerciseId,
-                            $index
-                          )
-                            ? 'Desmarcar serie completada de '
-                            : 'Completar serie de '
-                        ) +
-                        exercise.name +
-                        ', serie ' +
-                        ($index + 1)
-                      "
-                    >
+                      )
+                    ) {
                       @if (
-                        isSetCompleted(
+                        isCorrectingSet(
                           exercise.exerciseId,
                           $index
                         )
                       ) {
-                        Completada - desmarcar
+                        <button
+                          type="button"
+                          class="complete-set-button"
+                          (click)="confirmSetCorrection(
+                            exercise.exerciseId,
+                            $index
+                          )"
+                          [disabled]="
+                            workoutLoading() ||
+                            cancellingWorkout()
+                          "
+                        >
+                          Confirmar corrección
+                        </button>
                       } @else {
-                        Completar
+                        <button
+                          type="button"
+                          class="secondary-button"
+                          (click)="startSetCorrection(
+                            exercise.exerciseId,
+                            $index
+                          )"
+                          [disabled]="
+                            workoutLoading() ||
+                            cancellingWorkout()
+                          "
+                        >
+                          Corregir
+                        </button>
                       }
-                    </button>
+                    } @else {
+                      <button
+                        type="button"
+                        class="complete-set-button"
+                        (click)="completeSet(
+                          exercise.exerciseId,
+                          $index
+                        )"
+                        [disabled]="
+                          workoutLoading() ||
+                          cancellingWorkout()
+                        "
+                        [attr.aria-label]="
+                          'Completar serie de ' +
+                          exercise.name +
+                          ', serie ' +
+                          ($index + 1)
+                        "
+                      >
+                        Completar
+                      </button>
+                    }
                     </div>
                     }
                   </section>

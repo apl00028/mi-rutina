@@ -2227,3 +2227,26 @@ button:disabled {
     margin-inline: 10px;
   }
 }
+
+.correct-set-button {
+  width: calc(100% - 28px);
+  min-height: 36px;
+
+  margin: -2px 14px 10px;
+  padding: 6px 10px;
+
+  border: 1px solid var(--gymos-border-strong);
+  border-radius: 8px;
+
+  background: transparent;
+  color: var(--gymos-text-muted);
+
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 750;
+}
+
+.correct-set-button:hover {
+  background: var(--gymos-surface-hover);
+  color: var(--gymos-text);
+}

@@ -2250,3 +2250,88 @@ button:disabled {
   background: var(--gymos-surface-hover);
   color: var(--gymos-text);
 }
+
+.session-rest-control {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+
+  gap: 14px;
+
+  margin-bottom: 14px;
+  padding: 12px 14px;
+
+  border: 1px solid var(--gymos-border);
+  border-radius: 12px;
+
+  background: var(--gymos-surface);
+}
+
+.session-rest-copy {
+  display: grid;
+  gap: 2px;
+}
+
+.session-rest-copy > span {
+  color: var(--gymos-text-muted);
+
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.session-rest-copy strong {
+  font-size: 1rem;
+}
+
+.session-rest-copy small {
+  color: var(--gymos-text-muted);
+
+  font-size: 0.72rem;
+}
+
+.session-rest-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+
+  gap: 6px;
+}
+
+.session-rest-actions
+.secondary-button {
+  min-height: 36px;
+
+  padding: 6px 10px;
+
+  font-size: 0.8rem;
+}
+
+.session-rest-reset {
+  min-height: 36px;
+
+  padding: 6px 8px;
+
+  border: 0;
+
+  background: transparent;
+  color: var(--gymos-text-muted);
+
+  font: inherit;
+  font-size: 0.76rem;
+  font-weight: 750;
+}
+
+@media (max-width: 560px) {
+  .session-rest-control {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .session-rest-actions {
+    width: 100%;
+
+    justify-content: flex-start;
+  }
+}

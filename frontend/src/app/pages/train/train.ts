@@ -77,6 +77,7 @@ interface Workout {
   status: 'in_progress' | 'finished';
   startedAt?: string;
   finishedAt?: string;
+  restOverrideSeconds?: number | null;
   sets: WorkoutSetInput[];
   discomforts?: ExerciseDiscomfortInput[];
 }
@@ -3974,6 +3975,205 @@ export class Train implements OnInit, OnDestroy {
   }
 
 
+  sessionPlannedRestSeconds(): number[] {
+    const session =
+      this.activeSession();
+
+    if (!session) {
+      return [];
+    }
+
+    return session.exercises
+      .map(
+        exercise =>
+          Number(exercise.restSeconds)
+      )
+      .filter(
+        value =>
+          Number.isFinite(value) &&
+          value > 0
+      )
+      .map(
+        value =>
+          Math.floor(value)
+      );
+  }
+
+
+  sessionDefaultRestSeconds(): number {
+    const planned =
+      this.sessionPlannedRestSeconds();
+
+    if (!planned.length) {
+      return 150;
+    }
+
+    /*
+     * Para crear un descanso global partimos
+     * del descanso más largo prescrito en la sesión.
+     *
+     * Así no reducimos accidentalmente la recuperación
+     * de los ejercicios que requieren más descanso.
+     */
+    return Math.max(...planned);
+  }
+
+
+  sessionPlannedRestLabel(): string {
+    const planned =
+      this.sessionPlannedRestSeconds();
+
+    if (!planned.length) {
+      return 'Según el plan';
+    }
+
+    const minimum =
+      Math.min(...planned);
+
+    const maximum =
+      Math.max(...planned);
+
+    if (minimum === maximum) {
+      return (
+        this.formatRestClock(minimum) +
+        ' · Según el plan'
+      );
+    }
+
+    return (
+      this.formatRestClock(minimum) +
+      '–' +
+      this.formatRestClock(maximum) +
+      ' · Según el plan'
+    );
+  }
+
+
+  private formatRestClock(
+    seconds: number
+  ): string {
+    const minutes =
+      Math.floor(seconds / 60);
+
+    const remainingSeconds =
+      seconds % 60;
+
+    return (
+      `${minutes}:` +
+      `${remainingSeconds}`.padStart(
+        2,
+        '0'
+      )
+    );
+  }
+
+
+  sessionRestOverrideLabel(): string {
+    const seconds =
+      this.sessionRestOverrideSeconds();
+
+    if (seconds === null) {
+      return this.sessionPlannedRestLabel();
+    }
+
+    return this.formatRestClock(
+      seconds
+    );
+  }
+
+
+  sessionRestOverrideSeconds(): number | null {
+    const value =
+      this.activeWorkout()?.restOverrideSeconds;
+
+    return (
+      Number.isFinite(value) &&
+      Number(value) >= 0
+    )
+      ? Math.floor(Number(value))
+      : null;
+  }
+
+
+  setSessionRestOverride(
+    seconds: number
+  ): void {
+    const workout = this.activeWorkout();
+
+    if (
+      !workout ||
+      this.cancellingWorkout() ||
+      !Number.isFinite(seconds)
+    ) {
+      return;
+    }
+
+    const normalized =
+      Math.min(
+        3600,
+        Math.max(
+          0,
+          Math.floor(seconds)
+        )
+      );
+
+    this.activeWorkout.set({
+      ...workout,
+      restOverrideSeconds:
+        normalized
+    });
+
+    this.markWorkoutEdited();
+  }
+
+
+  adjustSessionRestOverride(
+    deltaSeconds: number
+  ): void {
+    const workout = this.activeWorkout();
+
+    if (!workout) {
+      return;
+    }
+
+    const current =
+      this.sessionRestOverrideSeconds();
+
+    /*
+     * Si todavía estamos usando los descansos del plan,
+     * el primer ajuste parte del descanso planificado
+     * más largo de esta sesión.
+     */
+    const base =
+      current ??
+      this.sessionDefaultRestSeconds();
+
+    this.setSessionRestOverride(
+      base + deltaSeconds
+    );
+  }
+
+
+  clearSessionRestOverride(): void {
+    const workout = this.activeWorkout();
+
+    if (
+      !workout ||
+      this.cancellingWorkout()
+    ) {
+      return;
+    }
+
+    this.activeWorkout.set({
+      ...workout,
+      restOverrideSeconds:
+        null
+    });
+
+    this.markWorkoutEdited();
+  }
+
+
   private startRestTimerForSet(
     exerciseId: string,
     setIndex: number
@@ -3983,8 +4183,13 @@ export class Train implements OnInit, OnDestroy {
         exerciseId
       );
 
+    const sessionOverride =
+      this.sessionRestOverrideSeconds();
+
     const restSeconds =
-      Number(exercise?.restSeconds);
+      sessionOverride !== null
+        ? sessionOverride
+        : Number(exercise?.restSeconds);
 
     this.clearSetTimer();
     this.clearRestTimer();

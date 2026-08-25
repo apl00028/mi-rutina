@@ -93,3 +93,30 @@ def test_warmup_rejects_non_negative_index():
     raise AssertionError(
         "Un calentamiento debe usar índice negativo."
     )
+
+
+def test_workout_accepts_rest_override_seconds():
+    workout = Workout(
+        workoutId="workout-1",
+        routineId="routine-1",
+        sessionId="session-1",
+        restOverrideSeconds=150,
+    )
+
+    assert workout.restOverrideSeconds == 150
+
+
+def test_workout_rejects_rest_override_above_one_hour():
+    try:
+        Workout(
+            workoutId="workout-1",
+            routineId="routine-1",
+            sessionId="session-1",
+            restOverrideSeconds=3601,
+        )
+    except ValidationError:
+        return
+
+    raise AssertionError(
+        "restOverrideSeconds > 3600 debería ser inválido."
+    )

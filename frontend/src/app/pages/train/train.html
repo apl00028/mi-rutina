@@ -22,6 +22,70 @@
           </div>
         </header>
 
+        <section class="session-rest-control">
+          <div class="session-rest-copy">
+            <span>
+              Descanso de sesión
+            </span>
+
+            <strong>
+              {{ sessionRestOverrideLabel() }}
+            </strong>
+
+            <small>
+              Se aplica a los próximos descansos
+            </small>
+          </div>
+
+          <div class="session-rest-actions">
+            <button
+              type="button"
+              class="secondary-button"
+              (click)="
+                adjustSessionRestOverride(-30)
+              "
+              [disabled]="
+                workoutLoading() ||
+                cancellingWorkout()
+              "
+            >
+              -30 s
+            </button>
+
+            <button
+              type="button"
+              class="secondary-button"
+              (click)="
+                adjustSessionRestOverride(30)
+              "
+              [disabled]="
+                workoutLoading() ||
+                cancellingWorkout()
+              "
+            >
+              +30 s
+            </button>
+
+            @if (
+              sessionRestOverrideSeconds() !== null
+            ) {
+              <button
+                type="button"
+                class="session-rest-reset"
+                (click)="
+                  clearSessionRestOverride()
+                "
+                [disabled]="
+                  workoutLoading() ||
+                  cancellingWorkout()
+                "
+              >
+                Usar descansos del plan
+              </button>
+            }
+          </div>
+        </section>
+
         <div class="exercise-stack">
           @for (
             exercise of session.exercises;

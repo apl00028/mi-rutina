@@ -64,6 +64,14 @@ class Workout(BaseModel):
     startedAt: str | None = None
     finishedAt: str | None = None
 
+    # Descanso común opcional para este entrenamiento.
+    # Si es None, cada ejercicio conserva su restSeconds.
+    restOverrideSeconds: int | None = Field(
+        default=None,
+        ge=0,
+        le=3600,
+    )
+
     sets: list[WorkoutSet] = Field(default_factory=list)
 
     discomforts: list[ExerciseDiscomfort] = Field(

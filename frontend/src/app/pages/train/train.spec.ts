@@ -5052,6 +5052,121 @@ describe('Train first workout flow', () => {
   });
 
 
+
+  it('uses the session rest override instead of the exercise rest time', async () => {
+    const fixture =
+      await createLoadedTrain([
+        {
+          ...activeWorkout(),
+          restOverrideSeconds: 60
+        }
+      ]);
+
+    const component =
+      fixture.componentInstance;
+
+    component.updateSet(
+      'dumbbell-bench-press',
+      0,
+      'weight',
+      '80'
+    );
+
+    component.updateSet(
+      'dumbbell-bench-press',
+      0,
+      'reps',
+      '8'
+    );
+
+    const complete =
+      component.completeSet(
+        'dumbbell-bench-press',
+        0
+      );
+
+    await waitForHttpTick();
+
+    const save =
+      http.expectOne(
+        `${environment.apiUrl}/workouts/active-workout`
+      );
+
+    save.flush(save.request.body);
+
+    await complete;
+
+    expect(
+      component.restTimer()?.remainingSeconds
+    ).toBe(60);
+  });
+
+
+  it('can adjust and clear the session rest override without changing the routine', async () => {
+    const fixture =
+      await createLoadedTrain([
+        activeWorkout()
+      ]);
+
+    const component =
+      fixture.componentInstance;
+
+    vi.spyOn(
+      component as any,
+      'scheduleAutosave'
+    ).mockImplementation(() => {});
+
+    const originalRest =
+      component.activeSession()
+        ?.exercises[0]
+        .restSeconds;
+
+    component.setSessionRestOverride(
+      150
+    );
+
+    expect(
+      component.sessionRestOverrideSeconds()
+    ).toBe(150);
+
+    component.adjustSessionRestOverride(
+      30
+    );
+
+    expect(
+      component.sessionRestOverrideSeconds()
+    ).toBe(180);
+
+    component.adjustSessionRestOverride(
+      -30
+    );
+
+    expect(
+      component.sessionRestOverrideSeconds()
+    ).toBe(150);
+
+    component.clearSessionRestOverride();
+
+    expect(
+      component.sessionRestOverrideSeconds()
+    ).toBeNull();
+
+    expect(
+      component.activeSession()
+        ?.exercises[0]
+        .restSeconds
+    ).toBe(originalRest);
+
+    (component as any)
+      .cancelAutosaveTimer();
+
+    (component as any)
+      .persistedEditVersion =
+        (component as any)
+          .workoutEditVersion;
+  });
+
+
   it('starts a rest timer from the completed exercise rest seconds', async () => {
     const fixture =
       await createLoadedTrain([

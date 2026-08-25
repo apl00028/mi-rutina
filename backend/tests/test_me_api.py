@@ -158,3 +158,108 @@ def test_me_rejects_invalid_token(monkeypatch):
         "detail":
             "Invalid or expired access token"
     }
+
+
+def test_delete_me_requires_authentication():
+    response = client.delete(
+        "/api/v1/me"
+    )
+
+    assert response.status_code == 401
+
+
+def test_delete_me_deletes_authenticated_account(
+    monkeypatch,
+):
+    from app.domains.account import (
+        router as me_api,
+    )
+
+    deleted = []
+
+    async def fake_delete_account(user):
+        deleted.append(user.id)
+
+    app.dependency_overrides[
+        authenticate_user
+    ] = authenticated_user
+
+    monkeypatch.setattr(
+        me_api,
+        "delete_account",
+        fake_delete_account,
+    )
+
+    try:
+        response = client.delete(
+            "/api/v1/me",
+            headers={
+                "Authorization":
+                    "Bearer token-123"
+            },
+        )
+    finally:
+        app.dependency_overrides.pop(
+            authenticate_user,
+            None,
+        )
+
+    assert response.status_code == 204
+    assert response.content == b""
+    assert deleted == [
+        "user-123"
+    ]
+
+
+def test_delete_account_removes_data_before_auth(
+    monkeypatch,
+):
+    from app.domains.account import (
+        deletion_service,
+    )
+
+    calls = []
+
+    async def fake_delete_user_data(
+        user_id,
+    ):
+        calls.append(
+            ("data", user_id)
+        )
+
+    async def fake_delete_auth_user(
+        user_id,
+    ):
+        calls.append(
+            ("auth", user_id)
+        )
+
+    monkeypatch.setattr(
+        deletion_service,
+        "_delete_user_data",
+        fake_delete_user_data,
+    )
+
+    monkeypatch.setattr(
+        deletion_service,
+        "_delete_auth_user",
+        fake_delete_auth_user,
+    )
+
+    awaitable = (
+        deletion_service.delete_account(
+            AuthenticatedUser(
+                id="user-123",
+                email="test@example.com",
+                access_token="token-123",
+            )
+        )
+    )
+
+    import asyncio
+    asyncio.run(awaitable)
+
+    assert calls == [
+        ("data", "user-123"),
+        ("auth", "user-123"),
+    ]

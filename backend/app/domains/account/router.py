@@ -14,6 +14,10 @@ from app.core.auth import (
     get_gymos_access,
 )
 
+from app.domains.account.deletion_service import (
+    delete_account,
+)
+
 
 router = APIRouter(
     tags=["Account"]
@@ -376,3 +380,17 @@ async def bootstrap_me(
         "onboarding_completed":
             False,
     }
+
+
+@router.delete(
+    "/me",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def delete_me(
+    user: AuthenticatedUser = Depends(
+        authenticate_user
+    ),
+) -> None:
+    await delete_account(
+        user
+    )

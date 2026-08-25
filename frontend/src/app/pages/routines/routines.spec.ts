@@ -1044,6 +1044,165 @@ describe('Routines training analytics', () => {
   });
 
 
+
+  it('exports planned, session override, and effective rest without warmups', async () => {
+    const fixture =
+      await createLoadedComponent();
+
+    const component =
+      fixture.componentInstance;
+
+    const writeFileSpy =
+      vi.spyOn(
+        component as any,
+        'writeTrainingRecordsWorkbook'
+      ).mockImplementation(
+        () => {}
+      );
+
+    component.openExportRecords();
+
+    fixture.detectChanges();
+
+    const exportPromise =
+      component.exportTrainingRecords();
+
+    await flushPromises();
+
+    http
+      .expectOne(
+        `${environment.apiUrl}/workouts`
+      )
+      .flush([
+        {
+          workoutId:
+            'workout-rest-test',
+          routineId:
+            'routine-1',
+          sessionId:
+            'session-1',
+          status:
+            'finished',
+          startedAt:
+            '2026-08-20T10:00:00Z',
+          finishedAt:
+            '2026-08-20T11:00:00Z',
+          restOverrideSeconds:
+            150,
+          sets: [
+            {
+              setId:
+                'warmup-1',
+              exerciseId:
+                'dumbbell-bench-press',
+              setIndex:
+                -1,
+              setType:
+                'warmup',
+              weight:
+                40,
+              reps:
+                10,
+              completedAt:
+                '2026-08-20T10:05:00Z'
+            },
+            {
+              setId:
+                'working-1',
+              exerciseId:
+                'dumbbell-bench-press',
+              setIndex:
+                0,
+              setType:
+                'working',
+              weight:
+                80,
+              reps:
+                8,
+              rir:
+                2,
+              completedAt:
+                '2026-08-20T10:10:00Z'
+            }
+          ]
+        }
+      ]);
+
+    http
+      .expectOne(
+        `${environment.apiUrl}/routines`
+      )
+      .flush([
+        {
+          routineId:
+            'routine-1',
+          name:
+            'Rutina test',
+          sessions: [
+            {
+              sessionId:
+                'session-1',
+              name:
+                'Sesión A',
+              exercises: [
+                {
+                  exerciseId:
+                    'dumbbell-bench-press',
+                  restSeconds:
+                    120
+                }
+              ]
+            }
+          ]
+        }
+      ]);
+
+    await exportPromise;
+
+    expect(writeFileSpy)
+      .toHaveBeenCalledTimes(1);
+
+    const workbook =
+      writeFileSpy.mock.calls[0][0] as any;
+
+    const rows =
+      XLSX.utils.sheet_to_json<any>(
+        workbook.Sheets['Registros'],
+        {
+          defval: ''
+        }
+      );
+
+    expect(rows)
+      .toHaveLength(1);
+
+    expect(rows[0]).toMatchObject({
+      'Serie':
+        1,
+      'Peso (kg)':
+        80,
+      'Repeticiones':
+        8,
+      'RIR':
+        2,
+      'Descanso planificado (s)':
+        120,
+      'Descanso global sesión (s)':
+        150,
+      'Descanso efectivo (s)':
+        150
+    });
+
+    expect(
+      rows.some(
+        row =>
+          row['Serie'] === 0
+      )
+    ).toBe(false);
+
+  });
+
+
   it('renders training analytics metrics', async () => {
     const fixture =
       await createLoadedComponent();

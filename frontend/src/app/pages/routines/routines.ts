@@ -54,6 +54,7 @@ interface WorkoutSet {
   setId: string;
   exerciseId: string;
   setIndex: number;
+  setType?: 'working' | 'warmup';
   weight?: number | null;
   reps?: number | null;
   rir?: number | null;
@@ -68,6 +69,7 @@ interface Workout {
   status: 'in_progress' | 'finished';
   startedAt?: string;
   finishedAt?: string;
+  restOverrideSeconds?: number | null;
   sets: WorkoutSet[];
 }
 
@@ -78,6 +80,10 @@ interface StoredRoutine {
     sessionId: string;
     name?: string;
     label?: string;
+    exercises?: {
+      exerciseId: string;
+      restSeconds?: number | null;
+    }[];
   }[];
 }
 
@@ -2884,6 +2890,17 @@ export class Routines implements OnInit {
     }
   }
 
+  private writeTrainingRecordsWorkbook(
+    workbook: XLSX.WorkBook,
+    filename: string
+  ): void {
+    XLSX.writeFile(
+      workbook,
+      filename
+    );
+  }
+
+
   async exportTrainingRecords(): Promise<void> {
     this.exportingRecords.set(true);
     this.exportRecordsError.set(null);
@@ -2989,7 +3006,10 @@ export class Routines implements OnInit {
           const set
           of workout.sets ?? []
         ) {
-          if (!set.completedAt) {
+          if (
+            !set.completedAt ||
+            set.setType === 'warmup'
+          ) {
             continue;
           }
 
@@ -3009,6 +3029,42 @@ export class Routines implements OnInit {
             exerciseById.get(
               set.exerciseId
             );
+
+          const sessionExercise =
+            session?.exercises?.find(
+              (item: any) =>
+                item.exerciseId ===
+                set.exerciseId
+            );
+
+          const plannedRestSeconds =
+            Number(
+              sessionExercise?.restSeconds
+            );
+
+          const overrideRestSeconds =
+            workout.restOverrideSeconds;
+
+          const hasPlannedRest =
+            Number.isFinite(
+              plannedRestSeconds
+            ) &&
+            plannedRestSeconds >= 0;
+
+          const hasOverrideRest =
+            typeof overrideRestSeconds ===
+              'number' &&
+            Number.isFinite(
+              overrideRestSeconds
+            ) &&
+            overrideRestSeconds >= 0;
+
+          const effectiveRestSeconds =
+            hasOverrideRest
+              ? overrideRestSeconds
+              : hasPlannedRest
+                ? plannedRestSeconds
+                : null;
 
           rows.push({
             'Fecha':
@@ -3047,6 +3103,19 @@ export class Routines implements OnInit {
 
             'Duración (s)':
               set.durationSeconds ?? '',
+
+            'Descanso planificado (s)':
+              hasPlannedRest
+                ? plannedRestSeconds
+                : '',
+
+            'Descanso global sesión (s)':
+              hasOverrideRest
+                ? overrideRestSeconds
+                : '',
+
+            'Descanso efectivo (s)':
+              effectiveRestSeconds ?? '',
 
             'Workout ID':
               workout.workoutId,
@@ -3189,7 +3258,7 @@ export class Routines implements OnInit {
         'Registros'
       );
 
-      XLSX.writeFile(
+      this.writeTrainingRecordsWorkbook(
         workbook,
         `Aptus_registros_${label}.xlsx`
       );

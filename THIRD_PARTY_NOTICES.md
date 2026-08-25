@@ -3,7 +3,7 @@
 ## SheetJS Community Edition
 
 Source: https://sheetjs.com/  
-Version: 0.20.3  
+Version: 0.18.5
 Copyright (C) 2012-present SheetJS LLC  
 License: Apache License, Version 2.0
 

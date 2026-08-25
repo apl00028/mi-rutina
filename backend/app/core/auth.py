@@ -27,7 +27,7 @@ class AuthenticatedUser:
 
 
 @dataclass(frozen=True)
-class GymOSAccess:
+class AptusAccess:
     user_id: str
     email: str | None
     status: str
@@ -102,7 +102,7 @@ async def authenticate_user(
     Validate only the Supabase identity.
 
     This dependency intentionally does NOT
-    require the GymOS account to be active.
+    require the Aptus account to be active.
 
     It is suitable for:
     - /me
@@ -179,7 +179,7 @@ async def authenticate_user(
 
 async def get_gymos_access(
     user: AuthenticatedUser,
-) -> GymOSAccess | None:
+) -> AptusAccess | None:
     """
     Read the authenticated user's GymOS
     authorization record.
@@ -240,7 +240,7 @@ async def get_gymos_access(
                 status.HTTP_503_SERVICE_UNAVAILABLE
             ),
             detail=(
-                "GymOS authorization "
+                "Aptus authorization "
                 "service is unavailable"
             ),
         ) from exc
@@ -251,7 +251,7 @@ async def get_gymos_access(
                 status.HTTP_503_SERVICE_UNAVAILABLE
             ),
             detail=(
-                "GymOS authorization "
+                "Aptus authorization "
                 "service is unavailable"
             ),
         )
@@ -263,7 +263,7 @@ async def get_gymos_access(
 
     access = rows[0]
 
-    return GymOSAccess(
+    return AptusAccess(
         user_id=access[
             "user_id"
         ],
@@ -287,7 +287,7 @@ async def get_gymos_access(
 
 
 def _validate_active_access(
-    access: GymOSAccess,
+    access: AptusAccess,
 ) -> None:
     if access.status != "active":
         raise HTTPException(
@@ -295,7 +295,7 @@ def _validate_active_access(
                 status.HTTP_403_FORBIDDEN
             ),
             detail=(
-                "GymOS account is not active"
+                "Aptus account is not active"
             ),
         )
 
@@ -319,7 +319,7 @@ def _validate_active_access(
                 status.HTTP_503_SERVICE_UNAVAILABLE
             ),
             detail=(
-                "Invalid GymOS "
+                "Invalid Aptus "
                 "authorization configuration"
             ),
         ) from exc
@@ -332,7 +332,7 @@ def _validate_active_access(
                 status.HTTP_403_FORBIDDEN
             ),
             detail=(
-                "GymOS access has expired"
+                "Aptus access has expired"
             ),
         )
 
@@ -357,7 +357,7 @@ async def require_user(
                 status.HTTP_403_FORBIDDEN
             ),
             detail=(
-                "GymOS access is not authorized"
+                "Aptus access is not authorized"
             ),
         )
 

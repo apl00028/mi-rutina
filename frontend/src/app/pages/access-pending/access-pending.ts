@@ -11,7 +11,7 @@ import {
 
 import {
   AuthService,
-  GymOSMe
+  AptusMe
 } from '../../core/auth.service';
 
 import {
@@ -37,7 +37,7 @@ export class AccessPending
     this.languageService.language;
 
   me =
-    signal<GymOSMe | null>(null);
+    signal<AptusMe | null>(null);
 
   checking =
     signal(false);

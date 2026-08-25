@@ -75,7 +75,7 @@ def generate_with_local_template(structured_analysis: dict[str, Any]) -> AIResul
     title = str(structured_analysis.get("short_title") or "Análisis de sesión")
     message = str(
         structured_analysis.get("short_message")
-        or "La sesión se ha analizado mediante las reglas internas de GymOS."
+        or "La sesión se ha analizado mediante las reglas internas de Aptus."
     )
     return AIResult(
         message=f"{title}. {message}",
@@ -102,7 +102,7 @@ def generate_with_openai(structured_analysis: dict[str, Any]) -> AIResult:
         raise RuntimeError("OpenAI no está configurado en el servidor.")
     response = OpenAI(api_key=api_key).responses.create(
         model=model,
-        instructions="Eres el redactor de GymOS. Las reglas ya han tomado las decisiones.",
+        instructions="Eres el redactor de Aptus. Las reglas ya han tomado las decisiones.",
         input=minimal_prompt(structured_analysis),
     )
     message = str(response.output_text or "").strip()
@@ -165,7 +165,7 @@ def generate_coach_message(structured_analysis: dict[str, Any]) -> AIResult:
     try:
         return generator(structured_analysis)
     except Exception:
-        logger.exception("AI provider failed; GymOS is using the local rules fallback.")
+        logger.exception("AI provider failed; Aptus is using the local rules fallback.")
         return generate_local_fallback(structured_analysis)
 
 
@@ -186,7 +186,7 @@ def generateWithOllama(structuredAnalysis: dict[str, Any]) -> AIResult:
 
 
 def generateCoachMessage(structuredAnalysis: dict[str, Any]) -> AIResult:
-    """Common provider-neutral interface requested by GymOS."""
+    """Common provider-neutral interface requested by Aptus."""
     return generate_coach_message(structuredAnalysis)
 
 

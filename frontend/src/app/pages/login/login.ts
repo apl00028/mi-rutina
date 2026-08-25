@@ -11,7 +11,7 @@ import {
 
 import {
   AuthService,
-  GymOSMe
+  AptusMe
 } from '../../core/auth.service';
 
 import {
@@ -216,7 +216,7 @@ export class Login {
 
 
   private async navigateAfterLogin(
-    me: GymOSMe
+    me: AptusMe
   ): Promise<void> {
     if (
       me.access_status ===

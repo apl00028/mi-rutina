@@ -553,7 +553,7 @@ async def _persist_onboarding(
             ),
             detail=(
                 "Could not complete "
-                "GymOS onboarding"
+                "Aptus onboarding"
             ),
         )
 

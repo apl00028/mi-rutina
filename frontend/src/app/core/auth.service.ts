@@ -38,7 +38,7 @@ import {
 } from '@capacitor/browser';
 
 
-export interface GymOSMe {
+export interface AptusMe {
   user_id: string;
   email: string | null;
 
@@ -95,7 +95,7 @@ export class AuthService {
     signal<User | null>(null);
 
   me =
-    signal<GymOSMe | null>(null);
+    signal<AptusMe | null>(null);
 
   loading =
     signal(true);
@@ -106,7 +106,7 @@ export class AuthService {
 
 
   private meRequest:
-    Promise<GymOSMe> | null = null;
+    Promise<AptusMe> | null = null;
 
 
   private authReadyPromise!:
@@ -1075,12 +1075,12 @@ export class AuthService {
 
   async getMe(
     forceRefresh = false
-  ): Promise<GymOSMe> {
+  ): Promise<AptusMe> {
     if (
       !forceRefresh &&
       this.me()
     ) {
-      return this.me() as GymOSMe;
+      return this.me() as AptusMe;
     }
 
     if (
@@ -1094,7 +1094,7 @@ export class AuthService {
       this.requestWithAuth(
         async headers =>
           await firstValueFrom(
-            this.http.get<GymOSMe>(
+            this.http.get<AptusMe>(
               `${this.apiUrl}/me`,
               {
                 headers
@@ -1119,12 +1119,12 @@ export class AuthService {
 
 
   async bootstrapMe():
-    Promise<GymOSMe> {
+    Promise<AptusMe> {
     const me =
       await this.requestWithAuth(
         async headers =>
           await firstValueFrom(
-            this.http.post<GymOSMe>(
+            this.http.post<AptusMe>(
               `${this.apiUrl}/me/bootstrap`,
               {},
               {
@@ -1143,7 +1143,7 @@ export class AuthService {
 
 
   async resolveAccess():
-    Promise<GymOSMe> {
+    Promise<AptusMe> {
     const me =
       await this.getMe(
         true

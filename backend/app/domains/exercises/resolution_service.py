@@ -35,7 +35,7 @@ def resolve_exercise(
         if exercise is None:
             return ExerciseResolveResponse(
                 errorCode="unknown_exercise_id",
-                error="El ID de ejercicio no existe en la biblioteca de GymOS.",
+                error="El ID de ejercicio no existe en la biblioteca de Aptus.",
             )
 
         canonical_name = exercise.name

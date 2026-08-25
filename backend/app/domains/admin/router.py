@@ -65,7 +65,7 @@ def _supabase_config() -> tuple[str, str]:
                 status.HTTP_503_SERVICE_UNAVAILABLE
             ),
             detail=(
-                "GymOS authorization "
+                "Aptus authorization "
                 "service is not configured"
             ),
         )
@@ -145,7 +145,7 @@ async def list_access_requests(
                 status.HTTP_503_SERVICE_UNAVAILABLE
             ),
             detail=(
-                "GymOS authorization "
+                "Aptus authorization "
                 "service is unavailable"
             ),
         ) from exc
@@ -225,7 +225,7 @@ async def update_access_request(
                 status.HTTP_503_SERVICE_UNAVAILABLE
             ),
             detail=(
-                "GymOS authorization "
+                "Aptus authorization "
                 "service is unavailable"
             ),
         ) from exc

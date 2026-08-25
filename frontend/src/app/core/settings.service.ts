@@ -17,7 +17,7 @@ export type TextSizePreference =
   | 'normal'
   | 'large';
 
-export interface GymOSSettings {
+export interface AptusSettings {
   units: UnitPreference;
   showRir: boolean;
   automaticRestTimer: boolean;
@@ -28,7 +28,7 @@ export interface GymOSSettings {
 }
 
 export const DEFAULT_SETTINGS:
-  GymOSSettings = {
+  AptusSettings = {
   units: 'kg',
   showRir: true,
   automaticRestTimer: true,
@@ -46,7 +46,7 @@ const STORAGE_KEY =
 })
 export class SettingsService {
   readonly settings =
-    signal<GymOSSettings>(
+    signal<AptusSettings>(
       this.readSettings()
     );
 
@@ -77,7 +77,7 @@ export class SettingsService {
   }
 
   update(
-    patch: Partial<GymOSSettings>
+    patch: Partial<AptusSettings>
   ): void {
     const next = this.normalize({
       ...this.settings(),
@@ -112,7 +112,7 @@ export class SettingsService {
   }
 
   private readSettings():
-    GymOSSettings {
+    AptusSettings {
     try {
       const raw =
         localStorage.getItem(
@@ -133,7 +133,7 @@ export class SettingsService {
   }
 
   private writeSettings(
-    settings: GymOSSettings
+    settings: AptusSettings
   ): void {
     localStorage.setItem(
       STORAGE_KEY,
@@ -142,8 +142,8 @@ export class SettingsService {
   }
 
   private normalize(
-    value: Partial<GymOSSettings>
-  ): GymOSSettings {
+    value: Partial<AptusSettings>
+  ): AptusSettings {
     return {
       units:
         value.units === 'lb'
@@ -181,7 +181,7 @@ export class SettingsService {
   }
 
   private applyGlobalSettings(
-    settings: GymOSSettings
+    settings: AptusSettings
   ): void {
     const root =
       document.documentElement;

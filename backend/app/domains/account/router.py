@@ -316,7 +316,7 @@ async def bootstrap_me(
                 status.HTTP_503_SERVICE_UNAVAILABLE
             ),
             detail=(
-                "GymOS authorization "
+                "Aptus authorization "
                 "service is unavailable"
             ),
         ) from exc
@@ -331,7 +331,7 @@ async def bootstrap_me(
             ),
             detail=(
                 "Could not create "
-                "GymOS access request"
+                "Aptus access request"
             ),
         )
 

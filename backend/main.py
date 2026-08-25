@@ -21,7 +21,7 @@ ALLOWED_ORIGINS = [
     if origin.strip()
 ]
 
-app = FastAPI(title="GymOS Coach API", version="4.0.0")
+app = FastAPI(title="Aptus API", version="4.0.0")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=ALLOWED_ORIGINS,

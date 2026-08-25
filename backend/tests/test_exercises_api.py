@@ -1335,7 +1335,7 @@ def test_resolve_unknown_exercise_id():
     assert response.status_code == 200
     assert response.json() == {
         "errorCode": "unknown_exercise_id",
-        "error": "El ID de ejercicio no existe en la biblioteca de GymOS.",
+        "error": "El ID de ejercicio no existe en la biblioteca de Aptus.",
     }
 
 

@@ -23,7 +23,7 @@ import {
 
 import {
   AuthService,
-  GymOSMe
+  AptusMe
 } from './core/auth.service';
 import {
   SettingsService
@@ -66,8 +66,8 @@ export class App implements OnDestroy {
   isStandalonePage =
     signal(false);
 
-  gymosMe =
-    signal<GymOSMe | null>(null);
+  aptusMe =
+    signal<AptusMe | null>(null);
 
   initializationState =
     signal<AppInitializationState>(
@@ -169,7 +169,7 @@ export class App implements OnDestroy {
     );
 
     if (!session) {
-      this.gymosMe.set(null);
+      this.aptusMe.set(null);
       return;
     }
 
@@ -180,7 +180,7 @@ export class App implements OnDestroy {
       const me =
         await this.auth.getMe();
 
-      this.gymosMe.set(me);
+      this.aptusMe.set(me);
 
       this.logStartup(
         '/api/v1/me',
@@ -188,7 +188,7 @@ export class App implements OnDestroy {
       );
 
     } catch {
-      this.gymosMe.set(null);
+      this.aptusMe.set(null);
 
       this.logStartup(
         '/api/v1/me FAILED',
@@ -335,7 +335,7 @@ export class App implements OnDestroy {
 
   isAdmin(): boolean {
     const me =
-      this.gymosMe();
+      this.aptusMe();
 
     return (
       me?.access_status === 'active' &&
@@ -450,7 +450,7 @@ export class App implements OnDestroy {
   async signOut(): Promise<void> {
     await this.auth.signOut();
 
-    this.gymosMe.set(null);
+    this.aptusMe.set(null);
     this.protectedShellInitializationStarted =
       false;
     this.userMenuOpen.set(false);

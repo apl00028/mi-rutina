@@ -355,6 +355,137 @@
                 }
               </section>
 
+              <details class="discomfort-section">
+                <summary class="discomfort-summary">
+                  <span>
+                    Molestias
+                  </span>
+
+                  <strong>
+                    @if (
+                      exerciseDiscomfort(
+                        exercise.exerciseId
+                      );
+                      as discomfort
+                    ) {
+                      @if (discomfort.painScore > 0) {
+                        {{ discomfort.painScore }}/10
+                      } @else {
+                        Ninguna
+                      }
+                    } @else {
+                      Ninguna
+                    }
+                  </strong>
+                </summary>
+
+                <div class="discomfort-body">
+                  @if (
+                    exerciseDiscomfort(
+                      exercise.exerciseId
+                    );
+                    as discomfort
+                  ) {
+                    <label class="discomfort-field">
+                      <span>
+                        Intensidad
+                      </span>
+
+                      <select
+                        [value]="discomfort.painScore"
+                        (change)="
+                          updateExerciseDiscomfort(
+                            exercise.exerciseId,
+                            'painScore',
+                            $any($event.target).value
+                          )
+                        "
+                      >
+                        @for (
+                          score of [
+                            0, 1, 2, 3, 4, 5,
+                            6, 7, 8, 9, 10
+                          ];
+                          track score
+                        ) {
+                          <option [value]="score">
+                            {{
+                              score === 0
+                                ? '0 — Ninguna'
+                                : score
+                            }}
+                          </option>
+                        }
+                      </select>
+                    </label>
+
+                    <label class="discomfort-field">
+                      <span>
+                        Zona
+                      </span>
+
+                      <input
+                        type="text"
+                        placeholder="Ej. hombro derecho"
+                        [value]="discomfort.area ?? ''"
+                        (input)="
+                          updateExerciseDiscomfort(
+                            exercise.exerciseId,
+                            'area',
+                            $any($event.target).value
+                          )
+                        "
+                      />
+                    </label>
+
+                    <label class="discomfort-field">
+                      <span>
+                        Nota
+                      </span>
+
+                      <textarea
+                        rows="2"
+                        placeholder="Opcional"
+                        [value]="discomfort.note ?? ''"
+                        (input)="
+                          updateExerciseDiscomfort(
+                            exercise.exerciseId,
+                            'note',
+                            $any($event.target).value
+                          )
+                        "
+                      ></textarea>
+                    </label>
+
+                    <button
+                      type="button"
+                      class="discomfort-clear-button"
+                      (click)="
+                        clearExerciseDiscomfort(
+                          exercise.exerciseId
+                        )
+                      "
+                    >
+                      Limpiar molestias
+                    </button>
+                  } @else {
+                    <button
+                      type="button"
+                      class="discomfort-add-button"
+                      (click)="
+                        updateExerciseDiscomfort(
+                          exercise.exerciseId,
+                          'painScore',
+                          '0'
+                        )
+                      "
+                    >
+                      Registrar molestias
+                    </button>
+                  }
+                </div>
+              </details>
+
               <div class="sets-list">
                 @for (
                   setNumber of [].constructor(exercise.sets);

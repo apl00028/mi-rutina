@@ -62,6 +62,14 @@ interface WorkoutSetInput {
   completedAt?: string | null;
 }
 
+interface ExerciseDiscomfortInput {
+  exerciseId: string;
+  painScore: number;
+  area?: string | null;
+  note?: string | null;
+}
+
+
 interface Workout {
   workoutId: string;
   routineId: string;
@@ -70,6 +78,7 @@ interface Workout {
   startedAt?: string;
   finishedAt?: string;
   sets: WorkoutSetInput[];
+  discomforts?: ExerciseDiscomfortInput[];
 }
 
 interface RestTimerState {
@@ -3046,6 +3055,147 @@ export class Train implements OnInit, OnDestroy {
       this.workoutLoading.set(false);
     }
   }
+
+  exerciseDiscomfort(
+    exerciseId: string
+  ): ExerciseDiscomfortInput | null {
+    const workout = this.activeWorkout();
+
+    if (!workout) {
+      return null;
+    }
+
+    return (
+      workout.discomforts ?? []
+    ).find(
+      discomfort =>
+        discomfort.exerciseId === exerciseId
+    ) ?? null;
+  }
+
+
+  updateExerciseDiscomfort(
+    exerciseId: string,
+    field:
+      | 'painScore'
+      | 'area'
+      | 'note',
+    value: string
+  ): void {
+    const workout = this.activeWorkout();
+
+    if (
+      !workout ||
+      this.cancellingWorkout()
+    ) {
+      return;
+    }
+
+    const current =
+      this.exerciseDiscomfort(
+        exerciseId
+      );
+
+    const discomforts =
+      [
+        ...(workout.discomforts ?? [])
+      ];
+
+    let next:
+      ExerciseDiscomfortInput;
+
+    if (field === 'painScore') {
+      const score = Number(value);
+
+      if (
+        !Number.isInteger(score) ||
+        score < 0 ||
+        score > 10
+      ) {
+        return;
+      }
+
+      next = {
+        exerciseId,
+        painScore: score,
+        area:
+          current?.area ?? null,
+        note:
+          current?.note ?? null
+      };
+    } else {
+      next = {
+        exerciseId,
+        painScore:
+          current?.painScore ?? 0,
+        area:
+          field === 'area'
+            ? (
+                value.trim() || null
+              )
+            : (
+                current?.area ?? null
+              ),
+        note:
+          field === 'note'
+            ? (
+                value.trim() || null
+              )
+            : (
+                current?.note ?? null
+              )
+      };
+    }
+
+    const index =
+      discomforts.findIndex(
+        discomfort =>
+          discomfort.exerciseId === exerciseId
+      );
+
+    if (index >= 0) {
+      discomforts[index] = next;
+    } else {
+      discomforts.push(next);
+    }
+
+    this.activeWorkout.set({
+      ...workout,
+      discomforts
+    });
+
+    this.markWorkoutEdited();
+  }
+
+
+  clearExerciseDiscomfort(
+    exerciseId: string
+  ): void {
+    const workout = this.activeWorkout();
+
+    if (
+      !workout ||
+      this.cancellingWorkout()
+    ) {
+      return;
+    }
+
+    const discomforts =
+      (
+        workout.discomforts ?? []
+      ).filter(
+        discomfort =>
+          discomfort.exerciseId !== exerciseId
+      );
+
+    this.activeWorkout.set({
+      ...workout,
+      discomforts
+    });
+
+    this.markWorkoutEdited();
+  }
+
 
   warmupSets(
     exerciseId: string

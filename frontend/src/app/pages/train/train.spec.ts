@@ -395,6 +395,131 @@ describe('Train first workout flow', () => {
 
 
 
+
+  it('stores exercise discomfort independently from workout sets', async () => {
+    const fixture =
+      await createLoadedTrain([
+        activeWorkout()
+      ]);
+
+    const component =
+      fixture.componentInstance;
+
+    vi.spyOn(
+      component as any,
+      'scheduleAutosave'
+    ).mockImplementation(() => {});
+
+    component.updateExerciseDiscomfort(
+      'dumbbell-bench-press',
+      'painScore',
+      '3'
+    );
+
+    component.updateExerciseDiscomfort(
+      'dumbbell-bench-press',
+      'area',
+      'Hombro derecho'
+    );
+
+    component.updateExerciseDiscomfort(
+      'dumbbell-bench-press',
+      'note',
+      'Molestia al bajar'
+    );
+
+    expect(
+      component.exerciseDiscomfort(
+        'dumbbell-bench-press'
+      )
+    ).toEqual({
+      exerciseId:
+        'dumbbell-bench-press',
+      painScore:
+        3,
+      area:
+        'Hombro derecho',
+      note:
+        'Molestia al bajar'
+    });
+
+    expect(
+      component.activeWorkout()
+        ?.sets
+    ).toEqual([]);
+
+    (component as any)
+      .cancelAutosaveTimer();
+
+    (component as any)
+      .persistedEditVersion =
+        (component as any)
+          .workoutEditVersion;
+  });
+
+
+  it('clears exercise discomfort without touching sets', async () => {
+    const fixture =
+      await createLoadedTrain([
+        {
+          ...activeWorkout(),
+          discomforts: [
+            {
+              exerciseId:
+                'dumbbell-bench-press',
+              painScore:
+                4,
+              area:
+                'Codo',
+              note:
+                null
+            }
+          ]
+        }
+      ]);
+
+    const component =
+      fixture.componentInstance;
+
+    vi.spyOn(
+      component as any,
+      'scheduleAutosave'
+    ).mockImplementation(() => {});
+
+    component.updateSet(
+      'dumbbell-bench-press',
+      0,
+      'weight',
+      '80'
+    );
+
+    component.clearExerciseDiscomfort(
+      'dumbbell-bench-press'
+    );
+
+    expect(
+      component.exerciseDiscomfort(
+        'dumbbell-bench-press'
+      )
+    ).toBeNull();
+
+    expect(
+      component.getCurrentSet(
+        'dumbbell-bench-press',
+        0
+      )?.weight
+    ).toBe(80);
+
+    (component as any)
+      .cancelAutosaveTimer();
+
+    (component as any)
+      .persistedEditVersion =
+        (component as any)
+          .workoutEditVersion;
+  });
+
+
   it('adds warmup sets with negative indices without colliding with working sets', async () => {
     const fixture =
       await createLoadedTrain([

@@ -141,6 +141,9 @@ describe('Settings pages', () => {
               vi.fn(),
 
             deletePasskey:
+              vi.fn(),
+
+            deleteAccount:
               vi.fn()
           }
         }

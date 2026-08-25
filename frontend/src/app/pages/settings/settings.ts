@@ -5,6 +5,7 @@ import {
 } from '@angular/core';
 
 import {
+  Router,
   RouterLink
 } from '@angular/router';
 
@@ -436,6 +437,79 @@ export class SettingsHub {
             aún no convierte todos los registros a lb.
           </small>
         </div>
+
+        <div class="settings-field">
+          <span>Eliminar cuenta</span>
+
+          <small>
+            Elimina permanentemente tu cuenta de Aptus y
+            todos los datos asociados. Esta acción no se
+            puede deshacer.
+          </small>
+
+          @if (!deleteAccountConfirmationOpen()) {
+            <button
+              type="button"
+              class="settings-danger-action"
+              (click)="openDeleteAccountConfirmation()"
+            >
+              Eliminar cuenta
+            </button>
+          } @else {
+            <div class="settings-password-form">
+              <label>
+                Escribe ELIMINAR para confirmar
+              </label>
+
+              <input
+                type="text"
+                autocomplete="off"
+                [value]="deleteAccountConfirmation()"
+                [disabled]="deletingAccount()"
+                (input)="
+                  deleteAccountConfirmation.set(
+                    $any($event.target).value
+                  )
+                "
+              />
+
+              <button
+                type="button"
+                class="settings-danger-action"
+                [disabled]="
+                  deleteAccountConfirmation() !==
+                    'ELIMINAR' ||
+                  deletingAccount()
+                "
+                (click)="deleteAccount()"
+              >
+                @if (deletingAccount()) {
+                  Eliminando…
+                } @else {
+                  Eliminar mi cuenta definitivamente
+                }
+              </button>
+
+              <button
+                type="button"
+                class="settings-action"
+                [disabled]="deletingAccount()"
+                (click)="cancelDeleteAccountConfirmation()"
+              >
+                Cancelar
+              </button>
+            </div>
+          }
+
+          @if (deleteAccountError()) {
+            <p
+              class="settings-status settings-status-error"
+              role="alert"
+            >
+              {{ deleteAccountError() }}
+            </p>
+          }
+        </div>
       </section>
 
       <p class="settings-note">
@@ -494,10 +568,25 @@ export class SettingsAccount
     signal<string | null>(null);
 
 
+  readonly deleteAccountConfirmationOpen =
+    signal(false);
+
+  readonly deleteAccountConfirmation =
+    signal('');
+
+  readonly deletingAccount =
+    signal(false);
+
+  readonly deleteAccountError =
+    signal<string | null>(null);
+
+
   constructor(
     public auth: AuthService,
     private settingsService:
-      SettingsService
+      SettingsService,
+    private router:
+      Router
   ) {}
 
 
@@ -602,6 +691,67 @@ export class SettingsAccount
       );
     } finally {
       this.savingPassword.set(false);
+    }
+  }
+
+
+  openDeleteAccountConfirmation():
+    void {
+    this.deleteAccountConfirmation.set('');
+    this.deleteAccountError.set(null);
+
+    this.deleteAccountConfirmationOpen.set(
+      true
+    );
+  }
+
+
+  cancelDeleteAccountConfirmation():
+    void {
+    if (this.deletingAccount()) {
+      return;
+    }
+
+    this.deleteAccountConfirmation.set('');
+    this.deleteAccountError.set(null);
+
+    this.deleteAccountConfirmationOpen.set(
+      false
+    );
+  }
+
+
+  async deleteAccount():
+    Promise<void> {
+    if (
+      this.deletingAccount() ||
+      this.deleteAccountConfirmation() !==
+        'ELIMINAR'
+    ) {
+      return;
+    }
+
+    this.deletingAccount.set(true);
+    this.deleteAccountError.set(null);
+
+    try {
+      await this.auth.deleteAccount();
+
+      await this.router.navigateByUrl(
+        '/login'
+      );
+    } catch (error: unknown) {
+      const candidate =
+        error as {
+          message?: string;
+        };
+
+      this.deleteAccountError.set(
+        candidate.message?.trim() ||
+        'No se pudo eliminar la cuenta.'
+      );
+    } finally {
+      this.deletingAccount.set(false);
     }
   }
 

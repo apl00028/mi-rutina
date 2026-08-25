@@ -425,6 +425,95 @@ describe(
 
 
     it(
+      'deletes the current account and clears local auth state',
+      async () => {
+        service.session.set(
+          supabaseMock.session as any
+        );
+
+        service.user.set(
+          supabaseMock.session.user as any
+        );
+
+        service.me.set({
+          user_id:
+            'user-123',
+          email:
+            'test@example.com',
+          access_status:
+            'active',
+          plan:
+            'trial',
+          role:
+            'user',
+          expires_at:
+            null,
+          onboarding_completed:
+            true
+        });
+
+        supabaseMock.auth.signOut
+          .mockResolvedValue({
+            error:
+              null
+          });
+
+        const deletion =
+          service.deleteAccount();
+
+        const request =
+          await expectMeRequest();
+
+        expect(
+          request.request.method
+        ).toBe(
+          'DELETE'
+        );
+
+        expect(
+          request.request.headers.get(
+            'Authorization'
+          )
+        ).toBe(
+          'Bearer access-token'
+        );
+
+        request.flush(
+          null,
+          {
+            status:
+              204,
+            statusText:
+              'No Content'
+          }
+        );
+
+        await deletion;
+
+        expect(
+          supabaseMock.auth.signOut
+        ).toHaveBeenCalledWith({
+          scope:
+            'local'
+        });
+
+        expect(
+          service.session()
+        ).toBeNull();
+
+        expect(
+          service.user()
+        ).toBeNull();
+
+        expect(
+          service.me()
+        ).toBeNull();
+      }
+    );
+
+
+
+    it(
       'lists and deletes passkeys for the current user',
       async () => {
         supabaseMock.auth.passkey.list

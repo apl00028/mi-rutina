@@ -1142,6 +1142,36 @@ export class AuthService {
   }
 
 
+  async deleteAccount():
+    Promise<void> {
+    await this.requestWithAuth(
+      async headers =>
+        await firstValueFrom(
+          this.http.delete<void>(
+            `${this.apiUrl}/me`,
+            {
+              headers
+            }
+          )
+        )
+    );
+
+    try {
+      await this.client.auth.signOut({
+        scope: 'local'
+      });
+    } catch {
+      // La cuenta ya ha sido eliminada en Supabase Auth.
+    }
+
+    this.session.set(null);
+    this.user.set(null);
+    this.me.set(null);
+    this.meRequest = null;
+  }
+
+
+
   async resolveAccess():
     Promise<AptusMe> {
     const me =

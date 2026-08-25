@@ -1310,6 +1310,13 @@ export class Nutrition implements OnInit {
             plan.planId
           )
         );
+
+      globalThis.localStorage
+        .removeItem(
+          this.legacyShoppingStorageKey(
+            plan.planId
+          )
+        );
     }
   }
 
@@ -1340,6 +1347,17 @@ export class Nutrition implements OnInit {
   ): string {
 
     return (
+      'aptus:nutrition:shopping:'
+      + planId
+    );
+  }
+
+
+  private legacyShoppingStorageKey(
+    planId: string
+  ): string {
+
+    return (
       'gymos:nutrition:shopping:'
       + planId
     );
@@ -1363,6 +1381,12 @@ export class Nutrition implements OnInit {
         [...items]
       )
     );
+
+    globalThis.localStorage.removeItem(
+      this.legacyShoppingStorageKey(
+        planId
+      )
+    );
   }
 
 
@@ -1382,13 +1406,24 @@ export class Nutrition implements OnInit {
 
     try {
 
-      const raw =
+      const current =
         globalThis.localStorage
           .getItem(
             this.shoppingStorageKey(
               planId
             )
           );
+
+      const legacy =
+        globalThis.localStorage
+          .getItem(
+            this.legacyShoppingStorageKey(
+              planId
+            )
+          );
+
+      const raw =
+        current ?? legacy;
 
       const stored =
         raw
@@ -1417,6 +1452,21 @@ export class Nutrition implements OnInit {
       this.purchasedItems.set(
         new Set(purchased)
       );
+
+      if (!current && legacy) {
+        globalThis.localStorage.setItem(
+          this.shoppingStorageKey(
+            planId
+          ),
+          JSON.stringify(purchased)
+        );
+
+        globalThis.localStorage.removeItem(
+          this.legacyShoppingStorageKey(
+            planId
+          )
+        );
+      }
 
     } catch {
 

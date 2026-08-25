@@ -442,7 +442,7 @@ export class AuthService {
           : 'No se pudo completar la autenticación.';
 
       sessionStorage.setItem(
-        'gymos-native-auth-error',
+        'aptus-native-auth-error',
         message
       );
 
@@ -459,11 +459,11 @@ export class AuthService {
     string | null {
     const value =
       sessionStorage.getItem(
-        'gymos-native-auth-error'
+        'aptus-native-auth-error'
       );
 
     sessionStorage.removeItem(
-      'gymos-native-auth-error'
+      'aptus-native-auth-error'
     );
 
     return value;

@@ -594,6 +594,83 @@ describe('Nutrition import', () => {
 
 
   it(
+    'migrates legacy GymOS shopping state to Aptus storage',
+    () => {
+      globalThis.localStorage.clear();
+
+      const fixture =
+        TestBed.createComponent(
+          Nutrition
+        );
+
+      const component =
+        fixture.componentInstance;
+
+      const result =
+        parse(
+          component,
+          workbook()
+        );
+
+      component.plans.set([
+        result.plan
+      ]);
+
+      const items: any[] = [
+        {
+          name: 'Arroz',
+          unit: 'g',
+          quantity: 500,
+          productBrand: 'Hacendado',
+          sources: []
+        }
+      ];
+
+      const itemKey =
+        (component as any)
+          .shoppingItemKey(
+            items[0]
+          );
+
+      globalThis.localStorage.setItem(
+        'gymos:nutrition:shopping:'
+          + result.plan.planId,
+        JSON.stringify([
+          itemKey
+        ])
+      );
+
+      (component as any)
+        .loadPurchasedItems(
+          result.plan.planId,
+          items
+        );
+
+      expect(
+        component.isShoppingItemPurchased(
+          items[0]
+        )
+      ).toBe(true);
+
+      expect(
+        globalThis.localStorage.getItem(
+          'aptus:nutrition:shopping:'
+            + result.plan.planId
+        )
+      ).not.toBeNull();
+
+      expect(
+        globalThis.localStorage.getItem(
+          'gymos:nutrition:shopping:'
+            + result.plan.planId
+        )
+      ).toBeNull();
+    }
+  );
+
+
+
+  it(
     'tracks shopping progress and purchased items',
     () => {
 

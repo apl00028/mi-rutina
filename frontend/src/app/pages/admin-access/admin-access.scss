@@ -23,7 +23,7 @@
 
   margin-bottom: 7px;
 
-  color: var(--gymos-text-muted);
+  color: var(--aptus-text-muted);
 
   font-size: 11px;
   font-weight: 700;
@@ -34,7 +34,7 @@
 .page-header h1 {
   margin: 0;
 
-  color: var(--gymos-text);
+  color: var(--aptus-text);
 
   font-size: 28px;
   font-weight: 760;
@@ -45,7 +45,7 @@
 .page-header p {
   margin: 9px 0 0;
 
-  color: var(--gymos-text-muted);
+  color: var(--aptus-text-muted);
 
   font-size: 13px;
   line-height: 1.6;
@@ -55,11 +55,11 @@
   min-height: 38px;
   padding: 0 14px;
 
-  border: 1px solid var(--gymos-border);
+  border: 1px solid var(--aptus-border);
   border-radius: 9px;
 
-  background: var(--gymos-surface);
-  color: var(--gymos-text-muted);
+  background: var(--aptus-surface);
+  color: var(--aptus-text-muted);
 
   font: inherit;
   font-size: 11px;
@@ -69,7 +69,7 @@
 }
 
 .refresh-button:hover:not(:disabled) {
-  background: var(--gymos-surface-muted);
+  background: var(--aptus-surface-muted);
 }
 
 .refresh-button:disabled {
@@ -94,14 +94,14 @@
 
   padding: 18px;
 
-  border: 1px solid var(--gymos-border);
+  border: 1px solid var(--aptus-border);
   border-radius: 14px;
 
-  background: var(--gymos-surface);
+  background: var(--aptus-surface);
 
   box-shadow:
     0 2px 5px
-      var(--gymos-shadow-soft);
+      var(--aptus-shadow-soft);
 }
 
 .request-main {
@@ -123,8 +123,8 @@
 
   border-radius: 11px;
 
-  background: var(--gymos-accent);
-  color: var(--gymos-accent-contrast);
+  background: var(--aptus-accent);
+  color: var(--aptus-accent-contrast);
 
   font-size: 14px;
   font-weight: 800;
@@ -140,7 +140,7 @@
 .request-details strong {
   overflow: hidden;
 
-  color: var(--gymos-text);
+  color: var(--aptus-text);
 
   font-size: 12px;
   font-weight: 700;
@@ -150,7 +150,7 @@
 }
 
 .request-details span {
-  color: var(--gymos-text-subtle);
+  color: var(--aptus-text-subtle);
 
   font-size: 10px;
   font-weight: 500;
@@ -163,11 +163,11 @@
 
   padding: 6px 9px;
 
-  border: 1px solid var(--gymos-warning-border);
+  border: 1px solid var(--aptus-warning-border);
   border-radius: 999px;
 
-  background: var(--gymos-warning-bg);
-  color: var(--gymos-warning);
+  background: var(--aptus-warning-bg);
+  color: var(--aptus-warning);
 
   font-size: 9px;
   font-weight: 700;
@@ -179,7 +179,7 @@
 
   border-radius: 50%;
 
-  background: var(--gymos-warning);
+  background: var(--aptus-warning);
 }
 
 .request-actions {
@@ -203,28 +203,28 @@
 }
 
 .reject-button {
-  border: 1px solid var(--gymos-border);
+  border: 1px solid var(--aptus-border);
 
-  background: var(--gymos-surface);
-  color: var(--gymos-text-muted);
+  background: var(--aptus-surface);
+  color: var(--aptus-text-muted);
 }
 
 .reject-button:hover:not(:disabled) {
-  border-color: var(--gymos-danger-border);
+  border-color: var(--aptus-danger-border);
 
-  background: var(--gymos-danger-bg);
-  color: var(--gymos-danger);
+  background: var(--aptus-danger-bg);
+  color: var(--aptus-danger);
 }
 
 .approve-button {
-  border: 1px solid var(--gymos-accent);
+  border: 1px solid var(--aptus-accent);
 
-  background: var(--gymos-accent);
-  color: var(--gymos-accent-contrast);
+  background: var(--aptus-accent);
+  color: var(--aptus-accent-contrast);
 }
 
 .approve-button:hover:not(:disabled) {
-  background: var(--gymos-accent-hover);
+  background: var(--aptus-accent-hover);
 }
 
 .request-actions button:disabled {
@@ -236,12 +236,12 @@
 .state-card {
   padding: 54px 24px;
 
-  border: 1px solid var(--gymos-border);
+  border: 1px solid var(--aptus-border);
   border-radius: 14px;
 
-  background: var(--gymos-surface);
+  background: var(--aptus-surface);
 
-  color: var(--gymos-text-muted);
+  color: var(--aptus-text-muted);
 
   text-align: center;
 }
@@ -257,8 +257,8 @@
 
   border-radius: 50%;
 
-  background: var(--gymos-bg);
-  color: var(--gymos-text-muted);
+  background: var(--aptus-bg);
+  color: var(--aptus-text-muted);
 
   font-size: 16px;
   font-weight: 800;
@@ -267,7 +267,7 @@
 .empty-state h2 {
   margin: 0;
 
-  color: var(--gymos-text);
+  color: var(--aptus-text);
 
   font-size: 16px;
   font-weight: 700;
@@ -276,7 +276,7 @@
 .empty-state p {
   margin: 7px 0 0;
 
-  color: var(--gymos-text-subtle);
+  color: var(--aptus-text-subtle);
 
   font-size: 11px;
 }
@@ -285,11 +285,11 @@
   margin-bottom: 18px;
   padding: 12px 14px;
 
-  border: 1px solid var(--gymos-border);
+  border: 1px solid var(--aptus-border);
   border-radius: 9px;
 
-  background: var(--gymos-surface-muted);
-  color: var(--gymos-text-muted);
+  background: var(--aptus-surface-muted);
+  color: var(--aptus-text-muted);
 
   font-size: 11px;
   font-weight: 600;
@@ -299,11 +299,11 @@
   margin-bottom: 18px;
   padding: 12px 14px;
 
-  border: 1px solid var(--gymos-danger-border);
+  border: 1px solid var(--aptus-danger-border);
   border-radius: 9px;
 
-  background: var(--gymos-danger-bg);
-  color: var(--gymos-danger);
+  background: var(--aptus-danger-bg);
+  color: var(--aptus-danger);
 
   font-size: 11px;
   font-weight: 600;

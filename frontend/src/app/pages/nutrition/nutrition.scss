@@ -1372,7 +1372,7 @@ input:checked
 }
 
 .nutrition-day-selector > span {
-  color: var(--gymos-text-muted);
+  color: var(--aptus-text-muted);
   font-size: 0.8rem;
   font-weight: 700;
 }
@@ -1382,11 +1382,11 @@ input:checked
 
   padding: 10px 38px 10px 13px;
 
-  border: 1px solid var(--gymos-border);
+  border: 1px solid var(--aptus-border);
   border-radius: 10px;
 
-  background: var(--gymos-surface);
-  color: var(--gymos-text);
+  background: var(--aptus-surface);
+  color: var(--aptus-text);
 
   font: inherit;
   font-weight: 700;
@@ -1399,11 +1399,11 @@ input:checked
   display: grid;
   place-items: center;
 
-  border: 1px solid var(--gymos-border);
+  border: 1px solid var(--aptus-border);
   border-radius: 10px;
 
-  background: var(--gymos-surface);
-  color: var(--gymos-text);
+  background: var(--aptus-surface);
+  color: var(--aptus-text);
 
   font-size: 1.5rem;
   cursor: pointer;
@@ -1422,14 +1422,14 @@ input:checked
 
   padding: 12px 14px;
 
-  border: 1px solid var(--gymos-border);
+  border: 1px solid var(--aptus-border);
   border-radius: 12px;
 
-  background: var(--gymos-surface-muted);
+  background: var(--aptus-surface-muted);
 }
 
 .nutrition-adherence-summary span {
-  color: var(--gymos-text-muted);
+  color: var(--aptus-text-muted);
   font-size: 0.85rem;
 }
 
@@ -1450,11 +1450,11 @@ input:checked
 .day-followed-button {
   padding: 8px 12px;
 
-  border: 1px solid var(--gymos-border);
+  border: 1px solid var(--aptus-border);
   border-radius: 999px;
 
-  background: var(--gymos-surface);
-  color: var(--gymos-text-muted);
+  background: var(--aptus-surface);
+  color: var(--aptus-text-muted);
 
   font: inherit;
   font-size: 0.82rem;

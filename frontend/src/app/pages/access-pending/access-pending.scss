@@ -11,7 +11,7 @@
     "Segoe UI",
     sans-serif;
 
-  color: var(--gymos-text);
+  color: var(--aptus-text);
 }
 
 
@@ -31,9 +31,9 @@
   background:
     radial-gradient(
       circle at 50% -10%,
-      var(--gymos-surface) 0%,
-      var(--gymos-surface-muted) 40%,
-      var(--gymos-bg) 100%
+      var(--aptus-surface) 0%,
+      var(--aptus-surface-muted) 40%,
+      var(--aptus-bg) 100%
     );
 }
 
@@ -54,14 +54,14 @@
   box-sizing: border-box;
   padding: 32px;
 
-  border: 1px solid var(--gymos-border);
+  border: 1px solid var(--aptus-border);
   border-radius: 18px;
 
-  background: var(--gymos-surface);
+  background: var(--aptus-surface);
 
   box-shadow:
-    0 24px 60px var(--gymos-shadow),
-    0 2px 8px var(--gymos-shadow-soft);
+    0 24px 60px var(--aptus-shadow),
+    0 2px 8px var(--aptus-shadow-soft);
 }
 
 
@@ -80,10 +80,10 @@
 
   padding: 3px;
 
-  border: 1px solid var(--gymos-border);
+  border: 1px solid var(--aptus-border);
   border-radius: 9px;
 
-  background: var(--gymos-surface-muted);
+  background: var(--aptus-surface-muted);
 }
 
 .language-switch button {
@@ -99,7 +99,7 @@
   -webkit-appearance: none;
 
   background: transparent;
-  color: var(--gymos-text-muted);
+  color: var(--aptus-text-muted);
 
   font: inherit;
   font-size: 10px;
@@ -116,16 +116,16 @@
 }
 
 .language-switch button:hover {
-  color: var(--gymos-text);
+  color: var(--aptus-text);
 }
 
 .language-switch button.active {
-  background: var(--gymos-surface);
-  color: var(--gymos-text);
+  background: var(--aptus-surface);
+  color: var(--aptus-text);
 
   box-shadow:
-    0 1px 3px var(--gymos-shadow),
-    0 0 0 1px var(--gymos-shadow-soft);
+    0 1px 3px var(--aptus-shadow),
+    0 0 0 1px var(--aptus-shadow-soft);
 }
 
 .language-switch button:focus-visible {
@@ -158,8 +158,8 @@
 
   border-radius: 12px;
 
-  background: var(--gymos-accent);
-  color: var(--gymos-accent-contrast);
+  background: var(--aptus-accent);
+  color: var(--aptus-accent-contrast);
 
   font-size: 16px;
   font-weight: 800;
@@ -172,7 +172,7 @@
 }
 
 .brand strong {
-  color: var(--gymos-text);
+  color: var(--aptus-text);
 
   font-size: 19px;
   font-weight: 760;
@@ -181,7 +181,7 @@
 }
 
 .brand span {
-  color: var(--gymos-text-muted);
+  color: var(--aptus-text-muted);
 
   font-size: 11px;
   font-weight: 500;
@@ -221,25 +221,25 @@
 }
 
 .status-badge.pending {
-  border: 1px solid var(--gymos-warning-border);
+  border: 1px solid var(--aptus-warning-border);
 
-  background: var(--gymos-warning-bg);
-  color: var(--gymos-warning);
+  background: var(--aptus-warning-bg);
+  color: var(--aptus-warning);
 }
 
 .status-badge.pending > span {
-  background: var(--gymos-warning);
+  background: var(--aptus-warning);
 }
 
 .status-badge.suspended {
-  border: 1px solid var(--gymos-danger-border);
+  border: 1px solid var(--aptus-danger-border);
 
-  background: var(--gymos-danger-bg);
-  color: var(--gymos-danger);
+  background: var(--aptus-danger-bg);
+  color: var(--aptus-danger);
 }
 
 .status-badge.suspended > span {
-  background: var(--gymos-danger);
+  background: var(--aptus-danger);
 }
 
 
@@ -260,7 +260,7 @@
 
   margin: 0;
 
-  color: var(--gymos-text);
+  color: var(--aptus-text);
 
   font-size: 26px;
   font-weight: 740;
@@ -273,7 +273,7 @@
 
   margin: 11px 0 0;
 
-  color: var(--gymos-text-muted);
+  color: var(--aptus-text-muted);
 
   font-size: 13px;
   font-weight: 450;
@@ -290,10 +290,10 @@
 
   overflow: hidden;
 
-  border: 1px solid var(--gymos-border);
+  border: 1px solid var(--aptus-border);
   border-radius: 10px;
 
-  background: var(--gymos-surface-muted);
+  background: var(--aptus-surface-muted);
 }
 
 .account-row {
@@ -310,13 +310,13 @@
 }
 
 .account-row + .account-row {
-  border-top: 1px solid var(--gymos-border);
+  border-top: 1px solid var(--aptus-border);
 }
 
 .account-label {
   flex: 0 0 auto;
 
-  color: var(--gymos-text-muted);
+  color: var(--aptus-text-muted);
 
   font-size: 11px;
   font-weight: 600;
@@ -327,7 +327,7 @@
 
   overflow: hidden;
 
-  color: var(--gymos-text-muted);
+  color: var(--aptus-text-muted);
 
   font-size: 11px;
   font-weight: 650;
@@ -338,7 +338,7 @@
 }
 
 .account-status {
-  color: var(--gymos-warning) !important;
+  color: var(--aptus-warning) !important;
 }
 
 
@@ -350,11 +350,11 @@
   margin: 0 0 19px;
   padding: 12px 13px;
 
-  border: 1px solid var(--gymos-border);
+  border: 1px solid var(--aptus-border);
   border-radius: 9px;
 
-  background: var(--gymos-surface-muted);
-  color: var(--gymos-text-muted);
+  background: var(--aptus-surface-muted);
+  color: var(--aptus-text-muted);
 
   font-size: 11px;
   font-weight: 550;
@@ -370,11 +370,11 @@
   margin-bottom: 14px;
   padding: 11px 12px;
 
-  border: 1px solid var(--gymos-danger-border);
+  border: 1px solid var(--aptus-danger-border);
   border-radius: 9px;
 
-  background: var(--gymos-danger-bg);
-  color: var(--gymos-danger);
+  background: var(--aptus-danger-bg);
+  color: var(--aptus-danger);
 
   font-size: 11px;
   font-weight: 600;
@@ -394,11 +394,11 @@
   align-items: center;
   justify-content: center;
 
-  border: 1px solid var(--gymos-accent);
+  border: 1px solid var(--aptus-accent);
   border-radius: 10px;
 
-  background: var(--gymos-accent);
-  color: var(--gymos-accent-contrast);
+  background: var(--aptus-accent);
+  color: var(--aptus-accent-contrast);
 
   font: inherit;
   font-size: 12px;
@@ -407,7 +407,7 @@
   cursor: pointer;
 
   box-shadow:
-    0 6px 14px var(--gymos-shadow);
+    0 6px 14px var(--aptus-shadow);
 
   transition:
     background 130ms ease,
@@ -417,13 +417,13 @@
 }
 
 .primary-action:hover:not(:disabled) {
-  border-color: var(--gymos-text);
-  background: var(--gymos-accent-hover);
+  border-color: var(--aptus-text);
+  background: var(--aptus-accent-hover);
 
   transform: translateY(-1px);
 
   box-shadow:
-    0 8px 18px var(--gymos-shadow);
+    0 8px 18px var(--aptus-shadow);
 }
 
 .primary-action:active:not(:disabled) {
@@ -458,7 +458,7 @@
   border: 0;
 
   background: transparent;
-  color: var(--gymos-text-muted);
+  color: var(--aptus-text-muted);
 
   font: inherit;
   font-size: 11px;
@@ -472,7 +472,7 @@
 }
 
 .sign-out:hover {
-  color: var(--gymos-text);
+  color: var(--aptus-text);
 }
 
 
@@ -486,9 +486,9 @@ footer {
   margin-top: auto;
   padding-top: 16px;
 
-  border-top: 1px solid var(--gymos-border);
+  border-top: 1px solid var(--aptus-border);
 
-  color: var(--gymos-text-subtle);
+  color: var(--aptus-text-subtle);
 
   font-size: 10px;
   font-weight: 500;

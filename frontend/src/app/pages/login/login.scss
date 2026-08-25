@@ -11,7 +11,7 @@
     "Segoe UI",
     sans-serif;
 
-  color: var(--gymos-text);
+  color: var(--aptus-text);
 }
 
 
@@ -31,9 +31,9 @@
   background:
     radial-gradient(
       circle at 50% -10%,
-      var(--gymos-surface) 0%,
-      var(--gymos-surface-muted) 38%,
-      var(--gymos-bg) 100%
+      var(--aptus-surface) 0%,
+      var(--aptus-surface-muted) 38%,
+      var(--aptus-bg) 100%
     );
 }
 
@@ -50,14 +50,14 @@
 
   padding: 34px;
 
-  border: 1px solid var(--gymos-border);
+  border: 1px solid var(--aptus-border);
   border-radius: 18px;
 
-  background: var(--gymos-surface);
+  background: var(--aptus-surface);
 
   box-shadow:
-    0 24px 60px var(--gymos-shadow),
-    0 2px 8px var(--gymos-shadow-soft);
+    0 24px 60px var(--aptus-shadow),
+    0 2px 8px var(--aptus-shadow-soft);
 }
 
 
@@ -76,10 +76,10 @@
 
   padding: 3px;
 
-  border: 1px solid var(--gymos-border);
+  border: 1px solid var(--aptus-border);
   border-radius: 9px;
 
-  background: var(--gymos-surface-muted);
+  background: var(--aptus-surface-muted);
 
   box-shadow:
     inset 0 0 0 1px rgba(255, 255, 255, 0.45);
@@ -99,7 +99,7 @@
   border-radius: 6px;
 
   background: transparent;
-  color: var(--gymos-text-muted);
+  color: var(--aptus-text-muted);
 
   font: inherit;
   font-size: 10px;
@@ -116,16 +116,16 @@
 }
 
 .language-switch button:hover {
-  color: var(--gymos-text);
+  color: var(--aptus-text);
 }
 
 .language-switch button.active {
-  background: var(--gymos-surface);
-  color: var(--gymos-text);
+  background: var(--aptus-surface);
+  color: var(--aptus-text);
 
   box-shadow:
-    0 1px 3px var(--gymos-shadow),
-    0 0 0 1px var(--gymos-shadow-soft);
+    0 1px 3px var(--aptus-shadow),
+    0 0 0 1px var(--aptus-shadow-soft);
 }
 
 
@@ -154,8 +154,8 @@
 
   border-radius: 12px;
 
-  background: var(--gymos-accent);
-  color: var(--gymos-accent-contrast);
+  background: var(--aptus-accent);
+  color: var(--aptus-accent-contrast);
 
   font-size: 16px;
   font-weight: 800;
@@ -166,7 +166,7 @@
 .brand-header h1 {
   margin: 0;
 
-  color: var(--gymos-text);
+  color: var(--aptus-text);
 
   font-size: 20px;
   font-weight: 760;
@@ -177,7 +177,7 @@
 .brand-header p {
   margin: 4px 0 0;
 
-  color: var(--gymos-text-muted);
+  color: var(--aptus-text-muted);
 
   font-size: 12px;
   font-weight: 500;
@@ -198,7 +198,7 @@
 
   margin-bottom: 9px;
 
-  color: var(--gymos-text-muted);
+  color: var(--aptus-text-muted);
 
   font-size: 10px;
   font-weight: 750;
@@ -211,7 +211,7 @@
 .login-intro h2 {
   margin: 0;
 
-  color: var(--gymos-text);
+  color: var(--aptus-text);
 
   font-size: 28px;
   font-weight: 760;
@@ -224,7 +224,7 @@
 
   margin: 11px 0 0;
 
-  color: var(--gymos-text-muted);
+  color: var(--aptus-text-muted);
 
   font-size: 13px;
   font-weight: 450;
@@ -283,24 +283,24 @@
 
   margin-bottom: 10px;
 
-  border: 1px solid var(--gymos-accent);
+  border: 1px solid var(--aptus-accent);
 
-  background: var(--gymos-accent);
-  color: var(--gymos-accent-contrast);
+  background: var(--aptus-accent);
+  color: var(--aptus-accent-contrast);
 
   font-weight: 750;
 
   box-shadow:
-    0 6px 14px var(--gymos-shadow);
+    0 6px 14px var(--aptus-shadow);
 }
 
 .passkey-button:hover:not(:disabled) {
-  border-color: var(--gymos-text);
+  border-color: var(--aptus-text);
 
-  background: var(--gymos-accent-hover);
+  background: var(--aptus-accent-hover);
 
   box-shadow:
-    0 8px 18px var(--gymos-shadow);
+    0 8px 18px var(--aptus-shadow);
 
   transform: translateY(-1px);
 }
@@ -347,22 +347,22 @@
 .google-button {
   gap: 9px;
 
-  border: 1px solid var(--gymos-border-strong);
+  border: 1px solid var(--aptus-border-strong);
 
-  background: var(--gymos-surface);
-  color: var(--gymos-text);
+  background: var(--aptus-surface);
+  color: var(--aptus-text);
 
   box-shadow:
-    0 1px 2px var(--gymos-shadow-soft);
+    0 1px 2px var(--aptus-shadow-soft);
 }
 
 .google-button:hover:not(:disabled) {
-  border-color: var(--gymos-border-strong);
+  border-color: var(--aptus-border-strong);
 
-  background: var(--gymos-surface-muted);
+  background: var(--aptus-surface-muted);
 
   box-shadow:
-    0 3px 8px var(--gymos-shadow-soft);
+    0 3px 8px var(--aptus-shadow-soft);
 
   transform: translateY(-1px);
 }
@@ -374,11 +374,11 @@
   display: grid;
   place-items: center;
 
-  border: 1px solid var(--gymos-border-strong);
+  border: 1px solid var(--aptus-border-strong);
   border-radius: 50%;
 
-  background: var(--gymos-surface);
-  color: var(--gymos-text-muted);
+  background: var(--aptus-surface);
+  color: var(--aptus-text-muted);
 
   font-size: 10px;
   font-weight: 800;
@@ -402,11 +402,11 @@
 .divider span {
   height: 1px;
 
-  background: var(--gymos-border);
+  background: var(--aptus-border);
 }
 
 .divider small {
-  color: var(--gymos-text-subtle);
+  color: var(--aptus-text-subtle);
 
   font-size: 10px;
   font-weight: 600;
@@ -423,7 +423,7 @@
 }
 
 .email-form label {
-  color: var(--gymos-text-muted);
+  color: var(--aptus-text-muted);
 
   font-size: 11px;
   font-weight: 700;
@@ -438,13 +438,13 @@
 
   padding: 0 14px;
 
-  border: 1px solid var(--gymos-border-strong);
+  border: 1px solid var(--aptus-border-strong);
   border-radius: 10px;
 
   outline: 0;
 
-  background: var(--gymos-surface);
-  color: var(--gymos-text);
+  background: var(--aptus-surface);
+  color: var(--aptus-text);
 
   font: inherit;
   font-size: 13px;
@@ -457,17 +457,17 @@
 }
 
 .email-form input::placeholder {
-  color: var(--gymos-text-subtle);
+  color: var(--aptus-text-subtle);
 
   font-weight: 450;
 }
 
 .email-form input:hover {
-  border-color: var(--gymos-border-strong);
+  border-color: var(--aptus-border-strong);
 }
 
 .email-form input:focus {
-  border-color: var(--gymos-text-muted);
+  border-color: var(--aptus-text-muted);
 
   box-shadow:
     0 0 0 3px rgba(100, 116, 139, 0.09);
@@ -481,22 +481,22 @@
 .primary-button {
   margin-top: 3px;
 
-  border: 1px solid var(--gymos-accent);
+  border: 1px solid var(--aptus-accent);
 
-  background: var(--gymos-accent);
-  color: var(--gymos-accent-contrast);
+  background: var(--aptus-accent);
+  color: var(--aptus-accent-contrast);
 
   box-shadow:
-    0 6px 14px var(--gymos-shadow);
+    0 6px 14px var(--aptus-shadow);
 }
 
 .primary-button:hover:not(:disabled) {
-  border-color: var(--gymos-text);
+  border-color: var(--aptus-text);
 
-  background: var(--gymos-accent-hover);
+  background: var(--aptus-accent-hover);
 
   box-shadow:
-    0 8px 18px var(--gymos-shadow);
+    0 8px 18px var(--aptus-shadow);
 
   transform: translateY(-1px);
 }
@@ -534,17 +534,17 @@
 }
 
 .status.success {
-  border: 1px solid var(--gymos-success-border);
+  border: 1px solid var(--aptus-success-border);
 
-  background: var(--gymos-success-bg);
-  color: var(--gymos-success);
+  background: var(--aptus-success-bg);
+  color: var(--aptus-success);
 }
 
 .status.error {
-  border: 1px solid var(--gymos-danger-border);
+  border: 1px solid var(--aptus-danger-border);
 
-  background: var(--gymos-danger-bg);
-  color: var(--gymos-danger);
+  background: var(--aptus-danger-bg);
+  color: var(--aptus-danger);
 }
 
 
@@ -559,9 +559,9 @@
   margin-top: 22px;
   padding-top: 17px;
 
-  border-top: 1px solid var(--gymos-border);
+  border-top: 1px solid var(--aptus-border);
 
-  color: var(--gymos-text-subtle);
+  color: var(--aptus-text-subtle);
 
   font-size: 10px;
   font-weight: 500;
@@ -578,7 +578,7 @@
   border: 0;
 
   background: transparent;
-  color: var(--gymos-text);
+  color: var(--aptus-text);
 
   font: inherit;
   font-size: 11px;
@@ -590,7 +590,7 @@
 }
 
 .request-access-button:hover {
-  color: var(--gymos-text-muted);
+  color: var(--aptus-text-muted);
 }
 
 
@@ -696,7 +696,7 @@
   border: 0;
 
   background: transparent;
-  color: var(--gymos-accent-text);
+  color: var(--aptus-accent-text);
 
   font: inherit;
   font-size: 0.84rem;
@@ -727,13 +727,13 @@
 }
 
 .recovery-copy strong {
-  color: var(--gymos-text);
+  color: var(--aptus-text);
 
   font-size: 1rem;
 }
 
 .recovery-copy small {
-  color: var(--gymos-text-muted);
+  color: var(--aptus-text-muted);
 
   font-size: 0.84rem;
   line-height: 1.4;

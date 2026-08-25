@@ -44,7 +44,7 @@ button:disabled {
   display: block;
   margin-bottom: 6px;
 
-  color: var(--gymos-text-muted);
+  color: var(--aptus-text-muted);
 
   font-size: 0.75rem;
   font-weight: 800;
@@ -53,7 +53,7 @@ button:disabled {
 }
 
 .muted {
-  color: var(--gymos-text-muted);
+  color: var(--aptus-text-muted);
 }
 
 .page-header,
@@ -83,8 +83,8 @@ button:disabled {
 .status-pill {
   padding: 8px 12px;
 
-  background: var(--gymos-success-bg);
-  color: var(--gymos-success);
+  background: var(--aptus-success-bg);
+  color: var(--aptus-success);
 
   font-size: 0.82rem;
 }
@@ -93,8 +93,8 @@ button:disabled {
 .sets-badge {
   padding: 6px 10px;
 
-  background: var(--gymos-surface-hover);
-  color: var(--gymos-text-muted);
+  background: var(--aptus-surface-hover);
+  color: var(--aptus-text-muted);
 
   font-size: 0.78rem;
 }
@@ -115,10 +115,10 @@ button:disabled {
 .state-card {
   box-sizing: border-box;
 
-  border: 1px solid var(--gymos-border);
+  border: 1px solid var(--aptus-border);
   border-radius: 16px;
 
-  background: var(--gymos-surface);
+  background: var(--aptus-surface);
 
   box-shadow:
     0 1px 2px
@@ -161,7 +161,7 @@ button:disabled {
 
   padding: 10px 0;
 
-  border-bottom: 1px solid var(--gymos-border);
+  border-bottom: 1px solid var(--aptus-border);
 }
 
 .session-exercise:last-child {
@@ -180,7 +180,7 @@ button:disabled {
 }
 
 .session-exercise span {
-  color: var(--gymos-text-muted);
+  color: var(--aptus-text-muted);
 
   font-size: 0.82rem;
 }
@@ -204,10 +204,10 @@ button:disabled {
 }
 
 .primary-button {
-  border: 1px solid var(--gymos-accent);
+  border: 1px solid var(--aptus-accent);
 
-  background: var(--gymos-accent);
-  color: var(--gymos-accent-contrast);
+  background: var(--aptus-accent);
+  color: var(--aptus-accent-contrast);
 
   padding: 10px 16px;
 }
@@ -222,19 +222,19 @@ button:disabled {
 }
 
 .secondary-button {
-  border: 1px solid var(--gymos-border-strong);
+  border: 1px solid var(--aptus-border-strong);
 
-  background: var(--gymos-surface);
-  color: var(--gymos-text);
+  background: var(--aptus-surface);
+  color: var(--aptus-text);
 
   padding: 10px 16px;
 }
 
 .finish-button {
-  border: 1px solid var(--gymos-accent);
+  border: 1px solid var(--aptus-accent);
 
-  background: var(--gymos-accent);
-  color: var(--gymos-accent-contrast);
+  background: var(--aptus-accent);
+  color: var(--aptus-accent-contrast);
 
   padding: 10px 18px;
 }
@@ -248,8 +248,8 @@ button:disabled {
   border-radius: 8px;
 
   background: transparent;
-  border-color: var(--gymos-danger-border);
-  color: var(--gymos-danger);
+  border-color: var(--aptus-danger-border);
+  color: var(--aptus-danger);
 
   font: inherit;
   font-size: 0.84rem;
@@ -266,7 +266,7 @@ button:disabled {
 }
 
 .exercise-header {
-  border-bottom: 1px solid var(--gymos-border);
+  border-bottom: 1px solid var(--aptus-border);
 }
 
 .exercise-toggle {
@@ -283,8 +283,8 @@ button:disabled {
 
   border: 0;
 
-  background: var(--gymos-surface);
-  color: var(--gymos-text);
+  background: var(--aptus-surface);
+  color: var(--aptus-text);
 
   text-align: left;
 }
@@ -302,7 +302,7 @@ button:disabled {
   flex-wrap: wrap;
   gap: 6px;
 
-  color: var(--gymos-text-muted);
+  color: var(--aptus-text-muted);
 
   font-size: 0.88rem;
 }
@@ -316,11 +316,11 @@ button:disabled {
 
   border-radius: 999px;
 
-  background: var(--gymos-surface-muted);
+  background: var(--aptus-surface-muted);
 }
 
 .exercise-target strong {
-  color: var(--gymos-text);
+  color: var(--aptus-text);
 
   font-weight: 800;
 }
@@ -337,13 +337,13 @@ button:disabled {
 
   padding: 10px 20px;
 
-  border-bottom: 1px solid var(--gymos-border);
+  border-bottom: 1px solid var(--aptus-border);
 
-  background: var(--gymos-surface-muted);
+  background: var(--aptus-surface-muted);
 }
 
 .previous-exercise span {
-  color: var(--gymos-text-muted);
+  color: var(--aptus-text-muted);
 
   font-size: 0.72rem;
   font-weight: 800;
@@ -353,14 +353,14 @@ button:disabled {
 .previous-exercise p {
   margin: 0;
 
-  color: var(--gymos-text-muted);
+  color: var(--aptus-text-muted);
 
   font-size: 0.84rem;
   font-weight: 650;
 }
 
 .previous-exercise .exercise-trend {
-  color: var(--gymos-text-muted);
+  color: var(--aptus-text-muted);
 
   font-size: 0.78rem;
   font-weight: 600;
@@ -373,11 +373,11 @@ button:disabled {
   margin-top: 3px;
   padding: 8px 10px;
 
-  border: 1px solid var(--gymos-border);
+  border: 1px solid var(--aptus-border);
   border-left-width: 3px;
   border-radius: 8px;
 
-  background: var(--gymos-surface);
+  background: var(--aptus-surface);
 }
 
 .today-performance p,
@@ -391,14 +391,14 @@ button:disabled {
   gap: 4px;
   align-items: baseline;
 
-  color: var(--gymos-text);
+  color: var(--aptus-text);
 
   font-size: 0.82rem;
   font-weight: 800;
 }
 
 .today-performance small {
-  color: var(--gymos-text-muted);
+  color: var(--aptus-text-muted);
 
   font-size: 0.76rem;
   font-weight: 650;
@@ -410,7 +410,7 @@ button:disabled {
 }
 
 .today-performance-normal {
-  border-left-color: var(--gymos-accent);
+  border-left-color: var(--aptus-accent);
 }
 
 .today-performance-below {
@@ -418,7 +418,7 @@ button:disabled {
 }
 
 .today-performance-insufficient {
-  border-left-color: var(--gymos-text-muted);
+  border-left-color: var(--aptus-text-muted);
 }
 
 .set-row {
@@ -432,7 +432,7 @@ button:disabled {
 
   padding: 0;
 
-  border-bottom: 1px solid var(--gymos-border);
+  border-bottom: 1px solid var(--aptus-border);
 
   transition:
     background 140ms ease,
@@ -448,23 +448,23 @@ button:disabled {
 }
 
 .set-row.completed {
-  background: var(--gymos-surface);
+  background: var(--aptus-surface);
 }
 
 .set-row.next-set {
-  background: var(--gymos-surface);
+  background: var(--aptus-surface);
 }
 
 .set-row.next-set:not(.completed) {
   box-shadow:
     inset 3px 0 0
-    var(--gymos-accent);
+    var(--aptus-accent);
 }
 
 .set-row.in-progress:not(.completed) {
   box-shadow:
     inset 3px 0 0
-    var(--gymos-accent);
+    var(--aptus-accent);
 }
 
 .set-summary-row {
@@ -484,7 +484,7 @@ button:disabled {
   border: 0;
 
   background: transparent;
-  color: var(--gymos-text);
+  color: var(--aptus-text);
 
   text-align: left;
 }
@@ -498,16 +498,16 @@ button:disabled {
 
   border-radius: 50%;
 
-  background: var(--gymos-surface-hover);
-  color: var(--gymos-text-muted);
+  background: var(--aptus-surface-hover);
+  color: var(--aptus-text-muted);
 
   font-size: 0.87rem;
   font-weight: 800;
 }
 
 .completed .set-number {
-  background: var(--gymos-success-bg);
-  color: var(--gymos-success);
+  background: var(--aptus-success-bg);
+  color: var(--aptus-success);
 }
 
 .set-summary-copy {
@@ -523,7 +523,7 @@ button:disabled {
 }
 
 .set-summary-copy span {
-  color: var(--gymos-text-muted);
+  color: var(--aptus-text-muted);
 
   font-size: 0.8rem;
   overflow-wrap: anywhere;
@@ -538,8 +538,8 @@ button:disabled {
 
   border-radius: 999px;
 
-  background: var(--gymos-surface-hover);
-  color: var(--gymos-text-muted);
+  background: var(--aptus-surface-hover);
+  color: var(--aptus-text-muted);
 
   font-size: 0.7rem;
   font-weight: 800;
@@ -547,18 +547,18 @@ button:disabled {
 }
 
 .next-set:not(.completed) .set-state {
-  background: var(--gymos-accent);
-  color: var(--gymos-accent-contrast);
+  background: var(--aptus-accent);
+  color: var(--aptus-accent-contrast);
 }
 
 .in-progress:not(.completed) .set-state {
-  background: var(--gymos-accent);
-  color: var(--gymos-accent-contrast);
+  background: var(--aptus-accent);
+  color: var(--aptus-accent-contrast);
 }
 
 .completed .set-state {
-  background: var(--gymos-success-bg);
-  color: var(--gymos-success);
+  background: var(--aptus-success-bg);
+  color: var(--aptus-success);
 }
 
 .set-row-body {
@@ -584,7 +584,7 @@ button:disabled {
 }
 
 .set-inputs label > span {
-  color: var(--gymos-text-muted);
+  color: var(--aptus-text-muted);
 
   font-size: 0.72rem;
   font-weight: 700;
@@ -600,11 +600,11 @@ button:disabled {
 
   padding: 8px;
 
-  border: 1px solid var(--gymos-border-strong);
+  border: 1px solid var(--aptus-border-strong);
   border-radius: 9px;
 
-  background: var(--gymos-input-bg);
-  color: var(--gymos-text);
+  background: var(--aptus-input-bg);
+  color: var(--aptus-text);
 
   font-size: 1rem;
   font-weight: 650;
@@ -613,11 +613,11 @@ button:disabled {
 }
 
 .set-inputs input:focus {
-  border-color: var(--gymos-text);
+  border-color: var(--aptus-text);
 
   box-shadow:
     0 0 0 3px
-    var(--gymos-shadow-soft);
+    var(--aptus-shadow-soft);
 }
 
 .complete-set-button {
@@ -625,14 +625,14 @@ button:disabled {
 
   padding: 10px 12px;
 
-  border: 1px solid var(--gymos-accent);
+  border: 1px solid var(--aptus-accent);
 
-  background: var(--gymos-accent);
-  color: var(--gymos-accent-contrast);
+  background: var(--aptus-accent);
+  color: var(--aptus-accent-contrast);
 }
 
 .complete-set-button:not(:disabled):hover {
-  background: var(--gymos-accent-hover);
+  background: var(--aptus-accent-hover);
 }
 
 .reuse-weight-button {
@@ -641,11 +641,11 @@ button:disabled {
 
   padding: 6px 8px;
 
-  border: 1px solid var(--gymos-border-strong);
+  border: 1px solid var(--aptus-border-strong);
   border-radius: 8px;
 
-  background: var(--gymos-surface);
-  color: var(--gymos-info);
+  background: var(--aptus-surface);
+  color: var(--aptus-info);
 
   font-size: 0.74rem;
   font-weight: 800;
@@ -674,11 +674,11 @@ button:disabled {
 
   padding: 8px 10px;
 
-  border: 1px solid var(--gymos-info-border);
+  border: 1px solid var(--aptus-info-border);
   border-radius: 10px;
 
-  background: var(--gymos-info-bg);
-  color: var(--gymos-info);
+  background: var(--aptus-info-bg);
+  color: var(--aptus-info);
 }
 
 .set-timer-display span {
@@ -714,10 +714,10 @@ button:disabled {
 }
 
 .completed .complete-set-button {
-  border-color: var(--gymos-success-border);
+  border-color: var(--aptus-success-border);
 
-  background: var(--gymos-success-bg);
-  color: var(--gymos-success);
+  background: var(--aptus-success-bg);
+  color: var(--aptus-success);
 }
 
 .workout-actions {
@@ -735,16 +735,16 @@ button:disabled {
 
   padding: 12px;
 
-  border: 1px solid var(--gymos-border);
+  border: 1px solid var(--aptus-border);
   border-radius: 14px;
 
-  background: var(--gymos-topbar-bg);
+  background: var(--aptus-topbar-bg);
 
   backdrop-filter: blur(10px);
 
   box-shadow:
     0 10px 30px
-    var(--gymos-shadow);
+    var(--aptus-shadow);
 }
 
 .confirm-overlay {
@@ -755,7 +755,7 @@ button:disabled {
   display: grid;
   place-items: center;
 
-  background: var(--gymos-overlay);
+  background: var(--aptus-overlay);
 }
 
 
@@ -769,18 +769,18 @@ button:disabled {
   margin-right: auto;
   padding: 10px 12px;
 
-  border: 1px solid var(--gymos-info-border);
+  border: 1px solid var(--aptus-info-border);
   border-radius: 12px;
 
-  background: var(--gymos-info-bg);
-  color: var(--gymos-info);
+  background: var(--aptus-info-bg);
+  color: var(--aptus-info);
 }
 
 .rest-timer.finished {
-  border-color: var(--gymos-success-border);
+  border-color: var(--aptus-success-border);
 
-  background: var(--gymos-success-bg);
-  color: var(--gymos-success);
+  background: var(--aptus-success-bg);
+  color: var(--aptus-success);
 }
 
 .rest-timer > div:first-child {
@@ -830,7 +830,7 @@ button:disabled {
 .autosave-status {
   margin-right: auto;
 
-  color: var(--gymos-text-muted);
+  color: var(--aptus-text-muted);
 
   font-size: 0.78rem;
   font-weight: 650;
@@ -839,7 +839,7 @@ button:disabled {
 .workout-id {
   margin: 12px 0 0;
 
-  color: var(--gymos-text-subtle);
+  color: var(--aptus-text-subtle);
 
   font-size: 0.72rem;
 }
@@ -849,11 +849,11 @@ button:disabled {
 
   padding: 12px 14px;
 
-  border: 1px solid var(--gymos-danger-border);
+  border: 1px solid var(--aptus-danger-border);
   border-radius: 10px;
 
-  background: var(--gymos-danger-bg);
-  color: var(--gymos-danger);
+  background: var(--aptus-danger-bg);
+  color: var(--aptus-danger);
 }
 
 .login-card,
@@ -883,11 +883,11 @@ button:disabled {
 
   padding: 11px 12px;
 
-  border: 1px solid var(--gymos-border-strong);
+  border: 1px solid var(--aptus-border-strong);
   border-radius: 10px;
 
-  background: var(--gymos-input-bg);
-  color: var(--gymos-text);
+  background: var(--aptus-input-bg);
+  color: var(--aptus-text);
 }
 
 .message {
@@ -942,13 +942,13 @@ button:disabled {
   .set-row.next-set:not(.completed) {
     box-shadow:
       inset 5px 0 0
-      var(--gymos-accent);
+      var(--aptus-accent);
   }
 
   .set-row.in-progress:not(.completed) {
     box-shadow:
       inset 5px 0 0
-      var(--gymos-accent);
+      var(--aptus-accent);
   }
 
   .set-summary-row {
@@ -1130,12 +1130,12 @@ button:disabled {
   appearance: none;
   min-width: 145px;
 
-  border: 1px solid var(--gymos-border);
+  border: 1px solid var(--aptus-border);
   border-radius: 999px;
 
   padding: 9px 38px 9px 15px;
 
-  background: var(--gymos-surface);
+  background: var(--aptus-surface);
   color: inherit;
 
   font: inherit;
@@ -1169,10 +1169,10 @@ button:disabled {
 
   padding: 3px;
 
-  border: 1px solid var(--gymos-border);
+  border: 1px solid var(--aptus-border);
   border-radius: 999px;
 
-  background: var(--gymos-surface);
+  background: var(--aptus-surface);
 
   vertical-align: middle;
 }
@@ -1195,7 +1195,7 @@ button:disabled {
 }
 
 .training-view-tabs button.active {
-  background: var(--gymos-surface-hover);
+  background: var(--aptus-surface-hover);
   opacity: 1;
 }
 
@@ -1262,12 +1262,12 @@ button:disabled {
 
     border:
       1px solid
-      var(--gymos-border);
+      var(--aptus-border);
 
     border-radius: 12px;
 
     background:
-      var(--gymos-surface);
+      var(--aptus-surface);
   }
 
 
@@ -1296,12 +1296,12 @@ button:disabled {
 
     border:
       1px solid
-      var(--gymos-border);
+      var(--aptus-border);
 
     border-radius: 12px;
 
     background:
-      var(--gymos-surface);
+      var(--aptus-surface);
   }
 
   .training-view-tabs button {
@@ -1316,7 +1316,7 @@ button:disabled {
 
   .training-view-tabs button.active {
     background:
-      var(--gymos-surface-hover);
+      var(--aptus-surface-hover);
 
     opacity: 1;
   }
@@ -1955,10 +1955,10 @@ button:disabled {
   margin: 12px 14px 6px;
   padding: 12px;
 
-  border: 1px solid var(--gymos-border);
+  border: 1px solid var(--aptus-border);
   border-radius: 12px;
 
-  background: var(--gymos-surface-muted);
+  background: var(--aptus-surface-muted);
 }
 
 .warmup-header {
@@ -1980,7 +1980,7 @@ button:disabled {
 }
 
 .warmup-header small {
-  color: var(--gymos-text-muted);
+  color: var(--aptus-text-muted);
 
   font-size: 0.72rem;
 }
@@ -1990,11 +1990,11 @@ button:disabled {
 
   padding: 7px 10px;
 
-  border: 1px solid var(--gymos-border-strong);
+  border: 1px solid var(--aptus-border-strong);
   border-radius: 9px;
 
-  background: var(--gymos-surface);
-  color: var(--gymos-text);
+  background: var(--aptus-surface);
+  color: var(--aptus-text);
 
   font-size: 0.8rem;
   font-weight: 750;
@@ -2026,7 +2026,7 @@ button:disabled {
 .warmup-number {
   align-self: center;
 
-  color: var(--gymos-text-muted);
+  color: var(--aptus-text-muted);
 
   font-size: 0.78rem;
   font-weight: 800;
@@ -2039,7 +2039,7 @@ button:disabled {
 }
 
 .warmup-input span {
-  color: var(--gymos-text-muted);
+  color: var(--aptus-text-muted);
 
   font-size: 0.7rem;
   font-weight: 700;
@@ -2054,11 +2054,11 @@ button:disabled {
 
   padding: 7px 8px;
 
-  border: 1px solid var(--gymos-border);
+  border: 1px solid var(--aptus-border);
   border-radius: 8px;
 
-  background: var(--gymos-surface);
-  color: var(--gymos-text);
+  background: var(--aptus-surface);
+  color: var(--aptus-text);
 }
 
 .warmup-complete-button,
@@ -2075,25 +2075,25 @@ button:disabled {
 }
 
 .warmup-complete-button {
-  border: 1px solid var(--gymos-border-strong);
+  border: 1px solid var(--aptus-border-strong);
 
-  background: var(--gymos-surface);
-  color: var(--gymos-text);
+  background: var(--aptus-surface);
+  color: var(--aptus-text);
 }
 
 .warmup-row.completed
 .warmup-complete-button {
-  border-color: var(--gymos-success);
+  border-color: var(--aptus-success);
 
-  background: var(--gymos-success-bg);
-  color: var(--gymos-success);
+  background: var(--aptus-success-bg);
+  color: var(--aptus-success);
 }
 
 .warmup-remove-button {
   border: 0;
 
   background: transparent;
-  color: var(--gymos-text-muted);
+  color: var(--aptus-text-muted);
 }
 
 @media (max-width: 560px) {
@@ -2120,10 +2120,10 @@ button:disabled {
 .discomfort-section {
   margin: 8px 14px 10px;
 
-  border: 1px solid var(--gymos-border);
+  border: 1px solid var(--aptus-border);
   border-radius: 12px;
 
-  background: var(--gymos-surface);
+  background: var(--aptus-surface);
 }
 
 .discomfort-summary {
@@ -2142,7 +2142,7 @@ button:disabled {
 }
 
 .discomfort-summary strong {
-  color: var(--gymos-text-muted);
+  color: var(--aptus-text-muted);
 
   font-size: 0.8rem;
 }
@@ -2160,7 +2160,7 @@ button:disabled {
 }
 
 .discomfort-field > span {
-  color: var(--gymos-text-muted);
+  color: var(--aptus-text-muted);
 
   font-size: 0.72rem;
   font-weight: 700;
@@ -2173,11 +2173,11 @@ button:disabled {
 
   box-sizing: border-box;
 
-  border: 1px solid var(--gymos-border);
+  border: 1px solid var(--aptus-border);
   border-radius: 8px;
 
-  background: var(--gymos-surface);
-  color: var(--gymos-text);
+  background: var(--aptus-surface);
+  color: var(--aptus-text);
 
   font: inherit;
 }
@@ -2209,17 +2209,17 @@ button:disabled {
 }
 
 .discomfort-add-button {
-  border: 1px solid var(--gymos-border-strong);
+  border: 1px solid var(--aptus-border-strong);
 
-  background: var(--gymos-surface);
-  color: var(--gymos-text);
+  background: var(--aptus-surface);
+  color: var(--aptus-text);
 }
 
 .discomfort-clear-button {
   border: 0;
 
   background: transparent;
-  color: var(--gymos-text-muted);
+  color: var(--aptus-text-muted);
 }
 
 @media (max-width: 560px) {
@@ -2235,11 +2235,11 @@ button:disabled {
   margin: -2px 14px 10px;
   padding: 6px 10px;
 
-  border: 1px solid var(--gymos-border-strong);
+  border: 1px solid var(--aptus-border-strong);
   border-radius: 8px;
 
   background: transparent;
-  color: var(--gymos-text-muted);
+  color: var(--aptus-text-muted);
 
   font: inherit;
   font-size: 0.78rem;
@@ -2247,8 +2247,8 @@ button:disabled {
 }
 
 .correct-set-button:hover {
-  background: var(--gymos-surface-hover);
-  color: var(--gymos-text);
+  background: var(--aptus-surface-hover);
+  color: var(--aptus-text);
 }
 
 .session-rest-control {
@@ -2261,10 +2261,10 @@ button:disabled {
   margin-bottom: 14px;
   padding: 12px 14px;
 
-  border: 1px solid var(--gymos-border);
+  border: 1px solid var(--aptus-border);
   border-radius: 12px;
 
-  background: var(--gymos-surface);
+  background: var(--aptus-surface);
 }
 
 .session-rest-copy {
@@ -2273,7 +2273,7 @@ button:disabled {
 }
 
 .session-rest-copy > span {
-  color: var(--gymos-text-muted);
+  color: var(--aptus-text-muted);
 
   font-size: 0.72rem;
   font-weight: 800;
@@ -2286,7 +2286,7 @@ button:disabled {
 }
 
 .session-rest-copy small {
-  color: var(--gymos-text-muted);
+  color: var(--aptus-text-muted);
 
   font-size: 0.72rem;
 }
@@ -2316,7 +2316,7 @@ button:disabled {
   border: 0;
 
   background: transparent;
-  color: var(--gymos-text-muted);
+  color: var(--aptus-text-muted);
 
   font: inherit;
   font-size: 0.76rem;

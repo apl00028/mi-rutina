@@ -5,7 +5,7 @@
 
   box-sizing: border-box;
 
-  color: var(--gymos-text);
+  color: var(--aptus-text);
 }
 
 .settings-header {
@@ -15,7 +15,7 @@
 .settings-header h1 {
   margin: 0;
 
-  color: var(--gymos-text);
+  color: var(--aptus-text);
 
   font-size: clamp(1.75rem, 5vw, 2.35rem);
   line-height: 1.08;
@@ -25,10 +25,10 @@
 .settings-panel {
   display: grid;
 
-  border: 1px solid var(--gymos-border);
+  border: 1px solid var(--aptus-border);
   border-radius: 14px;
 
-  background: var(--gymos-surface);
+  background: var(--aptus-surface);
 
   overflow: hidden;
 }
@@ -43,10 +43,10 @@
   padding: 12px 14px;
 
   border: 0;
-  border-bottom: 1px solid var(--gymos-border);
+  border-bottom: 1px solid var(--aptus-border);
 
   background: transparent;
-  color: var(--gymos-text);
+  color: var(--aptus-text);
 }
 
 .settings-row:last-child,
@@ -69,7 +69,7 @@
 
 .settings-row:hover,
 .settings-toggle-row:hover {
-  background: var(--gymos-surface-muted);
+  background: var(--aptus-surface-muted);
 }
 
 .settings-row:focus-visible,
@@ -89,8 +89,8 @@
 
   border-radius: 9px;
 
-  background: var(--gymos-surface-muted);
-  color: var(--gymos-navy);
+  background: var(--aptus-surface-muted);
+  color: var(--aptus-navy);
 
   font-size: 1rem;
   font-weight: 800;
@@ -110,7 +110,7 @@
 .settings-toggle-row strong {
   min-width: 0;
 
-  color: var(--gymos-text);
+  color: var(--aptus-text);
 
   font-size: 0.98rem;
   line-height: 1.2;
@@ -122,7 +122,7 @@
 .settings-field small,
 .settings-toggle-row small,
 .settings-note {
-  color: var(--gymos-text-muted);
+  color: var(--aptus-text-muted);
 
   font-size: 0.84rem;
   line-height: 1.38;
@@ -133,7 +133,7 @@
 }
 
 .settings-chevron {
-  color: var(--gymos-text-muted);
+  color: var(--aptus-text-muted);
 
   font-size: 1.35rem;
 }
@@ -148,7 +148,7 @@
 
   margin-bottom: 12px;
 
-  color: var(--gymos-text);
+  color: var(--aptus-text);
 
   text-decoration: none;
 
@@ -162,11 +162,11 @@
   display: inline-grid;
   place-items: center;
 
-  border: 1px solid var(--gymos-border);
+  border: 1px solid var(--aptus-border);
   border-radius: 12px;
 
-  background: var(--gymos-surface);
-  color: var(--gymos-accent-text);
+  background: var(--aptus-surface);
+  color: var(--aptus-accent-text);
 
   font-size: 1.55rem;
   line-height: 1;
@@ -178,10 +178,10 @@
 }
 
 .settings-back:hover .settings-back-icon {
-  border-color: var(--gymos-border-strong);
+  border-color: var(--aptus-border-strong);
 
-  background: var(--gymos-accent);
-  color: var(--gymos-accent-contrast);
+  background: var(--aptus-accent);
+  color: var(--aptus-accent-contrast);
 }
 
 .settings-toggle-row {
@@ -210,7 +210,7 @@
 
   border-radius: 999px;
 
-  background: var(--gymos-border-strong);
+  background: var(--aptus-border-strong);
 }
 
 .switch::before {
@@ -221,14 +221,14 @@
 
   border-radius: 50%;
 
-  background: var(--gymos-surface);
+  background: var(--aptus-surface);
 
   transition:
     transform 140ms ease;
 }
 
 .switch.on {
-  background: var(--gymos-accent);
+  background: var(--aptus-accent);
 }
 
 .switch.on::before {
@@ -243,10 +243,10 @@
 
   padding: 4px;
 
-  border: 1px solid var(--gymos-border);
+  border: 1px solid var(--aptus-border);
   border-radius: 12px;
 
-  background: var(--gymos-surface-muted);
+  background: var(--aptus-surface-muted);
 }
 
 .segmented-control button {
@@ -257,7 +257,7 @@
   border-radius: 9px;
 
   background: transparent;
-  color: var(--gymos-text-muted);
+  color: var(--aptus-text-muted);
 
   font: inherit;
   font-size: 0.9rem;
@@ -267,8 +267,8 @@
 }
 
 .segmented-control button.active {
-  background: var(--gymos-accent);
-  color: var(--gymos-accent-contrast);
+  background: var(--aptus-accent);
+  color: var(--aptus-accent-contrast);
 }
 
 .settings-note {
@@ -309,11 +309,11 @@
   margin-top: 6px;
   padding: 9px 13px;
 
-  border: 1px solid var(--gymos-border);
+  border: 1px solid var(--aptus-border);
   border-radius: 10px;
 
-  background: var(--gymos-surface-muted);
-  color: var(--gymos-text);
+  background: var(--aptus-surface-muted);
+  color: var(--aptus-text);
 
   font: inherit;
   font-size: 0.86rem;
@@ -328,22 +328,22 @@
 }
 
 .settings-action:hover:not(:disabled) {
-  border-color: var(--gymos-border-strong);
+  border-color: var(--aptus-border-strong);
 
-  background: var(--gymos-accent);
-  color: var(--gymos-accent-contrast);
+  background: var(--aptus-accent);
+  color: var(--aptus-accent-contrast);
 }
 
 .settings-danger-action {
   margin-top: 0;
 
-  color: var(--gymos-danger);
+  color: var(--aptus-danger);
 }
 
 .settings-danger-action:hover:not(:disabled) {
-  border-color: var(--gymos-danger);
+  border-color: var(--aptus-danger);
 
-  background: var(--gymos-surface-muted);
+  background: var(--aptus-surface-muted);
 }
 
 .settings-action:disabled,
@@ -367,15 +367,15 @@
 }
 
 .settings-status-success {
-  color: var(--gymos-success);
+  color: var(--aptus-success);
 }
 
 .settings-status-error {
-  color: var(--gymos-danger);
+  color: var(--aptus-danger);
 }
 
 .settings-status-muted {
-  color: var(--gymos-text-muted);
+  color: var(--aptus-text-muted);
 }
 
 .passkey-list {
@@ -397,10 +397,10 @@
 
   padding: 10px;
 
-  border: 1px solid var(--gymos-border);
+  border: 1px solid var(--aptus-border);
   border-radius: 10px;
 
-  background: var(--gymos-surface-muted);
+  background: var(--aptus-surface-muted);
 }
 
 .passkey-copy {
@@ -411,14 +411,14 @@
 }
 
 .passkey-copy strong {
-  color: var(--gymos-text);
+  color: var(--aptus-text);
 
   font-size: 0.9rem;
   overflow-wrap: anywhere;
 }
 
 .passkey-copy small {
-  color: var(--gymos-text-muted);
+  color: var(--aptus-text-muted);
 
   font-size: 0.78rem;
 }
@@ -448,11 +448,11 @@
 
   padding: 0 12px;
 
-  border: 1px solid var(--gymos-border-strong);
+  border: 1px solid var(--aptus-border-strong);
   border-radius: 10px;
 
-  background: var(--gymos-surface);
-  color: var(--gymos-text);
+  background: var(--aptus-surface);
+  color: var(--aptus-text);
 
   font: inherit;
   font-size: 0.9rem;

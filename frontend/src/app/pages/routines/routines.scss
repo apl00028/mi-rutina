@@ -9,7 +9,7 @@
 .routines-page h1 {
   margin: 0 0 16px;
 
-  color: var(--gymos-text);
+  color: var(--aptus-text);
 
   font-size: clamp(1.75rem, 4vw, 2.5rem);
   line-height: 1.08;
@@ -42,22 +42,22 @@
 }
 
 .session-card {
-  border: 1px solid var(--gymos-border);
+  border: 1px solid var(--aptus-border);
   border-radius: 12px;
   padding: 16px;
 
-  background: var(--gymos-surface);
-  color: var(--gymos-text);
+  background: var(--aptus-surface);
+  color: var(--aptus-text);
 }
 
 .exercise-card {
-  border: 1px solid var(--gymos-border);
+  border: 1px solid var(--aptus-border);
   border-radius: 10px;
   padding: 16px;
   margin: 12px 0;
 
-  background: var(--gymos-surface);
-  color: var(--gymos-text);
+  background: var(--aptus-surface);
+  color: var(--aptus-text);
 
   display: grid;
   gap: 14px;
@@ -88,11 +88,11 @@ input {
   width: 100%;
   padding: 9px;
 
-  border: 1px solid var(--gymos-border-strong);
+  border: 1px solid var(--aptus-border-strong);
   border-radius: 8px;
 
-  background: var(--gymos-input-bg);
-  color: var(--gymos-text);
+  background: var(--aptus-input-bg);
+  color: var(--aptus-text);
 }
 
 button,
@@ -100,11 +100,11 @@ button,
   box-sizing: border-box;
   padding: 9px 13px;
 
-  border: 1px solid var(--gymos-border-strong);
+  border: 1px solid var(--aptus-border-strong);
   border-radius: 8px;
 
-  background: var(--gymos-surface);
-  color: var(--gymos-text);
+  background: var(--aptus-surface);
+  color: var(--aptus-text);
 
   cursor: pointer;
 }
@@ -114,29 +114,29 @@ button,
   align-items: center;
   justify-content: center;
 
-  border: 1px solid var(--gymos-border-strong);
+  border: 1px solid var(--aptus-border-strong);
   border-radius: 6px;
 }
 
 .success-message,
 .error-message {
   padding: 12px;
-  border: 1px solid var(--gymos-border-strong);
+  border: 1px solid var(--aptus-border-strong);
   border-radius: 8px;
 }
 
 .success-message {
-  border-color: var(--gymos-success-border);
+  border-color: var(--aptus-success-border);
 
-  background: var(--gymos-success-bg);
-  color: var(--gymos-success);
+  background: var(--aptus-success-bg);
+  color: var(--aptus-success);
 }
 
 .error-message {
-  border-color: var(--gymos-danger-border);
+  border-color: var(--aptus-danger-border);
 
-  background: var(--gymos-danger-bg);
-  color: var(--gymos-danger);
+  background: var(--aptus-danger-bg);
+  color: var(--aptus-danger);
 }
 
 .import-report {
@@ -153,18 +153,18 @@ button,
 .import-issue-group h4 {
   margin: 4px 0 0;
 
-  color: var(--gymos-text);
+  color: var(--aptus-text);
 
   font-size: 0.95rem;
 }
 
 .import-issue {
   padding: 12px;
-  border: 1px solid var(--gymos-border-strong);
+  border: 1px solid var(--aptus-border-strong);
   border-radius: 8px;
 
-  background: var(--gymos-surface);
-  color: var(--gymos-text);
+  background: var(--aptus-surface);
+  color: var(--aptus-text);
 
   display: grid;
   gap: 4px;
@@ -179,10 +179,10 @@ button,
 }
 
 .import-issue.autocorrection {
-  border-color: var(--gymos-success-border);
+  border-color: var(--aptus-success-border);
 
-  background: var(--gymos-success-bg);
-  color: var(--gymos-success);
+  background: var(--aptus-success-bg);
+  color: var(--aptus-success);
 }
 
 .issue-location {
@@ -195,7 +195,7 @@ button,
   z-index: 1000;
 
   background:
-    var(--gymos-overlay);
+    var(--aptus-overlay);
 
   display: grid;
   place-items: center;
@@ -204,7 +204,7 @@ button,
 }
 
 .picker-panel {
-  background: var(--gymos-surface);
+  background: var(--aptus-surface);
 
   width: min(720px, 100%);
   max-height: 85vh;
@@ -309,11 +309,11 @@ button,
 
   padding: 16px 18px;
 
-  border: 1px solid var(--gymos-border);
+  border: 1px solid var(--aptus-border);
   border-radius: 14px;
 
-  background: var(--gymos-surface);
-  color: var(--gymos-text);
+  background: var(--aptus-surface);
+  color: var(--aptus-text);
 
   text-align: left;
   cursor: pointer;
@@ -327,7 +327,7 @@ button,
 }
 
 .routine-action-card:hover {
-  border-color: var(--gymos-border-strong);
+  border-color: var(--aptus-border-strong);
   box-shadow: 0 5px 16px rgb(0 0 0 / 6%);
   transform: translateY(-1px);
 }
@@ -341,8 +341,8 @@ button,
 
   border-radius: 11px;
 
-  background: var(--gymos-surface-hover);
-  color: var(--gymos-text);
+  background: var(--aptus-surface-hover);
+  color: var(--aptus-text);
 
   font-size: 1.35rem;
   font-weight: 700;
@@ -360,13 +360,13 @@ button,
 }
 
 .routine-action-content > span {
-  color: var(--gymos-text-muted);
+  color: var(--aptus-text-muted);
   font-size: 0.88rem;
   line-height: 1.4;
 }
 
 .routine-action-arrow {
-  color: var(--gymos-text-subtle);
+  color: var(--aptus-text-subtle);
   font-size: 1.5rem;
 }
 
@@ -394,11 +394,11 @@ button,
   width: 100%;
   padding: 16px 18px;
 
-  border: 1px solid var(--gymos-border);
+  border: 1px solid var(--aptus-border);
   border-radius: 14px;
 
-  background: var(--gymos-surface);
-  color: var(--gymos-text);
+  background: var(--aptus-surface);
+  color: var(--aptus-text);
 
   cursor: pointer;
   list-style: none;
@@ -420,8 +420,8 @@ button,
 
   border-radius: 11px;
 
-  background: var(--gymos-accent);
-  color: var(--gymos-accent-contrast);
+  background: var(--aptus-accent);
+  color: var(--aptus-accent-contrast);
 
   font-size: 1.1rem;
 }
@@ -438,14 +438,14 @@ button,
 }
 
 .management-content > span {
-  color: var(--gymos-text-muted);
+  color: var(--aptus-text-muted);
 
   font-size: 0.88rem;
   line-height: 1.4;
 }
 
 .management-chevron {
-  color: var(--gymos-text-subtle);
+  color: var(--aptus-text-subtle);
 
   font-size: 1.5rem;
 
@@ -482,10 +482,10 @@ button,
   margin-top: 12px;
   padding: 18px;
 
-  border: 1px solid var(--gymos-border);
+  border: 1px solid var(--aptus-border);
   border-radius: 14px;
 
-  background: var(--gymos-surface);
+  background: var(--aptus-surface);
 }
 
 .analysis-period {
@@ -502,24 +502,24 @@ button,
 .period-selector button {
   padding: 8px 12px;
 
-  border: 1px solid var(--gymos-border-strong);
+  border: 1px solid var(--aptus-border-strong);
   border-radius: 999px;
 
-  background: var(--gymos-surface);
-  color: var(--gymos-text-muted);
+  background: var(--aptus-surface);
+  color: var(--aptus-text-muted);
 
   cursor: pointer;
 }
 
 .period-selector button:hover {
-  background: var(--gymos-surface-hover);
+  background: var(--aptus-surface-hover);
 }
 
 .period-selector button.active {
-  border-color: var(--gymos-text);
+  border-color: var(--aptus-text);
 
-  background: var(--gymos-accent);
-  color: var(--gymos-accent-contrast);
+  background: var(--aptus-accent);
+  color: var(--aptus-accent-contrast);
 }
 
 .period-selector button:disabled {
@@ -535,7 +535,7 @@ button,
 .analysis-section + .analysis-section {
   padding-top: 20px;
 
-  border-top: 1px solid var(--gymos-border);
+  border-top: 1px solid var(--aptus-border);
 }
 
 .analysis-section-header h3 {
@@ -545,7 +545,7 @@ button,
 .analysis-section-header p {
   margin: 0;
 
-  color: var(--gymos-text-muted);
+  color: var(--aptus-text-muted);
 
   font-size: 0.9rem;
 }
@@ -567,14 +567,14 @@ button,
 
   padding: 14px;
 
-  border: 1px solid var(--gymos-border);
+  border: 1px solid var(--aptus-border);
   border-radius: 12px;
 
-  background: var(--gymos-surface-muted);
+  background: var(--aptus-surface-muted);
 }
 
 .metric-card span {
-  color: var(--gymos-text-muted);
+  color: var(--aptus-text-muted);
 
   font-size: 0.82rem;
 }
@@ -586,20 +586,20 @@ button,
 .analysis-placeholder {
   padding: 16px;
 
-  border: 1px dashed var(--gymos-border-strong);
+  border: 1px dashed var(--aptus-border-strong);
   border-radius: 12px;
 
-  background: var(--gymos-surface-muted);
-  color: var(--gymos-text-muted);
+  background: var(--aptus-surface-muted);
+  color: var(--aptus-text-muted);
 
   font-size: 0.9rem;
 }
 
 .analysis-error {
-  border-color: var(--gymos-danger-border);
+  border-color: var(--aptus-danger-border);
 
-  background: var(--gymos-danger-bg);
-  color: var(--gymos-danger);
+  background: var(--aptus-danger-bg);
+  color: var(--aptus-danger);
 }
 
 .analysis-ranking {
@@ -614,10 +614,10 @@ button,
 
   padding: 10px 12px;
 
-  border: 1px solid var(--gymos-border);
+  border: 1px solid var(--aptus-border);
   border-radius: 10px;
 
-  background: var(--gymos-surface);
+  background: var(--aptus-surface);
 }
 
 .analysis-ranking-row span,
@@ -629,7 +629,7 @@ button,
   display: grid;
   overflow-x: auto;
 
-  border: 1px solid var(--gymos-border);
+  border: 1px solid var(--aptus-border);
   border-radius: 12px;
 }
 
@@ -644,7 +644,7 @@ button,
 
   min-width: 1100px;
 
-  border-top: 1px solid var(--gymos-border);
+  border-top: 1px solid var(--aptus-border);
 }
 
 .analysis-table-row:first-child {
@@ -655,18 +655,18 @@ button,
   min-width: 0;
   padding: 10px 12px;
 
-  color: var(--gymos-text-muted);
+  color: var(--aptus-text-muted);
 
   font-size: 0.86rem;
   overflow-wrap: anywhere;
 }
 
 .analysis-table-head {
-  background: var(--gymos-surface-muted);
+  background: var(--aptus-surface-muted);
 }
 
 .analysis-table-head span {
-  color: var(--gymos-text-muted);
+  color: var(--aptus-text-muted);
 
   font-size: 0.78rem;
   font-weight: 700;
@@ -704,7 +704,7 @@ button,
 }
 
 .trend-group p {
-  color: var(--gymos-text-muted);
+  color: var(--aptus-text-muted);
 
   font-size: 0.84rem;
 }
@@ -717,17 +717,17 @@ button,
   min-height: 82px;
   padding: 10px;
 
-  border: 1px solid var(--gymos-border);
+  border: 1px solid var(--aptus-border);
   border-radius: 8px;
 
-  background: var(--gymos-surface);
-  color: var(--gymos-text);
+  background: var(--aptus-surface);
+  color: var(--aptus-text);
 
   text-align: left;
 }
 
 .trend-exercise:hover {
-  border-color: var(--gymos-text-subtle);
+  border-color: var(--aptus-text-subtle);
 }
 
 .trend-exercise span,
@@ -743,14 +743,14 @@ button,
 }
 
 .trend-exercise small {
-  color: var(--gymos-text-muted);
+  color: var(--aptus-text-muted);
 }
 
 .analysis-evolution label {
   display: grid;
   gap: 6px;
 
-  color: var(--gymos-text-muted);
+  color: var(--aptus-text-muted);
 
   font-size: 0.86rem;
   font-weight: 700;
@@ -760,11 +760,11 @@ button,
   max-width: 360px;
   padding: 9px 10px;
 
-  border: 1px solid var(--gymos-border-strong);
+  border: 1px solid var(--aptus-border-strong);
   border-radius: 10px;
 
-  background: var(--gymos-surface);
-  color: var(--gymos-text);
+  background: var(--aptus-surface);
+  color: var(--aptus-text);
 }
 
 .analysis-evolution .analysis-table-row {
@@ -793,15 +793,15 @@ button,
 
   padding: 12px;
 
-  border: 1px solid var(--gymos-border);
+  border: 1px solid var(--aptus-border);
   border-radius: 8px;
 
-  background: var(--gymos-surface-muted);
+  background: var(--aptus-surface-muted);
 }
 
 .selected-trend-summary span,
 .chart-header span {
-  color: var(--gymos-text-muted);
+  color: var(--aptus-text-muted);
 
   font-size: 0.76rem;
   font-weight: 700;
@@ -819,10 +819,10 @@ button,
   margin: 0;
   padding: 10px 12px;
 
-  border-left: 3px solid var(--gymos-accent);
+  border-left: 3px solid var(--aptus-accent);
 
-  background: var(--gymos-surface-muted);
-  color: var(--gymos-text-muted);
+  background: var(--aptus-surface-muted);
+  color: var(--aptus-text-muted);
 
   font-size: 0.9rem;
 }
@@ -847,27 +847,27 @@ button,
   width: 100%;
   height: 220px;
 
-  border: 1px solid var(--gymos-border);
+  border: 1px solid var(--aptus-border);
   border-radius: 8px;
 
   background:
     linear-gradient(
       to bottom,
-      var(--gymos-surface),
-      var(--gymos-surface-muted)
+      var(--aptus-surface),
+      var(--aptus-surface-muted)
     );
 }
 
 .e1rm-chart polyline {
   fill: none;
-  stroke: var(--gymos-accent-text);
+  stroke: var(--aptus-accent-text);
   stroke-width: 2.2;
   vector-effect: non-scaling-stroke;
 }
 
 .e1rm-chart circle {
-  fill: var(--gymos-surface);
-  stroke: var(--gymos-accent-text);
+  fill: var(--aptus-surface);
+  stroke: var(--aptus-accent-text);
   stroke-width: 1.8;
   vector-effect: non-scaling-stroke;
 }
@@ -877,7 +877,7 @@ button,
   justify-content: space-between;
   gap: 8px;
 
-  color: var(--gymos-text-muted);
+  color: var(--aptus-text-muted);
 
   font-size: 0.74rem;
 }
@@ -1243,13 +1243,13 @@ button,
   display: grid;
   place-items: center;
 
-  border: 1px solid var(--gymos-border);
+  border: 1px solid var(--aptus-border);
   border-radius: 8px;
 
   padding: 0;
 
   background: transparent;
-  color: var(--gymos-text-muted);
+  color: var(--aptus-text-muted);
 
   font: inherit;
   font-size: 1rem;
@@ -1258,8 +1258,8 @@ button,
 }
 
 .analysis-delete-record:hover:not(:disabled) {
-  border-color: var(--gymos-danger);
-  color: var(--gymos-danger);
+  border-color: var(--aptus-danger);
+  color: var(--aptus-danger);
 }
 
 .analysis-delete-record:disabled {

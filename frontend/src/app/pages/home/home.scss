@@ -83,12 +83,12 @@
 
   border:
     1px solid
-    var(--gymos-border);
+    var(--aptus-border);
 
   border-radius: 18px;
 
   background:
-    var(--gymos-surface);
+    var(--aptus-surface);
 
   color: inherit;
 
@@ -110,7 +110,7 @@
 
 .home-card:hover {
   background:
-    var(--gymos-surface-hover);
+    var(--aptus-surface-hover);
 }
 
 
@@ -142,7 +142,7 @@
 
   border:
     1px solid
-    var(--gymos-border);
+    var(--aptus-border);
 
   border-radius: 999px;
 
@@ -157,7 +157,7 @@
   opacity: 1;
 
   background:
-    var(--gymos-surface-hover);
+    var(--aptus-surface-hover);
 }
 
 
@@ -251,7 +251,7 @@
   border-radius: 999px;
 
   background:
-    var(--gymos-surface-hover);
+    var(--aptus-surface-hover);
 }
 
 

@@ -7,7 +7,7 @@ Version: 0.20.3
 Copyright (C) 2012-present SheetJS LLC  
 License: Apache License, Version 2.0
 
-The bundled browser build is stored at `vendor/xlsx.full.min.js`.
+SheetJS is consumed by the Angular frontend through the `xlsx` package dependency.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.

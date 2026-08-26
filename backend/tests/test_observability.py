@@ -43,7 +43,7 @@ def test_observability_adds_request_id(
 
     with caplog.at_level(
         logging.INFO,
-        logger="aptus.requests",
+        logger="uvicorn.error.aptus.requests",
     ):
         response = asyncio.run(
             observe_request(
@@ -62,7 +62,7 @@ def test_observability_adds_request_id(
         record
         for record in caplog.records
         if record.name
-        == "aptus.requests"
+        == "uvicorn.error.aptus.requests"
     ]
 
     assert len(records) == 1
@@ -109,7 +109,7 @@ def test_observability_does_not_log_query_string(
 
     with caplog.at_level(
         logging.INFO,
-        logger="aptus.requests",
+        logger="uvicorn.error.aptus.requests",
     ):
         asyncio.run(
             observe_request(
@@ -122,7 +122,7 @@ def test_observability_does_not_log_query_string(
         record.getMessage()
         for record in caplog.records
         if record.name
-        == "aptus.requests"
+        == "uvicorn.error.aptus.requests"
     )
 
     assert "/api/v1/search" in logged
@@ -140,7 +140,7 @@ def test_observability_logs_exception_type_only(
 
     with caplog.at_level(
         logging.ERROR,
-        logger="aptus.requests",
+        logger="uvicorn.error.aptus.requests",
     ):
         response = asyncio.run(
             observe_request(
@@ -170,7 +170,7 @@ def test_observability_logs_exception_type_only(
         record
         for record in caplog.records
         if record.name
-        == "aptus.requests"
+        == "uvicorn.error.aptus.requests"
     ]
 
     assert len(records) == 1

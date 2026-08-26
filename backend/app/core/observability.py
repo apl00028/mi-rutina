@@ -8,7 +8,9 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 
 
-logger = logging.getLogger("aptus.requests")
+logger = logging.getLogger(
+    "uvicorn.error.aptus.requests"
+)
 
 
 async def observe_request(

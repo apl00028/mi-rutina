@@ -12,6 +12,7 @@ from app.domains.coach.service import (
 )
 from app.api.v1.router import router as api_v1_router
 from app.core.security_headers import apply_security_headers
+from app.core.observability import observe_request
 
 load_dotenv()
 
@@ -32,6 +33,15 @@ app.add_middleware(
 
 app.include_router(api_v1_router)
 app.include_router(coach_router)
+
+
+@app.middleware("http")
+async def observability_middleware(request, call_next):
+    return await observe_request(
+        request,
+        call_next,
+    )
+
 
 
 @app.middleware("http")

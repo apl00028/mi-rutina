@@ -1,3 +1,4 @@
+import asyncio
 import os
 
 import httpx
@@ -239,14 +240,16 @@ async def get_me(
         authenticate_user
     ),
 ) -> dict:
-    access = await get_gymos_access(
-        user
-    )
-
-    onboarding_completed = (
-        await _get_onboarding_completed(
+    (
+        access,
+        onboarding_completed,
+    ) = await asyncio.gather(
+        get_gymos_access(
             user
-        )
+        ),
+        _get_onboarding_completed(
+            user
+        ),
     )
 
     return _me_response(

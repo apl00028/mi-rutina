@@ -263,3 +263,84 @@ def test_delete_account_removes_data_before_auth(
         ("data", "user-123"),
         ("auth", "user-123"),
     ]
+
+
+def test_me_loads_access_and_onboarding_concurrently(
+    monkeypatch,
+):
+    import asyncio
+
+    from app.domains.account import (
+        router as me_api,
+    )
+
+    events = []
+
+    async def fake_get_gymos_access(user):
+        events.append("access_started")
+
+        await asyncio.sleep(0)
+
+        events.append("access_finished")
+
+        return type(
+            "Access",
+            (),
+            {
+                "status": "active",
+                "plan": "trial",
+                "role": "user",
+                "expires_at": None,
+            },
+        )()
+
+    async def fake_onboarding_completed(user):
+        events.append("onboarding_started")
+
+        await asyncio.sleep(0)
+
+        events.append("onboarding_finished")
+
+        return True
+
+    monkeypatch.setattr(
+        me_api,
+        "get_gymos_access",
+        fake_get_gymos_access,
+    )
+
+    monkeypatch.setattr(
+        me_api,
+        "_get_onboarding_completed",
+        fake_onboarding_completed,
+    )
+
+    user = AuthenticatedUser(
+        id="user-123",
+        email="test@example.com",
+        access_token="token-123",
+    )
+
+    result = asyncio.run(
+        me_api.get_me(user)
+    )
+
+    assert result[
+        "access_status"
+    ] == "active"
+
+    assert result[
+        "onboarding_completed"
+    ] is True
+
+    last_start = max(
+        events.index("access_started"),
+        events.index("onboarding_started"),
+    )
+
+    first_finish = min(
+        events.index("access_finished"),
+        events.index("onboarding_finished"),
+    )
+
+    assert last_start < first_finish

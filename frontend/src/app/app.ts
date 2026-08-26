@@ -31,6 +31,9 @@ import {
 import {
   WorkoutSessionStateService
 } from './core/workout-session-state.service';
+import {
+  TelemetryService
+} from './core/telemetry.service';
 
 type AppInitializationState =
   | 'initializing'
@@ -118,7 +121,9 @@ export class App implements OnDestroy {
     private settingsService:
       SettingsService,
     public workoutSessionState:
-      WorkoutSessionStateService
+      WorkoutSessionStateService,
+    private telemetry:
+      TelemetryService
   ) {
     this.syncRouteState();
 
@@ -140,6 +145,10 @@ export class App implements OnDestroy {
       )
       .subscribe(() => {
         this.syncRouteState();
+
+        void this.telemetry.pageView(
+          this.router.url
+        );
 
         if (
           !this.isStandalonePage() &&

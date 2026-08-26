@@ -16,6 +16,9 @@ begin
   delete from public.ai_daily_usage
   where user_id = p_user_id;
 
+  delete from public.app_events
+  where user_id = p_user_id;
+
   delete from public.nutrition_meal_completions
   where user_id = p_user_id;
 

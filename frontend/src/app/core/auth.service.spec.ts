@@ -318,6 +318,76 @@ describe(
 
 
     it(
+      'shares an in-flight /me request with resolveAccess',
+      async () => {
+        await service.waitForSession();
+
+        const getMePromise =
+          service.getMe();
+
+        const resolveAccessPromise =
+          service.resolveAccess();
+
+        const request =
+          await expectMeRequest();
+
+        expect(
+          request.request.method
+        ).toBe(
+          'GET'
+        );
+
+        request.flush({
+          user_id:
+            'user-123',
+
+          email:
+            'test@example.com',
+
+          access_status:
+            'active',
+
+          plan:
+            'trial',
+
+          role:
+            'user',
+
+          expires_at:
+            null,
+
+          onboarding_completed:
+            true
+        });
+
+        const [
+          me,
+          resolved
+        ] = await Promise.all([
+          getMePromise,
+          resolveAccessPromise
+        ]);
+
+        expect(
+          me.user_id
+        ).toBe(
+          'user-123'
+        );
+
+        expect(
+          resolved.user_id
+        ).toBe(
+          'user-123'
+        );
+
+        http.expectNone(
+          meUrl
+        );
+      }
+    );
+
+
+    it(
       'registers a passkey for the authenticated user',
       async () => {
         vi.spyOn(

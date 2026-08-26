@@ -1084,7 +1084,6 @@ export class AuthService {
     }
 
     if (
-      !forceRefresh &&
       this.meRequest
     ) {
       return this.meRequest;

@@ -261,6 +261,24 @@ export const routes: Routes = [
     ]
   },
   {
+    path: 'privacy',
+    loadComponent: () =>
+      import(
+        './pages/legal/privacy'
+      ).then(
+        module => module.PrivacyPage
+      )
+  },
+  {
+    path: 'delete-account',
+    loadComponent: () =>
+      import(
+        './pages/legal/delete-account'
+      ).then(
+        module => module.DeleteAccountPage
+      )
+  },
+  {
     path: '**',
     redirectTo: ''
   }

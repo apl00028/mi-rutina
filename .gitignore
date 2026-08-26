@@ -12,3 +12,6 @@ __pycache__/
 coverage/
 node_modules/
 dist/
+
+# Firebase local Android config
+frontend/android/app/google-services.json

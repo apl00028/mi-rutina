@@ -6,7 +6,8 @@
     "start": "ng serve",
     "build": "ng build",
     "watch": "ng build --watch --configuration development",
-    "test": "ng test"
+    "test": "ng test",
+    "postinstall": "node scripts/patch-capacitor-cordova-event.cjs"
   },
   "private": true,
   "packageManager": "npm@10.8.2",

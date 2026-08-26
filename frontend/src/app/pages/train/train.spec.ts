@@ -31,6 +31,9 @@ import {
   AuthService
 } from '../../core/auth.service';
 import {
+  TelemetryService
+} from '../../core/telemetry.service';
+import {
   WorkoutSessionStateService
 } from '../../core/workout-session-state.service';
 import {
@@ -77,6 +80,17 @@ describe('Train first workout flow', () => {
                 ),
             signInWithMagicLink:
               vi.fn()
+          }
+        },
+        {
+          provide:
+            TelemetryService,
+          useValue: {
+            track:
+              vi.fn()
+                .mockResolvedValue(
+                  undefined
+                )
           }
         }
       ]
@@ -913,6 +927,87 @@ describe('Train first workout flow', () => {
     ).toBe(
       '00000000-0000-4000-8000-000000000001'
     );
+  });
+
+
+  it('tracks workout_started only after successful creation', async () => {
+    const fixture =
+      await createLoadedTrain();
+
+    const component =
+      fixture.componentInstance;
+
+    const telemetry =
+      vi.mocked(
+        TestBed.inject(
+          TelemetryService
+        ).track
+      );
+
+    const session =
+      component.routine()!.sessions[0];
+
+    const failedStart =
+      component.startWorkout(session);
+
+    await waitForHttpTick();
+
+    const failed =
+      http.expectOne(
+        `${environment.apiUrl}/workouts`
+      );
+
+    expect(telemetry)
+      .not.toHaveBeenCalled();
+
+    failed.flush(
+      {
+        detail:
+          'Workouts service is unavailable'
+      },
+      {
+        status: 502,
+        statusText: 'Bad Gateway'
+      }
+    );
+
+    await failedStart;
+
+    expect(telemetry)
+      .not.toHaveBeenCalled();
+
+    const retry =
+      component.startWorkout(session);
+
+    await waitForHttpTick();
+
+    const created =
+      http.expectOne(
+        `${environment.apiUrl}/workouts`
+      );
+
+    expect(telemetry)
+      .not.toHaveBeenCalled();
+
+    created.flush({
+      ...created.request.body,
+      startedAt:
+        '2026-08-20T15:00:00Z'
+    });
+
+    await retry;
+
+    expect(telemetry)
+      .toHaveBeenCalledTimes(1);
+
+    expect(telemetry)
+      .toHaveBeenCalledWith({
+        event_name:
+          'workout_started',
+        route:
+          '/entrenar',
+        metadata: {}
+      });
   });
 
 
@@ -4128,6 +4223,94 @@ describe('Train first workout flow', () => {
 
     expect(recommendation)
       .toBeNull();
+  });
+
+
+  it('tracks workout_completed only after successful persistence', async () => {
+    const fixture =
+      await createLoadedTrain([
+        {
+          workoutId:
+            'workout-1',
+          routineId:
+            'routine-1',
+          sessionId:
+            'session-1',
+          status:
+            'in_progress',
+          sets: []
+        }
+      ]);
+
+    const component =
+      fixture.componentInstance;
+
+    const telemetry =
+      vi.mocked(
+        TestBed.inject(
+          TelemetryService
+        ).track
+      );
+
+    const failedFinish =
+      component.finishWorkout();
+
+    await waitForHttpTick();
+
+    const failed =
+      http.expectOne(
+        `${environment.apiUrl}/workouts/workout-1`
+      );
+
+    expect(telemetry)
+      .not.toHaveBeenCalled();
+
+    failed.flush(
+      {
+        detail:
+          'Workouts service is unavailable'
+      },
+      {
+        status: 502,
+        statusText: 'Bad Gateway'
+      }
+    );
+
+    await failedFinish;
+
+    expect(telemetry)
+      .not.toHaveBeenCalled();
+
+    const retry =
+      component.finishWorkout();
+
+    await waitForHttpTick();
+
+    const saved =
+      http.expectOne(
+        `${environment.apiUrl}/workouts/workout-1`
+      );
+
+    expect(telemetry)
+      .not.toHaveBeenCalled();
+
+    saved.flush(
+      saved.request.body
+    );
+
+    await retry;
+
+    expect(telemetry)
+      .toHaveBeenCalledTimes(1);
+
+    expect(telemetry)
+      .toHaveBeenCalledWith({
+        event_name:
+          'workout_completed',
+        route:
+          '/entrenar',
+        metadata: {}
+      });
   });
 
 

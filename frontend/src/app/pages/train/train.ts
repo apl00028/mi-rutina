@@ -1,3 +1,7 @@
+import {
+  TelemetryService
+} from '../../core/telemetry.service';
+
 import { Component, OnDestroy, OnInit, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { Router } from '@angular/router';
@@ -252,7 +256,9 @@ export class Train implements OnInit, OnDestroy {
       SettingsService,
     private workoutSessionState:
       WorkoutSessionStateService,
-    private router: Router
+    private router: Router,
+    private telemetry:
+      TelemetryService
   ) {}
 
   openTrainingSection(
@@ -3103,6 +3109,14 @@ export class Train implements OnInit, OnDestroy {
           });
       });
 
+      void this.telemetry.track({
+        event_name:
+          'workout_started',
+        route:
+          '/entrenar',
+        metadata: {}
+      });
+
       this.activeWorkout.set(created);
       this.activeSession.set(session);
       this.workoutSessionState
@@ -4700,6 +4714,14 @@ export class Train implements OnInit, OnDestroy {
             showLoading: true
           }
         );
+
+      void this.telemetry.track({
+        event_name:
+          'workout_completed',
+        route:
+          '/entrenar',
+        metadata: {}
+      });
 
       this.updateWorkoutHistory(saved);
       this.persistedEditVersion =

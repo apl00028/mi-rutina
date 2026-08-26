@@ -25,6 +25,10 @@ import {
 } from '../../core/auth.service';
 
 import {
+  TelemetryService
+} from '../../core/telemetry.service';
+
+import {
   HealthConnect
 } from '../../core/health-connect.plugin';
 
@@ -1894,6 +1898,12 @@ export class SettingsAppearance {
 export class SettingsData
   implements OnInit {
 
+  constructor(
+    private telemetry:
+      TelemetryService
+  ) {}
+
+
   readonly healthConnectAvailable =
     signal<boolean | null>(
       null
@@ -2092,11 +2102,33 @@ export class SettingsData
         snapshot
       );
 
+      void this.telemetry.track({
+        event_name:
+          'health_connect_read',
+        route:
+          '/ajustes/datos',
+        metadata: {
+          operation:
+            'snapshot'
+        }
+      });
+
       this.healthConnectMessage.set(
         'Lectura completada. Estos datos todavía no se han guardado en Aptus.'
       );
 
     } catch (error: unknown) {
+      void this.telemetry.track({
+        event_name:
+          'health_connect_error',
+        route:
+          '/ajustes/datos',
+        metadata: {
+          operation:
+            'snapshot'
+        }
+      });
+
       this.healthConnectError.set(
         this.healthConnectErrorMessage(
           error,
@@ -2141,12 +2173,34 @@ export class SettingsData
         result
       );
 
+      void this.telemetry.track({
+        event_name:
+          'health_connect_read',
+        route:
+          '/ajustes/datos',
+        metadata: {
+          operation:
+            'garmin_sessions'
+        }
+      });
+
       this.healthConnectMessage.set(
         `${result.count} actividades Garmin encontradas. ` +
         'Todavía no se han guardado en Aptus.'
       );
 
     } catch (error: unknown) {
+      void this.telemetry.track({
+        event_name:
+          'health_connect_error',
+        route:
+          '/ajustes/datos',
+        metadata: {
+          operation:
+            'garmin_sessions'
+        }
+      });
+
       this.healthConnectError.set(
         this.healthConnectErrorMessage(
           error,

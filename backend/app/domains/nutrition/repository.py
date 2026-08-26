@@ -59,12 +59,13 @@ async def get_nutrition_plan_by_id(
         "limit": "1",
     }
 
-    async with httpx.AsyncClient(timeout=10.0) as client:
-        response = await client.get(
-            f"{url}/rest/v1/nutrition_plans",
-            headers=headers,
-            params=params,
-        )
+    client = get_supabase_http_client()
+
+    response = await client.get(
+        f"{url}/rest/v1/nutrition_plans",
+        headers=headers,
+        params=params,
+    )
 
     response.raise_for_status()
     data = response.json()
@@ -239,17 +240,16 @@ async def list_nutrition_meal_completions(
         "order": "meal_date.asc",
     }
 
-    async with httpx.AsyncClient(
-        timeout=10.0
-    ) as client:
-        response = await client.get(
-            (
-                f"{url}/rest/v1/"
-                "nutrition_meal_completions"
-            ),
-            headers=headers,
-            params=params,
-        )
+    client = get_supabase_http_client()
+
+    response = await client.get(
+        (
+            f"{url}/rest/v1/"
+            "nutrition_meal_completions"
+        ),
+        headers=headers,
+        params=params,
+    )
 
     response.raise_for_status()
     data = response.json()

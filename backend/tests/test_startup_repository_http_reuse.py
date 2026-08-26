@@ -113,3 +113,73 @@ def test_home_startup_reads_reuse_shared_client(
             "/rest/v1/health_weight_entries"
         ),
     }
+
+
+
+def test_nutrition_home_followup_reuses_shared_client(
+    monkeypatch,
+):
+    user = AuthenticatedUser(
+        id="user-123",
+        access_token="token-123",
+    )
+
+    client = SharedFakeClient()
+
+    monkeypatch.setattr(
+        nutrition_repository,
+        "_supabase_config",
+        lambda: (
+            "https://example.supabase.co",
+            "publishable-key",
+        ),
+    )
+
+    monkeypatch.setattr(
+        nutrition_repository,
+        "get_supabase_http_client",
+        lambda: client,
+    )
+
+    async def run():
+        await (
+            nutrition_repository
+            .get_nutrition_plan_by_id(
+                user,
+                "plan-123",
+            )
+        )
+
+        await (
+            nutrition_repository
+            .list_nutrition_meal_completions(
+                user,
+                "plan-123",
+            )
+        )
+
+    asyncio.run(run())
+
+    assert len(client.calls) == 2
+
+    assert [
+        call["url"]
+        for call in client.calls
+    ] == [
+        (
+            "https://example.supabase.co"
+            "/rest/v1/nutrition_plans"
+        ),
+        (
+            "https://example.supabase.co"
+            "/rest/v1/"
+            "nutrition_meal_completions"
+        ),
+    ]
+
+    assert {
+        call["headers"]["Authorization"]
+        for call in client.calls
+    } == {
+        "Bearer token-123"
+    }

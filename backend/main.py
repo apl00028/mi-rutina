@@ -1,4 +1,5 @@
 import os
+from contextlib import asynccontextmanager
 
 from dotenv import load_dotenv
 from fastapi import FastAPI
@@ -13,6 +14,9 @@ from app.domains.coach.service import (
 from app.api.v1.router import router as api_v1_router
 from app.core.security_headers import apply_security_headers
 from app.core.observability import observe_request
+from app.core.http_client import (
+    close_supabase_http_client,
+)
 
 load_dotenv()
 
@@ -22,7 +26,19 @@ ALLOWED_ORIGINS = [
     if origin.strip()
 ]
 
-app = FastAPI(title="Aptus API", version="4.0.0")
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    try:
+        yield
+    finally:
+        await close_supabase_http_client()
+
+
+app = FastAPI(
+    title="Aptus API",
+    version="4.0.0",
+    lifespan=lifespan,
+)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=ALLOWED_ORIGINS,

@@ -6,6 +6,10 @@ from datetime import datetime, timezone
 
 import httpx
 from fastapi import HTTPException, Security, status
+
+from app.core.http_client import (
+    get_supabase_http_client,
+)
 from fastapi.security import (
     HTTPAuthorizationCredentials,
     HTTPBearer,
@@ -127,13 +131,12 @@ async def authenticate_user(
     }
 
     try:
-        async with httpx.AsyncClient(
-            timeout=10.0
-        ) as client:
-            user_response = await client.get(
-                f"{supabase_url}/auth/v1/user",
-                headers=headers,
-            )
+        client = get_supabase_http_client()
+
+        user_response = await client.get(
+            f"{supabase_url}/auth/v1/user",
+            headers=headers,
+        )
 
     except httpx.HTTPError as exc:
         raise HTTPException(
@@ -209,16 +212,15 @@ async def get_gymos_access(
     }
 
     try:
-        async with httpx.AsyncClient(
-            timeout=10.0
-        ) as client:
-            response = await client.get(
-                (
-                    f"{supabase_url}"
-                    "/rest/v1/gymos_users"
-                ),
-                headers=headers,
-                params={
+        client = get_supabase_http_client()
+
+        response = await client.get(
+            (
+                f"{supabase_url}"
+                "/rest/v1/gymos_users"
+            ),
+            headers=headers,
+            params={
                     "user_id":
                         f"eq.{user.id}",
                     "select": (
@@ -229,10 +231,10 @@ async def get_gymos_access(
                         "role,"
                         "expires_at"
                     ),
-                    "limit":
-                        "1",
-                },
-            )
+                "limit":
+                    "1",
+            },
+        )
 
     except httpx.HTTPError as exc:
         raise HTTPException(

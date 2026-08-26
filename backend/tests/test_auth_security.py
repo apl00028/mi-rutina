@@ -70,9 +70,11 @@ def test_authenticate_user_with_valid_bearer_token(monkeypatch):
             return FakeResponse()
 
     monkeypatch.setattr(
-        auth.httpx,
-        "AsyncClient",
-        FakeClient,
+        auth,
+        "get_supabase_http_client",
+        lambda: FakeClient(
+            timeout=10.0
+        ),
     )
 
     user = asyncio.run(

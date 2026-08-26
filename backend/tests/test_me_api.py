@@ -140,9 +140,11 @@ def test_me_rejects_invalid_token(monkeypatch):
             return FakeResponse()
 
     monkeypatch.setattr(
-        auth.httpx,
-        "AsyncClient",
-        FakeClient,
+        auth,
+        "get_supabase_http_client",
+        lambda: FakeClient(
+            timeout=10.0
+        ),
     )
 
     response = client.get(

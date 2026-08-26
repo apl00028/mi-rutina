@@ -9,6 +9,10 @@ from fastapi import (
     status,
 )
 
+from app.core.http_client import (
+    get_supabase_http_client,
+)
+
 from app.core.auth import (
     AuthenticatedUser,
     authenticate_user,
@@ -89,24 +93,23 @@ async def _get_onboarding_completed(
     )
 
     try:
-        async with httpx.AsyncClient(
-            timeout=10.0
-        ) as client:
-            response = await client.get(
-                (
-                    f"{supabase_url}"
-                    "/rest/v1/training_profiles"
-                ),
-                headers=_headers(user),
-                params={
-                    "user_id":
-                        f"eq.{user.id}",
-                    "select":
-                        "onboarding_completed",
-                    "limit":
-                        "1",
-                },
-            )
+        client = get_supabase_http_client()
+
+        response = await client.get(
+            (
+                f"{supabase_url}"
+                "/rest/v1/training_profiles"
+            ),
+            headers=_headers(user),
+            params={
+                "user_id":
+                    f"eq.{user.id}",
+                "select":
+                    "onboarding_completed",
+                "limit":
+                    "1",
+            },
+        )
 
     except httpx.HTTPError as exc:
         raise HTTPException(

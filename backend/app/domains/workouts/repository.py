@@ -3,6 +3,9 @@ from typing import Any
 import httpx
 
 from app.core.auth import AuthenticatedUser
+from app.core.http_client import (
+    get_supabase_http_client,
+)
 from app.domains.exercises.custom_repository import _supabase_config
 
 
@@ -21,12 +24,13 @@ async def list_workouts(
         "order": "updated_at.desc",
     }
 
-    async with httpx.AsyncClient(timeout=10.0) as client:
-        response = await client.get(
-            f"{url}/rest/v1/workouts",
-            headers=headers,
-            params=params,
-        )
+    client = get_supabase_http_client()
+
+    response = await client.get(
+        f"{url}/rest/v1/workouts",
+        headers=headers,
+        params=params,
+    )
 
     response.raise_for_status()
 

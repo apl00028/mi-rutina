@@ -4,6 +4,9 @@ from typing import Any
 import httpx
 
 from app.core.auth import AuthenticatedUser
+from app.core.http_client import (
+    get_supabase_http_client,
+)
 from app.domains.exercises.custom_repository import (
     _supabase_config,
 )
@@ -34,22 +37,21 @@ async def list_weight_entries(
 ) -> list[dict[str, Any]]:
     url, _ = _supabase_config()
 
-    async with httpx.AsyncClient(
-        timeout=10.0
-    ) as client:
-        response = await client.get(
-            (
-                f"{url}/rest/v1/"
-                "health_weight_entries"
-            ),
-            headers=_headers(user),
-            params={
-                "user_id":
-                    f"eq.{user.id}",
-                "order":
-                    "measurement_date.desc",
-            },
-        )
+    client = get_supabase_http_client()
+
+    response = await client.get(
+        (
+            f"{url}/rest/v1/"
+            "health_weight_entries"
+        ),
+        headers=_headers(user),
+        params={
+            "user_id":
+                f"eq.{user.id}",
+            "order":
+                "measurement_date.desc",
+        },
+    )
 
     response.raise_for_status()
     data = response.json()

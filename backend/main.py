@@ -45,12 +45,8 @@ async def security_headers_middleware(request, call_next):
     "/health",
     include_in_schema=False,
 )
-def health() -> dict[str, object]:
-    ai = configuration_status()
+def health() -> dict[str, str]:
     return {
         "status": "ok",
         "version": "4.0.0",
-        "model": ai["model"],
-        "provider": ai["provider"],
-        "aiStatus": ai["status"],
     }

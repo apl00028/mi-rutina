@@ -110,6 +110,8 @@ def coach_chat(
     user: AuthenticatedUser = Depends(require_user),
 ) -> dict[str, Any]:
     coach_rate_limiter.check(user.id)
+    ai_daily_rate_limiter.check(user.access_token)
+
     schema = {
         "message": "A concise Spanish answer grounded in the supplied data.",
         "actions": ["Optional short suggested next actions."],
@@ -157,6 +159,8 @@ def coach_review(
     user: AuthenticatedUser = Depends(require_user),
 ) -> dict[str, Any]:
     coach_rate_limiter.check(user.id)
+    ai_daily_rate_limiter.check(user.access_token)
+
     schema = {
         "summary": "Review summary in Spanish.",
         "notes": ["Grounded observations."],
@@ -208,7 +212,7 @@ def workout_analysis_message(
     user: AuthenticatedUser = Depends(require_user),
 ) -> dict[str, Any]:
     coach_rate_limiter.check(user.id)
-    ai_daily_rate_limiter.check(user.id)
+    ai_daily_rate_limiter.check(user.access_token)
     result = generate_coach_message(request.workout_analysis)
     return {
         "message": result.message,

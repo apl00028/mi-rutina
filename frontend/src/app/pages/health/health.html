@@ -156,15 +156,12 @@
           Peso (kg)
 
           <input
-            type="number"
+            type="text"
             inputmode="decimal"
-            min="20"
-            max="350"
-            step="0.1"
-            placeholder="75.4"
+            placeholder="75,40"
             [value]="weightKg()"
             (input)="
-              weightKg.set(
+              updateWeightInput(
                 $any($event.target).value
               )
             "
@@ -584,7 +581,11 @@
             ) {
               {{
                 metric.value
-                  | number:'1.1-2'
+                  | number:(
+                      metric.key === 'weight'
+                        ? '1.2-2'
+                        : '1.1-2'
+                    )
               }}
               {{ metric.unit }}
             } @else {
@@ -603,7 +604,7 @@
                 Media últimos 7 días:
                 {{
                   summary()?.recentAverageKg
-                    | number:'1.1-2'
+                    | number:'1.2-2'
                 }}
                 kg
               </small>
@@ -619,7 +620,7 @@
                 Cambio 7 días:
                 {{
                   summary()?.changeKg
-                    | number:'1.1-2'
+                    | number:'1.2-2'
                 }}
                 kg
 
@@ -769,7 +770,11 @@
             <strong>
               {{
                 chartCurrentValue()
-                  | number:'1.1-2'
+                  | number:(
+                      chartMetric() === 'weight'
+                        ? '1.2-2'
+                        : '1.1-2'
+                    )
               }}
               {{ chartUnit() }}
             </strong>
@@ -788,7 +793,11 @@
                 Math.abs(
                   chartChange() ?? 0
                 )
-                  | number:'1.1-2'
+                  | number:(
+                      chartMetric() === 'weight'
+                        ? '1.2-2'
+                        : '1.1-2'
+                    )
               }}
               {{ chartChangeUnit() }}
             </strong>
@@ -881,7 +890,11 @@
                     ·
                     {{
                       point.value
-                        | number:'1.1-2'
+                        | number:(
+                            chartMetric() === 'weight'
+                              ? '1.2-2'
+                              : '1.1-2'
+                          )
                     }}
                     {{ chartUnit() }}
                   </title>
@@ -1333,7 +1346,11 @@
               <strong>
                 {{
                   entry.value
-                    | number:'1.1-2'
+                    | number:(
+                        historyMetric() === 'weight'
+                          ? '1.2-2'
+                          : '1.1-2'
+                      )
                 }}
                 {{
                   metricUnit(

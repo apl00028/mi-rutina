@@ -175,13 +175,13 @@ describe('Health', () => {
         .toContain('Peso');
 
       expect(text)
-        .toContain('75.4 kg');
+        .toContain('75.40 kg');
 
       expect(text)
-        .toContain('75.5 kg');
+        .toContain('75.50 kg');
 
       expect(text)
-        .toContain('75.5 kg');
+        .toContain('75.50 kg');
     }
   );
 
@@ -436,6 +436,76 @@ describe('Health', () => {
       http.verify();
     }
   );
+
+
+  it(
+    'normalizes dot decimal input to comma',
+    () => {
+      component.updateWeightInput(
+        '77.25'
+      );
+
+      expect(
+        component.weightKg()
+      ).toBe(
+        '77,25'
+      );
+    }
+  );
+
+
+  it(
+    'saves comma decimal weight as a numeric value',
+    async () => {
+      component.weightDate.set(
+        '2026-08-24'
+      );
+
+      component.weightKg.set(
+        '77,25'
+      );
+
+      const savePromise =
+        component.saveWeight();
+
+      await flushPromises();
+
+      const request =
+        http.expectOne(
+          (
+            `${environment.apiUrl}`
+            + '/health/weights/'
+            + '2026-08-24'
+          )
+        );
+
+      expect(
+        request.request.body.weightKg
+      ).toBe(
+        77.25
+      );
+
+      request.flush({
+        id: 'weight-1',
+        measurementDate:
+          '2026-08-24',
+        weightKg:
+          77.25,
+        bodyFatPercent:
+          null,
+        source:
+          'manual'
+      });
+
+      await flushHealthLoad({
+        currentWeightKg:
+          77.25
+      });
+
+      await savePromise;
+    }
+  );
+
 
 
   it(

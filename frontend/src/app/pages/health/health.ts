@@ -369,12 +369,49 @@ export class Health implements OnInit {
   }
 
 
+  updateWeightInput(
+    value: string
+  ): void {
+    let normalized =
+      value
+        .replace('.', ',')
+        .replace(/[^0-9,]/g, '');
+
+    const commaIndex =
+      normalized.indexOf(',');
+
+    if (commaIndex >= 0) {
+      normalized =
+        normalized.slice(
+          0,
+          commaIndex + 1
+        )
+        +
+        normalized
+          .slice(
+            commaIndex + 1
+          )
+          .replace(/,/g, '')
+          .slice(0, 2);
+    }
+
+    this.weightKg.set(
+      normalized
+    );
+  }
+
+
   async saveWeight(): Promise<void> {
     this.error.set(null);
     this.message.set(null);
 
+    const weightText =
+      this.weightKg()
+        .trim()
+        .replace(',', '.');
+
     const weight =
-      Number(this.weightKg());
+      Number(weightText);
 
     if (
       !Number.isFinite(weight)

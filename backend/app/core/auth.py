@@ -11,6 +11,11 @@ from fastapi import HTTPException, Security, status
 from app.core.http_client import (
     get_supabase_http_client,
 )
+from app.core.supabase_jwt import (
+    InvalidSupabaseToken,
+    SupabaseJwksUnavailable,
+    verify_supabase_access_token,
+)
 from fastapi.security import (
     HTTPAuthorizationCredentials,
     HTTPBearer,
@@ -107,15 +112,13 @@ async def authenticate_user(
     ),
 ) -> AuthenticatedUser:
     """
-    Validate only the Supabase identity.
+    Validate the Supabase identity locally.
 
-    This dependency intentionally does NOT
-    require the Aptus account to be active.
+    The token signature and standard claims
+    are verified against Supabase JWKS.
 
-    It is suitable for:
-    - /me
-    - pending-access screens
-    - onboarding/access bootstrap flows
+    This avoids calling /auth/v1/user for
+    every protected backend request.
     """
 
     token = _extract_bearer_token(
@@ -124,27 +127,33 @@ async def authenticate_user(
 
     (
         supabase_url,
-        publishable_key,
+        _,
     ) = _supabase_config()
 
-    headers = {
-        "Authorization":
-            f"Bearer {token}",
-        "apikey":
-            publishable_key,
-    }
+    client = get_supabase_http_client()
 
     try:
-        client = get_supabase_http_client()
-
-        user_response = await client.get(
-            f"{supabase_url}/auth/v1/user",
-            headers=headers,
+        claims = (
+            await verify_supabase_access_token(
+                token,
+                supabase_url,
+                client,
+            )
         )
 
-    except httpx.HTTPError as exc:
+    except InvalidSupabaseToken as exc:
+        raise HTTPException(
+            status_code=(
+                status.HTTP_401_UNAUTHORIZED
+            ),
+            detail=(
+                "Invalid or expired access token"
+            ),
+        ) from exc
+
+    except SupabaseJwksUnavailable as exc:
         logger.warning(
-            "supabase_auth_request_failed "
+            "supabase_jwks_request_failed "
             "error_type=%s cause_type=%s",
             type(exc).__name__,
             (
@@ -164,21 +173,12 @@ async def authenticate_user(
             ),
         ) from exc
 
-    if user_response.status_code != 200:
-        raise HTTPException(
-            status_code=(
-                status.HTTP_401_UNAUTHORIZED
-            ),
-            detail=(
-                "Invalid or expired access token"
-            ),
-        )
+    user_id = claims.get("sub")
 
-    user_payload = user_response.json()
-
-    user_id = user_payload.get("id")
-
-    if not user_id:
+    if not isinstance(
+        user_id,
+        str,
+    ) or not user_id:
         raise HTTPException(
             status_code=(
                 status.HTTP_401_UNAUTHORIZED
@@ -186,11 +186,14 @@ async def authenticate_user(
             detail="Invalid user payload",
         )
 
+    email = claims.get("email")
+
+    if not isinstance(email, str):
+        email = None
+
     return AuthenticatedUser(
         id=user_id,
-        email=user_payload.get(
-            "email"
-        ),
+        email=email,
         access_token=token,
     )
 
@@ -252,6 +255,17 @@ async def get_gymos_access(
         )
 
     except httpx.HTTPError as exc:
+        logger.warning(
+            "supabase_access_request_failed "
+            "error_type=%s cause_type=%s",
+            type(exc).__name__,
+            (
+                type(exc.__cause__).__name__
+                if exc.__cause__ is not None
+                else "none"
+            ),
+        )
+
         raise HTTPException(
             status_code=(
                 status.HTTP_503_SERVICE_UNAVAILABLE

@@ -1,4 +1,5 @@
 import asyncio
+import logging
 import os
 
 import httpx
@@ -21,6 +22,11 @@ from app.core.auth import (
 
 from app.domains.account.deletion_service import (
     delete_account,
+)
+
+
+logger = logging.getLogger(
+    "uvicorn.error"
 )
 
 
@@ -112,6 +118,17 @@ async def _get_onboarding_completed(
         )
 
     except httpx.HTTPError as exc:
+        logger.warning(
+            "supabase_training_profile_request_failed "
+            "error_type=%s cause_type=%s",
+            type(exc).__name__,
+            (
+                type(exc.__cause__).__name__
+                if exc.__cause__ is not None
+                else "none"
+            ),
+        )
+
         raise HTTPException(
             status_code=(
                 status.HTTP_503_SERVICE_UNAVAILABLE

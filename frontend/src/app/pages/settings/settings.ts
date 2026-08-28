@@ -29,7 +29,8 @@ import {
 } from '../../core/telemetry.service';
 
 import {
-  HealthConnect
+  HealthConnect,
+  hasSwimmingHealthConnectPermissions
 } from '../../core/health-connect.plugin';
 
 import type {
@@ -1555,6 +1556,11 @@ export class SettingsAppearance {
                   Leer actividades Garmin
                 </button>
 
+              }
+
+              @if (
+                swimmingPermissionsGranted()
+              ) {
                 <button
                   type="button"
                   class="settings-action"
@@ -2098,6 +2104,20 @@ export class SettingsAppearance {
                   {{ session.speedError }}
                 </small>
               }
+
+              @if (session.distanceRecordsError) {
+                <small>
+                  Error registros de distancia:
+                  {{ session.distanceRecordsError }}
+                </small>
+              }
+
+              @if (session.heartRateError) {
+                <small>
+                  Error frecuencia cardiaca:
+                  {{ session.heartRateError }}
+                </small>
+              }
             </div>
           }
         </section>
@@ -2177,6 +2197,14 @@ export class SettingsData
     signal<string | null>(
       null
     );
+
+
+  swimmingPermissionsGranted():
+    boolean {
+    return hasSwimmingHealthConnectPermissions(
+      this.healthConnectPermissions()
+    );
+  }
 
 
   async ngOnInit():

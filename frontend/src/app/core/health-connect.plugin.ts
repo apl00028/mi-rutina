@@ -24,6 +24,21 @@ export interface HealthConnectPermissionStatus {
 }
 
 
+export function hasSwimmingHealthConnectPermissions(
+  permissions:
+    HealthConnectPermissionStatus
+    | null
+    | undefined
+): boolean {
+  return Boolean(
+    permissions?.exercise
+    && permissions.distance
+    && permissions.speed
+    && permissions.heartRate
+  );
+}
+
+
 export interface HealthConnectSnapshot {
   stepsToday?: number;
   stepsSources?: string[];
@@ -108,6 +123,7 @@ export interface HealthConnectSwimmingMetricSession {
   heartRateAverageBpm?: number;
   heartRateMaxBpm?: number;
   heartRateSampleCount: number;
+  heartRateError?: string;
 
   speedSampleCount: number;
   speedAverageMetersPerSecond?: number;

@@ -41,11 +41,13 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.Executor;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Consumer;
 
 
 @CapacitorPlugin(name = "HealthConnect")
@@ -380,51 +382,25 @@ public class HealthConnectPlugin
                         )
                         .build();
 
-        ReadRecordsRequestUsingFilters<
-                ExerciseSessionRecord
-                > request =
-                new ReadRecordsRequestUsingFilters
-                        .Builder<>(
-                                ExerciseSessionRecord.class
-                        )
-                        .setTimeRangeFilter(
-                                instantFilter(
-                                        start,
-                                        end
-                                )
-                        )
-                        .addDataOrigins(
-                                garminOrigin
-                        )
-                        .setAscending(false)
-                        .setPageSize(50)
-                        .build();
-
         final Executor executor =
                 getContext().getMainExecutor();
 
-        manager.readRecords(
-                request,
+        readExerciseSessionPages(
+                manager,
                 executor,
-                new OutcomeReceiver<
-                        ReadRecordsResponse<
-                                ExerciseSessionRecord
-                                >,
-                        HealthConnectException
-                        >() {
-
-                    @Override
-                    public void onResult(
-                            ReadRecordsResponse<
-                                    ExerciseSessionRecord
-                                    > result
-                    ) {
+                garminOrigin,
+                start,
+                end,
+                false,
+                -1,
+                new ArrayList<>(),
+                records -> {
                         JSArray sessions =
                                 new JSArray();
 
                         for (
                                 ExerciseSessionRecord record :
-                                result.getRecords()
+                                records
                         ) {
                             JSObject session =
                                     new JSObject();
@@ -655,20 +631,100 @@ public class HealthConnectPlugin
                         call.resolve(
                                 response
                         );
-                    }
+                    },
 
-                    @Override
-                    public void onError(
-                            HealthConnectException error
-                    ) {
+                error -> {
                         call.reject(
                                 "No se pudieron leer las sesiones Garmin: " +
                                 error,
                                 error
                         );
-                    }
                 }
         );
+    }
+
+
+    private void readExerciseSessionPages(
+            HealthConnectManager manager,
+            Executor executor,
+            DataOrigin origin,
+            Instant start,
+            Instant end,
+            boolean ascending,
+            long pageToken,
+            ArrayList<ExerciseSessionRecord> records,
+            Consumer<List<ExerciseSessionRecord>> onResult,
+            Consumer<Exception> onError
+    ) {
+        ReadRecordsRequestUsingFilters.Builder<
+                ExerciseSessionRecord
+                > builder =
+                new ReadRecordsRequestUsingFilters
+                        .Builder<>(
+                                ExerciseSessionRecord.class
+                        )
+                        .setTimeRangeFilter(
+                                instantFilter(start, end)
+                        )
+                        .addDataOrigins(origin)
+                        .setAscending(ascending)
+                        .setPageSize(50);
+
+        if (pageToken != -1) {
+            builder.setPageToken(pageToken);
+        }
+
+        try {
+            manager.readRecords(
+                    builder.build(),
+                    executor,
+                    new OutcomeReceiver<
+                            ReadRecordsResponse<ExerciseSessionRecord>,
+                            HealthConnectException
+                            >() {
+
+                        @Override
+                        public void onResult(
+                                ReadRecordsResponse<ExerciseSessionRecord>
+                                        result
+                        ) {
+                            records.addAll(
+                                    result.getRecords()
+                            );
+
+                            long nextPageToken =
+                                    result.getNextPageToken();
+
+                            if (nextPageToken == -1) {
+                                onResult.accept(records);
+                                return;
+                            }
+
+                            readExerciseSessionPages(
+                                    manager,
+                                    executor,
+                                    origin,
+                                    start,
+                                    end,
+                                    ascending,
+                                    nextPageToken,
+                                    records,
+                                    onResult,
+                                    onError
+                            );
+                        }
+
+                        @Override
+                        public void onError(
+                                HealthConnectException error
+                        ) {
+                            onError.accept(error);
+                        }
+                    }
+            );
+        } catch (Exception exception) {
+            onError.accept(exception);
+        }
     }
 
 
@@ -720,53 +776,27 @@ public class HealthConnectPlugin
                         Duration.ofDays(30)
                 );
 
-        ReadRecordsRequestUsingFilters<
-                ExerciseSessionRecord
-                > request =
-                new ReadRecordsRequestUsingFilters
-                        .Builder<>(
-                                ExerciseSessionRecord.class
-                        )
-                        .setTimeRangeFilter(
-                                instantFilter(
-                                        start,
-                                        end
-                                )
-                        )
-                        .addDataOrigins(
-                                garminOrigin
-                        )
-                        .setAscending(false)
-                        .setPageSize(50)
-                        .build();
-
         final Executor executor =
                 getContext().getMainExecutor();
 
-        manager.readRecords(
-                request,
+        readExerciseSessionPages(
+                manager,
                 executor,
-                new OutcomeReceiver<
-                        ReadRecordsResponse<
-                                ExerciseSessionRecord
-                                >,
-                        HealthConnectException
-                        >() {
-
-                    @Override
-                    public void onResult(
-                            ReadRecordsResponse<
-                                    ExerciseSessionRecord
-                                    > result
-                    ) {
-                        java.util.ArrayList<
+                garminOrigin,
+                start,
+                end,
+                false,
+                -1,
+                new ArrayList<>(),
+                records -> {
+                        ArrayList<
                                 ExerciseSessionRecord
                                 > swimmingSessions =
-                                new java.util.ArrayList<>();
+                                new ArrayList<>();
 
                         for (
                                 ExerciseSessionRecord record :
-                                result.getRecords()
+                                records
                         ) {
                             if (
                                     record.getExerciseType() ==
@@ -818,12 +848,19 @@ public class HealthConnectPlugin
                                                 * 4
                                 );
 
+                        AtomicBoolean resolved =
+                                new AtomicBoolean(false);
+
                         Runnable finishPart =
                                 () -> {
                                     if (
                                             pending
                                                     .decrementAndGet()
-                                                    == 0
+                                                    == 0 &&
+                                            resolved.compareAndSet(
+                                                    false,
+                                                    true
+                                            )
                                     ) {
                                         call.resolve(
                                                 response
@@ -872,6 +909,8 @@ public class HealthConnectPlugin
 
                             long segmentRepetitions = 0;
 
+                            // Garmin pool sessions expose total strokes through
+                            // segment repetitions in the observed Fenix data.
                             for (
                                     ExerciseSegment segment :
                                     record.getSegments()
@@ -886,62 +925,137 @@ public class HealthConnectPlugin
                                     segmentRepetitions
                             );
 
+                            session.put(
+                                    "distanceRecordCount",
+                                    0
+                            );
+
+                            session.put(
+                                    "rawDistanceTotalMeters",
+                                    0.0
+                            );
+
+                            session.put(
+                                    "distanceRecords",
+                                    new JSArray()
+                            );
+
+                            session.put(
+                                    "heartRateSampleCount",
+                                    0
+                            );
+
+                            session.put(
+                                    "speedSampleCount",
+                                    0
+                            );
+
                             sessions.put(session);
 
-                            readSwimmingDistance(
-                                    manager,
-                                    executor,
-                                    garminOrigin,
-                                    record.getStartTime(),
-                                    record.getEndTime(),
+                            launchSwimmingSubread(
                                     session,
-                                    finishPart
+                                    "distanceError",
+                                    finishPart,
+                                    done -> readSwimmingDistance(
+                                            manager,
+                                            executor,
+                                            garminOrigin,
+                                            record.getStartTime(),
+                                            record.getEndTime(),
+                                            session,
+                                            done
+                                    )
                             );
 
-                            readSwimmingDistanceRecords(
-                                    manager,
-                                    executor,
-                                    garminOrigin,
-                                    record.getStartTime(),
-                                    record.getEndTime(),
+                            launchSwimmingSubread(
                                     session,
-                                    finishPart
+                                    "distanceRecordsError",
+                                    finishPart,
+                                    done -> readSwimmingDistanceRecords(
+                                            manager,
+                                            executor,
+                                            garminOrigin,
+                                            record.getStartTime(),
+                                            record.getEndTime(),
+                                            session,
+                                            done
+                                    )
                             );
 
-                            readSwimmingHeartRate(
-                                    manager,
-                                    executor,
-                                    garminOrigin,
-                                    record.getStartTime(),
-                                    record.getEndTime(),
+                            launchSwimmingSubread(
                                     session,
-                                    finishPart
+                                    "heartRateError",
+                                    finishPart,
+                                    done -> readSwimmingHeartRate(
+                                            manager,
+                                            executor,
+                                            garminOrigin,
+                                            record.getStartTime(),
+                                            record.getEndTime(),
+                                            session,
+                                            done
+                                    )
                             );
 
-                            readSwimmingSpeed(
-                                    manager,
-                                    executor,
-                                    garminOrigin,
-                                    record.getStartTime(),
-                                    record.getEndTime(),
+                            launchSwimmingSubread(
                                     session,
-                                    finishPart
+                                    "speedError",
+                                    finishPart,
+                                    done -> readSwimmingSpeed(
+                                            manager,
+                                            executor,
+                                            garminOrigin,
+                                            record.getStartTime(),
+                                            record.getEndTime(),
+                                            session,
+                                            done
+                                    )
                             );
                         }
-                    }
+                    },
 
-                    @Override
-                    public void onError(
-                            HealthConnectException error
-                    ) {
+                error -> {
                         call.reject(
                                 "No se pudieron localizar las sesiones de natación: " +
                                 error,
                                 error
                         );
-                    }
                 }
         );
+    }
+
+
+    private void launchSwimmingSubread(
+            JSObject session,
+            String errorField,
+            Runnable finished,
+            Consumer<Runnable> operation
+    ) {
+        AtomicBoolean completed =
+                new AtomicBoolean(false);
+
+        Runnable finishOnce =
+                () -> {
+                    if (
+                            completed.compareAndSet(
+                                    false,
+                                    true
+                            )
+                    ) {
+                        finished.run();
+                    }
+                };
+
+        try {
+            operation.accept(finishOnce);
+        } catch (Exception exception) {
+            session.put(
+                    errorField,
+                    exception.toString()
+            );
+
+            finishOnce.run();
+        }
     }
 
 
@@ -1026,40 +1140,16 @@ public class HealthConnectPlugin
             JSObject session,
             Runnable done
     ) {
-        ReadRecordsRequestUsingFilters<
-                DistanceRecord
-                > request =
-                new ReadRecordsRequestUsingFilters
-                        .Builder<>(
-                                DistanceRecord.class
-                        )
-                        .setTimeRangeFilter(
-                                instantFilter(
-                                        start,
-                                        end
-                                )
-                        )
-                        .addDataOrigins(
-                                garminOrigin
-                        )
-                        .setAscending(true)
-                        .setPageSize(100)
-                        .build();
-
-        manager.readRecords(
-                request,
+        readDistanceRecordPages(
+                manager,
                 executor,
-                new OutcomeReceiver<
-                        ReadRecordsResponse<DistanceRecord>,
-                        HealthConnectException
-                        >() {
-
-                    @Override
-                    public void onResult(
-                            ReadRecordsResponse<DistanceRecord>
-                                    result
-                    ) {
-                        JSArray records =
+                garminOrigin,
+                start,
+                end,
+                -1,
+                new ArrayList<>(),
+                distanceRecords -> {
+                        JSArray serializedRecords =
                                 new JSArray();
 
                         double rawTotalMeters =
@@ -1067,7 +1157,7 @@ public class HealthConnectPlugin
 
                         for (
                                 DistanceRecord record :
-                                result.getRecords()
+                                distanceRecords
                         ) {
                             JSObject item =
                                     new JSObject();
@@ -1110,12 +1200,12 @@ public class HealthConnectPlugin
                                     meters
                             );
 
-                            records.put(item);
+                            serializedRecords.put(item);
                         }
 
                         session.put(
                                 "distanceRecordCount",
-                                records.length()
+                                serializedRecords.length()
                         );
 
                         session.put(
@@ -1125,25 +1215,100 @@ public class HealthConnectPlugin
 
                         session.put(
                                 "distanceRecords",
-                                records
+                                serializedRecords
                         );
 
                         done.run();
-                    }
-
-                    @Override
-                    public void onError(
-                            HealthConnectException error
-                    ) {
+                    },
+                error -> {
                         session.put(
                                 "distanceRecordsError",
                                 error.toString()
                         );
 
                         done.run();
-                    }
                 }
         );
+    }
+
+
+    private void readDistanceRecordPages(
+            HealthConnectManager manager,
+            Executor executor,
+            DataOrigin origin,
+            Instant start,
+            Instant end,
+            long pageToken,
+            ArrayList<DistanceRecord> records,
+            Consumer<List<DistanceRecord>> onResult,
+            Consumer<Exception> onError
+    ) {
+        ReadRecordsRequestUsingFilters.Builder<
+                DistanceRecord
+                > builder =
+                new ReadRecordsRequestUsingFilters
+                        .Builder<>(DistanceRecord.class)
+                        .setTimeRangeFilter(
+                                instantFilter(start, end)
+                        )
+                        .addDataOrigins(origin)
+                        .setAscending(true)
+                        .setPageSize(100);
+
+        if (pageToken != -1) {
+            builder.setPageToken(pageToken);
+        }
+
+        try {
+            manager.readRecords(
+                    builder.build(),
+                    executor,
+                    new OutcomeReceiver<
+                            ReadRecordsResponse<DistanceRecord>,
+                            HealthConnectException
+                            >() {
+
+                        @Override
+                        public void onResult(
+                                ReadRecordsResponse<DistanceRecord>
+                                        result
+                        ) {
+                            records.addAll(
+                                    result.getRecords()
+                            );
+
+                            long nextPageToken =
+                                    result.getNextPageToken();
+
+                            if (nextPageToken == -1) {
+                                onResult.accept(records);
+                                return;
+                            }
+
+                            readDistanceRecordPages(
+                                    manager,
+                                    executor,
+                                    origin,
+                                    start,
+                                    end,
+                                    nextPageToken,
+                                    records,
+                                    onResult,
+                                    onError
+                            );
+                        }
+
+                        @Override
+                        public void onError(
+                                HealthConnectException error
+                        ) {
+                            onError.accept(error);
+                        }
+                    }
+            );
+        } catch (Exception exception) {
+            onError.accept(exception);
+        }
     }
 
 
@@ -1259,46 +1424,22 @@ public class HealthConnectPlugin
             JSObject session,
             Runnable done
     ) {
-        ReadRecordsRequestUsingFilters<
-                SpeedRecord
-                > request =
-                new ReadRecordsRequestUsingFilters
-                        .Builder<>(
-                                SpeedRecord.class
-                        )
-                        .setTimeRangeFilter(
-                                instantFilter(
-                                        start,
-                                        end
-                                )
-                        )
-                        .addDataOrigins(
-                                garminOrigin
-                        )
-                        .setAscending(true)
-                        .setPageSize(100)
-                        .build();
-
-        manager.readRecords(
-                request,
+        readSpeedRecordPages(
+                manager,
                 executor,
-                new OutcomeReceiver<
-                        ReadRecordsResponse<SpeedRecord>,
-                        HealthConnectException
-                        >() {
-
-                    @Override
-                    public void onResult(
-                            ReadRecordsResponse<SpeedRecord>
-                                    result
-                    ) {
+                garminOrigin,
+                start,
+                end,
+                -1,
+                new ArrayList<>(),
+                speedRecords -> {
                         double speedSum = 0.0;
                         double speedMax = 0.0;
                         int sampleCount = 0;
 
                         for (
                                 SpeedRecord record :
-                                result.getRecords()
+                                speedRecords
                         ) {
                             for (
                                     SpeedRecord
@@ -1362,21 +1503,96 @@ public class HealthConnectPlugin
                         }
 
                         done.run();
-                    }
-
-                    @Override
-                    public void onError(
-                            HealthConnectException error
-                    ) {
+                    },
+                error -> {
                         session.put(
                                 "speedError",
                                 error.toString()
                         );
 
                         done.run();
-                    }
                 }
         );
+    }
+
+
+    private void readSpeedRecordPages(
+            HealthConnectManager manager,
+            Executor executor,
+            DataOrigin origin,
+            Instant start,
+            Instant end,
+            long pageToken,
+            ArrayList<SpeedRecord> records,
+            Consumer<List<SpeedRecord>> onResult,
+            Consumer<Exception> onError
+    ) {
+        ReadRecordsRequestUsingFilters.Builder<
+                SpeedRecord
+                > builder =
+                new ReadRecordsRequestUsingFilters
+                        .Builder<>(SpeedRecord.class)
+                        .setTimeRangeFilter(
+                                instantFilter(start, end)
+                        )
+                        .addDataOrigins(origin)
+                        .setAscending(true)
+                        .setPageSize(100);
+
+        if (pageToken != -1) {
+            builder.setPageToken(pageToken);
+        }
+
+        try {
+            manager.readRecords(
+                    builder.build(),
+                    executor,
+                    new OutcomeReceiver<
+                            ReadRecordsResponse<SpeedRecord>,
+                            HealthConnectException
+                            >() {
+
+                        @Override
+                        public void onResult(
+                                ReadRecordsResponse<SpeedRecord>
+                                        result
+                        ) {
+                            records.addAll(
+                                    result.getRecords()
+                            );
+
+                            long nextPageToken =
+                                    result.getNextPageToken();
+
+                            if (nextPageToken == -1) {
+                                onResult.accept(records);
+                                return;
+                            }
+
+                            readSpeedRecordPages(
+                                    manager,
+                                    executor,
+                                    origin,
+                                    start,
+                                    end,
+                                    nextPageToken,
+                                    records,
+                                    onResult,
+                                    onError
+                            );
+                        }
+
+                        @Override
+                        public void onError(
+                                HealthConnectException error
+                        ) {
+                            onError.accept(error);
+                        }
+                    }
+            );
+        } catch (Exception exception) {
+            onError.accept(exception);
+        }
     }
 
 

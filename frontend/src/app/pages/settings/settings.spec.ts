@@ -539,6 +539,121 @@ describe('Settings pages', () => {
     );
   });
 
+
+  it('offers Garmin swimming when only its required permissions are granted', () => {
+    const fixture =
+      TestBed.createComponent(
+        SettingsData
+      );
+
+    fixture.detectChanges();
+
+    fixture.componentInstance
+      .healthConnectAvailable.set(true);
+    fixture.componentInstance
+      .healthConnectPermissions.set({
+        steps: false,
+        exercise: true,
+        distance: true,
+        speed: true,
+        heartRate: true,
+        restingHeartRate: false,
+        sleep: false,
+        weight: false,
+        bodyFat: false,
+        allGranted: false
+      });
+
+    fixture.detectChanges();
+
+    expect(text(fixture.nativeElement))
+      .toContain(
+        'Diagnóstico natación Garmin'
+      );
+    expect(text(fixture.nativeElement))
+      .not.toContain(
+        'Leer datos ahora'
+      );
+
+    fixture.componentInstance
+      .healthConnectPermissions.update(
+        permissions => ({
+          ...permissions!,
+          speed: false
+        })
+      );
+
+    fixture.detectChanges();
+
+    expect(text(fixture.nativeElement))
+      .not.toContain(
+        'Diagnóstico natación Garmin'
+      );
+  });
+
+
+  it('renders safe swimming defaults and subread errors', () => {
+    const fixture =
+      TestBed.createComponent(
+        SettingsData
+      );
+
+    fixture.detectChanges();
+
+    fixture.componentInstance
+      .healthConnectSwimmingMetrics.set({
+        sourcePackage:
+          'com.garmin.android.apps.connectmobile',
+        lookbackDays: 30,
+        count: 1,
+        sessions: [
+          {
+            startTime:
+              '2026-08-27T08:00:00Z',
+            endTime:
+              '2026-08-27T09:00:00Z',
+            durationSeconds: 3600,
+            segmentCount: 48,
+            segmentRepetitions: 758,
+            distanceRecordCount: 0,
+            rawDistanceTotalMeters: 0,
+            distanceRecords: [],
+            distanceRecordsError:
+              'distance unavailable',
+            heartRateSampleCount: 0,
+            heartRateError:
+              'heart rate unavailable',
+            speedSampleCount: 0,
+            speedError:
+              'speed unavailable'
+          }
+        ]
+      });
+
+    expect(
+      () => fixture.detectChanges()
+    ).not.toThrow();
+
+    const page =
+      text(fixture.nativeElement);
+
+    expect(page).toContain(
+      'DistanceRecords: 0'
+    );
+    expect(page).toContain(
+      'muestras FC: 0'
+    );
+    expect(page).toContain(
+      'Muestras velocidad: 0'
+    );
+    expect(page).toContain(
+      'Error registros de distancia: distance unavailable'
+    );
+    expect(page).toContain(
+      'Error frecuencia cardiaca: heart rate unavailable'
+    );
+  });
+
   it('shows app version and build from the central source', () => {
     const fixture =
       TestBed.createComponent(

@@ -1185,8 +1185,12 @@
   }
 
   @if (exercisePickerSessionId()) {
-    <div class="picker">
-      <div class="picker-panel">
+    <div
+      class="aptus-overlay-shell exercise-picker-overlay"
+    >
+      <div
+        class="aptus-dialog-panel exercise-picker-panel"
+      >
         <h2>
           Biblioteca de ejercicios
         </h2>
@@ -1253,11 +1257,11 @@
 
   @if (exportRecordsOpen()) {
     <div
-      class="export-records-picker"
+      class="aptus-overlay-shell export-records-picker"
       data-testid="export-records-backdrop"
     >
       <form
-        class="export-panel"
+        class="aptus-dialog-panel export-panel"
         (ngSubmit)="exportTrainingRecords()"
       >
         <h2>

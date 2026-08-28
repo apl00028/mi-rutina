@@ -158,6 +158,26 @@ body {
     calc(16px * var(--aptus-font-scale));
 }
 
+.aptus-overlay-shell {
+  position: fixed;
+  inset: 0;
+
+  display: grid;
+  place-items: center;
+
+  background: var(--aptus-overlay);
+}
+
+.aptus-dialog-panel {
+  max-height: 85vh;
+  overflow: auto;
+
+  padding: 20px;
+  border-radius: 12px;
+
+  background: var(--aptus-surface);
+}
+
 html.aptus-reduce-motion *,
 html.aptus-reduce-motion *::before,
 html.aptus-reduce-motion *::after {

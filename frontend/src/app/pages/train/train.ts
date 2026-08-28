@@ -22,6 +22,9 @@ import {
   orderWarmupSteps,
   type ExecutionStep
 } from '../../features/workout/domain/execution-plan';
+import {
+  RestTimerController
+} from '../../features/workout/application/rest-timer.controller';
 
 interface Exercise {
   exerciseId: string;
@@ -92,16 +95,6 @@ interface Workout {
   restOverrideSeconds?: number | null;
   sets: WorkoutSetInput[];
   discomforts?: ExerciseDiscomfortInput[];
-}
-
-interface RestTimerState {
-  exerciseId: string;
-  setIndex: number;
-  setLabel: string;
-  exerciseName: string;
-  endsAt: number;
-  remainingSeconds: number;
-  finished: boolean;
 }
 
 interface SetTimerState {
@@ -224,8 +217,12 @@ export class Train implements OnInit, OnDestroy {
   cancellingWorkout = signal(false);
   autosaveStatus =
     signal<AutosaveStatus>('idle');
-  restTimer =
-    signal<RestTimerState | null>(null);
+  private readonly restTimerController =
+    new RestTimerController(
+      () => this.advanceAfterRest()
+    );
+  readonly restTimer =
+    this.restTimerController.state;
   setTimer =
     signal<SetTimerState | null>(null);
   expandedExerciseId =
@@ -244,8 +241,6 @@ export class Train implements OnInit, OnDestroy {
 
   private autosaveTimer:
     ReturnType<typeof setTimeout> | null = null;
-  private restTimerInterval:
-    ReturnType<typeof setInterval> | null = null;
   private setTimerInterval:
     ReturnType<typeof setInterval> | null = null;
 
@@ -364,7 +359,7 @@ export class Train implements OnInit, OnDestroy {
     this.workoutSessionState
       .setIdle();
     this.clearSetTimer();
-    this.clearRestTimer();
+    this.restTimerController.destroy();
 
     if (this.autosaveTimer) {
       clearTimeout(this.autosaveTimer);
@@ -4283,21 +4278,24 @@ export class Train implements OnInit, OnDestroy {
         : Number(exercise?.restSeconds);
 
     this.clearSetTimer();
-    this.clearRestTimer();
 
-    if (
-      !exercise ||
-      !Number.isFinite(restSeconds) ||
-      restSeconds <= 0
-    ) {
+    if (!exercise) {
+      this.clearRestTimer();
       return;
     }
 
-    const duration =
-      Math.floor(restSeconds);
+    const set =
+      this.getCurrentSet(
+        exerciseId,
+        setIndex
+      );
 
-    this.restTimer.set({
+    this.restTimerController.start({
       exerciseId,
+      sourceKind:
+        set?.setType === 'warmup'
+          ? 'warmup'
+          : 'working',
       setIndex,
       setLabel:
         this.restTimerSetLabel(
@@ -4305,22 +4303,8 @@ export class Train implements OnInit, OnDestroy {
           setIndex
         ),
       exerciseName:
-        exercise.name,
-      endsAt:
-        Date.now() + duration * 1000,
-      remainingSeconds:
-        duration,
-      finished:
-        false
-    });
-
-    this.restTimerInterval =
-      setInterval(
-        () => this.reconcileRestTimer(),
-        250
-      );
-
-    this.reconcileRestTimer();
+        exercise.name
+    }, restSeconds);
   }
 
 
@@ -4354,119 +4338,22 @@ export class Train implements OnInit, OnDestroy {
   }
 
 
-  private reconcileRestTimer(): void {
-    const timer =
-      this.restTimer();
-
-    if (!timer) {
-      this.clearRestTimer();
-      return;
-    }
-
-    const remainingSeconds =
-      Math.max(
-        0,
-        Math.ceil(
-          (timer.endsAt - Date.now()) / 1000
-        )
-      );
-
-    if (remainingSeconds <= 0) {
-      /*
-       * El descanso ha terminado de forma natural.
-       * Usamos el mismo flujo que al pulsar Saltar:
-       * cerrar temporizador y avanzar al siguiente set.
-       */
-      this.clearRestTimer();
-      this.advanceAfterRest();
-      return;
-    }
-
-    if (
-      remainingSeconds !==
-      timer.remainingSeconds
-    ) {
-      this.restTimer.set({
-        ...timer,
-        remainingSeconds,
-        finished: false
-      });
-    }
-  }
-
-
   addRestTime(
     seconds: number
   ): void {
-    const timer =
-      this.restTimer();
-
-    if (!timer) {
-      return;
-    }
-
-    const nextEndsAt =
-      Math.max(
-        Date.now(),
-        timer.endsAt + seconds * 1000
-      );
-
-    this.restTimer.set({
-      ...timer,
-      endsAt:
-        nextEndsAt,
-      remainingSeconds:
-        Math.max(
-          0,
-          Math.ceil(
-            (nextEndsAt - Date.now()) / 1000
-          )
-        ),
-      finished:
-        nextEndsAt <= Date.now()
-    });
-
-    if (
-      nextEndsAt > Date.now() &&
-      !this.restTimerInterval
-    ) {
-      this.restTimerInterval =
-        setInterval(
-          () => this.reconcileRestTimer(),
-          250
-        );
-    }
+    this.restTimerController.adjust(
+      seconds
+    );
   }
 
 
   skipRestTimer(): void {
-    if (!this.restTimer()) {
-      return;
-    }
-
-    /*
-     * Saltar significa continuar inmediatamente:
-     * eliminamos por completo el descanso antes
-     * de calcular cuál es el siguiente set.
-     */
-    this.clearRestTimer();
-    this.advanceAfterRest();
-  }
-
-
-  private clearRestTimerInterval(): void {
-    if (!this.restTimerInterval) {
-      return;
-    }
-
-    clearInterval(this.restTimerInterval);
-    this.restTimerInterval = null;
+    this.restTimerController.skip();
   }
 
 
   private clearRestTimer(): void {
-    this.clearRestTimerInterval();
-    this.restTimer.set(null);
+    this.restTimerController.clear();
   }
 
   isSetCompleted(

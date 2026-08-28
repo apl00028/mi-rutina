@@ -1378,6 +1378,66 @@
         </div>
       </header>
 
+      @if (workoutFinishSummary(); as summary) {
+        <section
+          class="state-card workout-finish-summary"
+          aria-live="polite"
+        >
+          <h2>
+            Entrenamiento completado
+          </h2>
+
+          @if (summary.records.length) {
+            <strong class="personal-record-count">
+              {{ summary.records.length }}
+              {{
+                summary.records.length === 1
+                  ? 'récord personal'
+                  : 'récords personales'
+              }}
+            </strong>
+
+            <div class="personal-record-groups">
+              @for (
+                group of summary.groups;
+                track group.exerciseId
+              ) {
+                <section class="personal-record-group">
+                  <h3>
+                    {{ group.exerciseName }}
+                  </h3>
+
+                  <ul>
+                    @for (
+                      record of group.records;
+                      track record.type
+                    ) {
+                      <li>
+                        <span>
+                          {{
+                            personalRecordLabel(
+                              record.type
+                            )
+                          }}:
+                        </span>
+
+                        <strong>
+                          {{
+                            personalRecordValue(
+                              record
+                            )
+                          }}
+                        </strong>
+                      </li>
+                    }
+                  </ul>
+                </section>
+              }
+            </div>
+          }
+        </section>
+      }
+
       @if (loading()) {
         <section class="state-card">
           <p>

@@ -4487,6 +4487,180 @@ describe('Train first workout flow', () => {
   });
 
 
+  it('renders personal records after finishing from the workout action', async () => {
+    const current = {
+      ...activeWorkout(),
+      sets: [
+        historySet(0, {
+          weight: 80,
+          reps: 8,
+          completedAt:
+            '2026-08-28T10:00:00Z'
+        })
+      ]
+    };
+    const previous =
+      finishedWorkout([
+        historySet(0, {
+          weight: 75,
+          reps: 8
+        })
+      ]);
+    const fixture =
+      await createLoadedTrain([
+        current,
+        previous
+      ]);
+
+    vi.spyOn(window, 'confirm')
+      .mockReturnValue(true);
+
+    const finishButton =
+      fixture.nativeElement.querySelector(
+        '.finish-button'
+      ) as HTMLButtonElement;
+
+    finishButton.click();
+    await waitForHttpTick();
+
+    const save = http.expectOne(
+      `${environment.apiUrl}/workouts/active-workout`
+    );
+
+    save.flush(save.request.body);
+    await fixture.whenStable();
+    await waitForHttpTick();
+    fixture.detectChanges();
+
+    expect(pageText(fixture))
+      .toContain(
+        'Entrenamiento completado'
+      );
+    expect(pageText(fixture))
+      .toContain('2 récords personales');
+    expect(pageText(fixture))
+      .toContain(
+        'Press banca con mancuernas'
+      );
+    expect(pageText(fixture))
+      .toContain('Mayor peso: 80 kg');
+    expect(pageText(fixture))
+      .toContain('Nuevo e1RM: 101,3 kg');
+  });
+
+
+  it('omits the personal-record section when a finished workout has no records', async () => {
+    const current = {
+      ...activeWorkout(),
+      sets: [
+        historySet(0, {
+          weight: 75,
+          reps: 8,
+          completedAt:
+            '2026-08-28T10:00:00Z'
+        })
+      ]
+    };
+    const fixture =
+      await createLoadedTrain([
+        current,
+        finishedWorkout([
+          historySet(0, {
+            weight: 75,
+            reps: 8
+          })
+        ])
+      ]);
+
+    vi.spyOn(window, 'confirm')
+      .mockReturnValue(true);
+
+    (
+      fixture.nativeElement.querySelector(
+        '.finish-button'
+      ) as HTMLButtonElement
+    ).click();
+    await waitForHttpTick();
+
+    const save = http.expectOne(
+      `${environment.apiUrl}/workouts/active-workout`
+    );
+
+    save.flush(save.request.body);
+    await fixture.whenStable();
+    await waitForHttpTick();
+    fixture.detectChanges();
+
+    expect(pageText(fixture))
+      .toContain(
+        'Entrenamiento completado'
+      );
+    expect(
+      fixture.nativeElement.querySelector(
+        '.personal-record-count'
+      )
+    ).toBeNull();
+  });
+
+
+  it('does not render a finish summary when workout persistence fails', async () => {
+    const fixture =
+      await createLoadedTrain([
+        {
+          ...activeWorkout(),
+          sets: [
+            historySet(0, {
+              weight: 80,
+              reps: 8
+            })
+          ]
+        },
+        finishedWorkout([
+          historySet(0, {
+            weight: 75,
+            reps: 8
+          })
+        ])
+      ]);
+
+    vi.spyOn(window, 'confirm')
+      .mockReturnValue(true);
+
+    (
+      fixture.nativeElement.querySelector(
+        '.finish-button'
+      ) as HTMLButtonElement
+    ).click();
+    await waitForHttpTick();
+
+    http.expectOne(
+      `${environment.apiUrl}/workouts/active-workout`
+    ).flush(
+      {
+        detail:
+          'No se pudo guardar'
+      },
+      {
+        status: 502,
+        statusText: 'Bad Gateway'
+      }
+    );
+    await fixture.whenStable();
+    await waitForHttpTick();
+    fixture.detectChanges();
+
+    expect(
+      fixture.nativeElement.querySelector(
+        '.workout-finish-summary'
+      )
+    ).toBeNull();
+    expect(
+      fixture.componentInstance
+        .activeWorkout()
+    ).not.toBeNull();
+  });
+
+
   it('does not clear the active workout when finish persistence fails and allows retry', async () => {
     const fixture =
       await createLoadedTrain([

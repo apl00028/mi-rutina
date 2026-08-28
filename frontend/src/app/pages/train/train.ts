@@ -33,6 +33,13 @@ import {
   unilateralPhaseForSet,
   type UnilateralExecutionState
 } from '../../features/workout/domain/working-set-execution';
+import {
+  detectPersonalRecords,
+  type PersonalRecord
+} from '../../features/workout/domain/personal-records';
+import {
+  calculateEpleyOneRepMax
+} from '../../features/workout/domain/strength-metrics';
 
 interface Exercise {
   exerciseId: string;
@@ -194,6 +201,17 @@ interface ProgressionRecommendation {
   reason: string;
 }
 
+interface PersonalRecordGroup {
+  exerciseId: string;
+  exerciseName: string;
+  records: PersonalRecord[];
+}
+
+interface WorkoutFinishSummary {
+  records: PersonalRecord[];
+  groups: PersonalRecordGroup[];
+}
+
 interface RepTarget {
   min: number;
   max: number;
@@ -226,6 +244,8 @@ export class Train implements OnInit, OnDestroy {
   activeWorkout = signal<Workout | null>(null);
   activeSession = signal<RoutineSession | null>(null);
   workoutHistory = signal<Workout[]>([]);
+  workoutFinishSummary =
+    signal<WorkoutFinishSummary | null>(null);
 
   workoutLoading = signal(false);
   workoutError = signal<string | null>(null);
@@ -2022,21 +2042,59 @@ export class Train implements OnInit, OnDestroy {
     if (
       !this.isExternallyLoadedExercise(
         exercise
-      ) ||
-      set.weight === null ||
-      set.weight === undefined ||
-      set.reps === null ||
-      set.reps === undefined ||
-      !Number.isFinite(set.weight) ||
-      !Number.isFinite(set.reps) ||
-      set.weight <= 0 ||
-      set.reps <= 0
+      )
     ) {
       return null;
     }
 
-    // Epley estimate: e1RM = weight * (1 + reps / 30).
-    return set.weight * (1 + set.reps / 30);
+    return calculateEpleyOneRepMax(
+      set.weight,
+      set.reps
+    );
+  }
+
+
+  personalRecordLabel(
+    type: PersonalRecord['type']
+  ): string {
+    const labels:
+      Record<PersonalRecord['type'], string> = {
+        'max-weight': 'Mayor peso',
+        'estimated-1rm': 'Nuevo e1RM',
+        'max-reps': 'Más repeticiones',
+        duration: 'Mayor duración'
+      };
+
+    return labels[type];
+  }
+
+
+  personalRecordValue(
+    record: PersonalRecord
+  ): string {
+    if (record.type === 'max-reps') {
+      return `${record.value} reps`;
+    }
+
+    if (record.type === 'duration') {
+      return this.formatDurationSeconds(
+        record.value
+      );
+    }
+
+    return `${new Intl.NumberFormat(
+      'es-ES',
+      {
+        minimumFractionDigits:
+          record.type === 'estimated-1rm'
+            ? 1
+            : 0,
+        maximumFractionDigits:
+          record.type === 'estimated-1rm'
+            ? 1
+            : 3
+      }
+    ).format(record.value)} kg`;
   }
 
 
@@ -3256,6 +3314,7 @@ export class Train implements OnInit, OnDestroy {
 
     this.workoutLoading.set(true);
     this.workoutError.set(null);
+    this.workoutFinishSummary.set(null);
 
     try {
       const token = await this.auth.getAccessToken();
@@ -4953,6 +5012,24 @@ export class Train implements OnInit, OnDestroy {
           }
         );
 
+      const records =
+        detectPersonalRecords({
+          currentWorkout: saved,
+          previousWorkouts:
+            this.workoutHistory(),
+          exercises:
+            this.activeSession()
+              ?.exercises ?? []
+        });
+
+      this.workoutFinishSummary.set({
+        records,
+        groups:
+          this.groupPersonalRecords(
+            records
+          )
+      });
+
       void this.telemetry.track({
         event_name:
           'workout_completed',
@@ -4983,6 +5060,32 @@ export class Train implements OnInit, OnDestroy {
     } finally {
       this.finishingWorkout = false;
     }
+  }
+
+
+  private groupPersonalRecords(
+    records: PersonalRecord[]
+  ): PersonalRecordGroup[] {
+    const groups =
+      new Map<string, PersonalRecordGroup>();
+
+    for (const record of records) {
+      const current =
+        groups.get(record.exerciseId);
+
+      if (current) {
+        current.records.push(record);
+        continue;
+      }
+
+      groups.set(record.exerciseId, {
+        exerciseId: record.exerciseId,
+        exerciseName: record.exerciseName,
+        records: [record]
+      });
+    }
+
+    return [...groups.values()];
   }
 
 

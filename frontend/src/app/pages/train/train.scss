@@ -865,6 +865,20 @@ button:disabled {
   padding: 24px;
 }
 
+.workout-finish-summary {
+  margin-bottom: 20px;
+
+  border-color: var(--aptus-success-border);
+}
+
+.personal-record-count {
+  color: var(--aptus-success);
+}
+
+.personal-record-groups {
+  margin-top: 18px;
+}
+
 .login-form {
   display: grid;
   gap: 16px;

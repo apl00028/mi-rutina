@@ -6060,6 +6060,122 @@ describe('Train first workout flow', () => {
   });
 
 
+  it('keeps the active rest timer when opening and editing the next pending set', async () => {
+    const fixture =
+      await createLoadedTrain([
+        {
+          workoutId:
+            'workout-1',
+          routineId:
+            'routine-1',
+          sessionId:
+            'session-1',
+          status:
+            'in_progress',
+          sets: []
+        }
+      ]);
+
+    vi.useFakeTimers();
+    vi.setSystemTime(
+      new Date(
+        '2026-08-20T15:00:00Z'
+      )
+    );
+
+    const component =
+      fixture.componentInstance;
+
+    vi.spyOn(
+      component as any,
+      'scheduleAutosave'
+    ).mockImplementation(() => {});
+
+    const complete =
+      component.completeSet(
+        'dumbbell-bench-press',
+        0
+      );
+
+    await flushPromises();
+
+    const save =
+      http.expectOne(
+        `${environment.apiUrl}/workouts/workout-1`
+      );
+
+    save.flush(save.request.body);
+    await complete;
+
+    const originalTimer =
+      component.restTimer();
+
+    expect(originalTimer)
+      .toMatchObject({
+        exerciseId:
+          'dumbbell-bench-press',
+        setIndex:
+          0,
+        remainingSeconds:
+          120,
+        finished:
+          false
+      });
+
+    component.toggleSet(
+      'dumbbell-bench-press',
+      1
+    );
+
+    component.updateSet(
+      'dumbbell-bench-press',
+      1,
+      'weight',
+      '82.5'
+    );
+
+    component.updateSet(
+      'dumbbell-bench-press',
+      1,
+      'reps',
+      '8'
+    );
+
+    component.updateSet(
+      'dumbbell-bench-press',
+      1,
+      'rir',
+      '2'
+    );
+
+    expect(
+      component.restTimer()
+    ).toEqual(originalTimer);
+
+    expect(
+      component.isSetExpanded(
+        'dumbbell-bench-press',
+        1
+      )
+    ).toBe(true);
+
+    component.skipRestTimer();
+
+    expect(
+      component.restTimer()
+    ).toBeNull();
+
+    http.expectNone(
+      `${environment.apiUrl}/workouts/workout-1`
+    );
+
+    (component as any)
+      .persistedEditVersion =
+        (component as any)
+          .workoutEditVersion;
+  });
+
+
   it('supports adding, reducing, and skipping rest time without saving', async () => {
     const fixture =
       await createLoadedTrain([

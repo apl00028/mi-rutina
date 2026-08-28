@@ -14,6 +14,14 @@ import {
 import {
   WorkoutSessionStateService
 } from '../../core/workout-session-state.service';
+import {
+  buildExecutionPlan,
+  findCurrentStep,
+  hasPendingStepAfter,
+  nextPendingStep,
+  orderWarmupSteps,
+  type ExecutionStep
+} from '../../features/workout/domain/execution-plan';
 
 interface Exercise {
   exerciseId: string;
@@ -94,11 +102,6 @@ interface RestTimerState {
   endsAt: number;
   remainingSeconds: number;
   finished: boolean;
-}
-
-interface WorkoutSetStep {
-  exerciseId: string;
-  setIndex: number;
 }
 
 interface SetTimerState {
@@ -2770,15 +2773,10 @@ export class Train implements OnInit, OnDestroy {
 
 
   private advanceAfterRest(): void {
-    const session =
-      this.activeSession();
-
-    if (!session) {
-      return;
-    }
-
     /*
-     * Buscar el primer set todavía no completado.
+     * Warmups do not have an expandable set editor.
+     * This UI transition therefore advances through
+     * working steps only, using the shared plan order.
      *
      * No usamos restorableWorkoutContext():
      * ese método está pensado para restaurar un
@@ -2787,58 +2785,49 @@ export class Train implements OnInit, OnDestroy {
      * Aquí queremos avanzar incluso hacia un set
      * completamente nuevo y todavía vacío.
      */
-    for (const exercise of session.exercises) {
-      for (
-        let setIndex = 0;
-        setIndex < exercise.sets;
-        setIndex += 1
-      ) {
-        if (
-          this.isSetCompleted(
-            exercise.exerciseId,
-            setIndex
-          )
-        ) {
-          continue;
-        }
+    const nextStep =
+      nextPendingStep(
+        this.workingExecutionPlan(),
+        step => this.isExecutionStepCompleted(step)
+      );
 
-        this.expandedExerciseId.set(
-          exercise.exerciseId
-        );
+    if (nextStep) {
+      this.expandedExerciseId.set(
+        nextStep.exerciseId
+      );
 
-        this.expandedSetKey.set(
-          this.setExpansionKey(
-            exercise.exerciseId,
-            setIndex
-          )
-        );
+      this.expandedSetKey.set(
+        this.setExpansionKey(
+          nextStep.exerciseId,
+          nextStep.setIndex
+        )
+      );
 
-        /*
-         * Esperamos a que Angular renderice
-         * el ejercicio/serie que acabamos de abrir.
-         */
-        window.setTimeout(
-          () => {
-            const expandedSet =
-              document.querySelector(
-                '.set-row.set-expanded'
-              );
+      /*
+       * Esperamos a que Angular renderice
+       * el ejercicio/serie que acabamos de abrir.
+       */
+      window.setTimeout(
+        () => {
+          const expandedSet =
+            document.querySelector(
+              '.set-row.set-expanded'
+            );
 
-            if (
-              expandedSet instanceof HTMLElement
-            ) {
-              expandedSet.scrollIntoView({
-                behavior: 'smooth',
-                block: 'center',
-                inline: 'nearest'
-              });
-            }
-          },
-          80
-        );
+          if (
+            expandedSet instanceof HTMLElement
+          ) {
+            expandedSet.scrollIntoView({
+              behavior: 'smooth',
+              block: 'center',
+              inline: 'nearest'
+            });
+          }
+        },
+        80
+      );
 
-        return;
-      }
+      return;
     }
 
     /*
@@ -2885,32 +2874,40 @@ export class Train implements OnInit, OnDestroy {
       return null;
     }
 
-    for (const exercise of session.exercises) {
-      for (
-        let index = 0;
-        index < exercise.sets;
-        index += 1
-      ) {
-        const set =
-          this.getCurrentSet(
-            exercise.exerciseId,
-            index
-          );
+    const step =
+      this.workingExecutionPlan().find(
+        candidate => {
+          const set =
+            this.getCurrentSet(
+              candidate.exerciseId,
+              candidate.setIndex
+            );
 
-        if (
-          set &&
-          !set.completedAt &&
-          this.hasRecordedSetInput(set)
-        ) {
-          return {
-            exercise,
-            setIndex: index
-          };
+          return (
+            set !== null &&
+            !set.completedAt &&
+            this.hasRecordedSetInput(set)
+          );
         }
-      }
+      );
+
+    if (!step) {
+      return null;
     }
 
-    return null;
+    const exercise =
+      session.exercises.find(
+        candidate =>
+          candidate.exerciseId ===
+          step.exerciseId
+      );
+
+    return exercise
+      ? {
+          exercise,
+          setIndex: step.setIndex
+        }
+      : null;
   }
 
 
@@ -2969,37 +2966,17 @@ export class Train implements OnInit, OnDestroy {
     exercise: Exercise,
     setIndex: number
   ): boolean {
-    const session =
-      this.activeSession();
+    const nextStep =
+      nextPendingStep(
+        this.workingExecutionPlan(),
+        step => this.isExecutionStepCompleted(step)
+      );
 
-    if (!session) {
-      return false;
-    }
-
-    for (const sessionExercise of session.exercises) {
-      for (
-        let index = 0;
-        index < sessionExercise.sets;
-        index += 1
-      ) {
-        if (
-          this.isSetCompleted(
-            sessionExercise.exerciseId,
-            index
-          )
-        ) {
-          continue;
-        }
-
-        return (
-          sessionExercise.exerciseId ===
-          exercise.exerciseId &&
-          index === setIndex
-        );
-      }
-    }
-
-    return false;
+    return (
+      nextStep?.exerciseId ===
+      exercise.exerciseId &&
+      nextStep.setIndex === setIndex
+    );
   }
 
 
@@ -3007,71 +2984,82 @@ export class Train implements OnInit, OnDestroy {
     exerciseId: string,
     setIndex: number
   ): boolean {
-    const orderedSteps =
-      this.orderedWorkoutSetSteps();
+    const plan =
+      this.executionPlan();
 
-    const currentStepIndex =
-      orderedSteps.findIndex(
-        step =>
-          step.exerciseId === exerciseId &&
-          step.setIndex === setIndex
+    const currentStep =
+      findCurrentStep(
+        plan,
+        {
+          kind:
+            setIndex < 0
+              ? 'warmup'
+              : 'working',
+          exerciseId,
+          setIndex
+        }
       );
 
-    if (currentStepIndex < 0) {
+    if (!currentStep) {
       return false;
     }
 
-    return orderedSteps
-      .slice(currentStepIndex + 1)
-      .some(
-        step =>
-          !this.isSetCompleted(
-            step.exerciseId,
-            step.setIndex
-          )
-      );
+    return hasPendingStepAfter(
+      plan,
+      currentStep,
+      step =>
+        this.isExecutionStepCompleted(
+          step
+        )
+    );
   }
 
 
-  private orderedWorkoutSetSteps(): WorkoutSetStep[] {
+  private executionPlan(): ExecutionStep[] {
     const session =
       this.activeSession();
+    const workout =
+      this.activeWorkout();
 
     if (!session) {
       return [];
     }
 
-    return session.exercises.flatMap(
-      exercise => {
-        const warmups =
-          this.warmupSets(
-            exercise.exerciseId
-          ).map(set => ({
-            exerciseId:
-              exercise.exerciseId,
-            setIndex:
-              set.setIndex
-          }));
+    return buildExecutionPlan(
+      session.exercises.map(
+        exercise => ({
+          exerciseId:
+            exercise.exerciseId,
+          workingSetCount:
+            exercise.sets,
+          warmupSetIndices:
+            (workout?.sets ?? [])
+              .filter(
+                set =>
+                  set.exerciseId ===
+                  exercise.exerciseId &&
+                  set.setType === 'warmup'
+              )
+              .map(set => set.setIndex)
+        })
+      )
+    );
+  }
 
-        const workingSets =
-          Array.from(
-            {
-              length:
-                exercise.sets
-            },
-            (_, index) => ({
-              exerciseId:
-                exercise.exerciseId,
-              setIndex:
-                index
-            })
-          );
 
-        return [
-          ...warmups,
-          ...workingSets
-        ];
-      }
+  private workingExecutionPlan(): ExecutionStep[] {
+    return this.executionPlan().filter(
+      step => step.kind === 'working'
+    );
+  }
+
+
+  private isExecutionStepCompleted(
+    step: ExecutionStep
+  ): boolean {
+    return this.isSetCompleted(
+      step.exerciseId,
+      step.setIndex
     );
   }
 
@@ -3346,16 +3334,13 @@ export class Train implements OnInit, OnDestroy {
       return [];
     }
 
-    return workout.sets
-      .filter(
+    return orderWarmupSteps(
+      workout.sets.filter(
         set =>
           set.exerciseId === exerciseId &&
           set.setType === 'warmup'
       )
-      .sort(
-        (a, b) =>
-          b.setIndex - a.setIndex
-      );
+    );
   }
 
 

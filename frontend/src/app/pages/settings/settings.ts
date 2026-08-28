@@ -35,7 +35,8 @@ import {
 import type {
   HealthConnectPermissionStatus,
   HealthConnectSnapshot,
-  HealthConnectExerciseSessions
+  HealthConnectExerciseSessions,
+  HealthConnectSwimmingMetrics
 } from '../../core/health-connect.plugin';
 
 import {
@@ -1553,6 +1554,19 @@ export class SettingsAppearance {
                 >
                   Leer actividades Garmin
                 </button>
+
+                <button
+                  type="button"
+                  class="settings-action"
+                  [disabled]="
+                    healthConnectLoading()
+                  "
+                  (click)="
+                    readGarminSwimmingMetrics()
+                  "
+                >
+                  Diagnóstico natación Garmin
+                </button>
               }
             </div>
 
@@ -1572,6 +1586,27 @@ export class SettingsAppearance {
                   permissionLabel(
                     healthConnectPermissions()
                       ?.exercise
+                  )
+                }}
+                · Distancia:
+                {{
+                  permissionLabel(
+                    healthConnectPermissions()
+                      ?.distance
+                  )
+                }}
+                · Velocidad:
+                {{
+                  permissionLabel(
+                    healthConnectPermissions()
+                      ?.speed
+                  )
+                }}
+                · FC ejercicio:
+                {{
+                  permissionLabel(
+                    healthConnectPermissions()
+                      ?.heartRate
                   )
                 }}
                 · FC reposo:
@@ -1866,6 +1901,55 @@ export class SettingsAppearance {
                 }}
               </small>
 
+              @if (
+                session.laps.length > 0
+              ) {
+                <small>
+                  <strong>Detalle de laps</strong>
+                </small>
+
+                @for (
+                  lap of session.laps;
+                  track lap.index
+                ) {
+                  <small>
+                    Lap {{ lap.index + 1 }}
+                    ·
+                    {{ numberLabel(lap.durationSeconds) }} s
+                    ·
+                    @if (
+                      lap.lengthMeters !== undefined
+                    ) {
+                      {{ numberLabel(lap.lengthMeters) }} m
+                    } @else {
+                      longitud no informada
+                    }
+                  </small>
+                }
+              }
+
+              @if (
+                session.segments.length > 0
+              ) {
+                <small>
+                  <strong>Detalle de segments</strong>
+                </small>
+
+                @for (
+                  segment of session.segments;
+                  track segment.index
+                ) {
+                  <small>
+                    Segment {{ segment.index + 1 }}
+                    · tipo {{ segment.segmentType }}
+                    ·
+                    {{ numberLabel(segment.durationSeconds) }} s
+                    · reps
+                    {{ segment.repetitionsCount }}
+                  </small>
+                }
+              }
+
               <small>
                 Origen:
                 {{
@@ -1885,6 +1969,139 @@ export class SettingsAppearance {
           }
         }
       </section>
+
+
+      @if (healthConnectSwimmingMetrics(); as swimming) {
+        <section class="settings-panel">
+          <div class="settings-field">
+            <span>Diagnóstico natación Garmin</span>
+
+            <strong>
+              {{ swimming.count }}
+              sesiones de piscina
+            </strong>
+
+            <small>
+              Últimos {{ swimming.lookbackDays }} días
+            </small>
+          </div>
+
+          @for (
+            session of swimming.sessions;
+            track session.startTime
+          ) {
+            <div class="settings-field">
+              <span>
+                {{ session.startTime }}
+              </span>
+
+              <strong>
+                @if (session.distanceMeters !== undefined) {
+                  {{ numberLabel(session.distanceMeters) }} m
+                } @else {
+                  Distancia no disponible
+                }
+              </strong>
+
+              <small>
+                Duración:
+                {{ numberLabel(session.durationSeconds) }} s
+              </small>
+
+              <small>
+                DistanceRecords:
+                {{ session.distanceRecordCount }}
+                · suma raw:
+                {{ numberLabel(session.rawDistanceTotalMeters) }}
+                m
+              </small>
+
+              @for (
+                record of session.distanceRecords;
+                track record.startTime
+              ) {
+                <small>
+                  Distancia raw:
+                  {{ numberLabel(record.distanceMeters) }} m
+                  · {{ numberLabel(record.durationSeconds) }} s
+                  · {{ record.startTime }}
+                  → {{ record.endTime }}
+                </small>
+              }
+
+              <small>
+                FC media:
+                {{
+                  session.heartRateAverageBpm !== undefined
+                    ? numberLabel(session.heartRateAverageBpm)
+                    : '—'
+                }}
+                ppm
+                · FC máx:
+                {{
+                  session.heartRateMaxBpm !== undefined
+                    ? numberLabel(session.heartRateMaxBpm)
+                    : '—'
+                }}
+                ppm
+                · muestras FC:
+                {{ session.heartRateSampleCount }}
+              </small>
+
+              <small>
+                Muestras velocidad:
+                {{ session.speedSampleCount }}
+                · velocidad media:
+                {{
+                  session.speedAverageMetersPerSecond !== undefined
+                    ? numberLabel(
+                        session.speedAverageMetersPerSecond
+                      )
+                    : '—'
+                }}
+                m/s
+              </small>
+
+              <small>
+                @if (
+                  session.paceSecondsPer100mFromSpeed !== undefined
+                ) {
+                  Ritmo derivado:
+                  {{
+                    numberLabel(
+                      session.paceSecondsPer100mFromSpeed
+                    )
+                  }}
+                  s/100 m
+                } @else {
+                  Ritmo derivado: —
+                }
+              </small>
+
+              <small>
+                Segmentos:
+                {{ session.segmentCount }}
+                · reps:
+                {{ session.segmentRepetitions }}
+              </small>
+
+              @if (session.distanceError) {
+                <small>
+                  Error distancia:
+                  {{ session.distanceError }}
+                </small>
+              }
+
+              @if (session.speedError) {
+                <small>
+                  Error velocidad:
+                  {{ session.speedError }}
+                </small>
+              }
+            </div>
+          }
+        </section>
+      }
 
 
       <p class="settings-note">
@@ -1931,6 +2148,15 @@ export class SettingsData
   readonly healthConnectExerciseSessions =
     signal<
       HealthConnectExerciseSessions
+      | null
+    >(
+      null
+    );
+
+
+  readonly healthConnectSwimmingMetrics =
+    signal<
+      HealthConnectSwimmingMetrics
       | null
     >(
       null
@@ -2330,6 +2556,65 @@ export class SettingsData
     }
 
     return source;
+  }
+
+
+  async readGarminSwimmingMetrics():
+    Promise<void> {
+    if (this.healthConnectLoading()) {
+      return;
+    }
+
+    this.healthConnectLoading.set(true);
+    this.healthConnectMessage.set(null);
+    this.healthConnectError.set(null);
+
+    try {
+      const result =
+        await HealthConnect
+          .readGarminSwimmingMetrics();
+
+      this.healthConnectSwimmingMetrics.set(
+        result
+      );
+
+      void this.telemetry.track({
+        event_name:
+          'health_connect_read',
+        route:
+          '/ajustes/datos',
+        metadata: {
+          operation:
+            'garmin_swimming_metrics'
+        }
+      });
+
+      this.healthConnectMessage.set(
+        `${result.count} sesiones de natación analizadas.`
+      );
+
+    } catch (error: unknown) {
+      void this.telemetry.track({
+        event_name:
+          'health_connect_error',
+        route:
+          '/ajustes/datos',
+        metadata: {
+          operation:
+            'garmin_swimming_metrics'
+        }
+      });
+
+      this.healthConnectError.set(
+        this.healthConnectErrorMessage(
+          error,
+          'No se pudieron leer las métricas de natación.'
+        )
+      );
+
+    } finally {
+      this.healthConnectLoading.set(false);
+    }
   }
 
 

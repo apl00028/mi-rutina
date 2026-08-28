@@ -175,13 +175,23 @@ def test_list_exercises_authenticated_appends_custom_exercise(monkeypatch):
     data = response.json()
 
     assert len(data) == 101
-    assert data[:100] == jsonable_encoder(
+    expected_builtin = jsonable_encoder(
         [
             exercise.model_copy(update={"favorite": False})
             for exercise in load_exercises()
         ],
         exclude_none=True,
     )
+    unilateral_by_id = {
+        exercise.id: exercise.metadata.unilateral
+        for exercise in load_exercise_catalog()
+    }
+    for exercise in expected_builtin:
+        exercise["unilateral"] = unilateral_by_id[
+            exercise["id"]
+        ]
+
+    assert data[:100] == expected_builtin
     assert data[-1] == {
         "id": f"custom-{custom_uuid}",
         "name": "Press personalizado",
@@ -277,13 +287,23 @@ def test_list_exercises_custom_supabase_failure_returns_builtin_catalog(monkeypa
         app.dependency_overrides.pop(require_user, None)
 
     assert response.status_code == 200
-    assert response.json() == jsonable_encoder(
+    expected = jsonable_encoder(
         [
             exercise.model_copy(update={"favorite": False})
             for exercise in load_exercises()
         ],
         exclude_none=True,
     )
+    unilateral_by_id = {
+        exercise.id: exercise.metadata.unilateral
+        for exercise in load_exercise_catalog()
+    }
+    for exercise in expected:
+        exercise["unilateral"] = unilateral_by_id[
+            exercise["id"]
+        ]
+
+    assert response.json() == expected
 
 
 def test_get_exercise_by_id_requires_authentication():

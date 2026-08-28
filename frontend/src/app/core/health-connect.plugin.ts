@@ -13,6 +13,9 @@ export interface HealthConnectAvailability {
 export interface HealthConnectPermissionStatus {
   steps: boolean;
   exercise: boolean;
+  distance: boolean;
+  speed: boolean;
+  heartRate: boolean;
   restingHeartRate: boolean;
   sleep: boolean;
   weight: boolean;
@@ -44,6 +47,25 @@ export interface HealthConnectSnapshot {
 }
 
 
+export interface HealthConnectExerciseLap {
+  index: number;
+  startTime: string;
+  endTime: string;
+  durationSeconds: number;
+  lengthMeters?: number;
+}
+
+
+export interface HealthConnectExerciseSegment {
+  index: number;
+  segmentType: number;
+  startTime: string;
+  endTime: string;
+  durationSeconds: number;
+  repetitionsCount: number;
+}
+
+
 export interface HealthConnectExerciseSession {
   exerciseType: number;
   startTime: string;
@@ -54,7 +76,52 @@ export interface HealthConnectExerciseSession {
   notes?: string;
   lapCount: number;
   segmentCount: number;
+  laps: HealthConnectExerciseLap[];
+  segments: HealthConnectExerciseSegment[];
   hasRoute: boolean;
+}
+
+
+export interface HealthConnectSwimmingDistanceRecord {
+  startTime: string;
+  endTime: string;
+  durationSeconds: number;
+  distanceMeters: number;
+}
+
+
+export interface HealthConnectSwimmingMetricSession {
+  startTime: string;
+  endTime: string;
+  durationSeconds: number;
+  segmentCount: number;
+  segmentRepetitions: number;
+
+  distanceMeters?: number;
+  distanceError?: string;
+
+  distanceRecordCount: number;
+  rawDistanceTotalMeters: number;
+  distanceRecords: HealthConnectSwimmingDistanceRecord[];
+  distanceRecordsError?: string;
+
+  heartRateAverageBpm?: number;
+  heartRateMaxBpm?: number;
+  heartRateSampleCount: number;
+
+  speedSampleCount: number;
+  speedAverageMetersPerSecond?: number;
+  speedMaxMetersPerSecond?: number;
+  paceSecondsPer100mFromSpeed?: number;
+  speedError?: string;
+}
+
+
+export interface HealthConnectSwimmingMetrics {
+  sourcePackage: string;
+  lookbackDays: number;
+  count: number;
+  sessions: HealthConnectSwimmingMetricSession[];
 }
 
 
@@ -82,6 +149,9 @@ export interface HealthConnectPlugin {
 
   readGarminExerciseSessions():
     Promise<HealthConnectExerciseSessions>;
+
+  readGarminSwimmingMetrics():
+    Promise<HealthConnectSwimmingMetrics>;
 }
 
 

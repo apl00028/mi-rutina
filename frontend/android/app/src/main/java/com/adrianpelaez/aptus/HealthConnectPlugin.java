@@ -11,11 +11,18 @@ import android.health.connect.ReadRecordsResponse;
 import android.health.connect.TimeInstantRangeFilter;
 import android.health.connect.datatypes.BodyFatRecord;
 import android.health.connect.datatypes.DataOrigin;
+import android.health.connect.datatypes.DistanceRecord;
+import android.health.connect.datatypes.ExerciseLap;
+import android.health.connect.datatypes.ExerciseSegment;
 import android.health.connect.datatypes.ExerciseSessionRecord;
+import android.health.connect.datatypes.ExerciseSessionType;
+import android.health.connect.datatypes.HeartRateRecord;
 import android.health.connect.datatypes.RestingHeartRateRecord;
 import android.health.connect.datatypes.SleepSessionRecord;
+import android.health.connect.datatypes.SpeedRecord;
 import android.health.connect.datatypes.StepsRecord;
 import android.health.connect.datatypes.WeightRecord;
+import android.health.connect.datatypes.units.Length;
 import android.os.Build;
 
 import androidx.activity.result.ActivityResultLauncher;
@@ -100,6 +107,9 @@ public class HealthConnectPlugin
         return Set.of(
                 "android.permission.health.READ_STEPS",
                 "android.permission.health.READ_EXERCISE",
+                "android.permission.health.READ_DISTANCE",
+                "android.permission.health.READ_SPEED",
+                "android.permission.health.READ_HEART_RATE",
                 "android.permission.health.READ_RESTING_HEART_RATE",
                 "android.permission.health.READ_SLEEP",
                 "android.permission.health.READ_WEIGHT",
@@ -183,6 +193,21 @@ public class HealthConnectPlugin
                         "android.permission.health.READ_EXERCISE"
                 );
 
+        boolean distance =
+                hasHealthPermission(
+                        "android.permission.health.READ_DISTANCE"
+                );
+
+        boolean speed =
+                hasHealthPermission(
+                        "android.permission.health.READ_SPEED"
+                );
+
+        boolean heartRate =
+                hasHealthPermission(
+                        "android.permission.health.READ_HEART_RATE"
+                );
+
         boolean restingHeartRate =
                 hasHealthPermission(
                         "android.permission.health.READ_RESTING_HEART_RATE"
@@ -214,6 +239,21 @@ public class HealthConnectPlugin
         );
 
         result.put(
+                "distance",
+                distance
+        );
+
+        result.put(
+                "speed",
+                speed
+        );
+
+        result.put(
+                "heartRate",
+                heartRate
+        );
+
+        result.put(
                 "restingHeartRate",
                 restingHeartRate
         );
@@ -237,6 +277,9 @@ public class HealthConnectPlugin
                 "allGranted",
                 steps &&
                 exercise &&
+                distance &&
+                speed &&
+                heartRate &&
                 restingHeartRate &&
                 sleep &&
                 weight &&
@@ -454,6 +497,128 @@ public class HealthConnectPlugin
                                             .size()
                             );
 
+                            JSArray laps =
+                                    new JSArray();
+
+                            int lapIndex = 0;
+
+                            for (
+                                    ExerciseLap lap :
+                                    record.getLaps()
+                            ) {
+                                JSObject item =
+                                        new JSObject();
+
+                                item.put(
+                                        "index",
+                                        lapIndex++
+                                );
+
+                                item.put(
+                                        "startTime",
+                                        lap
+                                                .getStartTime()
+                                                .toString()
+                                );
+
+                                item.put(
+                                        "endTime",
+                                        lap
+                                                .getEndTime()
+                                                .toString()
+                                );
+
+                                item.put(
+                                        "durationSeconds",
+                                        Duration
+                                                .between(
+                                                        lap.getStartTime(),
+                                                        lap.getEndTime()
+                                                )
+                                                .toMillis()
+                                                / 1000.0
+                                );
+
+                                android.health.connect.datatypes.units.Length
+                                        length =
+                                        lap.getLength();
+
+                                if (length != null) {
+                                    item.put(
+                                            "lengthMeters",
+                                            length.getInMeters()
+                                    );
+                                }
+
+                                laps.put(item);
+                            }
+
+                            session.put(
+                                    "laps",
+                                    laps
+                            );
+
+                            JSArray segments =
+                                    new JSArray();
+
+                            int segmentIndex = 0;
+
+                            for (
+                                    ExerciseSegment segment :
+                                    record.getSegments()
+                            ) {
+                                JSObject item =
+                                        new JSObject();
+
+                                item.put(
+                                        "index",
+                                        segmentIndex++
+                                );
+
+                                item.put(
+                                        "segmentType",
+                                        segment.getSegmentType()
+                                );
+
+                                item.put(
+                                        "startTime",
+                                        segment
+                                                .getStartTime()
+                                                .toString()
+                                );
+
+                                item.put(
+                                        "endTime",
+                                        segment
+                                                .getEndTime()
+                                                .toString()
+                                );
+
+                                item.put(
+                                        "durationSeconds",
+                                        Duration
+                                                .between(
+                                                        segment.getStartTime(),
+                                                        segment.getEndTime()
+                                                )
+                                                .toMillis()
+                                                / 1000.0
+                                );
+
+                                item.put(
+                                        "repetitionsCount",
+                                        segment
+                                                .getRepetitionsCount()
+                                );
+
+                                segments.put(item);
+                            }
+
+                            session.put(
+                                    "segments",
+                                    segments
+                            );
+
                             session.put(
                                     "hasRoute",
                                     record.hasRoute()
@@ -506,6 +671,713 @@ public class HealthConnectPlugin
         );
     }
 
+
+
+    @PluginMethod
+    public void readGarminSwimmingMetrics(
+            PluginCall call
+    ) {
+        final HealthConnectManager manager =
+                manager();
+
+        if (manager == null) {
+            call.reject(
+                    "Health Connect no está disponible."
+            );
+            return;
+        }
+
+        final String[] permissions = {
+                "android.permission.health.READ_EXERCISE",
+                "android.permission.health.READ_DISTANCE",
+                "android.permission.health.READ_SPEED",
+                "android.permission.health.READ_HEART_RATE"
+        };
+
+        for (String permission : permissions) {
+            if (!hasHealthPermission(permission)) {
+                call.reject(
+                        "Falta permiso para diagnóstico de natación: " +
+                        permission
+                );
+                return;
+            }
+        }
+
+        final String garminPackage =
+                "com.garmin.android.apps.connectmobile";
+
+        final DataOrigin garminOrigin =
+                new DataOrigin.Builder()
+                        .setPackageName(garminPackage)
+                        .build();
+
+        final Instant end =
+                Instant.now();
+
+        final Instant start =
+                end.minus(
+                        Duration.ofDays(30)
+                );
+
+        ReadRecordsRequestUsingFilters<
+                ExerciseSessionRecord
+                > request =
+                new ReadRecordsRequestUsingFilters
+                        .Builder<>(
+                                ExerciseSessionRecord.class
+                        )
+                        .setTimeRangeFilter(
+                                instantFilter(
+                                        start,
+                                        end
+                                )
+                        )
+                        .addDataOrigins(
+                                garminOrigin
+                        )
+                        .setAscending(false)
+                        .setPageSize(50)
+                        .build();
+
+        final Executor executor =
+                getContext().getMainExecutor();
+
+        manager.readRecords(
+                request,
+                executor,
+                new OutcomeReceiver<
+                        ReadRecordsResponse<
+                                ExerciseSessionRecord
+                                >,
+                        HealthConnectException
+                        >() {
+
+                    @Override
+                    public void onResult(
+                            ReadRecordsResponse<
+                                    ExerciseSessionRecord
+                                    > result
+                    ) {
+                        java.util.ArrayList<
+                                ExerciseSessionRecord
+                                > swimmingSessions =
+                                new java.util.ArrayList<>();
+
+                        for (
+                                ExerciseSessionRecord record :
+                                result.getRecords()
+                        ) {
+                            if (
+                                    record.getExerciseType() ==
+                                    ExerciseSessionType
+                                            .EXERCISE_SESSION_TYPE_SWIMMING_POOL
+                            ) {
+                                swimmingSessions.add(
+                                        record
+                                );
+                            }
+                        }
+
+                        JSArray sessions =
+                                new JSArray();
+
+                        JSObject response =
+                                new JSObject();
+
+                        response.put(
+                                "sourcePackage",
+                                garminPackage
+                        );
+
+                        response.put(
+                                "lookbackDays",
+                                30
+                        );
+
+                        response.put(
+                                "count",
+                                swimmingSessions.size()
+                        );
+
+                        response.put(
+                                "sessions",
+                                sessions
+                        );
+
+                        if (
+                                swimmingSessions.isEmpty()
+                        ) {
+                            call.resolve(response);
+                            return;
+                        }
+
+                        AtomicInteger pending =
+                                new AtomicInteger(
+                                        swimmingSessions.size()
+                                                * 4
+                                );
+
+                        Runnable finishPart =
+                                () -> {
+                                    if (
+                                            pending
+                                                    .decrementAndGet()
+                                                    == 0
+                                    ) {
+                                        call.resolve(
+                                                response
+                                        );
+                                    }
+                                };
+
+                        for (
+                                ExerciseSessionRecord record :
+                                swimmingSessions
+                        ) {
+                            JSObject session =
+                                    new JSObject();
+
+                            session.put(
+                                    "startTime",
+                                    record
+                                            .getStartTime()
+                                            .toString()
+                            );
+
+                            session.put(
+                                    "endTime",
+                                    record
+                                            .getEndTime()
+                                            .toString()
+                            );
+
+                            session.put(
+                                    "durationSeconds",
+                                    Duration
+                                            .between(
+                                                    record.getStartTime(),
+                                                    record.getEndTime()
+                                            )
+                                            .toMillis()
+                                            / 1000.0
+                            );
+
+                            session.put(
+                                    "segmentCount",
+                                    record
+                                            .getSegments()
+                                            .size()
+                            );
+
+                            long segmentRepetitions = 0;
+
+                            for (
+                                    ExerciseSegment segment :
+                                    record.getSegments()
+                            ) {
+                                segmentRepetitions +=
+                                        segment
+                                                .getRepetitionsCount();
+                            }
+
+                            session.put(
+                                    "segmentRepetitions",
+                                    segmentRepetitions
+                            );
+
+                            sessions.put(session);
+
+                            readSwimmingDistance(
+                                    manager,
+                                    executor,
+                                    garminOrigin,
+                                    record.getStartTime(),
+                                    record.getEndTime(),
+                                    session,
+                                    finishPart
+                            );
+
+                            readSwimmingDistanceRecords(
+                                    manager,
+                                    executor,
+                                    garminOrigin,
+                                    record.getStartTime(),
+                                    record.getEndTime(),
+                                    session,
+                                    finishPart
+                            );
+
+                            readSwimmingHeartRate(
+                                    manager,
+                                    executor,
+                                    garminOrigin,
+                                    record.getStartTime(),
+                                    record.getEndTime(),
+                                    session,
+                                    finishPart
+                            );
+
+                            readSwimmingSpeed(
+                                    manager,
+                                    executor,
+                                    garminOrigin,
+                                    record.getStartTime(),
+                                    record.getEndTime(),
+                                    session,
+                                    finishPart
+                            );
+                        }
+                    }
+
+                    @Override
+                    public void onError(
+                            HealthConnectException error
+                    ) {
+                        call.reject(
+                                "No se pudieron localizar las sesiones de natación: " +
+                                error,
+                                error
+                        );
+                    }
+                }
+        );
+    }
+
+
+    private void readSwimmingDistance(
+            HealthConnectManager manager,
+            Executor executor,
+            DataOrigin garminOrigin,
+            Instant start,
+            Instant end,
+            JSObject session,
+            Runnable done
+    ) {
+        AggregateRecordsRequest<Length> request =
+                new AggregateRecordsRequest
+                        .Builder<Length>(
+                                instantFilter(
+                                        start,
+                                        end
+                                )
+                        )
+                        .addAggregationType(
+                                DistanceRecord
+                                        .DISTANCE_TOTAL
+                        )
+                        .addDataOriginsFilter(
+                                garminOrigin
+                        )
+                        .build();
+
+        manager.aggregate(
+                request,
+                executor,
+                new OutcomeReceiver<
+                        AggregateRecordsResponse<Length>,
+                        HealthConnectException
+                        >() {
+
+                    @Override
+                    public void onResult(
+                            AggregateRecordsResponse<Length>
+                                    result
+                    ) {
+                        Length distance =
+                                result.get(
+                                        DistanceRecord
+                                                .DISTANCE_TOTAL
+                                );
+
+                        if (distance != null) {
+                            session.put(
+                                    "distanceMeters",
+                                    distance
+                                            .getInMeters()
+                            );
+                        }
+
+                        done.run();
+                    }
+
+                    @Override
+                    public void onError(
+                            HealthConnectException error
+                    ) {
+                        session.put(
+                                "distanceError",
+                                error.toString()
+                        );
+
+                        done.run();
+                    }
+                }
+        );
+    }
+
+
+    private void readSwimmingDistanceRecords(
+            HealthConnectManager manager,
+            Executor executor,
+            DataOrigin garminOrigin,
+            Instant start,
+            Instant end,
+            JSObject session,
+            Runnable done
+    ) {
+        ReadRecordsRequestUsingFilters<
+                DistanceRecord
+                > request =
+                new ReadRecordsRequestUsingFilters
+                        .Builder<>(
+                                DistanceRecord.class
+                        )
+                        .setTimeRangeFilter(
+                                instantFilter(
+                                        start,
+                                        end
+                                )
+                        )
+                        .addDataOrigins(
+                                garminOrigin
+                        )
+                        .setAscending(true)
+                        .setPageSize(100)
+                        .build();
+
+        manager.readRecords(
+                request,
+                executor,
+                new OutcomeReceiver<
+                        ReadRecordsResponse<DistanceRecord>,
+                        HealthConnectException
+                        >() {
+
+                    @Override
+                    public void onResult(
+                            ReadRecordsResponse<DistanceRecord>
+                                    result
+                    ) {
+                        JSArray records =
+                                new JSArray();
+
+                        double rawTotalMeters =
+                                0.0;
+
+                        for (
+                                DistanceRecord record :
+                                result.getRecords()
+                        ) {
+                            JSObject item =
+                                    new JSObject();
+
+                            double meters =
+                                    record
+                                            .getDistance()
+                                            .getInMeters();
+
+                            rawTotalMeters +=
+                                    meters;
+
+                            item.put(
+                                    "startTime",
+                                    record
+                                            .getStartTime()
+                                            .toString()
+                            );
+
+                            item.put(
+                                    "endTime",
+                                    record
+                                            .getEndTime()
+                                            .toString()
+                            );
+
+                            item.put(
+                                    "durationSeconds",
+                                    Duration
+                                            .between(
+                                                    record.getStartTime(),
+                                                    record.getEndTime()
+                                            )
+                                            .toMillis()
+                                            / 1000.0
+                            );
+
+                            item.put(
+                                    "distanceMeters",
+                                    meters
+                            );
+
+                            records.put(item);
+                        }
+
+                        session.put(
+                                "distanceRecordCount",
+                                records.length()
+                        );
+
+                        session.put(
+                                "rawDistanceTotalMeters",
+                                rawTotalMeters
+                        );
+
+                        session.put(
+                                "distanceRecords",
+                                records
+                        );
+
+                        done.run();
+                    }
+
+                    @Override
+                    public void onError(
+                            HealthConnectException error
+                    ) {
+                        session.put(
+                                "distanceRecordsError",
+                                error.toString()
+                        );
+
+                        done.run();
+                    }
+                }
+        );
+    }
+
+
+    private void readSwimmingHeartRate(
+            HealthConnectManager manager,
+            Executor executor,
+            DataOrigin garminOrigin,
+            Instant start,
+            Instant end,
+            JSObject session,
+            Runnable done
+    ) {
+        AggregateRecordsRequest<Long> request =
+                new AggregateRecordsRequest
+                        .Builder<Long>(
+                                instantFilter(
+                                        start,
+                                        end
+                                )
+                        )
+                        .addAggregationType(
+                                HeartRateRecord.BPM_AVG
+                        )
+                        .addAggregationType(
+                                HeartRateRecord.BPM_MAX
+                        )
+                        .addAggregationType(
+                                HeartRateRecord
+                                        .HEART_MEASUREMENTS_COUNT
+                        )
+                        .addDataOriginsFilter(
+                                garminOrigin
+                        )
+                        .build();
+
+        manager.aggregate(
+                request,
+                executor,
+                new OutcomeReceiver<
+                        AggregateRecordsResponse<Long>,
+                        HealthConnectException
+                        >() {
+
+                    @Override
+                    public void onResult(
+                            AggregateRecordsResponse<Long>
+                                    result
+                    ) {
+                        Long average =
+                                result.get(
+                                        HeartRateRecord
+                                                .BPM_AVG
+                                );
+
+                        Long maximum =
+                                result.get(
+                                        HeartRateRecord
+                                                .BPM_MAX
+                                );
+
+                        Long count =
+                                result.get(
+                                        HeartRateRecord
+                                                .HEART_MEASUREMENTS_COUNT
+                                );
+
+                        if (average != null) {
+                            session.put(
+                                    "heartRateAverageBpm",
+                                    average
+                            );
+                        }
+
+                        if (maximum != null) {
+                            session.put(
+                                    "heartRateMaxBpm",
+                                    maximum
+                            );
+                        }
+
+                        session.put(
+                                "heartRateSampleCount",
+                                count != null
+                                        ? count
+                                        : 0
+                        );
+
+                        done.run();
+                    }
+
+                    @Override
+                    public void onError(
+                            HealthConnectException error
+                    ) {
+                        session.put(
+                                "heartRateError",
+                                error.toString()
+                        );
+
+                        done.run();
+                    }
+                }
+        );
+    }
+
+
+    private void readSwimmingSpeed(
+            HealthConnectManager manager,
+            Executor executor,
+            DataOrigin garminOrigin,
+            Instant start,
+            Instant end,
+            JSObject session,
+            Runnable done
+    ) {
+        ReadRecordsRequestUsingFilters<
+                SpeedRecord
+                > request =
+                new ReadRecordsRequestUsingFilters
+                        .Builder<>(
+                                SpeedRecord.class
+                        )
+                        .setTimeRangeFilter(
+                                instantFilter(
+                                        start,
+                                        end
+                                )
+                        )
+                        .addDataOrigins(
+                                garminOrigin
+                        )
+                        .setAscending(true)
+                        .setPageSize(100)
+                        .build();
+
+        manager.readRecords(
+                request,
+                executor,
+                new OutcomeReceiver<
+                        ReadRecordsResponse<SpeedRecord>,
+                        HealthConnectException
+                        >() {
+
+                    @Override
+                    public void onResult(
+                            ReadRecordsResponse<SpeedRecord>
+                                    result
+                    ) {
+                        double speedSum = 0.0;
+                        double speedMax = 0.0;
+                        int sampleCount = 0;
+
+                        for (
+                                SpeedRecord record :
+                                result.getRecords()
+                        ) {
+                            for (
+                                    SpeedRecord
+                                            .SpeedRecordSample sample :
+                                    record.getSamples()
+                            ) {
+                                double metersPerSecond =
+                                        sample
+                                                .getSpeed()
+                                                .getInMetersPerSecond();
+
+                                if (
+                                        !Double.isFinite(
+                                                metersPerSecond
+                                        ) ||
+                                        metersPerSecond < 0
+                                ) {
+                                    continue;
+                                }
+
+                                speedSum +=
+                                        metersPerSecond;
+
+                                speedMax =
+                                        Math.max(
+                                                speedMax,
+                                                metersPerSecond
+                                        );
+
+                                sampleCount++;
+                            }
+                        }
+
+                        session.put(
+                                "speedSampleCount",
+                                sampleCount
+                        );
+
+                        if (sampleCount > 0) {
+                            double average =
+                                    speedSum /
+                                    sampleCount;
+
+                            session.put(
+                                    "speedAverageMetersPerSecond",
+                                    average
+                            );
+
+                            session.put(
+                                    "speedMaxMetersPerSecond",
+                                    speedMax
+                            );
+
+                            if (average > 0) {
+                                session.put(
+                                        "paceSecondsPer100mFromSpeed",
+                                        100.0 /
+                                        average
+                                );
+                            }
+                        }
+
+                        done.run();
+                    }
+
+                    @Override
+                    public void onError(
+                            HealthConnectException error
+                    ) {
+                        session.put(
+                                "speedError",
+                                error.toString()
+                        );
+
+                        done.run();
+                    }
+                }
+        );
+    }
 
 
     @PluginMethod

@@ -3421,7 +3421,17 @@ export class Train implements OnInit, OnDestroy {
           discomfort.exerciseId === exerciseId
       );
 
-    if (index >= 0) {
+    const hasMeaningfulEntry =
+      next.painScore > 0 ||
+      Boolean(next.note);
+
+    if (!hasMeaningfulEntry) {
+      if (index < 0) {
+        return;
+      }
+
+      discomforts.splice(index, 1);
+    } else if (index >= 0) {
       discomforts[index] = next;
     } else {
       discomforts.push(next);

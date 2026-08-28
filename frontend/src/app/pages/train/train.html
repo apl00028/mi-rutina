@@ -422,7 +422,7 @@
               <details class="discomfort-section">
                 <summary class="discomfort-summary">
                   <span>
-                    Molestias
+                    Molestias o anotaciones
                   </span>
 
                   <strong>
@@ -434,6 +434,8 @@
                     ) {
                       @if (discomfort.painScore > 0) {
                         {{ discomfort.painScore }}/10
+                      } @else if (discomfort.note) {
+                        Con anotación
                       } @else {
                         Ninguna
                       }
@@ -444,45 +446,50 @@
                 </summary>
 
                 <div class="discomfort-body">
+                  <label class="discomfort-field">
+                    <span>
+                      Molestia
+                    </span>
+
+                    <select
+                      [value]="
+                        exerciseDiscomfort(
+                          exercise.exerciseId
+                        )?.painScore ?? 0
+                      "
+                      (change)="
+                        updateExerciseDiscomfort(
+                          exercise.exerciseId,
+                          'painScore',
+                          $any($event.target).value
+                        )
+                      "
+                    >
+                      @for (
+                        score of [
+                          0, 1, 2, 3, 4, 5,
+                          6, 7, 8, 9, 10
+                        ];
+                        track score
+                      ) {
+                        <option [value]="score">
+                          {{
+                            score === 0
+                              ? '0 — Ninguna'
+                              : score
+                          }}
+                        </option>
+                      }
+                    </select>
+                  </label>
+
                   @if (
                     exerciseDiscomfort(
                       exercise.exerciseId
                     );
                     as discomfort
                   ) {
-                    <label class="discomfort-field">
-                      <span>
-                        Intensidad
-                      </span>
-
-                      <select
-                        [value]="discomfort.painScore"
-                        (change)="
-                          updateExerciseDiscomfort(
-                            exercise.exerciseId,
-                            'painScore',
-                            $any($event.target).value
-                          )
-                        "
-                      >
-                        @for (
-                          score of [
-                            0, 1, 2, 3, 4, 5,
-                            6, 7, 8, 9, 10
-                          ];
-                          track score
-                        ) {
-                          <option [value]="score">
-                            {{
-                              score === 0
-                                ? '0 — Ninguna'
-                                : score
-                            }}
-                          </option>
-                        }
-                      </select>
-                    </label>
-
+                    @if (discomfort.painScore > 0) {
                     <label class="discomfort-field">
                       <span>
                         Zona
@@ -501,26 +508,37 @@
                         "
                       />
                     </label>
+                    }
+                  }
 
-                    <label class="discomfort-field">
-                      <span>
-                        Nota
-                      </span>
+                  <label class="discomfort-field">
+                    <span>
+                      Anotación
+                    </span>
 
-                      <textarea
-                        rows="2"
-                        placeholder="Opcional"
-                        [value]="discomfort.note ?? ''"
-                        (input)="
-                          updateExerciseDiscomfort(
-                            exercise.exerciseId,
-                            'note',
-                            $any($event.target).value
-                          )
-                        "
-                      ></textarea>
-                    </label>
+                    <textarea
+                      rows="2"
+                      placeholder="Escribe una observación sobre este ejercicio"
+                      [value]="
+                        exerciseDiscomfort(
+                          exercise.exerciseId
+                        )?.note ?? ''
+                      "
+                      (input)="
+                        updateExerciseDiscomfort(
+                          exercise.exerciseId,
+                          'note',
+                          $any($event.target).value
+                        )
+                      "
+                    ></textarea>
+                  </label>
 
+                  @if (
+                    exerciseDiscomfort(
+                      exercise.exerciseId
+                    )
+                  ) {
                     <button
                       type="button"
                       class="discomfort-clear-button"
@@ -530,21 +548,7 @@
                         )
                       "
                     >
-                      Limpiar molestias
-                    </button>
-                  } @else {
-                    <button
-                      type="button"
-                      class="discomfort-add-button"
-                      (click)="
-                        updateExerciseDiscomfort(
-                          exercise.exerciseId,
-                          'painScore',
-                          '0'
-                        )
-                      "
-                    >
-                      Registrar molestias
+                      Limpiar registro
                     </button>
                   }
                 </div>

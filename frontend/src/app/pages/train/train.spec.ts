@@ -472,6 +472,179 @@ describe('Train first workout flow', () => {
   });
 
 
+  it('keeps pain and annotations independently and removes an empty entry', async () => {
+    const fixture =
+      await createLoadedTrain([
+        activeWorkout()
+      ]);
+    const component =
+      fixture.componentInstance;
+
+    vi.spyOn(
+      component as any,
+      'scheduleAutosave'
+    ).mockImplementation(() => {});
+
+    component.updateExerciseDiscomfort(
+      'dumbbell-bench-press',
+      'note',
+      '   '
+    );
+
+    expect(
+      component.exerciseDiscomfort(
+        'dumbbell-bench-press'
+      )
+    ).toBeNull();
+
+    component.updateExerciseDiscomfort(
+      'dumbbell-bench-press',
+      'note',
+      'Buena técnica'
+    );
+
+    expect(
+      component.exerciseDiscomfort(
+        'dumbbell-bench-press'
+      )
+    ).toMatchObject({
+      painScore: 0,
+      note: 'Buena técnica'
+    });
+
+    component.updateExerciseDiscomfort(
+      'dumbbell-bench-press',
+      'painScore',
+      '3'
+    );
+    component.updateExerciseDiscomfort(
+      'dumbbell-bench-press',
+      'note',
+      ''
+    );
+
+    expect(
+      component.exerciseDiscomfort(
+        'dumbbell-bench-press'
+      )
+    ).toMatchObject({
+      painScore: 3,
+      note: null
+    });
+
+    component.updateExerciseDiscomfort(
+      'dumbbell-bench-press',
+      'note',
+      'Mejor con agarre cerrado'
+    );
+    component.updateExerciseDiscomfort(
+      'dumbbell-bench-press',
+      'painScore',
+      '0'
+    );
+
+    expect(
+      component.exerciseDiscomfort(
+        'dumbbell-bench-press'
+      )
+    ).toMatchObject({
+      painScore: 0,
+      note:
+        'Mejor con agarre cerrado'
+    });
+
+    component.updateExerciseDiscomfort(
+      'dumbbell-bench-press',
+      'note',
+      ''
+    );
+
+    expect(
+      component.exerciseDiscomfort(
+        'dumbbell-bench-press'
+      )
+    ).toBeNull();
+
+    (component as any)
+      .cancelAutosaveTimer();
+    (component as any)
+      .persistedEditVersion =
+        (component as any)
+          .workoutEditVersion;
+  });
+
+
+  it('renders and saves an annotation without reporting pain', async () => {
+    const fixture =
+      await createLoadedTrain([
+        activeWorkout()
+      ]);
+    const component =
+      fixture.componentInstance;
+
+    vi.spyOn(
+      component as any,
+      'scheduleAutosave'
+    ).mockImplementation(() => {});
+
+    const exerciseToggle =
+      fixture.nativeElement.querySelector(
+        '.exercise-toggle'
+      ) as HTMLButtonElement;
+
+    exerciseToggle.click();
+    fixture.detectChanges();
+
+    expect(pageText(fixture))
+      .toContain(
+        'Molestias o anotaciones'
+      );
+
+    const annotation =
+      fixture.nativeElement.querySelector(
+        '.discomfort-field textarea'
+      ) as HTMLTextAreaElement;
+
+    expect(annotation.placeholder).toBe(
+      'Escribe una observación sobre este ejercicio'
+    );
+
+    annotation.value = 'Buena técnica';
+    annotation.dispatchEvent(
+      new Event('input', {
+        bubbles: true
+      })
+    );
+    fixture.detectChanges();
+
+    expect(
+      component.exerciseDiscomfort(
+        'dumbbell-bench-press'
+      )
+    ).toMatchObject({
+      painScore: 0,
+      note: 'Buena técnica'
+    });
+    expect(pageText(fixture))
+      .toContain('Con anotación');
+    expect(
+      component.activeWorkout()?.sets
+    ).toEqual([]);
+    expect(component.restTimer())
+      .toBeNull();
+    expect(
+      component.unilateralExecution()
+    ).toBeNull();
+
+    (component as any)
+      .cancelAutosaveTimer();
+    (component as any)
+      .persistedEditVersion =
+        (component as any)
+          .workoutEditVersion;
+  });
+
+
   it('clears exercise discomfort without touching sets', async () => {
     const fixture =
       await createLoadedTrain([

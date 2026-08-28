@@ -89,10 +89,16 @@ interface Workout {
 interface RestTimerState {
   exerciseId: string;
   setIndex: number;
+  setLabel: string;
   exerciseName: string;
   endsAt: number;
   remainingSeconds: number;
   finished: boolean;
+}
+
+interface WorkoutSetStep {
+  exerciseId: string;
+  setIndex: number;
 }
 
 interface SetTimerState {
@@ -3001,45 +3007,72 @@ export class Train implements OnInit, OnDestroy {
     exerciseId: string,
     setIndex: number
   ): boolean {
+    const orderedSteps =
+      this.orderedWorkoutSetSteps();
+
+    const currentStepIndex =
+      orderedSteps.findIndex(
+        step =>
+          step.exerciseId === exerciseId &&
+          step.setIndex === setIndex
+      );
+
+    if (currentStepIndex < 0) {
+      return false;
+    }
+
+    return orderedSteps
+      .slice(currentStepIndex + 1)
+      .some(
+        step =>
+          !this.isSetCompleted(
+            step.exerciseId,
+            step.setIndex
+          )
+      );
+  }
+
+
+  private orderedWorkoutSetSteps(): WorkoutSetStep[] {
     const session =
       this.activeSession();
 
     if (!session) {
-      return false;
+      return [];
     }
 
-    let foundCurrentSet = false;
+    return session.exercises.flatMap(
+      exercise => {
+        const warmups =
+          this.warmupSets(
+            exercise.exerciseId
+          ).map(set => ({
+            exerciseId:
+              exercise.exerciseId,
+            setIndex:
+              set.setIndex
+          }));
 
-    for (const exercise of session.exercises) {
-      for (
-        let index = 0;
-        index < exercise.sets;
-        index += 1
-      ) {
-        if (
-          exercise.exerciseId === exerciseId &&
-          index === setIndex
-        ) {
-          foundCurrentSet = true;
-          continue;
-        }
+        const workingSets =
+          Array.from(
+            {
+              length:
+                exercise.sets
+            },
+            (_, index) => ({
+              exerciseId:
+                exercise.exerciseId,
+              setIndex:
+                index
+            })
+          );
 
-        if (!foundCurrentSet) {
-          continue;
-        }
-
-        if (
-          !this.isSetCompleted(
-            exercise.exerciseId,
-            index
-          )
-        ) {
-          return true;
-        }
+        return [
+          ...warmups,
+          ...workingSets
+        ];
       }
-    }
-
-    return false;
+    );
   }
 
   async sendMagicLink(event: Event): Promise<void> {
@@ -3435,6 +3468,9 @@ export class Train implements OnInit, OnDestroy {
       return;
     }
 
+    const shouldStartRestTimer =
+      !warmup.completedAt;
+
     this.activeWorkout.set({
       ...workout,
       sets:
@@ -3452,6 +3488,30 @@ export class Train implements OnInit, OnDestroy {
               : set
         )
     });
+
+    if (shouldStartRestTimer) {
+      this.clearSetTimer();
+
+      if (
+        this.hasPendingSetAfter(
+          warmup.exerciseId,
+          warmup.setIndex
+        )
+      ) {
+        if (
+          this.settingsService
+            .settings()
+            .automaticRestTimer
+        ) {
+          this.startRestTimerForSet(
+            warmup.exerciseId,
+            warmup.setIndex
+          );
+        }
+      } else {
+        this.clearRestTimer();
+      }
+    }
 
     this.markWorkoutEdited();
   }
@@ -4254,6 +4314,11 @@ export class Train implements OnInit, OnDestroy {
     this.restTimer.set({
       exerciseId,
       setIndex,
+      setLabel:
+        this.restTimerSetLabel(
+          exerciseId,
+          setIndex
+        ),
       exerciseName:
         exercise.name,
       endsAt:
@@ -4271,6 +4336,36 @@ export class Train implements OnInit, OnDestroy {
       );
 
     this.reconcileRestTimer();
+  }
+
+
+  private restTimerSetLabel(
+    exerciseId: string,
+    setIndex: number
+  ): string {
+    const set =
+      this.getCurrentSet(
+        exerciseId,
+        setIndex
+      );
+
+    if (set?.setType === 'warmup') {
+      const warmupIndex =
+        this.warmupSets(
+          exerciseId
+        ).findIndex(
+          warmup =>
+            warmup.setIndex === setIndex
+        );
+
+      if (warmupIndex >= 0) {
+        return `calentamiento ${warmupIndex + 1}`;
+      }
+
+      return 'calentamiento';
+    }
+
+    return `serie ${setIndex + 1}`;
   }
 
 

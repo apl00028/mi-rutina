@@ -5964,6 +5964,354 @@ describe('Train first workout flow', () => {
   });
 
 
+  it('starts rest after a warmup when another warmup is pending', async () => {
+    const fixture =
+      await createLoadedTrain([
+        activeWorkout()
+      ]);
+
+    vi.useFakeTimers();
+    vi.setSystemTime(
+      new Date(
+        '2026-08-20T15:00:00Z'
+      )
+    );
+
+    const component =
+      fixture.componentInstance;
+
+    vi.spyOn(
+      component as any,
+      'scheduleAutosave'
+    ).mockImplementation(() => {});
+
+    vi.mocked(
+      crypto.randomUUID
+    )
+      .mockReturnValueOnce(
+        '00000000-0000-4000-8000-000000000201'
+      )
+      .mockReturnValueOnce(
+        '00000000-0000-4000-8000-000000000202'
+      );
+
+    component.addWarmupSet(
+      'dumbbell-bench-press'
+    );
+    component.addWarmupSet(
+      'dumbbell-bench-press'
+    );
+
+    const warmups =
+      component.warmupSets(
+        'dumbbell-bench-press'
+      );
+
+    component.toggleWarmupCompleted(
+      warmups[0].setId
+    );
+
+    expect(
+      component.restTimer()
+    ).toMatchObject({
+      exerciseId:
+        'dumbbell-bench-press',
+      setIndex:
+        warmups[0].setIndex,
+      setLabel:
+        'calentamiento 1',
+      remainingSeconds:
+        120,
+      finished:
+        false
+    });
+
+    expect(
+      component.getCurrentSet(
+        'dumbbell-bench-press',
+        warmups[1].setIndex
+      )?.completedAt
+    ).toBeFalsy();
+
+    (component as any)
+      .persistedEditVersion =
+        (component as any)
+          .workoutEditVersion;
+  });
+
+
+  it('keeps warmup rest active while opening and editing the next working set', async () => {
+    const fixture =
+      await createLoadedTrain([
+        activeWorkout()
+      ]);
+
+    vi.useFakeTimers();
+    vi.setSystemTime(
+      new Date(
+        '2026-08-20T15:00:00Z'
+      )
+    );
+
+    const component =
+      fixture.componentInstance;
+
+    vi.spyOn(
+      component as any,
+      'scheduleAutosave'
+    ).mockImplementation(() => {});
+
+    component.addWarmupSet(
+      'dumbbell-bench-press'
+    );
+
+    const warmup =
+      component.warmupSets(
+        'dumbbell-bench-press'
+      )[0];
+
+    component.toggleWarmupCompleted(
+      warmup.setId
+    );
+
+    const originalTimer =
+      component.restTimer();
+
+    expect(originalTimer)
+      .toMatchObject({
+        exerciseId:
+          'dumbbell-bench-press',
+        setIndex:
+          warmup.setIndex,
+        setLabel:
+          'calentamiento 1',
+        remainingSeconds:
+          120,
+        finished:
+          false
+      });
+
+    component.toggleSet(
+      'dumbbell-bench-press',
+      0
+    );
+
+    component.updateSet(
+      'dumbbell-bench-press',
+      0,
+      'weight',
+      '80'
+    );
+
+    component.updateSet(
+      'dumbbell-bench-press',
+      0,
+      'reps',
+      '8'
+    );
+
+    expect(
+      component.restTimer()
+    ).toEqual(originalTimer);
+
+    component.skipRestTimer();
+
+    expect(
+      component.restTimer()
+    ).toBeNull();
+
+    http.expectNone(
+      `${environment.apiUrl}/workouts/active-workout`
+    );
+
+    (component as any)
+      .persistedEditVersion =
+        (component as any)
+          .workoutEditVersion;
+  });
+
+
+  it('starts rest after a warmup when only a later exercise has pending work', async () => {
+    const fixture =
+      await createLoadedTrain(
+        [
+          {
+            ...activeWorkout(),
+            sets: [
+              {
+                setId:
+                  'set-1',
+                exerciseId:
+                  'dumbbell-bench-press',
+                setIndex:
+                  0,
+                completedAt:
+                  '2026-08-20T14:58:00Z'
+              },
+              {
+                setId:
+                  'set-2',
+                exerciseId:
+                  'dumbbell-bench-press',
+                setIndex:
+                  1,
+                completedAt:
+                  '2026-08-20T14:59:00Z'
+              }
+            ]
+          }
+        ],
+        [
+          {
+            id:
+              'dumbbell-bench-press',
+            recordTypes:
+              ['weight_reps']
+          },
+          {
+            id:
+              'lat-pulldown',
+            recordTypes:
+              ['weight_reps']
+          }
+        ],
+        twoExerciseRoutine()
+      );
+
+    vi.useFakeTimers();
+    vi.setSystemTime(
+      new Date(
+        '2026-08-20T15:00:00Z'
+      )
+    );
+
+    const component =
+      fixture.componentInstance;
+
+    vi.spyOn(
+      component as any,
+      'scheduleAutosave'
+    ).mockImplementation(() => {});
+
+    component.addWarmupSet(
+      'dumbbell-bench-press'
+    );
+
+    const warmup =
+      component.warmupSets(
+        'dumbbell-bench-press'
+      )[0];
+
+    component.toggleWarmupCompleted(
+      warmup.setId
+    );
+
+    expect(
+      component.restTimer()
+    ).toMatchObject({
+      exerciseId:
+        'dumbbell-bench-press',
+      setIndex:
+        warmup.setIndex,
+      setLabel:
+        'calentamiento 1',
+      remainingSeconds:
+        120
+    });
+
+    (component as any)
+      .persistedEditVersion =
+        (component as any)
+          .workoutEditVersion;
+  });
+
+
+  it('does not keep rest after completing a warmup with no pending planned work', async () => {
+    const fixture =
+      await createLoadedTrain([
+        {
+          ...activeWorkout(),
+          sets: [
+            {
+              setId:
+                'set-1',
+              exerciseId:
+                'dumbbell-bench-press',
+              setIndex:
+                0,
+              completedAt:
+                '2026-08-20T14:58:00Z'
+            },
+            {
+              setId:
+                'set-2',
+              exerciseId:
+                'dumbbell-bench-press',
+              setIndex:
+                1,
+              completedAt:
+                '2026-08-20T14:59:00Z'
+            }
+          ]
+        }
+      ]);
+
+    vi.useFakeTimers();
+    vi.setSystemTime(
+      new Date(
+        '2026-08-20T15:00:00Z'
+      )
+    );
+
+    const component =
+      fixture.componentInstance;
+
+    vi.spyOn(
+      component as any,
+      'scheduleAutosave'
+    ).mockImplementation(() => {});
+
+    component.restTimer.set({
+      exerciseId:
+        'dumbbell-bench-press',
+      setIndex:
+        0,
+      setLabel:
+        'serie 1',
+      exerciseName:
+        'Press banca con mancuernas',
+      endsAt:
+        Date.now() + 120_000,
+      remainingSeconds:
+        120,
+      finished:
+        false
+    });
+
+    component.addWarmupSet(
+      'dumbbell-bench-press'
+    );
+
+    const warmup =
+      component.warmupSets(
+        'dumbbell-bench-press'
+      )[0];
+
+    component.toggleWarmupCompleted(
+      warmup.setId
+    );
+
+    expect(
+      component.restTimer()
+    ).toBeNull();
+
+    (component as any)
+      .persistedEditVersion =
+        (component as any)
+          .workoutEditVersion;
+  });
+
+
   it('replaces the active rest timer when another set is completed', async () => {
     const fixture =
       await createLoadedTrain([

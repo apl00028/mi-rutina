@@ -2996,6 +2996,52 @@ export class Train implements OnInit, OnDestroy {
     return false;
   }
 
+
+  private hasPendingSetAfter(
+    exerciseId: string,
+    setIndex: number
+  ): boolean {
+    const session =
+      this.activeSession();
+
+    if (!session) {
+      return false;
+    }
+
+    let foundCurrentSet = false;
+
+    for (const exercise of session.exercises) {
+      for (
+        let index = 0;
+        index < exercise.sets;
+        index += 1
+      ) {
+        if (
+          exercise.exerciseId === exerciseId &&
+          index === setIndex
+        ) {
+          foundCurrentSet = true;
+          continue;
+        }
+
+        if (!foundCurrentSet) {
+          continue;
+        }
+
+        if (
+          !this.isSetCompleted(
+            exercise.exerciseId,
+            index
+          )
+        ) {
+          return true;
+        }
+      }
+    }
+
+    return false;
+  }
+
   async sendMagicLink(event: Event): Promise<void> {
     event.preventDefault();
 
@@ -3640,16 +3686,28 @@ export class Train implements OnInit, OnDestroy {
       !wasCompleted
     );
 
-    if (
-      shouldStartRestTimer &&
-      this.settingsService
-        .settings()
-        .automaticRestTimer
-    ) {
-      this.startRestTimerForSet(
-        exerciseId,
-        setIndex
-      );
+    if (shouldStartRestTimer) {
+      this.clearSetTimer();
+
+      if (
+        this.hasPendingSetAfter(
+          exerciseId,
+          setIndex
+        )
+      ) {
+        if (
+          this.settingsService
+            .settings()
+            .automaticRestTimer
+        ) {
+          this.startRestTimerForSet(
+            exerciseId,
+            setIndex
+          );
+        }
+      } else {
+        this.clearRestTimer();
+      }
     }
 
     await this.saveWorkout();

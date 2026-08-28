@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import os
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -14,6 +15,9 @@ from fastapi.security import (
     HTTPAuthorizationCredentials,
     HTTPBearer,
 )
+
+
+logger = logging.getLogger("uvicorn.error")
 
 
 bearer_scheme = HTTPBearer(
@@ -139,6 +143,17 @@ async def authenticate_user(
         )
 
     except httpx.HTTPError as exc:
+        logger.warning(
+            "supabase_auth_request_failed "
+            "error_type=%s cause_type=%s",
+            type(exc).__name__,
+            (
+                type(exc.__cause__).__name__
+                if exc.__cause__ is not None
+                else "none"
+            ),
+        )
+
         raise HTTPException(
             status_code=(
                 status.HTTP_503_SERVICE_UNAVAILABLE

@@ -43,7 +43,6 @@
 
     </div>
 
-
     <h1>
       {{ disciplineLabel() }}
     </h1>
@@ -55,23 +54,236 @@
   </header>
 
 
-  <section class="discipline-card">
+  @if (discipline() === 'swimming') {
 
-    <span class="eyebrow">
-      Sesiones
-    </span>
+    @if (swimmingRequiresAndroid()) {
+      <section class="discipline-card">
+        <span class="eyebrow">
+          Garmin
+        </span>
 
-    <h2>
-      Registro de
-      {{ disciplineLabel() }}
-    </h2>
+        <h2>
+          Sincronización disponible en Android
+        </h2>
 
-    <p>
-      Aquí aparecerán las sesiones
-      realizadas y el registro de una
-      nueva actividad.
-    </p>
+        <p>
+          Las sesiones de Garmin se leen desde
+          Health Connect en la aplicación Android.
+        </p>
+      </section>
 
-  </section>
+    } @else if (swimmingLoading()) {
+      <section class="discipline-card">
+        <p>
+          Cargando sesiones de natación…
+        </p>
+      </section>
+
+    } @else if (swimmingError(); as error) {
+      <section class="discipline-card">
+        <span class="eyebrow">
+          Health Connect
+        </span>
+
+        <h2>
+          No se pudieron cargar las sesiones
+        </h2>
+
+        <p>
+          {{ error }}
+        </p>
+
+        <button
+          type="button"
+          (click)="loadSwimming()"
+        >
+          Reintentar
+        </button>
+      </section>
+
+    } @else if (
+      swimmingSessions().length === 0
+    ) {
+      <section class="discipline-card">
+        <span class="eyebrow">
+          Garmin
+        </span>
+
+        <h2>
+          Sin sesiones recientes
+        </h2>
+
+        <p>
+          No se han encontrado sesiones de
+          natación de Garmin en los últimos
+          30 días.
+        </p>
+      </section>
+
+    } @else {
+
+      @for (
+        session of swimmingSessions();
+        track session.startTime
+      ) {
+        <section class="discipline-card swimming-session">
+
+          <div class="swimming-session-header">
+            <div>
+              <span class="eyebrow">
+                Sesión
+              </span>
+
+              <h2>
+                {{
+                  session.startTime
+                    | date:'dd/MM/yyyy'
+                }}
+              </h2>
+            </div>
+
+            @if (
+              session.distanceMeters !== null
+            ) {
+              <strong class="swimming-distance">
+                {{
+                  session.distanceMeters
+                    | number:'1.0-0'
+                }}
+                m
+              </strong>
+            }
+          </div>
+
+          <div class="swimming-metrics-grid">
+
+            <div>
+              <span>Tiempo total</span>
+              <strong>
+                {{
+                  session.durationSeconds / 60
+                    | number:'1.0-1'
+                }}
+                min
+              </strong>
+            </div>
+
+            <div>
+              <span>Largos</span>
+              <strong>
+                {{ session.lengths ?? '—' }}
+              </strong>
+            </div>
+
+            <div>
+              <span>Brazadas</span>
+              <strong>
+                {{
+                  session.totalStrokes
+                    ?? '—'
+                }}
+              </strong>
+            </div>
+
+            <div>
+              <span>Brazadas/largo</span>
+              <strong>
+                {{
+                  session.strokesPerLength !== null
+                    ? (
+                        session.strokesPerLength
+                          | number:'1.1-1'
+                      )
+                    : '—'
+                }}
+              </strong>
+            </div>
+
+            <div>
+              <span>Metros/brazada</span>
+              <strong>
+                {{
+                  session.metersPerStroke !== null
+                    ? (
+                        session.metersPerStroke
+                          | number:'1.2-2'
+                      )
+                    : '—'
+                }}
+              </strong>
+            </div>
+
+            <div>
+              <span>FC media</span>
+              <strong>
+                {{
+                  session.heartRateAverageBpm
+                    ?? '—'
+                }}
+              </strong>
+            </div>
+
+            <div>
+              <span>FC máxima</span>
+              <strong>
+                {{
+                  session.heartRateMaxBpm
+                    ?? '—'
+                }}
+              </strong>
+            </div>
+
+            <div>
+              <span>
+                Ritmo total
+              </span>
+
+              <strong>
+                @if (
+                  session.elapsedPaceSecondsPer100m !== null
+                ) {
+                  {{
+                    session.elapsedPaceSecondsPer100m / 60
+                      | number:'1.2-2'
+                  }}
+                  min/100 m
+                } @else {
+                  —
+                }
+              </strong>
+            </div>
+
+          </div>
+
+          <small class="swimming-note">
+            El ritmo total incluye los descansos.
+          </small>
+
+        </section>
+      }
+    }
+
+  } @else {
+
+    <section class="discipline-card">
+
+      <span class="eyebrow">
+        Sesiones
+      </span>
+
+      <h2>
+        Registro de
+        {{ disciplineLabel() }}
+      </h2>
+
+      <p>
+        Aquí aparecerán las sesiones
+        realizadas y el registro de una
+        nueva actividad.
+      </p>
+
+    </section>
+
+  }
 
 </main>

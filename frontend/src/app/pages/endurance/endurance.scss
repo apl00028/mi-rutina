@@ -149,3 +149,107 @@
   pointer-events: none;
   opacity: 0.65;
 }
+
+
+/* Swimming */
+
+.swimming-session {
+  display: grid;
+  gap: 18px;
+}
+
+.swimming-session + .swimming-session {
+  margin-top: 16px;
+}
+
+.swimming-session-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.swimming-session-header h2 {
+  margin: 0;
+}
+
+.swimming-distance {
+  font-size: 1.5rem;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.swimming-metrics-grid {
+  display: grid;
+  grid-template-columns:
+    repeat(
+      auto-fit,
+      minmax(140px, 1fr)
+    );
+  gap: 12px;
+}
+
+.swimming-metrics-grid > div {
+  display: grid;
+  gap: 5px;
+
+  min-width: 0;
+
+  border:
+    1px solid var(--border);
+
+  border-radius: 12px;
+
+  padding: 13px;
+
+  background: var(--bg);
+}
+
+.swimming-metrics-grid span {
+  font-size: 0.76rem;
+  opacity: 0.62;
+}
+
+.swimming-metrics-grid strong {
+  font-size: 1rem;
+}
+
+.swimming-note {
+  opacity: 0.58;
+}
+
+.discipline-card button {
+  margin-top: 16px;
+
+  border:
+    1px solid var(--border);
+
+  border-radius: 10px;
+
+  padding: 10px 14px;
+
+  background: var(--card);
+  color: inherit;
+
+  font: inherit;
+  font-weight: 700;
+
+  cursor: pointer;
+}
+
+
+@media (max-width: 700px) {
+
+  .swimming-session-header {
+    align-items: center;
+  }
+
+  .swimming-distance {
+    font-size: 1.25rem;
+  }
+
+  .swimming-metrics-grid {
+    grid-template-columns:
+      repeat(2, minmax(0, 1fr));
+  }
+}

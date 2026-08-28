@@ -24,6 +24,7 @@ describe('RestTimerController', () => {
   const workingContext:
     RestTimerContext = {
       exerciseId: 'press',
+      reason: 'between-sets',
       sourceKind: 'working',
       setIndex: 0,
       exerciseName: 'Press de banca',
@@ -96,6 +97,7 @@ describe('RestTimerController', () => {
     const warmupContext:
       RestTimerContext = {
         exerciseId: 'row',
+        reason: 'between-sets',
         sourceKind: 'warmup',
         setIndex: -1,
         exerciseName: 'Remo',

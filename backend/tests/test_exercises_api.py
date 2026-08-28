@@ -3,6 +3,7 @@ from fastapi.testclient import TestClient
 from fastapi.encoders import jsonable_encoder
 
 from app.core.auth import AuthenticatedUser, require_user
+from app.domains.exercises.catalog_service import load_exercise_catalog
 from app.domains.exercises.service import load_exercises
 from main import app
 
@@ -63,13 +64,27 @@ def test_list_exercises_authenticated_without_custom_returns_100_items(monkeypat
 
     assert len(data) == 100
     assert len({exercise["id"] for exercise in data}) == 100
-    assert data == jsonable_encoder(
+    exercises_by_id = {
+        exercise["id"]: exercise
+        for exercise in data
+    }
+    assert exercises_by_id["one-arm-dumbbell-row"]["unilateral"] is True
+    assert exercises_by_id["bench-press"]["unilateral"] is False
+    expected = jsonable_encoder(
         [
             exercise.model_copy(update={"favorite": False})
             for exercise in load_exercises()
         ],
         exclude_none=True,
     )
+    unilateral_by_id = {
+        exercise.id: exercise.metadata.unilateral
+        for exercise in load_exercise_catalog()
+    }
+    for exercise in expected:
+        exercise["unilateral"] = unilateral_by_id[exercise["id"]]
+
+    assert data == expected
 
 
 def test_list_exercises_authenticated_marks_builtin_favorite(monkeypatch):

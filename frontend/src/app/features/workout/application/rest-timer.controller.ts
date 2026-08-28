@@ -5,6 +5,9 @@ import {
 
 export interface RestTimerContext {
   readonly exerciseId: string;
+  readonly reason:
+    | 'between-sets'
+    | 'between-sides';
   readonly sourceKind:
     | 'warmup'
     | 'working';
@@ -214,6 +217,8 @@ export class RestTimerController {
     return {
       exerciseId:
         timer.exerciseId,
+      reason:
+        timer.reason,
       sourceKind:
         timer.sourceKind,
       setIndex:

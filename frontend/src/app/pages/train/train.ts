@@ -23,8 +23,16 @@ import {
   type ExecutionStep
 } from '../../features/workout/domain/execution-plan';
 import {
-  RestTimerController
+  RestTimerController,
+  type RestTimerEnd
 } from '../../features/workout/application/rest-timer.controller';
+import {
+  DEFAULT_INTER_SIDE_REST_SECONDS,
+  transitionAfterInterSideRest,
+  transitionWorkingSetCompletion,
+  unilateralPhaseForSet,
+  type UnilateralExecutionState
+} from '../../features/workout/domain/working-set-execution';
 
 interface Exercise {
   exerciseId: string;
@@ -44,11 +52,19 @@ interface Exercise {
     max: number;
   } | null;
   restSeconds?: number | null;
+  unilateral?: boolean;
+  interSideRestSeconds?: number | null;
 }
 
 interface CatalogExercise {
   id: string;
   recordTypes?: string[] | null;
+  unilateral?: boolean;
+}
+
+interface ExerciseCatalogMetadata {
+  recordTypes: string[];
+  unilateral: boolean;
 }
 
 interface RoutineSession {
@@ -219,10 +235,12 @@ export class Train implements OnInit, OnDestroy {
     signal<AutosaveStatus>('idle');
   private readonly restTimerController =
     new RestTimerController(
-      () => this.advanceAfterRest()
+      event => this.handleRestTimerEnded(event)
     );
   readonly restTimer =
     this.restTimerController.state;
+  readonly unilateralExecution =
+    signal<UnilateralExecutionState | null>(null);
   setTimer =
     signal<SetTimerState | null>(null);
   expandedExerciseId =
@@ -356,6 +374,7 @@ export class Train implements OnInit, OnDestroy {
 
   ngOnDestroy(): void {
     this.destroyed = true;
+    this.unilateralExecution.set(null);
     this.workoutSessionState
       .setIdle();
     this.clearSetTimer();
@@ -420,13 +439,13 @@ export class Train implements OnInit, OnDestroy {
         return;
       }
 
-      const exerciseRecordTypes =
-        await this.loadExerciseRecordTypes(headers);
+      const exerciseMetadata =
+        await this.loadExerciseMetadata(headers);
 
       this.routine.set(
-        this.enrichRoutineWithRecordTypes(
+        this.enrichRoutineWithExerciseMetadata(
           normalized,
-          exerciseRecordTypes
+          exerciseMetadata
         )
       );
 
@@ -449,9 +468,9 @@ export class Train implements OnInit, OnDestroy {
   }
 
 
-  private async loadExerciseRecordTypes(
+  private async loadExerciseMetadata(
     headers: HttpHeaders
-  ): Promise<Map<string, string[]>> {
+  ): Promise<Map<string, ExerciseCatalogMetadata>> {
     try {
       const exercises =
         await new Promise<CatalogExercise[]>((resolve, reject) => {
@@ -471,15 +490,19 @@ export class Train implements OnInit, OnDestroy {
           .filter(
             exercise =>
               typeof exercise?.id === 'string' &&
-              exercise.id.trim() &&
-              Array.isArray(exercise.recordTypes)
+              exercise.id.trim()
           )
           .map(
             exercise => [
               exercise.id,
-              this.cleanRecordTypes(
-                exercise.recordTypes
-              )
+              {
+                recordTypes:
+                  this.cleanRecordTypes(
+                    exercise.recordTypes
+                  ),
+                unilateral:
+                  exercise.unilateral === true
+              }
             ]
           )
       );
@@ -494,9 +517,10 @@ export class Train implements OnInit, OnDestroy {
   }
 
 
-  private enrichRoutineWithRecordTypes(
+  private enrichRoutineWithExerciseMetadata(
     routine: Routine,
-    catalogRecordTypes: Map<string, string[]>
+    catalogMetadata:
+      Map<string, ExerciseCatalogMetadata>
   ): Routine {
     return {
       ...routine,
@@ -507,26 +531,25 @@ export class Train implements OnInit, OnDestroy {
             session.exercises.map(exercise => {
               const currentRecordTypes =
                 this.exerciseRecordTypes(exercise);
-
-              if (currentRecordTypes.length) {
-                return {
-                  ...exercise,
-                  recordTypes:
-                    currentRecordTypes
-                };
-              }
-
-              const recordTypes =
-                catalogRecordTypes.get(
+              const metadata =
+                catalogMetadata.get(
                   exercise.exerciseId
-                ) ?? [];
+                );
+              const recordTypes =
+                currentRecordTypes.length
+                  ? currentRecordTypes
+                  : metadata?.recordTypes ?? [];
 
-              return recordTypes.length
-                ? {
-                    ...exercise,
-                    recordTypes
-                  }
-                : exercise;
+              return {
+                ...exercise,
+                ...(recordTypes.length
+                  ? { recordTypes }
+                  : {}),
+                unilateral:
+                  metadata?.unilateral ??
+                  exercise.unilateral ??
+                  false
+              };
             })
         }))
     };
@@ -639,6 +662,8 @@ export class Train implements OnInit, OnDestroy {
   }
 
   restoreActiveWorkout(): void {
+    this.unilateralExecution.set(null);
+
     const routine = this.routine();
 
     if (!routine) {
@@ -2833,6 +2858,47 @@ export class Train implements OnInit, OnDestroy {
   }
 
 
+  private handleRestTimerEnded(
+    event: RestTimerEnd
+  ): void {
+    if (
+      event.context.reason ===
+      'between-sides'
+    ) {
+      const nextState =
+        transitionAfterInterSideRest(
+          this.unilateralExecution(),
+          {
+            exerciseId:
+              event.context.exerciseId,
+            setIndex:
+              event.context.setIndex
+          }
+        );
+
+      this.unilateralExecution.set(
+        nextState
+      );
+
+      if (nextState?.phase === 'second') {
+        this.expandedExerciseId.set(
+          nextState.exerciseId
+        );
+        this.expandedSetKey.set(
+          this.setExpansionKey(
+            nextState.exerciseId,
+            nextState.setIndex
+          )
+        );
+      }
+
+      return;
+    }
+
+    this.advanceAfterRest();
+  }
+
+
   private syncExpandedWorkoutStep(): void {
     const context =
       this.restorableWorkoutContext();
@@ -2972,6 +3038,84 @@ export class Train implements OnInit, OnDestroy {
       exercise.exerciseId &&
       nextStep.setIndex === setIndex
     );
+  }
+
+
+  unilateralPhaseLabel(
+    exercise: Exercise,
+    setIndex: number
+  ): string {
+    const phase =
+      unilateralPhaseForSet(
+        exercise.unilateral === true,
+        this.unilateralExecution(),
+        {
+          exerciseId:
+            exercise.exerciseId,
+          setIndex
+        }
+      );
+
+    if (phase === 'first') {
+      return 'Lado 1';
+    }
+
+    if (phase === 'second') {
+      return 'Lado 2';
+    }
+
+    if (phase === 'between-sides') {
+      return 'Cambio de lado';
+    }
+
+    return '';
+  }
+
+
+  completeSetActionLabel(
+    exercise: Exercise,
+    setIndex: number
+  ): string {
+    const phase =
+      unilateralPhaseForSet(
+        exercise.unilateral === true,
+        this.unilateralExecution(),
+        {
+          exerciseId:
+            exercise.exerciseId,
+          setIndex
+        }
+      );
+
+    if (phase === 'first') {
+      return 'Completar lado 1';
+    }
+
+    if (phase === 'second') {
+      return 'Completar lado 2';
+    }
+
+    if (phase === 'between-sides') {
+      return 'Descanso entre lados';
+    }
+
+    return 'Completar';
+  }
+
+
+  isBetweenSides(
+    exercise: Exercise,
+    setIndex: number
+  ): boolean {
+    return unilateralPhaseForSet(
+      exercise.unilateral === true,
+      this.unilateralExecution(),
+      {
+        exerciseId:
+          exercise.exerciseId,
+        setIndex
+      }
+    ) === 'between-sides';
   }
 
 
@@ -3155,6 +3299,7 @@ export class Train implements OnInit, OnDestroy {
 
       this.activeWorkout.set(created);
       this.activeSession.set(session);
+      this.unilateralExecution.set(null);
       this.workoutSessionState
         .setActive();
       this.syncExpandedWorkoutStep();
@@ -3679,6 +3824,54 @@ export class Train implements OnInit, OnDestroy {
     );
     const wasCompleted =
       Boolean(existing?.completedAt);
+    const exercise =
+      this.findSessionExercise(
+        exerciseId
+      );
+
+    if (!wasCompleted) {
+      const transition =
+        transitionWorkingSetCompletion(
+          exercise?.unilateral === true,
+          this.unilateralExecution(),
+          {
+            exerciseId,
+            setIndex
+          }
+        );
+
+      this.unilateralExecution.set(
+        transition.state
+      );
+
+      if (
+        transition.action ===
+        'start-inter-side-rest'
+      ) {
+        this.clearSetTimer();
+        this.expandedExerciseId.set(
+          exerciseId
+        );
+        this.expandedSetKey.set(
+          this.setExpansionKey(
+            exerciseId,
+            setIndex
+          )
+        );
+        this.startInterSideRest(
+          exercise,
+          setIndex
+        );
+        return;
+      }
+
+      if (
+        this.restTimer()?.reason ===
+        'between-sides'
+      ) {
+        this.clearRestTimer();
+      }
+    }
 
     let sets: WorkoutSetInput[];
 
@@ -4292,6 +4485,7 @@ export class Train implements OnInit, OnDestroy {
 
     this.restTimerController.start({
       exerciseId,
+      reason: 'between-sets',
       sourceKind:
         set?.setType === 'warmup'
           ? 'warmup'
@@ -4304,6 +4498,40 @@ export class Train implements OnInit, OnDestroy {
         ),
       exerciseName:
         exercise.name
+    }, restSeconds);
+  }
+
+
+  private startInterSideRest(
+    exercise: Exercise | null,
+    setIndex: number
+  ): void {
+    if (!exercise) {
+      this.unilateralExecution.set(null);
+      this.clearRestTimer();
+      return;
+    }
+
+    const configuredDuration =
+      Number(
+        exercise.interSideRestSeconds
+      );
+    const restSeconds =
+      Number.isFinite(configuredDuration) &&
+      configuredDuration > 0
+        ? Math.floor(configuredDuration)
+        : DEFAULT_INTER_SIDE_REST_SECONDS;
+
+    this.restTimerController.start({
+      exerciseId:
+        exercise.exerciseId,
+      reason: 'between-sides',
+      sourceKind: 'working',
+      setIndex,
+      exerciseName:
+        exercise.name,
+      setLabel:
+        `serie ${setIndex + 1} · entre lados`
     }, restSeconds);
   }
 
@@ -4679,6 +4907,7 @@ export class Train implements OnInit, OnDestroy {
 
     this.clearSetTimer();
     this.clearRestTimer();
+    this.unilateralExecution.set(null);
 
     this.cancelAutosaveTimer();
     this.finishingWorkout = true;
@@ -4788,6 +5017,7 @@ export class Train implements OnInit, OnDestroy {
     this.saveQueued = false;
     this.clearSetTimer();
     this.clearRestTimer();
+    this.unilateralExecution.set(null);
 
     if (this.currentSave) {
       try {

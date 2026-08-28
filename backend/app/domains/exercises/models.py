@@ -14,3 +14,7 @@ class Exercise(BaseModel):
     notes: str
     category: str = Field(min_length=1)
     recordTypes: list[str] | None = None
+
+
+class ExerciseListItem(Exercise):
+    unilateral: bool | None = None

@@ -4726,7 +4726,7 @@ describe('Train first workout flow', () => {
   });
 
 
-  it('clears the rest timer when cancelling', async () => {
+  it('clears the rest timer and unilateral phase when cancelling', async () => {
     const fixture =
       await createLoadedTrain([
         activeWorkout()
@@ -4762,6 +4762,13 @@ describe('Train first workout flow', () => {
       component.restTimer()
     ).toBeTruthy();
 
+    component.unilateralExecution.set({
+      exerciseId:
+        'dumbbell-bench-press',
+      setIndex: 1,
+      phase: 'second'
+    });
+
     const cancel =
       component.cancelWorkout();
 
@@ -4777,6 +4784,9 @@ describe('Train first workout flow', () => {
 
     expect(
       component.restTimer()
+    ).toBeNull();
+    expect(
+      component.unilateralExecution()
     ).toBeNull();
   });
 
@@ -5347,6 +5357,164 @@ describe('Train first workout flow', () => {
       .persistedEditVersion =
         (component as any)
           .workoutEditVersion;
+  });
+
+
+  it('runs the rendered unilateral side flow with one persisted set', async () => {
+    const unilateralRoutine = {
+      ...routine(),
+      sessions: [
+        {
+          ...routine().sessions[0],
+          exercises: [
+            {
+              ...routine()
+                .sessions[0]
+                .exercises[0],
+              exerciseId:
+                'one-arm-dumbbell-row',
+              name:
+                'Remo con mancuerna a una mano'
+            }
+          ]
+        }
+      ]
+    };
+    const fixture =
+      await createLoadedTrain(
+        [
+          activeWorkout()
+        ],
+        [
+          {
+            id:
+              'one-arm-dumbbell-row',
+            recordTypes:
+              ['weight_reps'],
+            unilateral: true
+          }
+        ],
+        unilateralRoutine
+      );
+    const component =
+      fixture.componentInstance;
+
+    vi.useFakeTimers();
+    vi.setSystemTime(
+      new Date(
+        '2026-08-20T15:00:00Z'
+      )
+    );
+
+    const exerciseToggle =
+      fixture.nativeElement.querySelector(
+        '.exercise-toggle'
+      ) as HTMLButtonElement;
+
+    exerciseToggle.click();
+    fixture.detectChanges();
+
+    const firstSet =
+      fixture.nativeElement.querySelector(
+        '.set-summary-row'
+      ) as HTMLButtonElement;
+
+    firstSet.click();
+    fixture.detectChanges();
+
+    expect(pageText(fixture))
+      .toContain('Lado 1');
+
+    let completeButton =
+      fixture.nativeElement.querySelector(
+        '.complete-set-button'
+      ) as HTMLButtonElement;
+
+    expect(completeButton.textContent?.trim())
+      .toBe('Completar lado 1');
+
+    completeButton.click();
+    fixture.detectChanges();
+
+    expect(
+      component.getCurrentSet(
+        'one-arm-dumbbell-row',
+        0
+      )
+    ).toBeNull();
+    expect(
+      component.restTimer()
+    ).toMatchObject({
+      exerciseId:
+        'one-arm-dumbbell-row',
+      setIndex: 0,
+      reason: 'between-sides',
+      remainingSeconds: 30
+    });
+    expect(pageText(fixture))
+      .toContain('Descanso entre lados');
+    http.expectNone(
+      `${environment.apiUrl}/workouts/active-workout`
+    );
+
+    const skipButton =
+      fixture.nativeElement.querySelector(
+        '[aria-label="Saltar descanso"]'
+      ) as HTMLButtonElement;
+
+    skipButton.click();
+    fixture.detectChanges();
+
+    expect(pageText(fixture))
+      .toContain('Lado 2');
+    expect(
+      component.restTimer()
+    ).toBeNull();
+
+    completeButton =
+      fixture.nativeElement.querySelector(
+        '.complete-set-button'
+      ) as HTMLButtonElement;
+
+    expect(completeButton.textContent?.trim())
+      .toBe('Completar lado 2');
+
+    completeButton.click();
+
+    await flushPromises();
+
+    const save =
+      http.expectOne(
+        `${environment.apiUrl}/workouts/active-workout`
+      );
+    const savedSets =
+      save.request.body.sets;
+
+    expect(savedSets).toHaveLength(1);
+    expect(savedSets[0]).toMatchObject({
+      exerciseId:
+        'one-arm-dumbbell-row',
+      setIndex: 0
+    });
+    expect(savedSets[0].completedAt)
+      .toBeTruthy();
+
+    save.flush(save.request.body);
+    await flushPromises();
+    fixture.detectChanges();
+
+    expect(
+      component.activeWorkout()?.sets
+    ).toHaveLength(1);
+    expect(
+      component.restTimer()
+    ).toMatchObject({
+      reason: 'between-sets',
+      remainingSeconds: 120
+    });
+    expect(
+      component.unilateralExecution()
+    ).toBeNull();
   });
 
 
@@ -6767,7 +6935,7 @@ describe('Train first workout flow', () => {
   });
 
 
-  it('clears the rest timer when finishing the workout', async () => {
+  it('clears the rest timer and unilateral phase when finishing the workout', async () => {
     const fixture =
       await createLoadedTrain([
         {
@@ -6809,6 +6977,13 @@ describe('Train first workout flow', () => {
       component.restTimer()
     ).toBeTruthy();
 
+    component.unilateralExecution.set({
+      exerciseId:
+        'dumbbell-bench-press',
+      setIndex: 1,
+      phase: 'second'
+    });
+
     const finish =
       component.finishWorkout();
 
@@ -6825,6 +7000,9 @@ describe('Train first workout flow', () => {
 
     expect(
       component.restTimer()
+    ).toBeNull();
+    expect(
+      component.unilateralExecution()
     ).toBeNull();
 
     await vi.advanceTimersByTimeAsync(

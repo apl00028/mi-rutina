@@ -4,7 +4,8 @@ from starlette.responses import Response
 
 from app.core.auth import AuthenticatedUser, require_user
 from app.domains.exercises.schemas import CustomExerciseCreate, CustomExerciseUpdate
-from app.domains.exercises.models import Exercise
+from app.domains.exercises.catalog_service import load_exercise_catalog
+from app.domains.exercises.models import Exercise, ExerciseListItem
 from app.domains.exercises.resolution_models import (
     ExerciseResolveRequest,
     ExerciseResolveResponse,
@@ -56,6 +57,23 @@ def _with_favorites(
     return [_with_favorite(exercise, favorite_ids) for exercise in exercises]
 
 
+def _with_catalog_metadata(
+    exercises: list[Exercise],
+) -> list[ExerciseListItem]:
+    unilateral_by_id = {
+        exercise.id: exercise.metadata.unilateral
+        for exercise in load_exercise_catalog()
+    }
+
+    return [
+        ExerciseListItem(
+            **exercise.model_dump(),
+            unilateral=unilateral_by_id.get(exercise.id),
+        )
+        for exercise in exercises
+    ]
+
+
 async def _get_custom_exercise_or_none(
     user: AuthenticatedUser,
     exercise_id: str,
@@ -87,12 +105,12 @@ async def _resolve_exercise_for_user(
 
 @router.get(
     "/exercises",
-    response_model=list[Exercise],
+    response_model=list[ExerciseListItem],
     response_model_exclude_none=True,
 )
 async def list_exercises(
     user: AuthenticatedUser = Depends(require_user),
-) -> list[Exercise]:
+) -> list[ExerciseListItem]:
     built_in_exercises = load_exercises()
 
     custom_exercises: list[Exercise] = []
@@ -108,9 +126,11 @@ async def list_exercises(
     except (httpx.HTTPError, RuntimeError):
         pass
 
-    return _with_favorites(
-        built_in_exercises + custom_exercises,
-        favorite_ids,
+    return _with_catalog_metadata(
+        _with_favorites(
+            built_in_exercises + custom_exercises,
+            favorite_ids,
+        )
     )
 
 

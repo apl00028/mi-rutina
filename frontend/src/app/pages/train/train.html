@@ -688,6 +688,23 @@
                     ) {
                     <div class="set-row-body">
 
+                    @if (
+                      exercise.unilateral &&
+                      !isSetCompleted(
+                        exercise.exerciseId,
+                        $index
+                      )
+                    ) {
+                      <p class="unilateral-phase">
+                        {{
+                          unilateralPhaseLabel(
+                            exercise,
+                            $index
+                          )
+                        }}
+                      </p>
+                    }
+
                     <div class="set-inputs">
                       @if (supportsWeight(exercise)) {
                         <label>
@@ -1058,16 +1075,29 @@
                         )"
                         [disabled]="
                           workoutLoading() ||
-                          cancellingWorkout()
+                          cancellingWorkout() ||
+                          isBetweenSides(
+                            exercise,
+                            $index
+                          )
                         "
                         [attr.aria-label]="
-                          'Completar serie de ' +
+                          completeSetActionLabel(
+                            exercise,
+                            $index
+                          ) +
+                          ' de ' +
                           exercise.name +
                           ', serie ' +
                           ($index + 1)
                         "
                       >
-                        Completar
+                        {{
+                          completeSetActionLabel(
+                            exercise,
+                            $index
+                          )
+                        }}
                       </button>
                     }
                     </div>
@@ -1097,7 +1127,10 @@
                   {{
                     timer.finished
                       ? 'Descanso terminado'
-                      : 'Descanso'
+                      : timer.reason ===
+                        'between-sides'
+                        ? 'Descanso entre lados'
+                        : 'Descanso'
                   }}
                 </span>
 

@@ -27,10 +27,49 @@ import {
   vi
 } from 'vitest';
 
+const capacitorPluginMocks =
+  vi.hoisted(() => ({
+    filesystemWriteFile:
+      vi.fn(),
+    share:
+      vi.fn()
+  }));
+
+vi.mock(
+  '@capacitor/filesystem',
+  () => ({
+    Directory: {
+      Cache:
+        'CACHE'
+    },
+    Filesystem: {
+      writeFile:
+        capacitorPluginMocks
+          .filesystemWriteFile
+    }
+  })
+);
+
+vi.mock(
+  '@capacitor/share',
+  () => ({
+    Share: {
+      share:
+        capacitorPluginMocks.share
+    }
+  })
+);
+
 import {
   environment
 } from '../../../environments/environment';
 import * as XLSX from 'xlsx';
+import {
+  Capacitor
+} from '@capacitor/core';
+import {
+  Directory
+} from '@capacitor/filesystem';
 import {
   AuthService
 } from '../../core/auth.service';
@@ -62,6 +101,24 @@ describe('Routines training analytics', () => {
     HttpTestingController;
 
   beforeEach(async () => {
+    vi.clearAllMocks();
+    capacitorPluginMocks
+      .filesystemWriteFile
+      .mockResolvedValue({
+        uri:
+          'file:///cache/Aptus_registros_ultimo_mes.xlsx'
+      });
+    capacitorPluginMocks
+      .share
+      .mockResolvedValue(
+        undefined
+      );
+
+    vi.spyOn(
+      Capacitor,
+      'isNativePlatform'
+    ).mockReturnValue(false);
+
     await TestBed.configureTestingModule({
       imports: [
         Routines
@@ -249,6 +306,120 @@ describe('Routines training analytics', () => {
       fixture.nativeElement
         .textContent ?? ''
     ).replace(/\s+/g, ' ');
+  }
+
+  function openRenderedExportModal(
+    fixture: {
+      componentInstance: Routines;
+      nativeElement: HTMLElement;
+      detectChanges: () => void;
+    }
+  ): HTMLButtonElement {
+    fixture.componentInstance
+      .trainingView
+      .set('analysis');
+    fixture.detectChanges();
+
+    const openButton =
+      fixture.nativeElement
+        .querySelector<HTMLButtonElement>(
+          '.analysis-export-action button'
+        );
+
+    expect(openButton)
+      .toBeTruthy();
+
+    openButton?.click();
+    fixture.detectChanges();
+
+    const downloadButton =
+      Array.from(
+        fixture.nativeElement
+          .querySelectorAll<HTMLButtonElement>(
+            '.export-panel button'
+          )
+      ).find(
+        button =>
+          button.textContent?.includes(
+            'Descargar historial'
+          )
+      );
+
+    expect(downloadButton)
+      .toBeTruthy();
+
+    return downloadButton as HTMLButtonElement;
+  }
+
+  function flushTrainingExportData(
+    workoutId: string
+  ): void {
+    http
+      .expectOne(
+        `${environment.apiUrl}/workouts`
+      )
+      .flush([
+        {
+          workoutId,
+          routineId:
+            'routine-1',
+          sessionId:
+            'session-1',
+          status:
+            'finished',
+          startedAt:
+            '2026-08-20T10:00:00Z',
+          finishedAt:
+            '2026-08-20T11:00:00Z',
+          sets: [
+            {
+              setId:
+                'working-1',
+              exerciseId:
+                'bench-press',
+              setIndex:
+                0,
+              setType:
+                'working',
+              weight:
+                80,
+              reps:
+                8,
+              completedAt:
+                '2026-08-20T10:10:00Z'
+            }
+          ]
+        }
+      ]);
+
+    http
+      .expectOne(
+        `${environment.apiUrl}/routines`
+      )
+      .flush([
+        {
+          routineId:
+            'routine-1',
+          name:
+            'Rutina test',
+          sessions: [
+            {
+              sessionId:
+                'session-1',
+              name:
+                'Sesión A',
+              exercises: [
+                {
+                  exerciseId:
+                    'bench-press',
+                  restSeconds:
+                    120
+                }
+              ]
+            }
+          ]
+        }
+      ]);
   }
 
 
@@ -1045,27 +1216,280 @@ describe('Routines training analytics', () => {
 
 
 
-  it('exports planned, session override, and effective rest without warmups', async () => {
+  it('does not show the records export action in the routine view', async () => {
+    const fixture =
+      await createLoadedComponent();
+
+    expect(
+      fixture.componentInstance
+        .trainingView()
+    ).toBe('routine');
+
+    expect(
+      pageText(fixture)
+    ).not.toContain(
+      'Exportar registros'
+    );
+  });
+
+
+  it('executes the rendered export button and downloads on web', async () => {
     const fixture =
       await createLoadedComponent();
 
     const component =
       fixture.componentInstance;
 
+    const exportSpy =
+      vi.spyOn(
+        component,
+        'exportTrainingRecords'
+      );
+
     const writeFileSpy =
       vi.spyOn(
         component as any,
-        'writeTrainingRecordsWorkbook'
+        'writeBrowserTrainingRecordsWorkbook'
       ).mockImplementation(
         () => {}
       );
 
-    component.openExportRecords();
+    const downloadButton =
+      openRenderedExportModal(
+        fixture
+      );
 
+    downloadButton.click();
+    fixture.detectChanges();
+
+    expect(exportSpy)
+      .toHaveBeenCalledTimes(1);
+
+    expect(
+      pageText(fixture)
+    ).toContain(
+      'Preparando...'
+    );
+
+    const exportPromise =
+      exportSpy.mock.results[0]
+        ?.value as Promise<void>;
+
+    await flushPromises();
+
+    flushTrainingExportData(
+      'workout-rendered-web-export'
+    );
+
+    await exportPromise;
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect(writeFileSpy)
+      .toHaveBeenCalledTimes(1);
+
+    expect(
+      writeFileSpy.mock.calls[0][1]
+    ).toBe(
+      'Aptus_registros_ultimo_mes.xlsx'
+    );
+
+    expect(
+      capacitorPluginMocks
+        .filesystemWriteFile
+    )
+      .not.toHaveBeenCalled();
+  });
+
+  it('executes the rendered export button through Filesystem and Share on Android', async () => {
+    vi.mocked(
+      Capacitor.isNativePlatform
+    ).mockReturnValue(true);
+
+    const fixture =
+      await createLoadedComponent();
+
+    const component =
+      fixture.componentInstance;
+
+    const exportSpy =
+      vi.spyOn(
+        component,
+        'exportTrainingRecords'
+      );
+
+    const writeBase64 =
+      vi.spyOn(
+        component as any,
+        'writeTrainingRecordsWorkbookBase64'
+      ).mockReturnValue(
+        'base64-xlsx'
+      );
+
+    const downloadButton =
+      openRenderedExportModal(
+        fixture
+      );
+
+    downloadButton.click();
+    fixture.detectChanges();
+
+    expect(exportSpy)
+      .toHaveBeenCalledTimes(1);
+
+    expect(
+      pageText(fixture)
+    ).toContain(
+      'Preparando...'
+    );
+
+    const exportPromise =
+      exportSpy.mock.results[0]
+        ?.value as Promise<void>;
+
+    await flushPromises();
+
+    flushTrainingExportData(
+      'workout-rendered-native-export'
+    );
+
+    await exportPromise;
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect(writeBase64)
+      .toHaveBeenCalledWith(
+        expect.any(Object)
+      );
+
+    expect(
+      capacitorPluginMocks
+        .filesystemWriteFile
+    )
+      .toHaveBeenCalledWith({
+        path:
+          'Aptus_registros_ultimo_mes.xlsx',
+        data:
+          'base64-xlsx',
+        directory:
+          Directory.Cache,
+        recursive:
+          true
+      });
+
+    expect(capacitorPluginMocks.share)
+      .toHaveBeenCalledWith({
+        title:
+          'Aptus · Registros de entrenamiento',
+        text:
+          'Exportación de registros de entrenamiento de Aptus',
+        url:
+          'file:///cache/Aptus_registros_ultimo_mes.xlsx',
+        dialogTitle:
+          'Exportar registros'
+      });
+  });
+
+  it('keeps the export submit button inside the modal panel instead of a capturing backdrop layer', async () => {
+    const fixture =
+      await createLoadedComponent();
+
+    const component =
+      fixture.componentInstance;
+
+    const exportSpy =
+      vi.spyOn(
+        component,
+        'exportTrainingRecords'
+      );
+
+    const downloadButton =
+      openRenderedExportModal(
+        fixture
+      );
+
+    const backdrop =
+      fixture.nativeElement
+        .querySelector(
+          '[data-testid="export-records-backdrop"]'
+        ) as HTMLElement | null;
+
+    const form =
+      fixture.nativeElement
+        .querySelector(
+          'form.export-panel'
+        ) as HTMLFormElement | null;
+
+    const actions =
+      fixture.nativeElement
+        .querySelector(
+          '.export-actions'
+        ) as HTMLElement | null;
+
+    expect(backdrop)
+      .toBeTruthy();
+    expect(form)
+      .toBeTruthy();
+    expect(actions)
+      .toBeTruthy();
+    expect(
+      backdrop?.classList.contains(
+        'picker'
+      )
+    ).toBe(false);
+    expect(
+      form?.classList.contains(
+        'picker-panel'
+      )
+    ).toBe(false);
+    expect(
+      getComputedStyle(
+        backdrop as HTMLElement
+      ).display
+    ).not.toBe('none');
+    expect(backdrop?.firstElementChild)
+      .toBe(form);
+    expect(form?.contains(actions))
+      .toBe(true);
+    expect(actions?.contains(downloadButton))
+      .toBe(true);
+
+    backdrop?.dispatchEvent(
+      new MouseEvent(
+        'click',
+        {
+          bubbles:
+            true
+        }
+      )
+    );
+    fixture.detectChanges();
+
+    expect(exportSpy)
+      .not.toHaveBeenCalled();
+  });
+
+  it('shows an error from the rendered export button when export fails', async () => {
+    const fixture =
+      await createLoadedComponent();
+
+    const exportSpy =
+      vi.spyOn(
+        fixture.componentInstance,
+        'exportTrainingRecords'
+      );
+
+    const downloadButton =
+      openRenderedExportModal(
+        fixture
+      );
+
+    downloadButton.click();
     fixture.detectChanges();
 
     const exportPromise =
-      component.exportTrainingRecords();
+      exportSpy.mock.results[0]
+        ?.value as Promise<void> | undefined;
 
     await flushPromises();
 
@@ -1073,133 +1497,40 @@ describe('Routines training analytics', () => {
       .expectOne(
         `${environment.apiUrl}/workouts`
       )
-      .flush([
+      .flush(
         {
-          workoutId:
-            'workout-rest-test',
-          routineId:
-            'routine-1',
-          sessionId:
-            'session-1',
+          detail:
+            'Export failed'
+        },
+        {
           status:
-            'finished',
-          startedAt:
-            '2026-08-20T10:00:00Z',
-          finishedAt:
-            '2026-08-20T11:00:00Z',
-          restOverrideSeconds:
-            150,
-          sets: [
-            {
-              setId:
-                'warmup-1',
-              exerciseId:
-                'dumbbell-bench-press',
-              setIndex:
-                -1,
-              setType:
-                'warmup',
-              weight:
-                40,
-              reps:
-                10,
-              completedAt:
-                '2026-08-20T10:05:00Z'
-            },
-            {
-              setId:
-                'working-1',
-              exerciseId:
-                'dumbbell-bench-press',
-              setIndex:
-                0,
-              setType:
-                'working',
-              weight:
-                80,
-              reps:
-                8,
-              rir:
-                2,
-              completedAt:
-                '2026-08-20T10:10:00Z'
-            }
-          ]
+            500,
+          statusText:
+            'Server Error'
         }
-      ]);
+      );
 
     http
       .expectOne(
         `${environment.apiUrl}/routines`
       )
-      .flush([
-        {
-          routineId:
-            'routine-1',
-          name:
-            'Rutina test',
-          sessions: [
-            {
-              sessionId:
-                'session-1',
-              name:
-                'Sesión A',
-              exercises: [
-                {
-                  exerciseId:
-                    'dumbbell-bench-press',
-                  restSeconds:
-                    120
-                }
-              ]
-            }
-          ]
-        }
-      ]);
+      .flush([]);
 
     await exportPromise;
-
-    expect(writeFileSpy)
-      .toHaveBeenCalledTimes(1);
-
-    const workbook =
-      writeFileSpy.mock.calls[0][0] as any;
-
-    const rows =
-      XLSX.utils.sheet_to_json<any>(
-        workbook.Sheets['Registros'],
-        {
-          defval: ''
-        }
-      );
-
-    expect(rows)
-      .toHaveLength(1);
-
-    expect(rows[0]).toMatchObject({
-      'Serie':
-        1,
-      'Peso (kg)':
-        80,
-      'Repeticiones':
-        8,
-      'RIR':
-        2,
-      'Descanso planificado (s)':
-        120,
-      'Descanso global sesión (s)':
-        150,
-      'Descanso efectivo (s)':
-        150
-    });
+    await fixture.whenStable();
+    fixture.detectChanges();
 
     expect(
-      rows.some(
-        row =>
-          row['Serie'] === 0
-      )
-    ).toBe(false);
+      pageText(fixture)
+    ).toContain(
+      'Export failed'
+    );
 
+    expect(
+      pageText(fixture)
+    ).toContain(
+      'Descargar historial'
+    );
   });
 
 

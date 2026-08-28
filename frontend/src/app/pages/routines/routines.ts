@@ -1,11 +1,22 @@
 import { Component, OnInit, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { FormsModule } from '@angular/forms';
 import {
   ActivatedRoute,
   Router
 } from '@angular/router';
 import { HttpClient, HttpHeaders } from '@angular/common/http';
 import { environment } from '../../../environments/environment';
+import {
+  Capacitor
+} from '@capacitor/core';
+import {
+  Directory,
+  Filesystem
+} from '@capacitor/filesystem';
+import {
+  Share
+} from '@capacitor/share';
 import * as XLSX from 'xlsx';
 
 import { AuthService } from '../../core/auth.service';
@@ -188,7 +199,10 @@ interface ChartPoint {
 @Component({
   selector: 'app-routines',
   standalone: true,
-  imports: [CommonModule],
+  imports: [
+    CommonModule,
+    FormsModule
+  ],
   templateUrl: './routines.html',
   styleUrl: './routines.scss'
 })
@@ -2890,7 +2904,48 @@ export class Routines implements OnInit {
     }
   }
 
-  private writeTrainingRecordsWorkbook(
+  private async writeTrainingRecordsWorkbook(
+    workbook: XLSX.WorkBook,
+    filename: string
+  ): Promise<void> {
+    if (!Capacitor.isNativePlatform()) {
+      this.writeBrowserTrainingRecordsWorkbook(
+        workbook,
+        filename
+      );
+
+      return;
+    }
+
+    const data =
+      this.writeTrainingRecordsWorkbookBase64(
+        workbook
+      );
+
+    const result =
+      await Filesystem.writeFile({
+        path: filename,
+        data,
+        directory: Directory.Cache,
+        recursive: true
+      });
+
+    await Share.share({
+      title:
+        'Aptus · Registros de entrenamiento',
+
+      text:
+        'Exportación de registros de entrenamiento de Aptus',
+
+      url:
+        result.uri,
+
+      dialogTitle:
+        'Exportar registros'
+    });
+  }
+
+  private writeBrowserTrainingRecordsWorkbook(
     workbook: XLSX.WorkBook,
     filename: string
   ): void {
@@ -2900,8 +2955,24 @@ export class Routines implements OnInit {
     );
   }
 
+  private writeTrainingRecordsWorkbookBase64(
+    workbook: XLSX.WorkBook
+  ): string {
+    return XLSX.write(
+      workbook,
+      {
+        bookType: 'xlsx',
+        type: 'base64',
+        compression: true
+      }
+    );
+  }
 
   async exportTrainingRecords(): Promise<void> {
+    if (this.exportingRecords()) {
+      return;
+    }
+
     this.exportingRecords.set(true);
     this.exportRecordsError.set(null);
 
@@ -3258,7 +3329,7 @@ export class Routines implements OnInit {
         'Registros'
       );
 
-      this.writeTrainingRecordsWorkbook(
+      await this.writeTrainingRecordsWorkbook(
         workbook,
         `Aptus_registros_${label}.xlsx`
       );

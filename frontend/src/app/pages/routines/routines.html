@@ -324,31 +324,6 @@
           </span>
         </button>
 
-        <button
-          type="button"
-          class="routine-action-card"
-          (click)="openExportRecords()"
-        >
-          <span class="routine-action-icon">
-            ↗
-          </span>
-
-          <span class="routine-action-content">
-            <strong>
-              Exportar registros
-            </strong>
-
-            <span>
-              Descarga tus entrenamientos realizados durante
-              las últimas semanas, meses o un periodo
-              personalizado.
-            </span>
-          </span>
-
-          <span class="routine-action-arrow">
-            ›
-          </span>
-        </button>
       </div>
     </section>
   }
@@ -379,6 +354,36 @@
   </summary>
 
   <div class="analysis-content">
+    @if (trainingView() === 'analysis') {
+      <div class="analysis-export-action">
+        <button
+          type="button"
+          class="routine-action-card"
+          (click)="openExportRecords()"
+        >
+          <span class="routine-action-icon">
+            ↗
+          </span>
+
+          <span class="routine-action-content">
+            <strong>
+              Exportar registros
+            </strong>
+
+            <span>
+              Descarga tus entrenamientos realizados durante
+              las últimas semanas, meses o un periodo
+              personalizado.
+            </span>
+          </span>
+
+          <span class="routine-action-arrow">
+            ›
+          </span>
+        </button>
+      </div>
+    }
+
     <div class="analysis-period">
       <strong>Periodo</strong>
 
@@ -1247,8 +1252,14 @@
   }
 
   @if (exportRecordsOpen()) {
-    <div class="picker">
-      <div class="picker-panel export-panel">
+    <div
+      class="export-records-picker"
+      data-testid="export-records-backdrop"
+    >
+      <form
+        class="export-panel"
+        (ngSubmit)="exportTrainingRecords()"
+      >
         <h2>
           Exportar registros
         </h2>
@@ -1338,7 +1349,7 @@
           </p>
         }
 
-        <div class="builder-actions">
+        <div class="export-actions">
           <button
             type="button"
             (click)="closeExportRecords()"
@@ -1348,8 +1359,9 @@
           </button>
 
           <button
-            type="button"
-            (click)="exportTrainingRecords()"
+            type="submit"
+            class="export-records-download"
+            [attr.aria-busy]="exportingRecords()"
             [disabled]="exportingRecords()"
           >
             {{
@@ -1359,7 +1371,7 @@
             }}
           </button>
         </div>
-      </div>
+      </form>
     </div>
   }
 </section>

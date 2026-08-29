@@ -51,6 +51,14 @@ import {
   compareSwimmingSessions
 } from '../../features/swimming/domain/swimming-analysis';
 
+import {
+  analyseSwimmingLengths
+} from '../../features/swimming/domain/swimming-session-detail-analysis';
+
+import type {
+  SwimmingDetailedSessionAnalysis
+} from '../../features/swimming/domain/swimming-session-detail-analysis';
+
 import type {
   SwimmingSessionComparison
 } from '../../features/swimming/domain/swimming-analysis';
@@ -132,6 +140,9 @@ export interface SwimmingSessionView {
   anaerobicTrainingEffect?: number | null;
 
   fitEnriched?: boolean;
+
+  detailedAnalysis?:
+    SwimmingDetailedSessionAnalysis | null;
 }
 
 
@@ -561,6 +572,13 @@ export class Endurance
           100
         : null;
 
+    const detailedAnalysis =
+      analyseSwimmingLengths(
+        fit.lengths,
+        fit.pool_length_meters
+          ?? 25
+      );
+
     return {
       startTime:
         fit.start_time ?? '',
@@ -622,7 +640,9 @@ export class Endurance
         fit.anaerobic_training_effect
         ?? null,
 
-      fitEnriched: true
+      fitEnriched: true,
+
+      detailedAnalysis
     };
   }
 
@@ -748,6 +768,9 @@ export class Endurance
             anaerobicTrainingEffect:
               fitSession.anaerobicTrainingEffect,
 
+            detailedAnalysis:
+              fitSession.detailedAnalysis,
+
             fitEnriched: true
           };
         }
@@ -852,6 +875,39 @@ export class Endurance
     return this.swimmingSessions()[
       this.comparisonSwimmingSessionBIndex()
     ] ?? null;
+  }
+
+
+  swimmingFreestyleSummary(
+    session: SwimmingSessionView
+  ) {
+
+    return (
+      session.detailedAnalysis
+        ?.strokes.find(
+          item =>
+            item.stroke ===
+            'freestyle'
+        )
+      ?? null
+    );
+  }
+
+
+  swimmingLongestBlockMeters(
+    session: SwimmingSessionView
+  ): number | null {
+
+    const value =
+      session.detailedAnalysis
+        ?.longestBlockMeters;
+
+    return (
+      typeof value === 'number'
+      && Number.isFinite(value)
+    )
+      ? value
+      : null;
   }
 
 
@@ -1085,6 +1141,24 @@ export class Endurance
 
     return (
       `${sign}${value.toFixed(1)} %`
+    );
+  }
+
+
+  formatOptionalDuration(
+    seconds: number | null | undefined
+  ): string {
+
+    if (
+      seconds === null
+      || seconds === undefined
+      || !Number.isFinite(seconds)
+    ) {
+      return '—';
+    }
+
+    return this.formatDuration(
+      seconds
     );
   }
 

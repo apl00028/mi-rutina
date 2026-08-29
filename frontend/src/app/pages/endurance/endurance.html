@@ -312,7 +312,7 @@
 
               <div>
                 <span>
-                  Ritmo total
+                  Ritmo con descansos
                 </span>
 
                 <strong>
@@ -388,6 +388,12 @@
                   </strong>
                 </div>
 
+                <div class="swimming-metrics-section-title">
+                  <span class="eyebrow">
+                    Carga fisiológica
+                  </span>
+                </div>
+
                 <div>
                   <span>Calorías</span>
                   <strong>
@@ -446,7 +452,8 @@
             </div>
 
             <small class="swimming-note">
-              El ritmo total incluye los descansos.
+              El ritmo con descansos usa el tiempo total
+              de la sesión.
               @if (session.fitEnriched) {
                 El ritmo medio usa los datos detallados
                 del archivo FIT.
@@ -589,6 +596,264 @@
                     </h2>
                   </div>
                 </div>
+
+
+                @if (
+                  swimmingFreestyleSummary(sessionA);
+                  as freestyleA
+                ) {
+
+                  <div class="swimming-coach-section">
+
+                    <div class="swimming-coach-section-header">
+                      <div>
+                        <span class="eyebrow">
+                          Rendimiento específico
+                        </span>
+
+                        <h3>
+                          Crol
+                        </h3>
+                      </div>
+                    </div>
+
+
+                    <div class="swimming-analysis-grid">
+
+                      <div>
+                        <span>Distancia crol</span>
+
+                        <strong>
+                          {{
+                            freestyleA.distanceMeters
+                              | number:'1.0-0'
+                          }}
+                          m
+                        </strong>
+
+                        <small>
+                          @if (
+                            swimmingFreestyleSummary(sessionB);
+                            as freestyleB
+                          ) {
+                            anterior:
+                            {{
+                              freestyleB.distanceMeters
+                                | number:'1.0-0'
+                            }}
+                            m
+                          }
+                        </small>
+                      </div>
+
+
+                      <div>
+                        <span>Ritmo crol</span>
+
+                        <strong>
+                          {{
+                            formatPace(
+                              freestyleA
+                                .paceSecondsPer100m
+                            )
+                          }}
+                        </strong>
+
+                        <small>
+                          @if (
+                            swimmingFreestyleSummary(sessionB);
+                            as freestyleB
+                          ) {
+                            anterior:
+                            {{
+                              formatPace(
+                                freestyleB
+                                  .paceSecondsPer100m
+                              )
+                            }}
+                          }
+                        </small>
+                      </div>
+
+
+                      <div>
+                        <span>Brazadas/largo crol</span>
+
+                        <strong>
+                          @if (
+                            freestyleA.strokesPerLength !== null
+                          ) {
+                            {{
+                              freestyleA.strokesPerLength
+                                | number:'1.1-1'
+                            }}
+                          } @else {
+                            —
+                          }
+                        </strong>
+
+                        <small>
+                          @if (
+                            swimmingFreestyleSummary(sessionB);
+                            as freestyleB
+                          ) {
+                            anterior:
+                            @if (
+                              freestyleB.strokesPerLength !== null
+                            ) {
+                              {{
+                                freestyleB.strokesPerLength
+                                  | number:'1.1-1'
+                              }}
+                            } @else {
+                              —
+                            }
+                          }
+                        </small>
+                      </div>
+
+
+                      <div>
+                        <span>Cadencia crol</span>
+
+                        <strong>
+                          @if (
+                            freestyleA.averageStrokeRateSpm !== null
+                          ) {
+                            {{
+                              freestyleA.averageStrokeRateSpm
+                                | number:'1.1-1'
+                            }}
+                            /min
+                          } @else {
+                            —
+                          }
+                        </strong>
+
+                        <small>
+                          @if (
+                            swimmingFreestyleSummary(sessionB);
+                            as freestyleB
+                          ) {
+                            anterior:
+                            @if (
+                              freestyleB.averageStrokeRateSpm !== null
+                            ) {
+                              {{
+                                freestyleB.averageStrokeRateSpm
+                                  | number:'1.1-1'
+                              }}
+                              /min
+                            } @else {
+                              —
+                            }
+                          }
+                        </small>
+                      </div>
+
+
+                      <div>
+                        <span>Bloques</span>
+
+                        <strong>
+                          {{
+                            sessionA.detailedAnalysis
+                              ?.blockCount
+                              ?? '—'
+                          }}
+                        </strong>
+
+                        <small>
+                          anterior:
+                          {{
+                            sessionB.detailedAnalysis
+                              ?.blockCount
+                              ?? '—'
+                          }}
+                        </small>
+                      </div>
+
+
+                      <div>
+                        <span>Bloque continuo máximo</span>
+
+                        <strong>
+                          @if (
+                            swimmingLongestBlockMeters(sessionA);
+                            as longestA
+                          ) {
+                            {{ longestA }} m
+                          } @else {
+                            —
+                          }
+                        </strong>
+
+                        <small>
+                          anterior:
+                          @if (
+                            swimmingLongestBlockMeters(sessionB);
+                            as longestB
+                          ) {
+                            {{ longestB }} m
+                          } @else {
+                            —
+                          }
+                        </small>
+                      </div>
+
+
+                      <div>
+                        <span>Descanso medio</span>
+
+                        <strong>
+                          {{
+                            formatOptionalDuration(
+                              sessionA.detailedAnalysis
+                                ?.averageRestSeconds
+                            )
+                          }}
+                        </strong>
+
+                        <small>
+                          anterior:
+                          {{
+                            formatOptionalDuration(
+                              sessionB.detailedAnalysis
+                                ?.averageRestSeconds
+                            )
+                          }}
+                        </small>
+                      </div>
+
+
+                      <div>
+                        <span>Descanso máximo</span>
+
+                        <strong>
+                          {{
+                            formatOptionalDuration(
+                              sessionA.detailedAnalysis
+                                ?.maxRestSeconds
+                            )
+                          }}
+                        </strong>
+
+                        <small>
+                          anterior:
+                          {{
+                            formatOptionalDuration(
+                              sessionB.detailedAnalysis
+                                ?.maxRestSeconds
+                            )
+                          }}
+                        </small>
+                      </div>
+
+                    </div>
+
+                  </div>
+
+                }
 
 
                 <div class="swimming-analysis-grid">
@@ -822,7 +1087,7 @@
 
 
                   <div>
-                    <span>Ritmo total</span>
+                    <span>Ritmo con descansos</span>
 
                     <strong>
                       {{

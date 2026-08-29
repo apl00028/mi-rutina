@@ -344,6 +344,8 @@ export class Endurance
         result
       );
 
+      await this.loadSwimming();
+
     } catch (error: any) {
 
       this.swimmingFitImportError.set(

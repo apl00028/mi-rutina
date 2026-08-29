@@ -61,7 +61,10 @@
 
     }
 
-    @if (swimmingRequiresAndroid()) {
+    @if (
+      swimmingRequiresAndroid()
+      && swimmingSessions().length === 0
+    ) {
       <section class="discipline-card">
         <span class="eyebrow">
           Garmin

@@ -8,3 +8,5 @@ httpx>=0.27,<1
 pytest==8.4.1
 
 PyJWT[crypto]>=2.13,<3
+python-multipart==0.0.32
+fitdecode==0.11.0

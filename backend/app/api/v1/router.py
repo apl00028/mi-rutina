@@ -19,6 +19,7 @@ from app.domains.health_tracking.router import router as health_tracking_router
 from app.domains.telemetry.router import (
     router as telemetry_router,
 )
+from app.domains.swimming.router import router as swimming_router
 
 
 router = APIRouter(
@@ -68,4 +69,9 @@ router.include_router(
 
 router.include_router(
     telemetry_router
+)
+
+
+router.include_router(
+    swimming_router
 )

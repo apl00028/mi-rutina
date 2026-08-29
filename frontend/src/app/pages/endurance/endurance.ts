@@ -15,12 +15,29 @@ import {
 } from '@angular/router';
 
 import {
+  HttpClient,
+  HttpHeaders
+} from '@angular/common/http';
+
+import {
+  firstValueFrom
+} from 'rxjs';
+
+import {
   Capacitor
 } from '@capacitor/core';
 
 import {
   HealthConnect
 } from '../../core/health-connect.plugin';
+
+import {
+  AuthService
+} from '../../core/auth.service';
+
+import {
+  environment
+} from '../../../environments/environment';
 
 import type {
   HealthConnectSwimmingMetricSession
@@ -46,6 +63,42 @@ import type {
   TrainingDiscipline,
   TrainingNavigationTab
 } from '../../features/training/components/training-navigation/training-navigation';
+
+export interface SwimmingFitImportResponse {
+  start_time?: string;
+
+  pool_length_meters?: number;
+  distance_meters?: number;
+
+  total_elapsed_time_seconds?: number;
+  total_timer_time_seconds?: number;
+  total_moving_time_seconds?: number;
+
+  heart_rate_average_bpm?: number;
+  heart_rate_max_bpm?: number;
+
+  total_strokes?: number;
+  average_stroke_rate_spm?: number;
+
+  average_speed_meters_per_second?: number;
+  max_speed_meters_per_second?: number;
+  average_pace_seconds_per_100m?: number;
+
+  total_calories?: number;
+  aerobic_training_effect?: number;
+  anaerobic_training_effect?: number;
+
+  lengths: Array<{
+    start_time?: string;
+    duration_seconds?: number;
+    distance_meters?: number;
+    total_strokes?: number;
+    average_stroke_rate_spm?: number;
+    swim_stroke?: string;
+    length_type?: string;
+  }>;
+}
+
 
 export interface SwimmingSessionView {
   startTime: string;
@@ -80,6 +133,9 @@ export interface SwimmingSessionView {
 })
 export class Endurance
   implements OnInit {
+
+  private readonly apiUrl =
+    environment.apiUrl;
 
   discipline =
     signal<TrainingDiscipline>(
@@ -130,10 +186,25 @@ export class Endurance
   readonly swimmingRequiresAndroid =
     signal(false);
 
+  readonly swimmingFitImporting =
+    signal(false);
+
+  readonly swimmingFitImportError =
+    signal<string | null>(
+      null
+    );
+
+  readonly importedSwimmingFit =
+    signal<SwimmingFitImportResponse | null>(
+      null
+    );
+
 
   constructor(
     private route: ActivatedRoute,
-    private router: Router
+    private router: Router,
+    private http: HttpClient,
+    private auth: AuthService
   ) {}
 
 
@@ -185,6 +256,89 @@ export class Endurance
       void this.router.navigateByUrl(
         target
       );
+    }
+  }
+
+
+  async importSwimmingFit(
+    event: Event
+  ): Promise<void> {
+
+    const input =
+      event.target as HTMLInputElement;
+
+    const file =
+      input.files?.[0];
+
+    if (!file) {
+      return;
+    }
+
+    this.swimmingFitImportError.set(
+      null
+    );
+
+    this.importedSwimmingFit.set(
+      null
+    );
+
+    this.swimmingFitImporting.set(
+      true
+    );
+
+    try {
+      const token =
+        await this.auth.getAccessToken();
+
+      if (!token) {
+        throw new Error(
+          'Necesitas iniciar sesión.'
+        );
+      }
+
+      const headers =
+        new HttpHeaders({
+          Authorization:
+            `Bearer ${token}`
+        });
+
+      const formData =
+        new FormData();
+
+      formData.append(
+        'file',
+        file,
+        file.name
+      );
+
+      const result =
+        await firstValueFrom(
+          this.http.post<SwimmingFitImportResponse>(
+            `${this.apiUrl}/swimming/import-fit`,
+            formData,
+            { headers }
+          )
+        );
+
+      this.importedSwimmingFit.set(
+        result
+      );
+
+    } catch (error: any) {
+
+      this.swimmingFitImportError.set(
+        error?.error?.detail ??
+        error?.message ??
+        'No se pudo importar el archivo FIT.'
+      );
+
+    } finally {
+
+      this.swimmingFitImporting.set(
+        false
+      );
+
+      input.value = '';
     }
   }
 

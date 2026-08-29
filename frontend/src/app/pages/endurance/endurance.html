@@ -282,23 +282,6 @@
                         {{ block.title }}
                       </h3>
 
-                      <small>
-                        @for (
-                          set of block.sets;
-                          track $index;
-                          let last = $last
-                        ) {
-                          {{
-                            set.repetitions
-                          }}×{{
-                            set.distanceMeters
-                          }}
-                          m
-                          @if (!last) {
-                            ·
-                          }
-                        }
-                      </small>
                     </div>
 
                   </div>

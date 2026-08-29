@@ -933,29 +933,6 @@
   opacity: 0.68;
 }
 
-.swimming-routine-distance-scale {
-  display: grid;
-  grid-template-columns:
-    repeat(5, 25px);
-
-  gap: 3px;
-
-  margin-left: 32px;
-  margin-bottom: -2px;
-
-  font-size: 0.62rem;
-  opacity: 0.45;
-}
-
-.swimming-routine-distance-scale span {
-  text-align: left;
-}
-
-.swimming-routine-distance-scale span:last-child {
-  white-space: nowrap;
-}
-
-
 @media (max-width: 700px) {
 
   .swimming-routine-series-head {

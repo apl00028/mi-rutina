@@ -651,3 +651,112 @@
     height: 16px;
   }
 }
+
+
+/* Swimming routine series map */
+
+.swimming-routine-series-map {
+  display: grid;
+  gap: 12px;
+}
+
+.swimming-routine-series-row {
+  display: grid;
+  gap: 7px;
+
+  padding-top: 10px;
+
+  border-top: 1px solid var(--border);
+}
+
+.swimming-routine-series-row:first-child {
+  padding-top: 0;
+  border-top: 0;
+}
+
+.swimming-routine-series-head {
+  display: grid;
+  grid-template-columns:
+    auto minmax(0, 1fr) auto;
+  align-items: baseline;
+  gap: 6px 10px;
+}
+
+.swimming-routine-series-head > strong {
+  white-space: nowrap;
+}
+
+.swimming-routine-series-head > span {
+  font-size: 0.78rem;
+  opacity: 0.66;
+}
+
+.swimming-routine-series-head > small {
+  font-size: 0.72rem;
+  font-weight: 700;
+  white-space: nowrap;
+  opacity: 0.7;
+}
+
+.swimming-routine-series-row
+  .swimming-pool-lane {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+
+  gap: 8px;
+
+  min-height: 34px;
+
+  padding: 6px 0;
+
+  border: 0;
+  border-radius: 0;
+}
+
+.swimming-routine-repetition {
+  display: flex;
+  gap: 3px;
+
+  padding-right: 7px;
+
+  border-right:
+    1px solid
+    color-mix(
+      in srgb,
+      var(--border) 85%,
+      transparent
+    );
+}
+
+.swimming-routine-repetition:last-child {
+  padding-right: 0;
+  border-right: 0;
+}
+
+.swimming-routine-series-instruction {
+  margin: 0;
+
+  font-size: 0.8rem;
+  line-height: 1.35;
+
+  opacity: 0.72;
+}
+
+
+@media (max-width: 700px) {
+
+  .swimming-routine-series-head {
+    grid-template-columns:
+      auto 1fr;
+  }
+
+  .swimming-routine-series-head > small {
+    grid-column: 1 / -1;
+  }
+
+  .swimming-routine-series-row
+    .swimming-pool-lane {
+    gap: 6px;
+  }
+}

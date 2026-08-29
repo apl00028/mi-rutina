@@ -1251,6 +1251,45 @@ export class Endurance
   }
 
 
+  swimmingRoutineSetGroups(
+    repetitions: number,
+    distanceMeters: number,
+    poolLengthMeters: number
+  ): number[][] {
+
+    if (
+      repetitions <= 0
+      || distanceMeters <= 0
+      || poolLengthMeters <= 0
+    ) {
+      return [];
+    }
+
+    const lengthsPerRepetition =
+      Math.max(
+        1,
+        Math.round(
+          distanceMeters
+          / poolLengthMeters
+        )
+      );
+
+    return Array.from(
+      { length: repetitions },
+      (_, repetitionIndex) =>
+        Array.from(
+          { length: lengthsPerRepetition },
+          (_, lengthIndex) =>
+            (
+              repetitionIndex
+              * lengthsPerRepetition
+            )
+            + lengthIndex
+        )
+    );
+  }
+
+
   swimmingRoutineSetLengths(
     repetitions: number,
     distanceMeters: number,

@@ -304,52 +304,17 @@
                   </div>
 
 
-                  <div class="swimming-pool-lane">
+                  <div class="swimming-routine-series-map">
 
                     @for (
                       set of block.sets;
                       track $index
                     ) {
 
-                      @for (
-                        length of
-                          swimmingRoutineSetLengths(
-                            set.repetitions,
-                            set.distanceMeters,
-                            routine.poolLengthMeters
-                          );
-                        track $index
-                      ) {
-                        <span
-                          class="swimming-routine-length"
-                          [attr.data-block-type]="
-                            block.type
-                          "
-                          [title]="
-                            swimmingStrokeLabel(
-                              set.stroke
-                            )
-                          "
-                        ></span>
-                      }
+                      <div class="swimming-routine-series-row">
 
-                    }
+                        <div class="swimming-routine-series-head">
 
-                  </div>
-
-
-                  <div class="swimming-routine-sets">
-
-                    @for (
-                      set of block.sets;
-                      track $index
-                    ) {
-
-                      <div class="swimming-routine-set">
-
-                        <div
-                          class="swimming-routine-set-main"
-                        >
                           <strong>
                             {{ set.repetitions }}
                             ×
@@ -365,34 +330,66 @@
                             }}
                             ·
                             {{
-                              swimmingWorkTypeLabel(
-                                set.workType
-                              )
-                            }}
-                            ·
-                            {{
                               swimmingIntensityLabel(
                                 set.intensity
                               )
                             }}
                           </span>
+
+                          @if (
+                            set.restSeconds > 0
+                          ) {
+                            <small>
+                              Descanso
+                              {{ set.restSeconds }} s
+                            </small>
+                          }
+
                         </div>
 
 
-                        @if (
-                          set.restSeconds > 0
-                        ) {
-                          <span
-                            class="swimming-routine-rest"
-                          >
-                            Descanso
-                            {{ set.restSeconds }} s
-                          </span>
-                        }
+                        <div class="swimming-pool-lane">
+
+                          @for (
+                            repetition of
+                              swimmingRoutineSetGroups(
+                                set.repetitions,
+                                set.distanceMeters,
+                                routine.poolLengthMeters
+                              );
+                            track $index
+                          ) {
+
+                            <div
+                              class="swimming-routine-repetition"
+                            >
+
+                              @for (
+                                length of repetition;
+                                track $index
+                              ) {
+                                <span
+                                  class="swimming-routine-length"
+                                  [attr.data-block-type]="
+                                    block.type
+                                  "
+                                  [title]="
+                                    swimmingStrokeLabel(
+                                      set.stroke
+                                    )
+                                  "
+                                ></span>
+                              }
+
+                            </div>
+
+                          }
+
+                        </div>
 
 
                         @if (set.instruction) {
-                          <p>
+                          <p class="swimming-routine-series-instruction">
                             {{ set.instruction }}
                           </p>
                         }

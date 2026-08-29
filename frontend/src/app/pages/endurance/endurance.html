@@ -1111,17 +1111,90 @@
 
 
                 @if (
-                  comparison.integratedSummary;
-                  as integratedSummary
+                  selectedSwimmingCoachAssessment();
+                  as coachAssessment
                 ) {
                   <div class="swimming-analysis-summary">
 
                     <span class="eyebrow">
-                      Lectura
+                      Evaluación del entrenador
                     </span>
 
-                    <p>
-                      {{ integratedSummary }}
+                    <h3>
+                      {{ coachAssessment.headline }}
+                    </h3>
+
+                    <div class="swimming-coach-assessment">
+
+                      <div>
+                        <strong>
+                          Capacidad de trabajo
+                        </strong>
+                        <p>
+                          {{
+                            coachAssessment
+                              .workCapacity
+                              .summary
+                          }}
+                        </p>
+                      </div>
+
+                      <div>
+                        <strong>
+                          Ritmo específico
+                        </strong>
+                        <p>
+                          {{
+                            coachAssessment
+                              .pace
+                              .summary
+                          }}
+                        </p>
+                      </div>
+
+                      <div>
+                        <strong>
+                          Técnica
+                        </strong>
+                        <p>
+                          {{
+                            coachAssessment
+                              .technique
+                              .summary
+                          }}
+                        </p>
+                      </div>
+
+                      <div>
+                        <strong>
+                          Continuidad
+                        </strong>
+                        <p>
+                          {{
+                            coachAssessment
+                              .continuity
+                              .summary
+                          }}
+                        </p>
+                      </div>
+
+                      <div>
+                        <strong>
+                          Coste cardiovascular
+                        </strong>
+                        <p>
+                          {{
+                            coachAssessment
+                              .cardiovascularCost
+                              .summary
+                          }}
+                        </p>
+                      </div>
+
+                    </div>
+
+                    <p class="swimming-coach-narrative">
+                      {{ coachAssessment.narrative }}
                     </p>
 
                   </div>
@@ -1129,9 +1202,10 @@
 
 
                 <small class="swimming-note">
-                  Comparación descriptiva entre dos
-                  sesiones. No implica por sí sola una
-                  mejora fisiológica o técnica.
+                  Evaluación descriptiva basada en datos
+                  disponibles y en comparaciones homogéneas
+                  cuando es posible. No demuestra por sí sola
+                  una adaptación fisiológica o técnica.
                 </small>
 
               </section>

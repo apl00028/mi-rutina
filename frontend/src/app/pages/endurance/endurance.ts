@@ -55,6 +55,14 @@ import {
   analyseSwimmingLengths
 } from '../../features/swimming/domain/swimming-session-detail-analysis';
 
+import {
+  evaluateSwimmingSessions
+} from '../../features/swimming/domain/swimming-coach-analysis';
+
+import type {
+  SwimmingCoachAssessment
+} from '../../features/swimming/domain/swimming-coach-analysis';
+
 import type {
   SwimmingDetailedSessionAnalysis
 } from '../../features/swimming/domain/swimming-session-detail-analysis';
@@ -908,6 +916,50 @@ export class Endurance
     )
       ? value
       : null;
+  }
+
+
+  selectedSwimmingCoachAssessment():
+    SwimmingCoachAssessment | null {
+
+    const sessionA =
+      this.comparisonSwimmingSessionA();
+
+    const sessionB =
+      this.comparisonSwimmingSessionB();
+
+    if (
+      !sessionA
+      || !sessionB
+      || sessionA === sessionB
+    ) {
+      return null;
+    }
+
+    return evaluateSwimmingSessions(
+      {
+        distanceMeters:
+          sessionA.distanceMeters,
+
+        heartRateAverageBpm:
+          sessionA.heartRateAverageBpm,
+
+        detailedAnalysis:
+          sessionA.detailedAnalysis
+          ?? null
+      },
+      {
+        distanceMeters:
+          sessionB.distanceMeters,
+
+        heartRateAverageBpm:
+          sessionB.heartRateAverageBpm,
+
+        detailedAnalysis:
+          sessionB.detailedAnalysis
+          ?? null
+      }
+    );
   }
 
 

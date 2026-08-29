@@ -993,6 +993,32 @@ export class Endurance
 
 
 
+  formatPercentagePointDelta(
+    value: number | null
+  ): string {
+
+    if (
+      value === null
+      || !Number.isFinite(value)
+    ) {
+      return '—';
+    }
+
+    if (Math.abs(value) < 0.05) {
+      return 'Sin cambio relevante';
+    }
+
+    const sign =
+      value > 0
+        ? '+'
+        : '';
+
+    return (
+      `${sign}${value.toFixed(1)} pp`
+    );
+  }
+
+
   formatPaceDelta(
     seconds: number | null
   ): string {

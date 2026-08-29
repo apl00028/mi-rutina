@@ -622,20 +622,71 @@
 
 
                   <div>
-                    <span>Ritmo total</span>
+                    <span>Ritmo medio</span>
 
                     <strong>
                       {{
                         formatPace(
-                          sessionA.elapsedPaceSecondsPer100m
+                          sessionA.averagePaceSecondsPer100m
+                            ?? null
                         )
                       }}
                     </strong>
 
                     <small>
+                      anterior:
+                      {{
+                        formatPace(
+                          sessionB.averagePaceSecondsPer100m
+                            ?? null
+                        )
+                      }}
+                      ·
                       {{
                         formatPaceDelta(
                           comparison.pace.absoluteChange
+                        )
+                      }}
+                    </small>
+                  </div>
+
+
+                  <div>
+                    <span>Descanso</span>
+
+                    <strong>
+                      @if (
+                        comparison.restPercent.current !== null
+                      ) {
+                        {{
+                          comparison.restPercent.current
+                            | number:'1.1-1'
+                        }}
+                        %
+                      } @else {
+                        —
+                      }
+                    </strong>
+
+                    <small>
+                      anterior:
+                      @if (
+                        comparison.restPercent.previous !== null
+                      ) {
+                        {{
+                          comparison.restPercent.previous
+                            | number:'1.1-1'
+                        }}
+                        %
+                      } @else {
+                        —
+                      }
+
+                      ·
+
+                      {{
+                        formatPercentagePointDelta(
+                          comparison.restPercent.absoluteChange
                         )
                       }}
                     </small>
@@ -699,6 +750,42 @@
 
 
                   <div>
+                    <span>Brazadas/min</span>
+
+                    <strong>
+                      {{
+                        sessionA.averageStrokeRateSpm
+                          ?? '—'
+                      }}
+                    </strong>
+
+                    <small>
+                      anterior:
+                      {{
+                        sessionB.averageStrokeRateSpm
+                          ?? '—'
+                      }}
+
+                      @if (
+                        comparison.strokeRate.absoluteChange !==
+                          null
+                      ) {
+                        ·
+                        {{
+                          comparison.strokeRate.absoluteChange
+                            > 0
+                            ? '+'
+                            : ''
+                        }}{{
+                          comparison.strokeRate.absoluteChange
+                            | number:'1.0-1'
+                        }}
+                      }
+                    </small>
+                  </div>
+
+
+                  <div>
                     <span>FC media</span>
 
                     <strong>
@@ -732,6 +819,28 @@
                       {{
                         formatHeartRateDelta(
                           comparison.heartRateAverage.absoluteChange
+                        )
+                      }}
+                    </small>
+                  </div>
+
+
+                  <div>
+                    <span>Ritmo total</span>
+
+                    <strong>
+                      {{
+                        formatPace(
+                          sessionA.elapsedPaceSecondsPer100m
+                        )
+                      }}
+                    </strong>
+
+                    <small>
+                      incluye descansos ·
+                      {{
+                        formatPaceDelta(
+                          comparison.totalPace.absoluteChange
                         )
                       }}
                     </small>

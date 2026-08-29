@@ -7,6 +7,15 @@ export interface SwimmingAnalysisSession {
 
   elapsedPaceSecondsPer100m: number | null;
 
+  averagePaceSecondsPer100m?:
+    number | null;
+
+  restTimeSeconds?:
+    number | null;
+
+  averageStrokeRateSpm?:
+    number | null;
+
   heartRateAverageBpm: number | null;
 }
 
@@ -22,9 +31,26 @@ export interface SwimmingMetricChange {
 
 export interface SwimmingSessionComparison {
   distance: SwimmingMetricChange;
+
+  /*
+   * Ritmo efectivo de natación.
+   * Solo se compara cuando ambos lados tienen
+   * el dato FIT enriquecido.
+   */
   pace: SwimmingMetricChange;
+
+  /*
+   * Ritmo de sesión incluyendo descansos.
+   * Se conserva como contexto secundario.
+   */
+  totalPace: SwimmingMetricChange;
+
+  restPercent: SwimmingMetricChange;
+
   strokesPerLength: SwimmingMetricChange;
   metersPerStroke: SwimmingMetricChange;
+  strokeRate: SwimmingMetricChange;
+
   heartRateAverage: SwimmingMetricChange;
 
   summary: string[];
@@ -71,6 +97,46 @@ function metricChange(
 }
 
 
+function optionalMetric(
+  value:
+    number | null | undefined
+): number | null {
+
+  return (
+    typeof value === 'number'
+    && Number.isFinite(value)
+  )
+    ? value
+    : null;
+}
+
+
+function restPercent(
+  session: SwimmingAnalysisSession
+): number | null {
+
+  const rest =
+    optionalMetric(
+      session.restTimeSeconds
+    );
+
+  if (
+    rest === null
+    || !Number.isFinite(
+      session.durationSeconds
+    )
+    || session.durationSeconds <= 0
+  ) {
+    return null;
+  }
+
+  return (
+    rest /
+    session.durationSeconds
+  ) * 100;
+}
+
+
 function approximatelyEqual(
   left: number,
   right: number,
@@ -111,8 +177,24 @@ export function compareSwimmingSessions(
 
   const pace =
     metricChange(
+      optionalMetric(
+        current.averagePaceSecondsPer100m
+      ),
+      optionalMetric(
+        previous.averagePaceSecondsPer100m
+      )
+    );
+
+  const totalPace =
+    metricChange(
       current.elapsedPaceSecondsPer100m,
       previous.elapsedPaceSecondsPer100m
+    );
+
+  const restPercentChange =
+    metricChange(
+      restPercent(current),
+      restPercent(previous)
     );
 
   const strokesPerLength =
@@ -125,6 +207,16 @@ export function compareSwimmingSessions(
     metricChange(
       current.metersPerStroke,
       previous.metersPerStroke
+    );
+
+  const strokeRate =
+    metricChange(
+      optionalMetric(
+        current.averageStrokeRateSpm
+      ),
+      optionalMetric(
+        previous.averageStrokeRateSpm
+      )
     );
 
   const heartRateAverage =
@@ -163,7 +255,7 @@ export function compareSwimmingSessions(
       )
     ) {
       summary.push(
-        'Ritmo total similar.'
+        'Ritmo medio similar.'
       );
 
     } else if (
@@ -171,12 +263,44 @@ export function compareSwimmingSessions(
       pace.previous
     ) {
       summary.push(
-        'Ritmo total más rápido.'
+        'Ritmo medio más rápido.'
       );
 
     } else {
       summary.push(
-        'Ritmo total más lento.'
+        'Ritmo medio más lento.'
+      );
+    }
+  }
+
+
+  if (
+    restPercentChange.current !== null
+    && restPercentChange.previous !== null
+  ) {
+
+    const difference =
+      restPercentChange.absoluteChange;
+
+    if (
+      difference !== null
+      && Math.abs(difference) < 1
+    ) {
+      summary.push(
+        'Proporción de descanso similar.'
+      );
+
+    } else if (
+      difference !== null
+      && difference < 0
+    ) {
+      summary.push(
+        'Menor proporción de descanso.'
+      );
+
+    } else if (difference !== null) {
+      summary.push(
+        'Mayor proporción de descanso.'
       );
     }
   }
@@ -245,6 +369,38 @@ export function compareSwimmingSessions(
 
 
   if (
+    strokeRate.current !== null
+    && strokeRate.previous !== null
+  ) {
+
+    if (
+      approximatelyEqual(
+        strokeRate.current,
+        strokeRate.previous,
+        0.03
+      )
+    ) {
+      summary.push(
+        'Cadencia de brazada similar.'
+      );
+
+    } else if (
+      strokeRate.current >
+      strokeRate.previous
+    ) {
+      summary.push(
+        'Mayor frecuencia de brazada.'
+      );
+
+    } else {
+      summary.push(
+        'Menor frecuencia de brazada.'
+      );
+    }
+  }
+
+
+  if (
     heartRateAverage.current !== null
     && heartRateAverage.previous !== null
   ) {
@@ -276,14 +432,14 @@ export function compareSwimmingSessions(
   }
 
 
-  let integratedSummary:
-    string | null = null;
-
   const parts: string[] = [];
+
 
   if (
     distance.percentChange !== null
-    && Math.abs(distance.percentChange) >= 1
+    && Math.abs(
+      distance.percentChange
+    ) >= 1
   ) {
     parts.push(
       distance.percentChange > 0
@@ -291,6 +447,7 @@ export function compareSwimmingSessions(
         : 'menor volumen'
     );
   }
+
 
   if (
     pace.current !== null
@@ -302,10 +459,25 @@ export function compareSwimmingSessions(
   ) {
     parts.push(
       pace.current < pace.previous
-        ? 'ritmo total más rápido'
-        : 'ritmo total más lento'
+        ? 'ritmo medio más rápido'
+        : 'ritmo medio más lento'
     );
   }
+
+
+  if (
+    restPercentChange.absoluteChange !== null
+    && Math.abs(
+      restPercentChange.absoluteChange
+    ) >= 1
+  ) {
+    parts.push(
+      restPercentChange.absoluteChange < 0
+        ? 'menor proporción de descanso'
+        : 'mayor proporción de descanso'
+    );
+  }
+
 
   const strokeEfficiencyStable =
     (
@@ -332,6 +504,25 @@ export function compareSwimmingSessions(
     );
   }
 
+
+  if (
+    strokeRate.current !== null
+    && strokeRate.previous !== null
+    && !approximatelyEqual(
+      strokeRate.current,
+      strokeRate.previous,
+      0.03
+    )
+  ) {
+    parts.push(
+      strokeRate.current >
+        strokeRate.previous
+        ? 'mayor frecuencia de brazada'
+        : 'menor frecuencia de brazada'
+    );
+  }
+
+
   if (
     heartRateAverage.current !== null
     && heartRateAverage.previous !== null
@@ -349,6 +540,10 @@ export function compareSwimmingSessions(
     );
   }
 
+
+  let integratedSummary:
+    string | null = null;
+
   if (parts.length > 0) {
     integratedSummary =
       parts.join(', ') + '.';
@@ -358,11 +553,16 @@ export function compareSwimmingSessions(
       + integratedSummary.slice(1);
   }
 
+
   return {
     distance,
     pace,
+    totalPace,
+    restPercent:
+      restPercentChange,
     strokesPerLength,
     metersPerStroke,
+    strokeRate,
     heartRateAverage,
     summary,
     integratedSummary

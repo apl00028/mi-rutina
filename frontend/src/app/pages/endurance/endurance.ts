@@ -30,13 +30,22 @@ import {
   deriveSwimmingMetrics
 } from '../../features/swimming/domain/swimming-metrics';
 
+import {
+  compareSwimmingSessions
+} from '../../features/swimming/domain/swimming-analysis';
 
-type TrainingDiscipline =
-  | 'strength'
-  | 'swimming'
-  | 'cycling'
-  | 'running';
+import type {
+  SwimmingSessionComparison
+} from '../../features/swimming/domain/swimming-analysis';
 
+import {
+  TrainingNavigation
+} from '../../features/training/components/training-navigation/training-navigation';
+
+import type {
+  TrainingDiscipline,
+  TrainingNavigationTab
+} from '../../features/training/components/training-navigation/training-navigation';
 
 export interface SwimmingSessionView {
   startTime: string;
@@ -63,7 +72,8 @@ export interface SwimmingSessionView {
   standalone: true,
   imports: [
     DatePipe,
-    DecimalPipe
+    DecimalPipe,
+    TrainingNavigation
   ],
   templateUrl: './endurance.html',
   styleUrl: './endurance.scss'
@@ -77,6 +87,19 @@ export class Endurance
     );
 
 
+  readonly swimmingTabs:
+    TrainingNavigationTab[] = [
+      {
+        id: 'session',
+        label: 'Sesión'
+      },
+      {
+        id: 'analytics',
+        label: 'Análisis'
+      }
+    ];
+
+
   readonly swimmingLoading =
     signal(false);
 
@@ -88,6 +111,20 @@ export class Endurance
   readonly swimmingSessions =
     signal<SwimmingSessionView[]>(
       []
+    );
+
+  readonly selectedSwimmingSessionIndex =
+    signal(0);
+
+  readonly comparisonSwimmingSessionAIndex =
+    signal(0);
+
+  readonly comparisonSwimmingSessionBIndex =
+    signal(1);
+
+  readonly swimmingView =
+    signal<'session' | 'analytics'>(
+      'session'
     );
 
   readonly swimmingRequiresAndroid =
@@ -204,6 +241,20 @@ export class Endurance
         sessions
       );
 
+      this.selectedSwimmingSessionIndex.set(
+        0
+      );
+
+      this.comparisonSwimmingSessionAIndex.set(
+        0
+      );
+
+      this.comparisonSwimmingSessionBIndex.set(
+        sessions.length > 1
+          ? 1
+          : 0
+      );
+
     } catch (error: unknown) {
 
       this.swimmingError.set(
@@ -286,6 +337,286 @@ export class Endurance
         ?? null
     };
   }
+
+
+  comparisonSwimmingSessionA():
+    SwimmingSessionView | null {
+
+    return this.swimmingSessions()[
+      this.comparisonSwimmingSessionAIndex()
+    ] ?? null;
+  }
+
+
+  comparisonSwimmingSessionB():
+    SwimmingSessionView | null {
+
+    return this.swimmingSessions()[
+      this.comparisonSwimmingSessionBIndex()
+    ] ?? null;
+  }
+
+
+  selectedSwimmingComparison():
+    SwimmingSessionComparison | null {
+
+    const sessionA =
+      this.comparisonSwimmingSessionA();
+
+    const sessionB =
+      this.comparisonSwimmingSessionB();
+
+    if (
+      !sessionA
+      || !sessionB
+      || sessionA === sessionB
+    ) {
+      return null;
+    }
+
+    return compareSwimmingSessions(
+      sessionA,
+      sessionB
+    );
+  }
+
+
+  selectComparisonSwimmingSessionA(
+    value: string
+  ): void {
+
+    const index = Number(value);
+
+    if (
+      !Number.isInteger(index)
+      || index < 0
+      || index >= this.swimmingSessions().length
+    ) {
+      return;
+    }
+
+    const previousA =
+      this.comparisonSwimmingSessionAIndex();
+
+    const currentB =
+      this.comparisonSwimmingSessionBIndex();
+
+    this.comparisonSwimmingSessionAIndex.set(
+      index
+    );
+
+    if (index === currentB) {
+      this.comparisonSwimmingSessionBIndex.set(
+        previousA
+      );
+    }
+  }
+
+
+  selectComparisonSwimmingSessionB(
+    value: string
+  ): void {
+
+    const index = Number(value);
+
+    if (
+      !Number.isInteger(index)
+      || index < 0
+      || index >= this.swimmingSessions().length
+    ) {
+      return;
+    }
+
+    const currentA =
+      this.comparisonSwimmingSessionAIndex();
+
+    const previousB =
+      this.comparisonSwimmingSessionBIndex();
+
+    this.comparisonSwimmingSessionBIndex.set(
+      index
+    );
+
+    if (index === currentA) {
+      this.comparisonSwimmingSessionAIndex.set(
+        previousB
+      );
+    }
+  }
+
+
+  selectedSwimmingSession():
+    SwimmingSessionView | null {
+
+    const sessions =
+      this.swimmingSessions();
+
+    const index =
+      this.selectedSwimmingSessionIndex();
+
+    return sessions[index]
+      ?? null;
+  }
+
+
+  selectSwimmingSession(
+    value: string
+  ): void {
+
+    const index =
+      Number(value);
+
+    if (
+      Number.isInteger(index)
+      && index >= 0
+      && index <
+        this.swimmingSessions().length
+    ) {
+      this.selectedSwimmingSessionIndex.set(
+        index
+      );
+    }
+  }
+
+
+  setSwimmingView(
+    view: string
+  ): void {
+
+    if (
+      view === 'session'
+      || view === 'analytics'
+    ) {
+      this.swimmingView.set(
+        view
+      );
+    }
+  }
+
+
+
+  formatPaceDelta(
+    seconds: number | null
+  ): string {
+
+    if (
+      seconds === null
+      || !Number.isFinite(seconds)
+    ) {
+      return '—';
+    }
+
+    if (Math.abs(seconds) < 0.05) {
+      return 'Sin cambio relevante';
+    }
+
+    const value =
+      Math.abs(seconds).toFixed(1);
+
+    return seconds < 0
+      ? `${value} s/100 m más rápido`
+      : `${value} s/100 m más lento`;
+  }
+
+
+  formatHeartRateDelta(
+    bpm: number | null
+  ): string {
+
+    if (
+      bpm === null
+      || !Number.isFinite(bpm)
+    ) {
+      return '—';
+    }
+
+    if (Math.abs(bpm) < 0.5) {
+      return 'Sin cambio relevante';
+    }
+
+    const value =
+      Math.abs(Math.round(bpm));
+
+    return bpm > 0
+      ? `+${value} ppm`
+      : `-${value} ppm`;
+  }
+
+
+  formatPercentChange(
+    value: number | null
+  ): string {
+
+    if (
+      value === null
+      || !Number.isFinite(value)
+    ) {
+      return '—';
+    }
+
+    const sign =
+      value > 0
+        ? '+'
+        : '';
+
+    return (
+      `${sign}${value.toFixed(1)} %`
+    );
+  }
+
+
+  formatDuration(
+    seconds: number
+  ): string {
+
+    if (
+      !Number.isFinite(seconds)
+      || seconds < 0
+    ) {
+      return '—';
+    }
+
+    const rounded =
+      Math.round(seconds);
+
+    const minutes =
+      Math.floor(rounded / 60);
+
+    const remainingSeconds =
+      rounded % 60;
+
+    return (
+      `${minutes}:${
+        remainingSeconds
+          .toString()
+          .padStart(2, '0')
+      }`
+    );
+  }
+
+
+  formatPace(
+    secondsPer100m:
+      number | null
+  ): string {
+
+    if (
+      secondsPer100m === null
+      || !Number.isFinite(
+        secondsPer100m
+      )
+      || secondsPer100m <= 0
+    ) {
+      return '—';
+    }
+
+    return (
+      `${this.formatDuration(
+        secondsPer100m
+      )} /100 m`
+    );
+  }
+
 
 
   disciplineLabel(): string {

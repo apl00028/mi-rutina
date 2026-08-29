@@ -1,56 +1,27 @@
 <main class="endurance-page">
 
   <header class="page-header">
-
-    <span class="eyebrow">
-      Entrenar
-    </span>
-
-    <div
-      class="training-discipline-selector"
-    >
-
-      <label for="discipline">
-        Disciplina
-      </label>
-
-      <select
-        id="discipline"
-        #disciplineSelect
-        [value]="discipline()"
-        (change)="
-          changeTrainingDiscipline(
-            disciplineSelect.value
-          )
+    <div>
+      <app-training-navigation
+        [discipline]="discipline()"
+        [tabs]="
+          discipline() === 'swimming'
+            ? swimmingTabs
+            : []
         "
-      >
-        <option value="strength">
-          Fuerza
-        </option>
-
-        <option value="swimming">
-          Natación
-        </option>
-
-        <option value="cycling">
-          Bicicleta
-        </option>
-
-        <option value="running">
-          Correr
-        </option>
-      </select>
-
+        [activeTab]="
+          discipline() === 'swimming'
+            ? swimmingView()
+            : null
+        "
+        (disciplineChange)="
+          changeTrainingDiscipline($event)
+        "
+        (tabChange)="
+          setSwimmingView($event)
+        "
+      />
     </div>
-
-    <h1>
-      {{ disciplineLabel() }}
-    </h1>
-
-    <p>
-      {{ disciplineDescription() }}
-    </p>
-
   </header>
 
 
@@ -122,144 +93,543 @@
 
     } @else {
 
-      @for (
-        session of swimmingSessions();
-        track session.startTime
+      @if (
+        swimmingView() === 'session'
       ) {
-        <section class="discipline-card swimming-session">
+      <section class="swimming-toolbar">
 
-          <div class="swimming-session-header">
-            <div>
-              <span class="eyebrow">
-                Sesión
-              </span>
+        <div class="swimming-session-selector">
+          <label for="swimming-session">
+            Sesión
+          </label>
 
-              <h2>
+          <select
+            id="swimming-session"
+            #swimmingSessionSelect
+            [value]="selectedSwimmingSessionIndex()"
+            (change)="
+              selectSwimmingSession(
+                swimmingSessionSelect.value
+              )
+            "
+          >
+            @for (
+              session of swimmingSessions();
+              track session.startTime;
+              let index = $index
+            ) {
+              <option>
                 {{
                   session.startTime
                     | date:'dd/MM/yyyy'
                 }}
-              </h2>
+                ·
+                {{
+                  session.distanceMeters !== null
+                    ? (
+                        session.distanceMeters
+                          | number:'1.0-0'
+                      ) + ' m'
+                    : 'Sin distancia'
+                }}
+              </option>
+            }
+          </select>
+        </div>
+
+
+
+
+      </section>
+      }
+
+
+
+      @if (
+        selectedSwimmingSession();
+        as session
+      ) {
+
+        @if (
+          swimmingView() === 'session'
+        ) {
+          <section
+            class="discipline-card swimming-session"
+          >
+
+            <div class="swimming-session-header">
+              <div>
+                <span class="eyebrow">
+                  Sesión
+                </span>
+
+                <h2>
+                  {{
+                    session.startTime
+                      | date:'dd/MM/yyyy'
+                  }}
+                </h2>
+              </div>
+
+              @if (
+                session.distanceMeters !== null
+              ) {
+                <strong class="swimming-distance">
+                  {{
+                    session.distanceMeters
+                      | number:'1.0-0'
+                  }}
+                  m
+                </strong>
+              }
             </div>
+
+            <div class="swimming-metrics-grid">
+
+              <div>
+                <span>Tiempo total</span>
+                <strong>
+                  {{
+                    formatDuration(
+                      session.durationSeconds
+                    )
+                  }}
+                </strong>
+              </div>
+
+              <div>
+                <span>Largos</span>
+                <strong>
+                  {{ session.lengths ?? '—' }}
+                </strong>
+              </div>
+
+              <div>
+                <span>Brazadas</span>
+                <strong>
+                  {{
+                    session.totalStrokes
+                      ?? '—'
+                  }}
+                </strong>
+              </div>
+
+              <div>
+                <span>Brazadas/largo</span>
+                <strong>
+                  {{
+                    session.strokesPerLength !== null
+                      ? (
+                          session.strokesPerLength
+                            | number:'1.1-1'
+                        )
+                      : '—'
+                  }}
+                </strong>
+              </div>
+
+              <div>
+                <span>Metros/brazada</span>
+                <strong>
+                  {{
+                    session.metersPerStroke !== null
+                      ? (
+                          session.metersPerStroke
+                            | number:'1.2-2'
+                        )
+                      : '—'
+                  }}
+                </strong>
+              </div>
+
+              <div>
+                <span>FC media</span>
+                <strong>
+                  @if (
+                    session.heartRateAverageBpm !== null
+                  ) {
+                    {{
+                      session.heartRateAverageBpm
+                    }}
+                    ppm
+                  } @else {
+                    —
+                  }
+                </strong>
+              </div>
+
+              <div>
+                <span>FC máxima</span>
+                <strong>
+                  @if (
+                    session.heartRateMaxBpm !== null
+                  ) {
+                    {{
+                      session.heartRateMaxBpm
+                    }}
+                    ppm
+                  } @else {
+                    —
+                  }
+                </strong>
+              </div>
+
+              <div>
+                <span>
+                  Ritmo total
+                </span>
+
+                <strong>
+                  {{
+                    formatPace(
+                      session.elapsedPaceSecondsPer100m
+                    )
+                  }}
+                </strong>
+              </div>
+
+            </div>
+
+            <small class="swimming-note">
+              El ritmo total incluye los descansos.
+            </small>
+
+          </section>
+
+        } @else {
+
+          <section class="swimming-comparison-selector">
+
+            <div>
+              <label for="comparison-session-a">
+                Sesión A
+              </label>
+
+              <select
+                id="comparison-session-a"
+                #comparisonSessionA
+                (change)="
+                  selectComparisonSwimmingSessionA(
+                    comparisonSessionA.value
+                  )
+                "
+              >
+                @for (
+                  item of swimmingSessions();
+                  track item.startTime;
+                  let index = $index
+                ) {
+                  <option
+                    [value]="index"
+                    [selected]="
+                      index ===
+                      comparisonSwimmingSessionAIndex()
+                    "
+                  >
+                    {{
+                      item.startTime
+                        | date:'dd/MM/yyyy'
+                    }}
+                    ·
+                    {{
+                      item.distanceMeters !== null
+                        ? (
+                            item.distanceMeters
+                              | number:'1.0-0'
+                          ) + ' m'
+                        : 'Sin distancia'
+                    }}
+                  </option>
+                }
+              </select>
+            </div>
+
+
+            <div>
+              <label for="comparison-session-b">
+                Sesión B
+              </label>
+
+              <select
+                id="comparison-session-b"
+                #comparisonSessionB
+                (change)="
+                  selectComparisonSwimmingSessionB(
+                    comparisonSessionB.value
+                  )
+                "
+              >
+                @for (
+                  item of swimmingSessions();
+                  track item.startTime;
+                  let index = $index
+                ) {
+                  <option
+                    [value]="index"
+                    [selected]="
+                      index ===
+                      comparisonSwimmingSessionBIndex()
+                    "
+                  >
+                    {{
+                      item.startTime
+                        | date:'dd/MM/yyyy'
+                    }}
+                    ·
+                    {{
+                      item.distanceMeters !== null
+                        ? (
+                            item.distanceMeters
+                              | number:'1.0-0'
+                          ) + ' m'
+                        : 'Sin distancia'
+                    }}
+                  </option>
+                }
+              </select>
+            </div>
+
+          </section>
+
+
+          @if (
+            selectedSwimmingComparison();
+            as comparison
+          ) {
 
             @if (
-              session.distanceMeters !== null
+              comparisonSwimmingSessionA();
+              as sessionA
             ) {
-              <strong class="swimming-distance">
-                {{
-                  session.distanceMeters
-                    | number:'1.0-0'
-                }}
-                m
-              </strong>
+
+              @if (
+                comparisonSwimmingSessionB();
+                as sessionB
+              ) {
+
+              <section
+                class="discipline-card swimming-analysis"
+              >
+
+                <div class="swimming-analysis-header">
+                  <div>
+                    <span class="eyebrow">
+                      Comparación
+                    </span>
+
+                    <h2>
+                      {{
+                        sessionA.startTime
+                          | date:'dd/MM/yyyy'
+                      }}
+                      vs
+                      {{
+                        sessionB.startTime
+                          | date:'dd/MM/yyyy'
+                      }}
+                    </h2>
+                  </div>
+                </div>
+
+
+                <div class="swimming-analysis-grid">
+
+                  <div>
+                    <span>Distancia</span>
+
+                    <strong>
+                      {{
+                        sessionA.distanceMeters !== null
+                          ? (
+                              sessionA.distanceMeters
+                                | number:'1.0-0'
+                            ) + ' m'
+                          : '—'
+                      }}
+                    </strong>
+
+                    <small>
+                      {{
+                        formatPercentChange(
+                          comparison.distance.percentChange
+                        )
+                      }}
+                    </small>
+                  </div>
+
+
+                  <div>
+                    <span>Ritmo total</span>
+
+                    <strong>
+                      {{
+                        formatPace(
+                          sessionA.elapsedPaceSecondsPer100m
+                        )
+                      }}
+                    </strong>
+
+                    <small>
+                      {{
+                        formatPaceDelta(
+                          comparison.pace.absoluteChange
+                        )
+                      }}
+                    </small>
+                  </div>
+
+
+                  <div>
+                    <span>Brazadas/largo</span>
+
+                    <strong>
+                      {{
+                        sessionA.strokesPerLength !== null
+                          ? (
+                              sessionA.strokesPerLength
+                                | number:'1.1-1'
+                            )
+                          : '—'
+                      }}
+                    </strong>
+
+                    <small>
+                      anterior:
+                      {{
+                        sessionB.strokesPerLength !== null
+                          ? (
+                              sessionB.strokesPerLength
+                                | number:'1.1-1'
+                            )
+                          : '—'
+                      }}
+                    </small>
+                  </div>
+
+
+                  <div>
+                    <span>Metros/brazada</span>
+
+                    <strong>
+                      {{
+                        sessionA.metersPerStroke !== null
+                          ? (
+                              sessionA.metersPerStroke
+                                | number:'1.2-2'
+                            )
+                          : '—'
+                      }}
+                    </strong>
+
+                    <small>
+                      anterior:
+                      {{
+                        sessionB.metersPerStroke !== null
+                          ? (
+                              sessionB.metersPerStroke
+                                | number:'1.2-2'
+                            )
+                          : '—'
+                      }}
+                    </small>
+                  </div>
+
+
+                  <div>
+                    <span>FC media</span>
+
+                    <strong>
+                      @if (
+                        sessionA.heartRateAverageBpm !== null
+                      ) {
+                        {{
+                          sessionA.heartRateAverageBpm
+                        }}
+                        ppm
+                      } @else {
+                        —
+                      }
+                    </strong>
+
+                    <small>
+                      anterior:
+                      @if (
+                        sessionB.heartRateAverageBpm !== null
+                      ) {
+                        {{
+                          sessionB.heartRateAverageBpm
+                        }}
+                        ppm
+                      } @else {
+                        —
+                      }
+
+                      ·
+
+                      {{
+                        formatHeartRateDelta(
+                          comparison.heartRateAverage.absoluteChange
+                        )
+                      }}
+                    </small>
+                  </div>
+
+                </div>
+
+
+                @if (
+                  comparison.integratedSummary;
+                  as integratedSummary
+                ) {
+                  <div class="swimming-analysis-summary">
+
+                    <span class="eyebrow">
+                      Lectura
+                    </span>
+
+                    <p>
+                      {{ integratedSummary }}
+                    </p>
+
+                  </div>
+                }
+
+
+                <small class="swimming-note">
+                  Comparación descriptiva entre dos
+                  sesiones. No implica por sí sola una
+                  mejora fisiológica o técnica.
+                </small>
+
+              </section>
+
+              }
+
             }
-          </div>
 
-          <div class="swimming-metrics-grid">
+          } @else {
 
-            <div>
-              <span>Tiempo total</span>
-              <strong>
-                {{
-                  session.durationSeconds / 60
-                    | number:'1.0-1'
-                }}
-                min
-              </strong>
-            </div>
+            <section class="discipline-card">
 
-            <div>
-              <span>Largos</span>
-              <strong>
-                {{ session.lengths ?? '—' }}
-              </strong>
-            </div>
-
-            <div>
-              <span>Brazadas</span>
-              <strong>
-                {{
-                  session.totalStrokes
-                    ?? '—'
-                }}
-              </strong>
-            </div>
-
-            <div>
-              <span>Brazadas/largo</span>
-              <strong>
-                {{
-                  session.strokesPerLength !== null
-                    ? (
-                        session.strokesPerLength
-                          | number:'1.1-1'
-                      )
-                    : '—'
-                }}
-              </strong>
-            </div>
-
-            <div>
-              <span>Metros/brazada</span>
-              <strong>
-                {{
-                  session.metersPerStroke !== null
-                    ? (
-                        session.metersPerStroke
-                          | number:'1.2-2'
-                      )
-                    : '—'
-                }}
-              </strong>
-            </div>
-
-            <div>
-              <span>FC media</span>
-              <strong>
-                {{
-                  session.heartRateAverageBpm
-                    ?? '—'
-                }}
-              </strong>
-            </div>
-
-            <div>
-              <span>FC máxima</span>
-              <strong>
-                {{
-                  session.heartRateMaxBpm
-                    ?? '—'
-                }}
-              </strong>
-            </div>
-
-            <div>
-              <span>
-                Ritmo total
+              <span class="eyebrow">
+                Análisis
               </span>
 
-              <strong>
-                @if (
-                  session.elapsedPaceSecondsPer100m !== null
-                ) {
-                  {{
-                    session.elapsedPaceSecondsPer100m / 60
-                      | number:'1.2-2'
-                  }}
-                  min/100 m
-                } @else {
-                  —
-                }
-              </strong>
-            </div>
+              <h2>
+                Aún no hay comparación disponible
+              </h2>
 
-          </div>
+              <p>
+                Se necesitan al menos dos sesiones
+                registradas para comparar la sesión
+                seleccionada con la anterior.
+              </p>
 
-          <small class="swimming-note">
-            El ritmo total incluye los descansos.
-          </small>
+            </section>
 
-        </section>
+          }
+
+        }
       }
     }
 

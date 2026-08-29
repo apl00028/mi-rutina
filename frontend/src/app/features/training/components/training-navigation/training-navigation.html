@@ -1,0 +1,72 @@
+<span class="eyebrow">
+  Entrenar
+</span>
+
+<div class="training-discipline-selector">
+
+  <label for="training-discipline">
+    Disciplina
+  </label>
+
+  <select
+    id="training-discipline"
+    #disciplineSelect
+    [value]="discipline"
+    (change)="
+      changeDiscipline(
+        disciplineSelect.value
+      )
+    "
+  >
+    <option value="strength">
+      Fuerza
+    </option>
+
+    <option value="swimming">
+      Natación
+    </option>
+
+    <option value="cycling">
+      Bicicleta
+    </option>
+
+    <option value="running">
+      Correr
+    </option>
+  </select>
+
+</div>
+
+
+@if (tabs.length > 0) {
+
+  <nav
+    class="training-view-tabs"
+    [class.two-tabs]="
+      tabs.length === 2
+    "
+    [class.three-tabs]="
+      tabs.length === 3
+    "
+    aria-label="Vista de entrenamiento"
+  >
+
+    @for (
+      tab of tabs;
+      track tab.id
+    ) {
+      <button
+        type="button"
+        [class.active]="
+          tab.id === activeTab
+        "
+        (click)="
+          selectTab(tab.id)
+        "
+      >
+        {{ tab.label }}
+      </button>
+    }
+
+  </nav>
+}

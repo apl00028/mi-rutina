@@ -389,26 +389,6 @@
                 </div>
 
                 <div>
-                  <span>Largos activos</span>
-                  <strong>
-                    {{
-                      session.activeLengths
-                        ?? '—'
-                    }}
-                  </strong>
-                </div>
-
-                <div>
-                  <span>Registros de largo</span>
-                  <strong>
-                    {{
-                      session.totalLengthRecords
-                        ?? '—'
-                    }}
-                  </strong>
-                </div>
-
-                <div>
                   <span>Calorías</span>
                   <strong>
                     @if (
@@ -429,20 +409,36 @@
                 <div>
                   <span>Training Effect aeróbico</span>
                   <strong>
-                    {{
-                      session.aerobicTrainingEffect
-                        ?? '—'
-                    }}
+                    @if (
+                      session.aerobicTrainingEffect !== null
+                      && session.aerobicTrainingEffect !==
+                        undefined
+                    ) {
+                      {{
+                        session.aerobicTrainingEffect
+                          | number:'1.1-1'
+                      }}
+                    } @else {
+                      —
+                    }
                   </strong>
                 </div>
 
                 <div>
                   <span>Training Effect anaeróbico</span>
                   <strong>
-                    {{
-                      session.anaerobicTrainingEffect
-                        ?? '—'
-                    }}
+                    @if (
+                      session.anaerobicTrainingEffect !== null
+                      && session.anaerobicTrainingEffect !==
+                        undefined
+                    ) {
+                      {{
+                        session.anaerobicTrainingEffect
+                          | number:'1.1-1'
+                      }}
+                    } @else {
+                      —
+                    }
                   </strong>
                 </div>
               }

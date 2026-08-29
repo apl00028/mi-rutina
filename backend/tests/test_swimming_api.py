@@ -105,9 +105,11 @@ def test_swimming_fit_import_returns_parsed_session(
 ):
     from app.domains.swimming import router as swimming_api
 
-    def fake_parse_swimming_fit(path):
+    async def fake_import_user_swimming_fit(user, path, contents):
+        assert user.id == "user-123"
         assert path.exists()
         assert path.suffix == ".fit"
+        assert contents == b"fake-fit-data"
 
         return SwimmingFitSession(
             start_time=datetime(
@@ -138,8 +140,8 @@ def test_swimming_fit_import_returns_parsed_session(
 
     monkeypatch.setattr(
         swimming_api,
-        "parse_swimming_fit",
-        fake_parse_swimming_fit,
+        "import_user_swimming_fit",
+        fake_import_user_swimming_fit,
     )
 
     app.dependency_overrides[
@@ -192,13 +194,13 @@ def test_swimming_fit_import_rejects_invalid_fit(
 ):
     from app.domains.swimming import router as swimming_api
 
-    def fake_parse_swimming_fit(path):
+    async def fake_import_user_swimming_fit(user, path, contents):
         raise ValueError("invalid FIT")
 
     monkeypatch.setattr(
         swimming_api,
-        "parse_swimming_fit",
-        fake_parse_swimming_fit,
+        "import_user_swimming_fit",
+        fake_import_user_swimming_fit,
     )
 
     app.dependency_overrides[

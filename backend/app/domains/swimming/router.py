@@ -14,11 +14,11 @@ from app.core.auth import (
     AuthenticatedUser,
     require_user,
 )
-from app.domains.swimming.fit_parser import (
-    parse_swimming_fit,
-)
 from app.domains.swimming.models import (
     SwimmingFitSession,
+)
+from app.domains.swimming.service import (
+    import_user_swimming_fit,
 )
 
 
@@ -36,8 +36,6 @@ async def import_swimming_fit(
     file: UploadFile = File(...),
     user: AuthenticatedUser = Depends(require_user),
 ) -> SwimmingFitSession:
-    del user
-
     filename = file.filename or ""
 
     if not filename.lower().endswith(".fit"):
@@ -64,7 +62,11 @@ async def import_swimming_fit(
             temp_file.write(contents)
             temp_path = Path(temp_file.name)
 
-        return parse_swimming_fit(temp_path)
+        return await import_user_swimming_fit(
+            user,
+            temp_path,
+            contents,
+        )
 
     except HTTPException:
         raise

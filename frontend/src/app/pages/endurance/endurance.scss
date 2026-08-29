@@ -850,3 +850,53 @@
     min-width: 42px;
   }
 }
+
+
+/* Compact pool-lane layout */
+
+.swimming-routine-repetition-row {
+  grid-template-columns:
+    24px
+    auto;
+
+  justify-content: start;
+}
+
+.swimming-routine-repetition-lane {
+  display: flex;
+  align-items: center;
+
+  gap: 3px;
+
+  width: fit-content;
+
+  padding: 5px 8px;
+
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.swimming-routine-repetition-distance {
+  min-width: auto;
+
+  margin-left: 7px;
+
+  padding-left: 8px;
+
+  border-left: 1px solid var(--border);
+
+  text-align: left;
+}
+
+@media (max-width: 700px) {
+
+  .swimming-routine-repetition-row {
+    grid-template-columns:
+      22px
+      auto;
+  }
+
+  .swimming-routine-repetition-lane {
+    max-width: 100%;
+  }
+}

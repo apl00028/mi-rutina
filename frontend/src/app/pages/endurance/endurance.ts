@@ -259,6 +259,32 @@ export class Endurance
       null
     );
 
+  readonly activeSwimmingRoutineRecord =
+    signal<StoredSwimmingRoutine | null>(
+      null
+    );
+
+  readonly swimmingRoutineDraft =
+    signal<SwimmingRoutine | null>(
+      null
+    );
+
+  readonly swimmingRoutineEditing =
+    signal(false);
+
+  readonly swimmingRoutineSaving =
+    signal(false);
+
+  readonly swimmingRoutineSaveError =
+    signal<string | null>(
+      null
+    );
+
+  readonly swimmingRoutineSaveMessage =
+    signal<string | null>(
+      null
+    );
+
   readonly swimmingRoutineLoading =
     signal(false);
 
@@ -407,6 +433,10 @@ export class Endurance
       const session =
         stored.sessions?.[0];
 
+      this.activeSwimmingRoutineRecord.set(
+        stored
+      );
+
       if (!session) {
         throw new Error(
           'La rutina activa de natación no contiene ninguna sesión.'
@@ -441,6 +471,9 @@ export class Endurance
     } catch (error: any) {
 
       this.swimmingRoutine.set(null);
+      this.activeSwimmingRoutineRecord.set(
+        null
+      );
 
       if (error?.status === 404) {
         return;
@@ -454,6 +487,474 @@ export class Endurance
 
     } finally {
       this.swimmingRoutineLoading.set(false);
+    }
+  }
+
+
+  startEditingSwimmingRoutine():
+    void {
+
+    const routine =
+      this.swimmingRoutine();
+
+    if (!routine) {
+      return;
+    }
+
+    this.swimmingRoutineDraft.set(
+      structuredClone(routine)
+    );
+
+    this.swimmingRoutineSaveError.set(
+      null
+    );
+    this.swimmingRoutineSaveMessage.set(
+      null
+    );
+    this.swimmingRoutineEditing.set(true);
+  }
+
+
+  cancelEditingSwimmingRoutine():
+    void {
+
+    this.swimmingRoutineDraft.set(null);
+    this.swimmingRoutineEditing.set(false);
+    this.swimmingRoutineSaveError.set(
+      null
+    );
+  }
+
+
+  updateSwimmingRoutineField(
+    field:
+      | 'title'
+      | 'objective'
+      | 'date'
+      | 'poolLengthMeters'
+      | 'estimatedDurationMinutes',
+    value: string
+  ): void {
+
+    const draft =
+      this.swimmingRoutineDraft();
+
+    if (!draft) {
+      return;
+    }
+
+    if (
+      field === 'poolLengthMeters'
+      || field ===
+        'estimatedDurationMinutes'
+    ) {
+      const numeric =
+        Number(value);
+
+      this.swimmingRoutineDraft.set({
+        ...draft,
+        [field]:
+          Number.isFinite(numeric)
+            ? Math.max(0, numeric)
+            : 0
+      });
+
+      return;
+    }
+
+    this.swimmingRoutineDraft.set({
+      ...draft,
+      [field]: value
+    });
+  }
+
+
+  updateSwimmingRoutineBlockTitle(
+    blockIndex: number,
+    value: string
+  ): void {
+
+    const draft =
+      this.swimmingRoutineDraft();
+
+    if (!draft) {
+      return;
+    }
+
+    const blocks =
+      structuredClone(draft.blocks);
+
+    const block =
+      blocks[blockIndex];
+
+    if (!block) {
+      return;
+    }
+
+    block.title = value;
+
+    this.swimmingRoutineDraft.set({
+      ...draft,
+      blocks
+    });
+  }
+
+
+  updateSwimmingRoutineSetField(
+    blockIndex: number,
+    setIndex: number,
+    field:
+      | 'repetitions'
+      | 'distanceMeters'
+      | 'stroke'
+      | 'workType'
+      | 'intensity'
+      | 'restSeconds'
+      | 'instruction',
+    value: string
+  ): void {
+
+    const draft =
+      this.swimmingRoutineDraft();
+
+    if (!draft) {
+      return;
+    }
+
+    const blocks =
+      structuredClone(draft.blocks);
+
+    const set =
+      blocks[blockIndex]
+        ?.sets[setIndex];
+
+    if (!set) {
+      return;
+    }
+
+    if (
+      field === 'repetitions'
+      || field === 'distanceMeters'
+      || field === 'restSeconds'
+    ) {
+      const numeric =
+        Number(value);
+
+      (set as any)[field] =
+        Number.isFinite(numeric)
+          ? Math.max(0, numeric)
+          : 0;
+    } else {
+      (set as any)[field] = value;
+    }
+
+    this.swimmingRoutineDraft.set({
+      ...draft,
+      blocks
+    });
+  }
+
+
+  addSwimmingRoutineSet(
+    blockIndex: number
+  ): void {
+
+    const draft =
+      this.swimmingRoutineDraft();
+
+    if (!draft) {
+      return;
+    }
+
+    const blocks =
+      structuredClone(draft.blocks);
+
+    const block =
+      blocks[blockIndex];
+
+    if (!block) {
+      return;
+    }
+
+    block.sets.push({
+      repetitions: 1,
+      distanceMeters:
+        draft.poolLengthMeters || 25,
+      stroke: 'freestyle',
+      workType: 'swim',
+      intensity: 'easy',
+      restSeconds: 20,
+      instruction: ''
+    });
+
+    this.swimmingRoutineDraft.set({
+      ...draft,
+      blocks
+    });
+  }
+
+
+  removeSwimmingRoutineSet(
+    blockIndex: number,
+    setIndex: number
+  ): void {
+
+    const draft =
+      this.swimmingRoutineDraft();
+
+    if (!draft) {
+      return;
+    }
+
+    const blocks =
+      structuredClone(draft.blocks);
+
+    const block =
+      blocks[blockIndex];
+
+    if (!block) {
+      return;
+    }
+
+    block.sets.splice(
+      setIndex,
+      1
+    );
+
+    this.swimmingRoutineDraft.set({
+      ...draft,
+      blocks
+    });
+  }
+
+
+  updateSwimmingTechnicalFocus(
+    index: number,
+    value: string
+  ): void {
+
+    const draft =
+      this.swimmingRoutineDraft();
+
+    if (!draft) {
+      return;
+    }
+
+    const technicalFocus = [
+      ...draft.technicalFocus
+    ];
+
+    technicalFocus[index] =
+      value;
+
+    this.swimmingRoutineDraft.set({
+      ...draft,
+      technicalFocus
+    });
+  }
+
+
+  addSwimmingTechnicalFocus():
+    void {
+
+    const draft =
+      this.swimmingRoutineDraft();
+
+    if (!draft) {
+      return;
+    }
+
+    this.swimmingRoutineDraft.set({
+      ...draft,
+      technicalFocus: [
+        ...draft.technicalFocus,
+        ''
+      ]
+    });
+  }
+
+
+  removeSwimmingTechnicalFocus(
+    index: number
+  ): void {
+
+    const draft =
+      this.swimmingRoutineDraft();
+
+    if (!draft) {
+      return;
+    }
+
+    this.swimmingRoutineDraft.set({
+      ...draft,
+      technicalFocus:
+        draft.technicalFocus.filter(
+          (_, focusIndex) =>
+            focusIndex !== index
+        )
+    });
+  }
+
+
+  async saveSwimmingRoutine():
+    Promise<void> {
+
+    const draft =
+      this.swimmingRoutineDraft();
+
+    const stored =
+      this.activeSwimmingRoutineRecord();
+
+    if (!draft || !stored) {
+      return;
+    }
+
+    if (!draft.title.trim()) {
+      this.swimmingRoutineSaveError.set(
+        'La rutina necesita un título.'
+      );
+      return;
+    }
+
+    if (
+      draft.poolLengthMeters <= 0
+    ) {
+      this.swimmingRoutineSaveError.set(
+        'La longitud de piscina debe ser mayor que 0.'
+      );
+      return;
+    }
+
+    if (
+      draft.blocks.length === 0
+      || draft.blocks.some(
+        block =>
+          block.sets.length === 0
+      )
+    ) {
+      this.swimmingRoutineSaveError.set(
+        'Cada bloque debe contener al menos una serie.'
+      );
+      return;
+    }
+
+    this.swimmingRoutineSaving.set(true);
+    this.swimmingRoutineSaveError.set(
+      null
+    );
+    this.swimmingRoutineSaveMessage.set(
+      null
+    );
+
+    try {
+      const token =
+        await this.auth.getAccessToken();
+
+      if (!token) {
+        throw new Error(
+          'Necesitas iniciar sesión.'
+        );
+      }
+
+      const headers =
+        new HttpHeaders({
+          Authorization:
+            `Bearer ${token}`,
+          'Content-Type':
+            'application/json'
+        });
+
+      const session =
+        stored.sessions[0];
+
+      if (!session) {
+        throw new Error(
+          'La rutina activa no contiene ninguna sesión.'
+        );
+      }
+
+      const payload:
+        StoredSwimmingRoutine = {
+          ...stored,
+
+          discipline: 'swimming',
+
+          revision:
+            stored.revision + 1,
+
+          name:
+            draft.title,
+
+          sessions: [
+            {
+              ...session,
+
+              sessionId:
+                draft.id,
+
+              date:
+                draft.date,
+
+              title:
+                draft.title,
+
+              objective:
+                draft.objective,
+
+              poolLengthMeters:
+                draft.poolLengthMeters,
+
+              estimatedDurationMinutes:
+                draft.estimatedDurationMinutes,
+
+              blocks:
+                draft.blocks,
+
+              technicalFocus:
+                draft.technicalFocus
+            }
+          ]
+        };
+
+      const saved =
+        await firstValueFrom(
+          this.http.put<StoredSwimmingRoutine>(
+            `${this.apiUrl}/routines/${
+              encodeURIComponent(
+                stored.routineId
+              )
+            }`,
+            payload,
+            { headers }
+          )
+        );
+
+      this.activeSwimmingRoutineRecord.set(
+        saved
+      );
+
+      this.swimmingRoutine.set(
+        structuredClone(draft)
+      );
+
+      this.swimmingRoutineDraft.set(null);
+      this.swimmingRoutineEditing.set(false);
+
+      this.swimmingRoutineSaveMessage.set(
+        'Rutina de natación guardada.'
+      );
+
+    } catch (error: any) {
+
+      this.swimmingRoutineSaveError.set(
+        error?.error?.detail
+        ?? error?.message
+        ?? 'No se pudo guardar la rutina de natación.'
+      );
+
+    } finally {
+
+      this.swimmingRoutineSaving.set(false);
     }
   }
 

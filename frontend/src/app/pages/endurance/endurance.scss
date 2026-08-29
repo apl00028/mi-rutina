@@ -944,3 +944,180 @@
     padding-top: 0;
   }
 }
+
+
+/* Swimming routine editor */
+
+.swimming-routine-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.swimming-routine-edit-button,
+.swimming-routine-add-button,
+.swimming-routine-remove-button,
+.swimming-routine-editor-actions button,
+.swimming-routine-editor-focus button {
+  min-height: 36px;
+  padding: 7px 11px;
+
+  border: 1px solid var(--border);
+  border-radius: 9px;
+
+  background: var(--bg);
+  color: inherit;
+
+  font: inherit;
+  cursor: pointer;
+}
+
+.swimming-routine-editor {
+  display: grid;
+  gap: 18px;
+}
+
+.swimming-routine-editor-grid,
+.swimming-routine-set-editor-grid {
+  display: grid;
+  grid-template-columns:
+    repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.swimming-routine-editor label,
+.swimming-routine-block-title-field {
+  display: grid;
+  gap: 5px;
+}
+
+.swimming-routine-editor label > span {
+  font-size: 0.72rem;
+  opacity: 0.66;
+}
+
+.swimming-routine-editor input,
+.swimming-routine-editor select,
+.swimming-routine-editor textarea {
+  width: 100%;
+  box-sizing: border-box;
+
+  padding: 9px 10px;
+
+  border: 1px solid var(--border);
+  border-radius: 9px;
+
+  background: var(--bg);
+  color: inherit;
+
+  font: inherit;
+}
+
+.swimming-routine-editor textarea {
+  resize: vertical;
+}
+
+.swimming-routine-editor .wide {
+  grid-column: 1 / -1;
+}
+
+.swimming-routine-input-unit {
+  display: grid;
+  grid-template-columns:
+    minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 7px;
+}
+
+.swimming-routine-input-unit > span {
+  font-size: 0.78rem;
+  opacity: 0.62;
+}
+
+.swimming-routine-editor-blocks {
+  display: grid;
+  gap: 12px;
+}
+
+.swimming-routine-editor-block {
+  display: grid;
+  gap: 12px;
+
+  padding: 12px;
+
+  border: 1px solid var(--border);
+  border-radius: 14px;
+}
+
+.swimming-routine-set-editor {
+  display: grid;
+  gap: 8px;
+
+  padding-top: 12px;
+
+  border-top: 1px solid var(--border);
+}
+
+.swimming-routine-remove-button {
+  justify-self: start;
+  font-size: 0.78rem;
+}
+
+.swimming-routine-add-button {
+  justify-self: start;
+}
+
+.swimming-routine-editor-focus {
+  display: grid;
+  gap: 8px;
+}
+
+.swimming-routine-editor-focus > div {
+  display: grid;
+  grid-template-columns:
+    minmax(0, 1fr) auto;
+  gap: 7px;
+}
+
+.swimming-routine-editor-focus > div button {
+  width: 38px;
+  padding: 0;
+}
+
+.swimming-routine-editor-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.swimming-routine-editor-actions
+  button.primary {
+  font-weight: 700;
+}
+
+.swimming-routine-save-error {
+  margin: 0;
+}
+
+.swimming-routine-save-message {
+  margin: 0;
+  font-size: 0.84rem;
+}
+
+
+@media (max-width: 700px) {
+
+  .swimming-routine-header-actions {
+    display: grid;
+    justify-items: end;
+  }
+
+  .swimming-routine-editor-grid,
+  .swimming-routine-set-editor-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .swimming-routine-editor .wide {
+    grid-column: auto;
+  }
+}

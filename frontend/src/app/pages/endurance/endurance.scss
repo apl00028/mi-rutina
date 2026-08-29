@@ -386,3 +386,268 @@
     gap: 8px;
   }
 }
+
+
+/* Swimming routine */
+
+.swimming-routine {
+  display: grid;
+  gap: 18px;
+}
+
+.swimming-routine-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.swimming-routine-header h2 {
+  margin: 2px 0 4px;
+}
+
+.swimming-routine-header p {
+  margin: 0;
+  max-width: 680px;
+  opacity: 0.7;
+}
+
+.swimming-routine-distance {
+  flex: 0 0 auto;
+  font-size: 1.35rem;
+  white-space: nowrap;
+}
+
+.swimming-routine-summary {
+  display: grid;
+  grid-template-columns:
+    repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.swimming-routine-summary > div {
+  display: grid;
+  gap: 3px;
+
+  padding: 10px 12px;
+
+  border: 1px solid var(--border);
+  border-radius: 12px;
+
+  background: var(--bg);
+}
+
+.swimming-routine-summary span {
+  font-size: 0.72rem;
+  opacity: 0.62;
+}
+
+.swimming-routine-map {
+  display: grid;
+  gap: 12px;
+}
+
+.swimming-pool-label {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.swimming-pool-label small {
+  opacity: 0.58;
+}
+
+.swimming-routine-block {
+  display: grid;
+  gap: 10px;
+
+  padding: 12px;
+
+  border: 1px solid var(--border);
+  border-radius: 14px;
+
+  background: var(--bg);
+}
+
+.swimming-routine-block-header {
+  display: flex;
+  justify-content: space-between;
+}
+
+.swimming-routine-block-header h3 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.swimming-routine-block-header small {
+  opacity: 0.58;
+}
+
+.swimming-pool-lane {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+
+  min-height: 28px;
+
+  padding: 5px;
+
+  border:
+    1px solid
+    color-mix(
+      in srgb,
+      var(--border) 80%,
+      transparent
+    );
+
+  border-radius: 10px;
+}
+
+.swimming-routine-length {
+  display: block;
+
+  width: 22px;
+  height: 18px;
+
+  border-radius: 4px;
+
+  background: currentColor;
+  opacity: 0.72;
+}
+
+.swimming-routine-length[
+  data-block-type="warmup"
+] {
+  opacity: 0.35;
+}
+
+.swimming-routine-length[
+  data-block-type="technique"
+] {
+  opacity: 0.52;
+}
+
+.swimming-routine-length[
+  data-block-type="main"
+] {
+  opacity: 0.9;
+}
+
+.swimming-routine-length[
+  data-block-type="cooldown"
+] {
+  opacity: 0.25;
+}
+
+.swimming-routine-sets {
+  display: grid;
+  gap: 7px;
+}
+
+.swimming-routine-set {
+  display: grid;
+  grid-template-columns:
+    minmax(0, 1fr) auto;
+  gap: 3px 12px;
+
+  padding-top: 7px;
+
+  border-top: 1px solid var(--border);
+}
+
+.swimming-routine-set:first-child {
+  padding-top: 0;
+  border-top: 0;
+}
+
+.swimming-routine-set-main {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.swimming-routine-set-main span {
+  font-size: 0.78rem;
+  opacity: 0.66;
+}
+
+.swimming-routine-rest {
+  font-size: 0.72rem;
+  font-weight: 700;
+  white-space: nowrap;
+  opacity: 0.72;
+}
+
+.swimming-routine-set p {
+  grid-column: 1 / -1;
+
+  margin: 0;
+
+  font-size: 0.8rem;
+  line-height: 1.35;
+  opacity: 0.72;
+}
+
+.swimming-routine-focus {
+  display: grid;
+  gap: 7px;
+
+  padding-top: 4px;
+}
+
+.swimming-routine-focus > div {
+  display: grid;
+  grid-template-columns: 26px 1fr;
+  align-items: center;
+  gap: 8px;
+}
+
+.swimming-routine-focus > div > strong {
+  display: grid;
+  place-items: center;
+
+  width: 24px;
+  height: 24px;
+
+  border: 1px solid var(--border);
+  border-radius: 999px;
+
+  font-size: 0.72rem;
+}
+
+.swimming-routine-focus > div > span {
+  font-size: 0.84rem;
+}
+
+
+@media (max-width: 700px) {
+
+  .swimming-routine-header {
+    align-items: start;
+  }
+
+  .swimming-routine-summary {
+    grid-template-columns:
+      repeat(3, minmax(0, 1fr));
+  }
+
+  .swimming-pool-label {
+    display: grid;
+    gap: 2px;
+  }
+
+  .swimming-routine-set {
+    grid-template-columns: 1fr;
+  }
+
+  .swimming-routine-rest {
+    justify-self: start;
+  }
+
+  .swimming-routine-length {
+    width: 18px;
+    height: 16px;
+  }
+}

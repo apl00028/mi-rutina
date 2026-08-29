@@ -59,6 +59,14 @@ import {
   evaluateSwimmingSessions
 } from '../../features/swimming/domain/swimming-coach-analysis';
 
+import {
+  swimmingRoutineDistance
+} from '../../features/swimming/domain/swimming-routine';
+
+import type {
+  SwimmingRoutine
+} from '../../features/swimming/domain/swimming-routine';
+
 import type {
   SwimmingCoachAssessment
 } from '../../features/swimming/domain/swimming-coach-analysis';
@@ -184,6 +192,10 @@ export class Endurance
         label: 'Sesión'
       },
       {
+        id: 'routine',
+        label: 'Rutina'
+      },
+      {
         id: 'analytics',
         label: 'Análisis'
       }
@@ -213,9 +225,163 @@ export class Endurance
     signal(1);
 
   readonly swimmingView =
-    signal<'session' | 'analytics'>(
+    signal<
+      'session'
+      | 'routine'
+      | 'analytics'
+    >(
       'session'
     );
+
+  readonly swimmingRoutine =
+    signal<SwimmingRoutine>({
+      id: 'swimming-routine-v1',
+
+      date: '2026-08-29',
+
+      title: 'Técnica y continuidad de crol',
+
+      objective:
+        'Nadar con respiración controlada, mantener técnica y aumentar progresivamente la continuidad.',
+
+      poolLengthMeters: 25,
+
+      estimatedDurationMinutes: 45,
+
+      blocks: [
+        {
+          id: 'warmup',
+          type: 'warmup',
+          title: 'Calentamiento',
+
+          sets: [
+            {
+              repetitions: 1,
+              distanceMeters: 200,
+
+              stroke: 'freestyle',
+              workType: 'swim',
+              intensity: 'easy',
+
+              restSeconds: 0,
+
+              instruction:
+                'Crol cómodo. Sin buscar ritmo.'
+            }
+          ]
+        },
+
+        {
+          id: 'technique',
+          type: 'technique',
+          title: 'Técnica',
+
+          sets: [
+            {
+              repetitions: 4,
+              distanceMeters: 25,
+
+              stroke: 'freestyle',
+              workType: 'technique',
+              intensity: 'easy',
+
+              restSeconds: 20,
+
+              instruction:
+                'Respiración relajada cada 2 brazadas.'
+            },
+
+            {
+              repetitions: 4,
+              distanceMeters: 25,
+
+              stroke: 'freestyle',
+              workType: 'technique',
+              intensity: 'easy',
+
+              restSeconds: 20,
+
+              instruction:
+                'Alargar brazada y mantener alineación.'
+            }
+          ]
+        },
+
+        {
+          id: 'main',
+          type: 'main',
+          title: 'Bloque principal',
+
+          sets: [
+            {
+              repetitions: 4,
+              distanceMeters: 50,
+
+              stroke: 'freestyle',
+              workType: 'swim',
+              intensity: 'controlled',
+
+              restSeconds: 25,
+
+              instruction:
+                'Ritmo uniforme. Terminar con control.'
+            },
+
+            {
+              repetitions: 2,
+              distanceMeters: 100,
+
+              stroke: 'freestyle',
+              workType: 'swim',
+              intensity: 'controlled',
+
+              restSeconds: 30,
+
+              instruction:
+                'Prioridad absoluta a la continuidad.'
+            }
+          ]
+        },
+
+        {
+          id: 'cooldown',
+          type: 'cooldown',
+          title: 'Soltura',
+
+          sets: [
+            {
+              repetitions: 1,
+              distanceMeters: 100,
+
+              stroke: 'backstroke',
+              workType: 'swim',
+              intensity: 'easy',
+
+              restSeconds: 0,
+
+              instruction:
+                'Muy suave y relajado.'
+            }
+          ]
+        }
+      ],
+
+      technicalFocus: [
+        'Respirar sin levantar la cabeza.',
+        'Mantener una brazada larga y relajada.',
+        'No acelerar si se pierde la técnica.'
+      ]
+    });
+
+
+  swimmingRoutineTotalDistance():
+    number {
+
+    return swimmingRoutineDistance(
+      this.swimmingRoutine()
+    );
+  }
+
 
   readonly swimmingRequiresAndroid =
     signal(false);
@@ -1085,12 +1251,91 @@ export class Endurance
   }
 
 
+  swimmingRoutineSetLengths(
+    repetitions: number,
+    distanceMeters: number,
+    poolLengthMeters: number
+  ): number[] {
+
+    if (
+      repetitions <= 0
+      || distanceMeters <= 0
+      || poolLengthMeters <= 0
+    ) {
+      return [];
+    }
+
+    const lengths =
+      Math.round(
+        repetitions
+        * distanceMeters
+        / poolLengthMeters
+      );
+
+    return Array.from(
+      { length: lengths },
+      (_, index) => index
+    );
+  }
+
+
+  swimmingStrokeLabel(
+    stroke: string
+  ): string {
+
+    const labels:
+      Record<string, string> = {
+        freestyle: 'Crol',
+        backstroke: 'Espalda',
+        breaststroke: 'Braza',
+        mixed: 'Mixto'
+      };
+
+    return labels[stroke]
+      ?? stroke;
+  }
+
+
+  swimmingWorkTypeLabel(
+    type: string
+  ): string {
+
+    const labels:
+      Record<string, string> = {
+        swim: 'Nado',
+        technique: 'Técnica',
+        kick: 'Piernas',
+        pull: 'Pull'
+      };
+
+    return labels[type]
+      ?? type;
+  }
+
+
+  swimmingIntensityLabel(
+    intensity: string
+  ): string {
+
+    const labels:
+      Record<string, string> = {
+        easy: 'Suave',
+        controlled: 'Controlado',
+        strong: 'Fuerte'
+      };
+
+    return labels[intensity]
+      ?? intensity;
+  }
+
+
   setSwimmingView(
     view: string
   ): void {
 
     if (
       view === 'session'
+      || view === 'routine'
       || view === 'analytics'
     ) {
       this.swimmingView.set(

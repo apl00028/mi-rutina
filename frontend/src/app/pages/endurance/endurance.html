@@ -182,6 +182,265 @@
 
 
       @if (
+        swimmingView() === 'routine'
+      ) {
+
+        @if (
+          swimmingRoutine();
+          as routine
+        ) {
+
+          <section
+            class="discipline-card swimming-routine"
+          >
+
+            <div class="swimming-routine-header">
+
+              <div>
+                <span class="eyebrow">
+                  Rutina de hoy
+                </span>
+
+                <h2>
+                  {{ routine.title }}
+                </h2>
+
+                <p>
+                  {{ routine.objective }}
+                </p>
+              </div>
+
+              <strong
+                class="swimming-routine-distance"
+              >
+                {{
+                  swimmingRoutineTotalDistance()
+                    | number:'1.0-0'
+                }}
+                m
+              </strong>
+
+            </div>
+
+
+            <div class="swimming-routine-summary">
+
+              <div>
+                <span>Piscina</span>
+                <strong>
+                  {{ routine.poolLengthMeters }} m
+                </strong>
+              </div>
+
+              <div>
+                <span>Duración estimada</span>
+                <strong>
+                  {{ routine.estimatedDurationMinutes }}
+                  min
+                </strong>
+              </div>
+
+              <div>
+                <span>Bloques</span>
+                <strong>
+                  {{ routine.blocks.length }}
+                </strong>
+              </div>
+
+            </div>
+
+
+            <div class="swimming-routine-map">
+
+              <div class="swimming-pool-label">
+                <span class="eyebrow">
+                  Mapa de piscina
+                </span>
+
+                <small>
+                  Cada segmento representa un largo de
+                  {{ routine.poolLengthMeters }} m
+                </small>
+              </div>
+
+
+              @for (
+                block of routine.blocks;
+                track block.id
+              ) {
+
+                <article
+                  class="swimming-routine-block"
+                  [attr.data-block-type]="block.type"
+                >
+
+                  <div
+                    class="swimming-routine-block-header"
+                  >
+                    <div>
+                      <h3>
+                        {{ block.title }}
+                      </h3>
+
+                      <small>
+                        @for (
+                          set of block.sets;
+                          track $index;
+                          let last = $last
+                        ) {
+                          {{
+                            set.repetitions
+                          }}×{{
+                            set.distanceMeters
+                          }}
+                          m
+                          @if (!last) {
+                            ·
+                          }
+                        }
+                      </small>
+                    </div>
+
+                  </div>
+
+
+                  <div class="swimming-pool-lane">
+
+                    @for (
+                      set of block.sets;
+                      track $index
+                    ) {
+
+                      @for (
+                        length of
+                          swimmingRoutineSetLengths(
+                            set.repetitions,
+                            set.distanceMeters,
+                            routine.poolLengthMeters
+                          );
+                        track $index
+                      ) {
+                        <span
+                          class="swimming-routine-length"
+                          [attr.data-block-type]="
+                            block.type
+                          "
+                          [title]="
+                            swimmingStrokeLabel(
+                              set.stroke
+                            )
+                          "
+                        ></span>
+                      }
+
+                    }
+
+                  </div>
+
+
+                  <div class="swimming-routine-sets">
+
+                    @for (
+                      set of block.sets;
+                      track $index
+                    ) {
+
+                      <div class="swimming-routine-set">
+
+                        <div
+                          class="swimming-routine-set-main"
+                        >
+                          <strong>
+                            {{ set.repetitions }}
+                            ×
+                            {{ set.distanceMeters }}
+                            m
+                          </strong>
+
+                          <span>
+                            {{
+                              swimmingStrokeLabel(
+                                set.stroke
+                              )
+                            }}
+                            ·
+                            {{
+                              swimmingWorkTypeLabel(
+                                set.workType
+                              )
+                            }}
+                            ·
+                            {{
+                              swimmingIntensityLabel(
+                                set.intensity
+                              )
+                            }}
+                          </span>
+                        </div>
+
+
+                        @if (
+                          set.restSeconds > 0
+                        ) {
+                          <span
+                            class="swimming-routine-rest"
+                          >
+                            Descanso
+                            {{ set.restSeconds }} s
+                          </span>
+                        }
+
+
+                        @if (set.instruction) {
+                          <p>
+                            {{ set.instruction }}
+                          </p>
+                        }
+
+                      </div>
+
+                    }
+
+                  </div>
+
+                </article>
+
+              }
+
+            </div>
+
+
+            <div class="swimming-routine-focus">
+
+              <span class="eyebrow">
+                Foco técnico de hoy
+              </span>
+
+              @for (
+                focus of routine.technicalFocus;
+                track focus
+              ) {
+                <div>
+                  <strong>
+                    {{ $index + 1 }}
+                  </strong>
+
+                  <span>
+                    {{ focus }}
+                  </span>
+                </div>
+              }
+
+            </div>
+
+          </section>
+
+        }
+
+      }
+
+
+      @if (
         selectedSwimmingSession();
         as session
       ) {

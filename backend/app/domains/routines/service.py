@@ -120,8 +120,12 @@ async def delete_user_routine(
 
 async def get_user_active_routine(
     user: AuthenticatedUser,
+    discipline: str = "strength",
 ) -> Routine | None:
-    row = await get_active_routine(user)
+    row = await get_active_routine(
+        user,
+        discipline,
+    )
 
     if row is None:
         return None
@@ -142,11 +146,21 @@ async def activate_user_routine(
     user: AuthenticatedUser,
     routine_id: str,
 ) -> Routine | None:
-    routine_row = await get_routine_by_id(user, routine_id)
+    routine_row = await get_routine_by_id(
+        user,
+        routine_id,
+    )
 
     if routine_row is None:
         return None
 
-    await set_active_routine(user, routine_id)
+    routine = routine_row_to_model(routine_row)
+    discipline = routine.discipline or "strength"
 
-    return routine_row_to_model(routine_row)
+    await set_active_routine(
+        user,
+        routine_id,
+        discipline,
+    )
+
+    return routine

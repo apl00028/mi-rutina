@@ -199,3 +199,92 @@ def test_replace_user_routine_maps_replaced_row(monkeypatch):
     assert replaced.routineId == "routine-1"
     assert captured["user_id"] == "user-123"
     assert captured["routine_id"] == "routine-1"
+
+
+def test_get_user_active_routine_passes_discipline(monkeypatch):
+    captured = {}
+
+    async def fake_get_active_routine(user, discipline):
+        captured["discipline"] = discipline
+        return {
+            "routine_id": "routine-1",
+        }
+
+    async def fake_get_routine_by_id(user, routine_id):
+        return routine_row()
+
+    monkeypatch.setattr(
+        service,
+        "get_active_routine",
+        fake_get_active_routine,
+    )
+    monkeypatch.setattr(
+        service,
+        "get_routine_by_id",
+        fake_get_routine_by_id,
+    )
+
+    user = AuthenticatedUser(
+        id="user-123",
+        email="test@example.com",
+        access_token="token-123",
+    )
+
+    routine = asyncio.run(
+        service.get_user_active_routine(
+            user,
+            "swimming",
+        )
+    )
+
+    assert routine.routineId == "routine-1"
+    assert captured["discipline"] == "swimming"
+
+
+def test_activate_user_routine_uses_routine_discipline(monkeypatch):
+    row = routine_row()
+    row["data"]["discipline"] = "swimming"
+
+    captured = {}
+
+    async def fake_get_routine_by_id(user, routine_id):
+        return row
+
+    async def fake_set_active_routine(
+        user,
+        routine_id,
+        discipline,
+    ):
+        captured["routine_id"] = routine_id
+        captured["discipline"] = discipline
+        return {}
+
+    monkeypatch.setattr(
+        service,
+        "get_routine_by_id",
+        fake_get_routine_by_id,
+    )
+    monkeypatch.setattr(
+        service,
+        "set_active_routine",
+        fake_set_active_routine,
+    )
+
+    user = AuthenticatedUser(
+        id="user-123",
+        email="test@example.com",
+        access_token="token-123",
+    )
+
+    routine = asyncio.run(
+        service.activate_user_routine(
+            user,
+            "routine-1",
+        )
+    )
+
+    assert routine.discipline == "swimming"
+    assert captured == {
+        "routine_id": "routine-1",
+        "discipline": "swimming",
+    }

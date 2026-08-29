@@ -184,6 +184,7 @@ async def delete_routine(
 
 async def get_active_routine(
     user: AuthenticatedUser,
+    discipline: str = "strength",
 ) -> dict[str, Any] | None:
     url, key = _supabase_config()
 
@@ -194,6 +195,7 @@ async def get_active_routine(
 
     params = {
         "user_id": f"eq.{user.id}",
+        "discipline": f"eq.{discipline}",
         "limit": "1",
     }
 
@@ -217,6 +219,7 @@ async def get_active_routine(
 async def set_active_routine(
     user: AuthenticatedUser,
     routine_id: str,
+    discipline: str = "strength",
 ) -> dict[str, Any]:
     url, key = _supabase_config()
 
@@ -229,11 +232,12 @@ async def set_active_routine(
 
     payload = {
         "user_id": user.id,
+        "discipline": discipline,
         "routine_id": routine_id,
     }
 
     params = {
-        "on_conflict": "user_id",
+        "on_conflict": "user_id,discipline",
     }
 
     async with httpx.AsyncClient(timeout=10.0) as client:

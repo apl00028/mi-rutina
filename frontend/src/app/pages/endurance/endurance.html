@@ -436,6 +436,43 @@
 
           </section>
 
+        } @else if (
+          swimmingRoutineLoading()
+        ) {
+
+          <section class="discipline-card">
+            <p>
+              Cargando rutina de natación…
+            </p>
+          </section>
+
+        } @else if (
+          swimmingRoutineError();
+          as routineError
+        ) {
+
+          <section class="discipline-card">
+            <p>
+              {{ routineError }}
+            </p>
+          </section>
+
+        } @else {
+
+          <section class="discipline-card">
+            <span class="eyebrow">
+              Rutina
+            </span>
+
+            <h2>
+              No hay una rutina activa de natación
+            </h2>
+
+            <p>
+              Crea o importa una rutina para verla aquí.
+            </p>
+          </section>
+
         }
 
       }

@@ -124,6 +124,27 @@ export interface SwimmingFitImportResponse {
 }
 
 
+interface StoredSwimmingRoutine {
+  routineId: string;
+  schemaVersion: string;
+  revision: number;
+  discipline?: string;
+  name?: string;
+
+  sessions: Array<{
+    sessionId: string;
+    date?: string;
+    title?: string;
+    name?: string;
+    objective?: string;
+    poolLengthMeters?: number;
+    estimatedDurationMinutes?: number;
+    blocks?: SwimmingRoutine['blocks'];
+    technicalFocus?: string[];
+  }>;
+}
+
+
 export interface SwimmingSessionView {
   startTime: string;
 
@@ -234,152 +255,30 @@ export class Endurance
     );
 
   readonly swimmingRoutine =
-    signal<SwimmingRoutine>({
-      id: 'swimming-routine-v1',
+    signal<SwimmingRoutine | null>(
+      null
+    );
 
-      date: '2026-08-29',
+  readonly swimmingRoutineLoading =
+    signal(false);
 
-      title: 'Técnica y continuidad de crol',
-
-      objective:
-        'Nadar con respiración controlada, mantener técnica y aumentar progresivamente la continuidad.',
-
-      poolLengthMeters: 25,
-
-      estimatedDurationMinutes: 45,
-
-      blocks: [
-        {
-          id: 'warmup',
-          type: 'warmup',
-          title: 'Calentamiento',
-
-          sets: [
-            {
-              repetitions: 1,
-              distanceMeters: 200,
-
-              stroke: 'freestyle',
-              workType: 'swim',
-              intensity: 'easy',
-
-              restSeconds: 0,
-
-              instruction:
-                'Crol cómodo. Sin buscar ritmo.'
-            }
-          ]
-        },
-
-        {
-          id: 'technique',
-          type: 'technique',
-          title: 'Técnica',
-
-          sets: [
-            {
-              repetitions: 4,
-              distanceMeters: 25,
-
-              stroke: 'freestyle',
-              workType: 'technique',
-              intensity: 'easy',
-
-              restSeconds: 20,
-
-              instruction:
-                'Respiración relajada cada 2 brazadas.'
-            },
-
-            {
-              repetitions: 4,
-              distanceMeters: 25,
-
-              stroke: 'freestyle',
-              workType: 'technique',
-              intensity: 'easy',
-
-              restSeconds: 20,
-
-              instruction:
-                'Alargar brazada y mantener alineación.'
-            }
-          ]
-        },
-
-        {
-          id: 'main',
-          type: 'main',
-          title: 'Bloque principal',
-
-          sets: [
-            {
-              repetitions: 4,
-              distanceMeters: 50,
-
-              stroke: 'freestyle',
-              workType: 'swim',
-              intensity: 'controlled',
-
-              restSeconds: 25,
-
-              instruction:
-                'Ritmo uniforme. Terminar con control.'
-            },
-
-            {
-              repetitions: 2,
-              distanceMeters: 100,
-
-              stroke: 'freestyle',
-              workType: 'swim',
-              intensity: 'controlled',
-
-              restSeconds: 30,
-
-              instruction:
-                'Prioridad absoluta a la continuidad.'
-            }
-          ]
-        },
-
-        {
-          id: 'cooldown',
-          type: 'cooldown',
-          title: 'Soltura',
-
-          sets: [
-            {
-              repetitions: 1,
-              distanceMeters: 100,
-
-              stroke: 'backstroke',
-              workType: 'swim',
-              intensity: 'easy',
-
-              restSeconds: 0,
-
-              instruction:
-                'Muy suave y relajado.'
-            }
-          ]
-        }
-      ],
-
-      technicalFocus: [
-        'Respirar sin levantar la cabeza.',
-        'Mantener una brazada larga y relajada.',
-        'No acelerar si se pierde la técnica.'
-      ]
-    });
+  readonly swimmingRoutineError =
+    signal<string | null>(
+      null
+    );
 
 
   swimmingRoutineTotalDistance():
     number {
 
-    return swimmingRoutineDistance(
-      this.swimmingRoutine()
-    );
+    const routine =
+      this.swimmingRoutine();
+
+    return routine
+      ? swimmingRoutineDistance(
+          routine
+        )
+      : 0;
   }
 
 
@@ -435,6 +334,7 @@ export class Endurance
       'swimming'
     ) {
       void this.loadSwimming();
+      void this.loadActiveSwimmingRoutine();
     }
   }
 
@@ -461,6 +361,99 @@ export class Endurance
       void this.router.navigateByUrl(
         target
       );
+    }
+  }
+
+
+  private async loadActiveSwimmingRoutine():
+    Promise<void> {
+
+    if (this.swimmingRoutineLoading()) {
+      return;
+    }
+
+    this.swimmingRoutineLoading.set(true);
+    this.swimmingRoutineError.set(null);
+
+    try {
+      const token =
+        await this.auth.getAccessToken();
+
+      if (!token) {
+        throw new Error(
+          'Necesitas iniciar sesión.'
+        );
+      }
+
+      const headers =
+        new HttpHeaders({
+          Authorization:
+            `Bearer ${token}`
+        });
+
+      const stored =
+        await firstValueFrom(
+          this.http.get<StoredSwimmingRoutine>(
+            `${this.apiUrl}/routines/active`,
+            {
+              headers,
+              params: {
+                discipline: 'swimming'
+              }
+            }
+          )
+        );
+
+      const session =
+        stored.sessions?.[0];
+
+      if (!session) {
+        throw new Error(
+          'La rutina activa de natación no contiene ninguna sesión.'
+        );
+      }
+
+      this.swimmingRoutine.set({
+        id: session.sessionId,
+        date: session.date ?? '',
+        title:
+          session.title
+          ?? session.name
+          ?? stored.name
+          ?? 'Rutina de natación',
+        objective:
+          session.objective
+          ?? '',
+        poolLengthMeters:
+          session.poolLengthMeters
+          ?? 25,
+        estimatedDurationMinutes:
+          session.estimatedDurationMinutes
+          ?? 0,
+        blocks:
+          session.blocks
+          ?? [],
+        technicalFocus:
+          session.technicalFocus
+          ?? []
+      });
+
+    } catch (error: any) {
+
+      this.swimmingRoutine.set(null);
+
+      if (error?.status === 404) {
+        return;
+      }
+
+      this.swimmingRoutineError.set(
+        error?.error?.detail
+        ?? error?.message
+        ?? 'No se pudo cargar la rutina de natación.'
+      );
+
+    } finally {
+      this.swimmingRoutineLoading.set(false);
     }
   }
 

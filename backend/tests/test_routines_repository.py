@@ -327,3 +327,119 @@ def test_replace_routine_empty_result_returns_none(monkeypatch):
     )
 
     assert row is None
+
+
+def test_get_active_routine_filters_by_discipline(monkeypatch):
+    monkeypatch.setenv("SUPABASE_URL", "https://example.supabase.co")
+    monkeypatch.setenv("SUPABASE_PUBLISHABLE_KEY", "publishable-key")
+
+    captured = {}
+
+    class FakeResponse:
+        def raise_for_status(self):
+            pass
+
+        def json(self):
+            return [
+                {
+                    "user_id": "user-123",
+                    "routine_id": "swim-1",
+                    "discipline": "swimming",
+                }
+            ]
+
+    class FakeClient:
+        def __init__(self, timeout):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):
+            pass
+
+        async def get(self, url, headers, params):
+            captured["params"] = params
+            return FakeResponse()
+
+    monkeypatch.setattr(repository.httpx, "AsyncClient", FakeClient)
+
+    user = AuthenticatedUser(
+        id="user-123",
+        email="test@example.com",
+        access_token="access-token",
+    )
+
+    row = asyncio.run(
+        repository.get_active_routine(
+            user,
+            "swimming",
+        )
+    )
+
+    assert row["routine_id"] == "swim-1"
+    assert captured["params"] == {
+        "user_id": "eq.user-123",
+        "discipline": "eq.swimming",
+        "limit": "1",
+    }
+
+
+def test_set_active_routine_upserts_by_user_and_discipline(monkeypatch):
+    monkeypatch.setenv("SUPABASE_URL", "https://example.supabase.co")
+    monkeypatch.setenv("SUPABASE_PUBLISHABLE_KEY", "publishable-key")
+
+    captured = {}
+
+    class FakeResponse:
+        def raise_for_status(self):
+            pass
+
+        def json(self):
+            return [
+                {
+                    "user_id": "user-123",
+                    "routine_id": "swim-1",
+                    "discipline": "swimming",
+                }
+            ]
+
+    class FakeClient:
+        def __init__(self, timeout):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):
+            pass
+
+        async def post(self, url, headers, params, json):
+            captured["params"] = params
+            captured["json"] = json
+            return FakeResponse()
+
+    monkeypatch.setattr(repository.httpx, "AsyncClient", FakeClient)
+
+    user = AuthenticatedUser(
+        id="user-123",
+        email="test@example.com",
+        access_token="access-token",
+    )
+
+    asyncio.run(
+        repository.set_active_routine(
+            user,
+            "swim-1",
+            "swimming",
+        )
+    )
+
+    assert captured["params"] == {
+        "on_conflict": "user_id,discipline",
+    }
+    assert captured["json"] == {
+        "user_id": "user-123",
+        "discipline": "swimming",
+        "routine_id": "swim-1",
+    }

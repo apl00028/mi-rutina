@@ -1,4 +1,4 @@
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -9,6 +9,12 @@ class Routine(BaseModel):
     routineId: str = Field(min_length=1)
     schemaVersion: str = Field(min_length=1)
     revision: int = Field(ge=0)
+    discipline: Literal[
+        "strength",
+        "swimming",
+        "cycling",
+        "running",
+    ] | None = None
     sessions: list[dict[str, Any]] = Field(default_factory=list)
     createdAt: str | None = None
     updatedAt: str | None = None

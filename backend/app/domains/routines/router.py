@@ -93,13 +93,15 @@ async def list_routines(
     response_model_exclude_none=True,
 )
 async def get_active_routine(
+    discipline: str = "strength",
     user: AuthenticatedUser = Depends(
         require_user
     ),
 ) -> Routine:
     try:
         routine = await get_user_active_routine(
-            user
+            user,
+            discipline,
         )
     except (
         httpx.HTTPError,

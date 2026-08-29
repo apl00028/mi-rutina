@@ -631,3 +631,51 @@ def test_generate_routine_requires_authentication():
     assert response.json() == {
         "detail": "Missing bearer token"
     }
+
+
+def test_get_active_routine_accepts_discipline(monkeypatch):
+    from app.domains.routines import router as routines_api
+
+    captured = {}
+
+    async def fake_get_user_active_routine(
+        user,
+        discipline,
+    ):
+        captured["user_id"] = user.id
+        captured["discipline"] = discipline
+
+        routine = routine_model("swim-1")
+        routine.discipline = "swimming"
+        return routine
+
+    app.dependency_overrides[require_user] = authenticated_user
+    monkeypatch.setattr(
+        routines_api,
+        "get_user_active_routine",
+        fake_get_user_active_routine,
+    )
+
+    try:
+        response = client.get(
+            "/api/v1/routines/active",
+            params={
+                "discipline": "swimming",
+            },
+            headers={
+                "Authorization": "Bearer token-123",
+            },
+        )
+    finally:
+        app.dependency_overrides.pop(
+            require_user,
+            None,
+        )
+
+    assert response.status_code == 200
+    assert response.json()["routineId"] == "swim-1"
+    assert response.json()["discipline"] == "swimming"
+    assert captured == {
+        "user_id": "user-123",
+        "discipline": "swimming",
+    }

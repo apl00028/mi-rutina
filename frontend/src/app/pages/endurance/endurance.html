@@ -315,26 +315,28 @@
 
                         <div class="swimming-routine-series-head">
 
-                          <strong>
-                            {{ set.repetitions }}
-                            ×
-                            {{ set.distanceMeters }}
-                            m
-                          </strong>
+                          <div>
+                            <strong>
+                              {{ set.repetitions }}
+                              ×
+                              {{ set.distanceMeters }}
+                              m
+                            </strong>
 
-                          <span>
-                            {{
-                              swimmingStrokeLabel(
-                                set.stroke
-                              )
-                            }}
-                            ·
-                            {{
-                              swimmingIntensityLabel(
-                                set.intensity
-                              )
-                            }}
-                          </span>
+                            <span>
+                              {{
+                                swimmingStrokeLabel(
+                                  set.stroke
+                                )
+                              }}
+                              ·
+                              {{
+                                swimmingIntensityLabel(
+                                  set.intensity
+                                )
+                              }}
+                            </span>
+                          </div>
 
                           @if (
                             set.restSeconds > 0
@@ -347,6 +349,14 @@
 
                         </div>
 
+
+                        <div class="swimming-routine-distance-scale">
+                          <span>0</span>
+                          <span>25</span>
+                          <span>50</span>
+                          <span>75</span>
+                          <span>100 m</span>
+                        </div>
 
                         <div class="swimming-routine-repetitions">
 

@@ -900,3 +900,70 @@
     max-width: 100%;
   }
 }
+
+
+/* Final routine-map refinements */
+
+.swimming-routine-series-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-start;
+  gap: 14px;
+}
+
+.swimming-routine-series-head > div {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.swimming-routine-series-head > div > span {
+  font-size: 0.78rem;
+  opacity: 0.66;
+}
+
+.swimming-routine-series-head > small {
+  padding-top: 2px;
+
+  font-size: 0.72rem;
+  font-weight: 700;
+
+  white-space: nowrap;
+  opacity: 0.68;
+}
+
+.swimming-routine-distance-scale {
+  display: grid;
+  grid-template-columns:
+    repeat(5, 25px);
+
+  gap: 3px;
+
+  margin-left: 32px;
+  margin-bottom: -2px;
+
+  font-size: 0.62rem;
+  opacity: 0.45;
+}
+
+.swimming-routine-distance-scale span {
+  text-align: left;
+}
+
+.swimming-routine-distance-scale span:last-child {
+  white-space: nowrap;
+}
+
+
+@media (max-width: 700px) {
+
+  .swimming-routine-series-head {
+    display: grid;
+    gap: 3px;
+  }
+
+  .swimming-routine-series-head > small {
+    padding-top: 0;
+  }
+}

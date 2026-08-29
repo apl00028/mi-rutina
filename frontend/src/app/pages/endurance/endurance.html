@@ -340,15 +340,15 @@
                             set.restSeconds > 0
                           ) {
                             <small>
-                              Descanso
                               {{ set.restSeconds }} s
+                              entre repeticiones
                             </small>
                           }
 
                         </div>
 
 
-                        <div class="swimming-pool-lane">
+                        <div class="swimming-routine-repetitions">
 
                           @for (
                             repetition of
@@ -357,29 +357,48 @@
                                 set.distanceMeters,
                                 routine.poolLengthMeters
                               );
-                            track $index
+                            track $index;
+                            let repetitionIndex = $index
                           ) {
 
                             <div
-                              class="swimming-routine-repetition"
+                              class="swimming-routine-repetition-row"
                             >
 
-                              @for (
-                                length of repetition;
-                                track $index
-                              ) {
-                                <span
-                                  class="swimming-routine-length"
-                                  [attr.data-block-type]="
-                                    block.type
-                                  "
-                                  [title]="
-                                    swimmingStrokeLabel(
-                                      set.stroke
-                                    )
-                                  "
-                                ></span>
-                              }
+                              <span
+                                class="swimming-routine-repetition-number"
+                              >
+                                {{ repetitionIndex + 1 }}
+                              </span>
+
+                              <div
+                                class="swimming-routine-repetition-lane"
+                              >
+
+                                @for (
+                                  length of repetition;
+                                  track $index
+                                ) {
+                                  <span
+                                    class="swimming-routine-length"
+                                    [attr.data-block-type]="
+                                      block.type
+                                    "
+                                    [title]="
+                                      swimmingStrokeLabel(
+                                        set.stroke
+                                      )
+                                    "
+                                  ></span>
+                                }
+
+                              </div>
+
+                              <span
+                                class="swimming-routine-repetition-distance"
+                              >
+                                {{ set.distanceMeters }} m
+                              </span>
 
                             </div>
 

@@ -760,3 +760,93 @@
     gap: 6px;
   }
 }
+
+
+/* Swimming routine repetition lanes */
+
+.swimming-routine-repetitions {
+  display: grid;
+  gap: 5px;
+
+  padding: 6px 0;
+}
+
+.swimming-routine-repetition-row {
+  display: grid;
+
+  grid-template-columns:
+    24px
+    minmax(0, 1fr)
+    auto;
+
+  align-items: center;
+  gap: 8px;
+}
+
+.swimming-routine-repetition-number {
+  display: grid;
+  place-items: center;
+
+  width: 22px;
+  height: 22px;
+
+  border: 1px solid var(--border);
+  border-radius: 999px;
+
+  font-size: 0.68rem;
+  font-weight: 700;
+
+  opacity: 0.65;
+}
+
+.swimming-routine-repetition-lane {
+  display: flex;
+  align-items: center;
+
+  gap: 3px;
+
+  min-height: 24px;
+}
+
+.swimming-routine-repetition-distance {
+  min-width: 46px;
+
+  font-size: 0.72rem;
+  font-weight: 700;
+
+  text-align: right;
+  white-space: nowrap;
+
+  opacity: 0.62;
+}
+
+
+/*
+ * The old horizontal repetition grouping is no longer
+ * used by the routine map.
+ */
+.swimming-routine-repetition {
+  display: none;
+}
+
+
+@media (max-width: 700px) {
+
+  .swimming-routine-repetition-row {
+    grid-template-columns:
+      22px
+      minmax(0, 1fr)
+      42px;
+
+    gap: 6px;
+  }
+
+  .swimming-routine-repetition-number {
+    width: 20px;
+    height: 20px;
+  }
+
+  .swimming-routine-repetition-distance {
+    min-width: 42px;
+  }
+}

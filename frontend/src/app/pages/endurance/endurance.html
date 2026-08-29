@@ -27,76 +27,10 @@
 
   @if (discipline() === 'swimming') {
 
-    @if (swimmingRequiresAndroid()) {
-      <section class="discipline-card">
-        <span class="eyebrow">
-          Garmin
-        </span>
-
-        <h2>
-          Sincronización disponible en Android
-        </h2>
-
-        <p>
-          Las sesiones de Garmin se leen desde
-          Health Connect en la aplicación Android.
-        </p>
-      </section>
-
-    } @else if (swimmingLoading()) {
-      <section class="discipline-card">
-        <p>
-          Cargando sesiones de natación…
-        </p>
-      </section>
-
-    } @else if (swimmingError(); as error) {
-      <section class="discipline-card">
-        <span class="eyebrow">
-          Health Connect
-        </span>
-
-        <h2>
-          No se pudieron cargar las sesiones
-        </h2>
-
-        <p>
-          {{ error }}
-        </p>
-
-        <button
-          type="button"
-          (click)="loadSwimming()"
-        >
-          Reintentar
-        </button>
-      </section>
-
-    } @else if (
-      swimmingSessions().length === 0
+    @if (
+      swimmingView() === 'session'
     ) {
-      <section class="discipline-card">
-        <span class="eyebrow">
-          Garmin
-        </span>
-
-        <h2>
-          Sin sesiones recientes
-        </h2>
-
-        <p>
-          No se han encontrado sesiones de
-          natación de Garmin en los últimos
-          30 días.
-        </p>
-      </section>
-
-    } @else {
-
-      @if (
-        swimmingView() === 'session'
-      ) {
-      <section class="swimming-toolbar">
+      <section class="swimming-fit-import-panel">
 
         <div class="swimming-fit-import">
           <label>
@@ -123,51 +57,7 @@
           }
         </div>
 
-        <div class="swimming-session-selector">
-          <label for="swimming-session">
-            Sesión
-          </label>
-
-          <select
-            id="swimming-session"
-            #swimmingSessionSelect
-            [value]="selectedSwimmingSessionIndex()"
-            (change)="
-              selectSwimmingSession(
-                swimmingSessionSelect.value
-              )
-            "
-          >
-            @for (
-              session of swimmingSessions();
-              track session.startTime;
-              let index = $index
-            ) {
-              <option>
-                {{
-                  session.startTime
-                    | date:'dd/MM/yyyy'
-                }}
-                ·
-                {{
-                  session.distanceMeters !== null
-                    ? (
-                        session.distanceMeters
-                          | number:'1.0-0'
-                      ) + ' m'
-                    : 'Sin distancia'
-                }}
-              </option>
-            }
-          </select>
-        </div>
-
-
-
-
       </section>
-      }
-
 
       @if (
         importedSwimmingFit();
@@ -280,6 +170,123 @@
 
           </div>
         </section>
+      }
+    }
+
+    @if (swimmingRequiresAndroid()) {
+      <section class="discipline-card">
+        <span class="eyebrow">
+          Garmin
+        </span>
+
+        <h2>
+          Sincronización disponible en Android
+        </h2>
+
+        <p>
+          Las sesiones de Garmin se leen desde
+          Health Connect en la aplicación Android.
+        </p>
+      </section>
+
+    } @else if (swimmingLoading()) {
+      <section class="discipline-card">
+        <p>
+          Cargando sesiones de natación…
+        </p>
+      </section>
+
+    } @else if (swimmingError(); as error) {
+      <section class="discipline-card">
+        <span class="eyebrow">
+          Health Connect
+        </span>
+
+        <h2>
+          No se pudieron cargar las sesiones
+        </h2>
+
+        <p>
+          {{ error }}
+        </p>
+
+        <button
+          type="button"
+          (click)="loadSwimming()"
+        >
+          Reintentar
+        </button>
+      </section>
+
+    } @else if (
+      swimmingSessions().length === 0
+    ) {
+      <section class="discipline-card">
+        <span class="eyebrow">
+          Garmin
+        </span>
+
+        <h2>
+          Sin sesiones recientes
+        </h2>
+
+        <p>
+          No se han encontrado sesiones de
+          natación de Garmin en los últimos
+          30 días.
+        </p>
+      </section>
+
+    } @else {
+
+      @if (
+        swimmingView() === 'session'
+      ) {
+      <section class="swimming-toolbar">
+
+        <div class="swimming-session-selector">
+          <label for="swimming-session">
+            Sesión
+          </label>
+
+          <select
+            id="swimming-session"
+            #swimmingSessionSelect
+            [value]="selectedSwimmingSessionIndex()"
+            (change)="
+              selectSwimmingSession(
+                swimmingSessionSelect.value
+              )
+            "
+          >
+            @for (
+              session of swimmingSessions();
+              track session.startTime;
+              let index = $index
+            ) {
+              <option>
+                {{
+                  session.startTime
+                    | date:'dd/MM/yyyy'
+                }}
+                ·
+                {{
+                  session.distanceMeters !== null
+                    ? (
+                        session.distanceMeters
+                          | number:'1.0-0'
+                      ) + ' m'
+                    : 'Sin distancia'
+                }}
+              </option>
+            }
+          </select>
+        </div>
+
+
+
+
+      </section>
       }
 
 

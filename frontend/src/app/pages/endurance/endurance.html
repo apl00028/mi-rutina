@@ -59,118 +59,6 @@
 
       </section>
 
-      @if (
-        importedSwimmingFit();
-        as fit
-      ) {
-        <section
-          class="discipline-card swimming-fit-result"
-        >
-          <span class="eyebrow">
-            FIT importado
-          </span>
-
-          <h2>
-            Importación correcta
-          </h2>
-
-          <div class="swimming-metrics-grid">
-
-            <div>
-              <span>Distancia</span>
-              <strong>
-                @if (
-                  fit.distance_meters !== undefined
-                ) {
-                  {{ fit.distance_meters }} m
-                } @else {
-                  —
-                }
-              </strong>
-            </div>
-
-            <div>
-              <span>Piscina</span>
-              <strong>
-                @if (
-                  fit.pool_length_meters !== undefined
-                ) {
-                  {{ fit.pool_length_meters }} m
-                } @else {
-                  —
-                }
-              </strong>
-            </div>
-
-            <div>
-              <span>Tiempo nadando</span>
-              <strong>
-                @if (
-                  fit.total_moving_time_seconds !==
-                    undefined
-                ) {
-                  {{
-                    formatDuration(
-                      fit.total_moving_time_seconds
-                    )
-                  }}
-                } @else {
-                  —
-                }
-              </strong>
-            </div>
-
-            <div>
-              <span>Brazadas</span>
-              <strong>
-                {{ fit.total_strokes ?? '—' }}
-              </strong>
-            </div>
-
-            <div>
-              <span>FC media</span>
-              <strong>
-                @if (
-                  fit.heart_rate_average_bpm !==
-                    undefined
-                ) {
-                  {{
-                    fit.heart_rate_average_bpm
-                  }}
-                  ppm
-                } @else {
-                  —
-                }
-              </strong>
-            </div>
-
-            <div>
-              <span>FC máxima</span>
-              <strong>
-                @if (
-                  fit.heart_rate_max_bpm !==
-                    undefined
-                ) {
-                  {{
-                    fit.heart_rate_max_bpm
-                  }}
-                  ppm
-                } @else {
-                  —
-                }
-              </strong>
-            </div>
-
-            <div>
-              <span>Registros Length</span>
-              <strong>
-                {{ fit.lengths.length }}
-              </strong>
-            </div>
-
-          </div>
-        </section>
-      }
     }
 
     @if (swimmingRequiresAndroid()) {
@@ -433,10 +321,137 @@
                 </strong>
               </div>
 
+              @if (
+                session.fitEnriched
+              ) {
+                <div>
+                  <span>Tiempo nadando</span>
+                  <strong>
+                    @if (
+                      session.movingTimeSeconds !==
+                        null
+                      && session.movingTimeSeconds !==
+                        undefined
+                    ) {
+                      {{
+                        formatDuration(
+                          session.movingTimeSeconds
+                        )
+                      }}
+                    } @else {
+                      —
+                    }
+                  </strong>
+                </div>
+
+                <div>
+                  <span>Descanso</span>
+                  <strong>
+                    @if (
+                      session.restTimeSeconds !== null
+                      && session.restTimeSeconds !==
+                        undefined
+                    ) {
+                      {{
+                        formatDuration(
+                          session.restTimeSeconds
+                        )
+                      }}
+                    } @else {
+                      —
+                    }
+                  </strong>
+                </div>
+
+                <div>
+                  <span>Ritmo medio</span>
+                  <strong>
+                    {{
+                      formatPace(
+                        session.averagePaceSecondsPer100m
+                          ?? null
+                      )
+                    }}
+                  </strong>
+                </div>
+
+                <div>
+                  <span>Brazadas/min</span>
+                  <strong>
+                    {{
+                      session.averageStrokeRateSpm
+                        ?? '—'
+                    }}
+                  </strong>
+                </div>
+
+                <div>
+                  <span>Largos activos</span>
+                  <strong>
+                    {{
+                      session.activeLengths
+                        ?? '—'
+                    }}
+                  </strong>
+                </div>
+
+                <div>
+                  <span>Registros de largo</span>
+                  <strong>
+                    {{
+                      session.totalLengthRecords
+                        ?? '—'
+                    }}
+                  </strong>
+                </div>
+
+                <div>
+                  <span>Calorías</span>
+                  <strong>
+                    @if (
+                      session.totalCalories !== null
+                      && session.totalCalories !==
+                        undefined
+                    ) {
+                      {{
+                        session.totalCalories
+                      }}
+                      kcal
+                    } @else {
+                      —
+                    }
+                  </strong>
+                </div>
+
+                <div>
+                  <span>Training Effect aeróbico</span>
+                  <strong>
+                    {{
+                      session.aerobicTrainingEffect
+                        ?? '—'
+                    }}
+                  </strong>
+                </div>
+
+                <div>
+                  <span>Training Effect anaeróbico</span>
+                  <strong>
+                    {{
+                      session.anaerobicTrainingEffect
+                        ?? '—'
+                    }}
+                  </strong>
+                </div>
+              }
+
             </div>
 
             <small class="swimming-note">
               El ritmo total incluye los descansos.
+              @if (session.fitEnriched) {
+                El ritmo medio usa los datos detallados
+                del archivo FIT.
+              }
             </small>
 
           </section>

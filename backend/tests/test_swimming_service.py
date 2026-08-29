@@ -169,3 +169,37 @@ def test_existing_fit_is_returned_without_reparse(
 
     assert result.distance_meters == 1200
     assert result.total_strokes == 758
+
+
+def test_list_user_swimming_sessions(
+    monkeypatch,
+):
+    from app.domains.swimming import service
+
+    session = sample_session()
+
+    async def fake_list(user):
+        assert user.id == "user-123"
+        return [
+            {
+                "data": session.model_dump(
+                    mode="json",
+                    exclude_none=True,
+                )
+            }
+        ]
+
+    monkeypatch.setattr(
+        service,
+        "list_swimming_sessions",
+        fake_list,
+    )
+
+    result = asyncio.run(
+        service.list_user_swimming_sessions(
+            USER
+        )
+    )
+
+    assert len(result) == 1
+    assert result[0].distance_meters == 1200

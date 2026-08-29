@@ -19,12 +19,26 @@ from app.domains.swimming.models import (
 )
 from app.domains.swimming.service import (
     import_user_swimming_fit,
+    list_user_swimming_sessions,
 )
 
 
 router = APIRouter(
     tags=["Swimming"]
 )
+
+
+@router.get(
+    "/swimming/sessions",
+    response_model=list[SwimmingFitSession],
+    response_model_exclude_none=True,
+)
+async def list_swimming_sessions(
+    user: AuthenticatedUser = Depends(require_user),
+) -> list[SwimmingFitSession]:
+    return await list_user_swimming_sessions(
+        user
+    )
 
 
 @router.post(

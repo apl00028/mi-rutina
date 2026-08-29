@@ -117,6 +117,21 @@ export interface SwimmingSessionView {
 
   heartRateAverageBpm: number | null;
   heartRateMaxBpm: number | null;
+
+  movingTimeSeconds?: number | null;
+  restTimeSeconds?: number | null;
+
+  averagePaceSecondsPer100m?: number | null;
+  averageStrokeRateSpm?: number | null;
+
+  activeLengths?: number | null;
+  totalLengthRecords?: number | null;
+
+  totalCalories?: number | null;
+  aerobicTrainingEffect?: number | null;
+  anaerobicTrainingEffect?: number | null;
+
+  fitEnriched?: boolean;
 }
 
 
@@ -197,6 +212,11 @@ export class Endurance
   readonly importedSwimmingFit =
     signal<SwimmingFitImportResponse | null>(
       null
+    );
+
+  readonly fitSwimmingSessions =
+    signal<SwimmingFitImportResponse[]>(
+      []
     );
 
 
@@ -350,46 +370,69 @@ export class Endurance
       return;
     }
 
+    this.swimmingLoading.set(true);
     this.swimmingError.set(null);
     this.swimmingRequiresAndroid.set(false);
 
-    if (
-      !Capacitor.isNativePlatform() ||
-      Capacitor.getPlatform() !==
-        'android'
-    ) {
-      this.swimmingRequiresAndroid.set(
-        true
+    try {
+      const fitSessions =
+        await this.loadPersistedSwimmingSessions();
+
+      this.fitSwimmingSessions.set(
+        fitSessions
       );
 
-      return;
-    }
+      const fitViews =
+        fitSessions.map(
+          session =>
+            this.toSwimmingSessionViewFromFit(
+              session
+            )
+        );
 
-    this.swimmingLoading.set(true);
+      let sessions =
+        fitViews;
 
-    try {
-      const result =
-        await HealthConnect
-          .readGarminSwimmingMetrics();
+      const isAndroid =
+        Capacitor.isNativePlatform()
+        && Capacitor.getPlatform() ===
+          'android';
 
-      const sessions =
-        result.sessions
-          .map(
+      if (isAndroid) {
+        const result =
+          await HealthConnect
+            .readGarminSwimmingMetrics();
+
+        const healthConnectViews =
+          result.sessions.map(
             session =>
               this.toSwimmingSessionView(
                 session
               )
-          )
-          .sort(
-            (left, right) =>
-              new Date(
-                right.startTime
-              ).getTime()
-              -
-              new Date(
-                left.startTime
-              ).getTime()
           );
+
+        sessions =
+          this.mergeSwimmingSessions(
+            healthConnectViews,
+            fitViews
+          );
+
+      } else {
+        this.swimmingRequiresAndroid.set(
+          true
+        );
+      }
+
+      sessions.sort(
+        (left, right) =>
+          new Date(
+            right.startTime
+          ).getTime()
+          -
+          new Date(
+            left.startTime
+          ).getTime()
+      );
 
       this.swimmingSessions.set(
         sessions
@@ -409,17 +452,316 @@ export class Endurance
           : 0
       );
 
-    } catch (error: unknown) {
+    } catch (error: any) {
 
       this.swimmingError.set(
-        error instanceof Error
-          ? error.message
-          : 'No se pudieron leer las sesiones de natación.'
+        error?.error?.detail ??
+        error?.message ??
+        'No se pudieron cargar las sesiones de natación.'
       );
 
     } finally {
       this.swimmingLoading.set(false);
     }
+  }
+
+
+  private async loadPersistedSwimmingSessions():
+    Promise<SwimmingFitImportResponse[]> {
+
+    const token =
+      await this.auth.getAccessToken();
+
+    if (!token) {
+      throw new Error(
+        'Necesitas iniciar sesión.'
+      );
+    }
+
+    const headers =
+      new HttpHeaders({
+        Authorization:
+          `Bearer ${token}`
+      });
+
+    return await firstValueFrom(
+      this.http.get<
+        SwimmingFitImportResponse[]
+      >(
+        `${this.apiUrl}/swimming/sessions`,
+        { headers }
+      )
+    );
+  }
+
+
+  private toSwimmingSessionViewFromFit(
+    fit: SwimmingFitImportResponse
+  ): SwimmingSessionView {
+
+    const distanceMeters =
+      typeof fit.distance_meters === 'number'
+      && Number.isFinite(
+        fit.distance_meters
+      )
+        ? fit.distance_meters
+        : null;
+
+    const durationSeconds =
+      fit.total_timer_time_seconds
+      ?? fit.total_elapsed_time_seconds
+      ?? fit.total_moving_time_seconds
+      ?? 0;
+
+    const movingTimeSeconds =
+      fit.total_moving_time_seconds
+      ?? null;
+
+    const restTimeSeconds =
+      movingTimeSeconds !== null
+        ? Math.max(
+            0,
+            durationSeconds -
+              movingTimeSeconds
+          )
+        : null;
+
+    const activeLengths =
+      fit.lengths.filter(
+        length =>
+          length.length_type !== 'idle'
+      ).length;
+
+    const totalStrokes =
+      fit.total_strokes
+      ?? null;
+
+    const strokesPerLength =
+      totalStrokes !== null
+      && activeLengths > 0
+        ? totalStrokes /
+          activeLengths
+        : null;
+
+    const metersPerStroke =
+      distanceMeters !== null
+      && totalStrokes !== null
+      && totalStrokes > 0
+        ? distanceMeters /
+          totalStrokes
+        : null;
+
+    const elapsedPaceSecondsPer100m =
+      distanceMeters !== null
+      && distanceMeters > 0
+        ? durationSeconds /
+          distanceMeters *
+          100
+        : null;
+
+    return {
+      startTime:
+        fit.start_time ?? '',
+
+      distanceMeters,
+
+      durationSeconds,
+
+      lengths:
+        activeLengths > 0
+          ? activeLengths
+          : null,
+
+      totalStrokes,
+
+      strokesPerLength,
+
+      metersPerStroke,
+
+      elapsedPaceSecondsPer100m,
+
+      heartRateAverageBpm:
+        fit.heart_rate_average_bpm
+        ?? null,
+
+      heartRateMaxBpm:
+        fit.heart_rate_max_bpm
+        ?? null,
+
+      movingTimeSeconds,
+
+      restTimeSeconds,
+
+      averagePaceSecondsPer100m:
+        fit.average_pace_seconds_per_100m
+        ?? null,
+
+      averageStrokeRateSpm:
+        fit.average_stroke_rate_spm
+        ?? null,
+
+      activeLengths:
+        activeLengths > 0
+          ? activeLengths
+          : null,
+
+      totalLengthRecords:
+        fit.lengths.length,
+
+      totalCalories:
+        fit.total_calories
+        ?? null,
+
+      aerobicTrainingEffect:
+        fit.aerobic_training_effect
+        ?? null,
+
+      anaerobicTrainingEffect:
+        fit.anaerobic_training_effect
+        ?? null,
+
+      fitEnriched: true
+    };
+  }
+
+
+  private mergeSwimmingSessions(
+    healthConnectSessions:
+      SwimmingSessionView[],
+    fitSessions:
+      SwimmingSessionView[]
+  ): SwimmingSessionView[] {
+
+    const usedFit =
+      new Set<number>();
+
+    const merged =
+      healthConnectSessions.map(
+        healthSession => {
+
+          const matchIndex =
+            fitSessions.findIndex(
+              (fitSession, index) => {
+
+                if (
+                  usedFit.has(index)
+                ) {
+                  return false;
+                }
+
+                const timeDifference =
+                  Math.abs(
+                    new Date(
+                      healthSession.startTime
+                    ).getTime()
+                    -
+                    new Date(
+                      fitSession.startTime
+                    ).getTime()
+                  );
+
+                const distanceMatches =
+                  healthSession.distanceMeters ===
+                    null
+                  || fitSession.distanceMeters ===
+                    null
+                  || Math.abs(
+                    healthSession.distanceMeters
+                    -
+                    fitSession.distanceMeters
+                  ) <= 5;
+
+                return (
+                  timeDifference <=
+                    2 * 60 * 1000
+                  && distanceMatches
+                );
+              }
+            );
+
+          if (matchIndex === -1) {
+            return healthSession;
+          }
+
+          usedFit.add(
+            matchIndex
+          );
+
+          const fitSession =
+            fitSessions[
+              matchIndex
+            ];
+
+          return {
+            ...healthSession,
+
+            lengths:
+              fitSession.lengths
+              ?? healthSession.lengths,
+
+            totalStrokes:
+              fitSession.totalStrokes
+              ?? healthSession.totalStrokes,
+
+            strokesPerLength:
+              fitSession.strokesPerLength
+              ?? healthSession.strokesPerLength,
+
+            metersPerStroke:
+              fitSession.metersPerStroke
+              ?? healthSession.metersPerStroke,
+
+            heartRateAverageBpm:
+              fitSession.heartRateAverageBpm
+              ?? healthSession.heartRateAverageBpm,
+
+            heartRateMaxBpm:
+              fitSession.heartRateMaxBpm
+              ?? healthSession.heartRateMaxBpm,
+
+            movingTimeSeconds:
+              fitSession.movingTimeSeconds,
+
+            restTimeSeconds:
+              fitSession.restTimeSeconds,
+
+            averagePaceSecondsPer100m:
+              fitSession.averagePaceSecondsPer100m,
+
+            averageStrokeRateSpm:
+              fitSession.averageStrokeRateSpm,
+
+            activeLengths:
+              fitSession.activeLengths,
+
+            totalLengthRecords:
+              fitSession.totalLengthRecords,
+
+            totalCalories:
+              fitSession.totalCalories,
+
+            aerobicTrainingEffect:
+              fitSession.aerobicTrainingEffect,
+
+            anaerobicTrainingEffect:
+              fitSession.anaerobicTrainingEffect,
+
+            fitEnriched: true
+          };
+        }
+      );
+
+    fitSessions.forEach(
+      (fitSession, index) => {
+        if (!usedFit.has(index)) {
+          merged.push(
+            fitSession
+          );
+        }
+      }
+    );
+
+    return merged;
   }
 
 

@@ -7,6 +7,42 @@ from app.domains.exercises.custom_repository import (
 )
 
 
+async def list_swimming_sessions(
+    user: AuthenticatedUser,
+) -> list[dict[str, Any]]:
+    url, key = _supabase_config()
+
+    headers = {
+        "Authorization":
+            f"Bearer {user.access_token}",
+        "apikey": key,
+    }
+
+    params = {
+        "user_id": f"eq.{user.id}",
+        "order": "started_at.desc",
+    }
+
+    client = get_supabase_http_client()
+
+    response = await client.get(
+        f"{url}/rest/v1/swimming_sessions",
+        headers=headers,
+        params=params,
+    )
+
+    response.raise_for_status()
+
+    data = response.json()
+
+    if not isinstance(data, list):
+        raise RuntimeError(
+            "Unexpected Supabase response."
+        )
+
+    return data
+
+
 async def get_swimming_session_by_hash(
     user: AuthenticatedUser,
     source_file_hash: str,

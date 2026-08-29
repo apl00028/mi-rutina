@@ -11,6 +11,7 @@ from app.domains.swimming.models import (
 from app.domains.swimming.repository import (
     create_swimming_session,
     get_swimming_session_by_hash,
+    list_swimming_sessions,
 )
 
 
@@ -58,6 +59,19 @@ def swimming_to_storage_payload(
                 exclude_none=True,
             ),
     }
+
+
+async def list_user_swimming_sessions(
+    user: AuthenticatedUser,
+) -> list[SwimmingFitSession]:
+    rows = await list_swimming_sessions(
+        user
+    )
+
+    return [
+        swimming_row_to_model(row)
+        for row in rows
+    ]
 
 
 async def import_user_swimming_fit(

@@ -232,3 +232,61 @@ def test_swimming_fit_import_rejects_invalid_fit(
     assert response.json() == {
         "detail": "Invalid or unsupported FIT file"
     }
+
+
+def test_list_swimming_sessions_returns_user_sessions(
+    monkeypatch,
+):
+    from app.domains.swimming import router as swimming_api
+
+    async def fake_list_user_swimming_sessions(user):
+        assert user.id == "user-123"
+
+        return [
+            SwimmingFitSession(
+                start_time=datetime(
+                    2026,
+                    8,
+                    27,
+                    15,
+                    51,
+                    58,
+                    tzinfo=timezone.utc,
+                ),
+                pool_length_meters=25,
+                distance_meters=1200,
+                total_strokes=758,
+                lengths=[],
+            )
+        ]
+
+    monkeypatch.setattr(
+        swimming_api,
+        "list_user_swimming_sessions",
+        fake_list_user_swimming_sessions,
+    )
+
+    app.dependency_overrides[
+        require_user
+    ] = authenticated_user
+
+    try:
+        response = client.get(
+            "/api/v1/swimming/sessions",
+            headers={
+                "Authorization":
+                    "Bearer token-123"
+            },
+        )
+    finally:
+        app.dependency_overrides.pop(
+            require_user,
+            None,
+        )
+
+    assert response.status_code == 200
+    payload = response.json()
+
+    assert len(payload) == 1
+    assert payload[0]["distance_meters"] == 1200
+    assert payload[0]["total_strokes"] == 758

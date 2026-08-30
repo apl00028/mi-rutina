@@ -1,4 +1,14 @@
-/* Shared training discipline navigation */
+/* Shared training discipline and workspace navigation */
+
+app-training-navigation .eyebrow {
+  display: block;
+  margin-bottom: 7px;
+  color: var(--aptus-text-muted);
+  font-size: 0.74rem;
+  font-weight: 700;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
 
 .training-discipline-selector {
   position: relative;
@@ -20,84 +30,75 @@
 }
 
 .training-discipline-selector select {
-  appearance: none;
   min-width: 145px;
-
+  min-height: 42px;
+  padding: 8px 12px;
   border: 1px solid var(--aptus-border);
-  border-radius: 999px;
-
-  padding: 9px 38px 9px 15px;
-
-  background: var(--aptus-surface);
-  color: inherit;
-
+  border-radius: var(--aptus-radius-md);
+  background: var(--aptus-input-bg);
+  color: var(--aptus-text);
   font: inherit;
   font-weight: 700;
-
   cursor: pointer;
 }
 
-.training-discipline-selector::after {
-  content: "⌄";
-
-  position: absolute;
-  right: 14px;
-  top: 50%;
-
-  transform: translateY(-56%);
-
-  pointer-events: none;
-  opacity: 0.65;
+.training-discipline-selector select:hover {
+  border-color: var(--aptus-border-strong);
 }
 
-
-/* Shared training workspace navigation */
+.training-discipline-selector select:focus-visible {
+  border-color: var(--aptus-brand);
+  outline: 3px solid var(--aptus-focus-ring);
+  outline-offset: 1px;
+}
 
 .training-view-tabs {
-  display: inline-flex;
+  display: inline-grid;
+  grid-template-columns:
+    repeat(
+      var(--training-tab-columns, 3),
+      minmax(0, 1fr)
+    );
   align-items: center;
   gap: 3px;
-
   margin: 7px 0 10px 8px;
-
   padding: 3px;
-
   border: 1px solid var(--aptus-border);
-  border-radius: 999px;
-
-  background: var(--aptus-surface);
-
+  border-radius: var(--aptus-radius-md);
+  background: var(--aptus-surface-muted);
   vertical-align: middle;
 }
 
 .training-view-tabs button {
-  border: 0;
-  border-radius: 999px;
-
+  min-height: 36px;
   padding: 7px 13px;
-
+  border: 0;
+  border-radius: var(--aptus-radius-sm);
   background: transparent;
-  color: inherit;
-
+  color: var(--aptus-text-muted);
   font: inherit;
   font-size: 0.78rem;
   font-weight: 700;
-
   cursor: pointer;
-  opacity: 0.62;
-}
-
-.training-view-tabs button.active {
-  background: var(--aptus-surface-hover);
-  opacity: 1;
+  transition:
+    background 120ms ease,
+    color 120ms ease;
 }
 
 .training-view-tabs button:hover {
-  opacity: 1;
+  background: var(--aptus-surface-hover);
+  color: var(--aptus-text);
 }
 
+.training-view-tabs button.active {
+  background: var(--aptus-brand-soft);
+  color: var(--aptus-accent-text);
+}
 
-/* Number of workspace tabs */
+.training-view-tabs button:focus-visible {
+  outline: 3px solid var(--aptus-focus-ring);
+  outline-offset: 1px;
+}
 
 .training-view-tabs.two-tabs {
   --training-tab-columns: 2;
@@ -107,86 +108,30 @@
   --training-tab-columns: 3;
 }
 
-
 @media (max-width: 700px) {
   .training-view-tabs {
     margin-left: 0;
   }
 }
 
-
 @media (max-width: 600px) {
-
   .training-discipline-selector {
-    margin:
-      4px
-      0
-      8px;
+    margin: 4px 0 8px;
   }
 
   .training-discipline-selector select {
     min-width: 132px;
-    min-height: 42px;
-
-    padding:
-      8px
-      36px
-      8px
-      14px;
-
-    border:
-      1px solid
-      var(--aptus-border);
-
-    border-radius: 12px;
-
-    background:
-      var(--aptus-surface);
   }
 
   .training-view-tabs {
     width: 100%;
-
-    display: grid;
-    grid-template-columns:
-      repeat(
-        var(--training-tab-columns, 3),
-        minmax(0, 1fr)
-      );
-
     box-sizing: border-box;
-
-    margin:
-      5px
-      0
-      18px;
-
-    padding: 3px;
-
-    border:
-      1px solid
-      var(--aptus-border);
-
-    border-radius: 12px;
-
-    background:
-      var(--aptus-surface);
+    margin: 5px 0 18px;
   }
 
   .training-view-tabs button {
     min-height: 40px;
-
     padding: 7px 8px;
-
-    border-radius: 9px;
-
     font-size: 0.82rem;
-  }
-
-  .training-view-tabs button.active {
-    background:
-      var(--aptus-surface-hover);
-
-    opacity: 1;
   }
 }

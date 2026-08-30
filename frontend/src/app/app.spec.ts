@@ -322,12 +322,19 @@ describe('App', () => {
           .trim()
       )
     ).toEqual([
-      '⌂ Inicio',
-      '◫ Entrenar',
-      '◉ Nutrición',
-      '♡ Salud',
-      '⚙ Ajustes'
+      'Inicio',
+      'Entrenar',
+      'Nutrición',
+      'Salud',
+      'Ajustes'
     ]);
+    expect(
+      links.every(link =>
+        link.querySelector(
+          'svg.nav-icon'
+        ) !== null
+      )
+    ).toBe(true);
     expect(
       links.map(link =>
         link.getAttribute('href')
@@ -525,7 +532,7 @@ describe('App', () => {
           ?.replace(/\s+/g, ' ')
           .trim()
       )
-    ).toContain('◫ Entrenar Actual');
+    ).toContain('Entrenar Actual');
 
     const activeLink =
       fixture.nativeElement.querySelector(
@@ -536,6 +543,11 @@ describe('App', () => {
       .toBe('/entrenar');
     expect(activeLink.getAttribute('aria-current'))
       .toBe('page');
+    expect(
+      activeLink.querySelector(
+        'svg.nav-icon'
+      )
+    ).toBeTruthy();
     expect(activeLink.textContent).toContain('Actual');
   });
 

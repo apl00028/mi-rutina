@@ -22,6 +22,18 @@ import {
 } from '@capacitor/core';
 
 import {
+  LucideApple,
+  LucideChevronDown,
+  LucideDumbbell,
+  LucideHeartPulse,
+  LucideHouse,
+  LucidePanelLeftClose,
+  LucidePanelLeftOpen,
+  LucideSettings,
+  LucideShieldCheck
+} from '@lucide/angular';
+
+import {
   AuthService,
   AptusMe
 } from './core/auth.service';
@@ -47,7 +59,16 @@ type AppInitializationState =
   imports: [
     RouterOutlet,
     RouterLink,
-    RouterLinkActive
+    RouterLinkActive,
+    LucideApple,
+    LucideChevronDown,
+    LucideDumbbell,
+    LucideHeartPulse,
+    LucideHouse,
+    LucidePanelLeftClose,
+    LucidePanelLeftOpen,
+    LucideSettings,
+    LucideShieldCheck
   ],
   templateUrl: './app.html',
   styleUrl: './app.scss'

@@ -34,9 +34,17 @@
           "
         >
           @if (sidebarExpanded()) {
-            ‹
+            <svg
+              lucidePanelLeftClose
+              [size]="18"
+              [strokeWidth]="2"
+            ></svg>
           } @else {
-            ›
+            <svg
+              lucidePanelLeftOpen
+              [size]="18"
+              [strokeWidth]="2"
+            ></svg>
           }
         </button>
       </div>
@@ -55,9 +63,12 @@
           "
           title="Inicio"
         >
-          <span class="nav-icon">
-            ⌂
-          </span>
+          <svg
+            class="nav-icon"
+            lucideHouse
+            [size]="20"
+            [strokeWidth]="2"
+          ></svg>
 
           @if (sidebarExpanded()) {
             <span class="nav-label">
@@ -76,9 +87,12 @@
           "
           title="Entrenar"
         >
-          <span class="nav-icon">
-            ◫
-          </span>
+          <svg
+            class="nav-icon"
+            lucideDumbbell
+            [size]="20"
+            [strokeWidth]="2"
+          ></svg>
 
           @if (sidebarExpanded()) {
             <span class="nav-label">
@@ -97,9 +111,12 @@
           "
           title="Nutrición"
         >
-          <span class="nav-icon">
-            ◉
-          </span>
+          <svg
+            class="nav-icon"
+            lucideApple
+            [size]="20"
+            [strokeWidth]="2"
+          ></svg>
 
           @if (sidebarExpanded()) {
             <span class="nav-label">
@@ -118,9 +135,12 @@
           "
           title="Salud"
         >
-          <span class="nav-icon">
-            ♡
-          </span>
+          <svg
+            class="nav-icon"
+            lucideHeartPulse
+            [size]="20"
+            [strokeWidth]="2"
+          ></svg>
 
           @if (sidebarExpanded()) {
             <span class="nav-label">
@@ -138,13 +158,21 @@
           class="collapse-button"
           (click)="toggleSidebar()"
         >
-          <span class="nav-icon">
-            @if (sidebarExpanded()) {
-              ‹
-            } @else {
-              ›
-            }
-          </span>
+          @if (sidebarExpanded()) {
+            <svg
+              class="nav-icon"
+              lucidePanelLeftClose
+              [size]="20"
+              [strokeWidth]="2"
+            ></svg>
+          } @else {
+            <svg
+              class="nav-icon"
+              lucidePanelLeftOpen
+              [size]="20"
+              [strokeWidth]="2"
+            ></svg>
+          }
 
           @if (sidebarExpanded()) {
             <span class="nav-label">
@@ -202,12 +230,12 @@
                 "
                 (click)="closeMobileNav()"
               >
-                <span
+                <svg
                   class="nav-icon"
-                  aria-hidden="true"
-                >
-                  ⌂
-                </span>
+                  lucideHouse
+                  [size]="20"
+                  [strokeWidth]="2"
+                ></svg>
 
                 <span class="nav-label">
                   Inicio
@@ -230,12 +258,12 @@
                 "
                 (click)="closeMobileNav()"
               >
-                <span
+                <svg
                   class="nav-icon"
-                  aria-hidden="true"
-                >
-                  ◫
-                </span>
+                  lucideDumbbell
+                  [size]="20"
+                  [strokeWidth]="2"
+                ></svg>
 
                 <span class="nav-label">
                   Entrenar
@@ -258,12 +286,12 @@
                 "
                 (click)="closeMobileNav()"
               >
-                <span
+                <svg
                   class="nav-icon"
-                  aria-hidden="true"
-                >
-                  ◉
-                </span>
+                  lucideApple
+                  [size]="20"
+                  [strokeWidth]="2"
+                ></svg>
 
                 <span class="nav-label">
                   Nutrición
@@ -287,12 +315,12 @@
                 "
                 (click)="closeMobileNav()"
               >
-                <span
+                <svg
                   class="nav-icon"
-                  aria-hidden="true"
-                >
-                  ♡
-                </span>
+                  lucideHeartPulse
+                  [size]="20"
+                  [strokeWidth]="2"
+                ></svg>
 
                 <span class="nav-label">
                   Salud
@@ -315,12 +343,12 @@
                 "
                 (click)="closeMobileNav()"
               >
-                <span
+                <svg
                   class="nav-icon"
-                  aria-hidden="true"
-                >
-                  ⚙
-                </span>
+                  lucideSettings
+                  [size]="20"
+                  [strokeWidth]="2"
+                ></svg>
 
                 <span class="nav-label">
                   Ajustes
@@ -344,12 +372,12 @@
                   "
                   (click)="closeMobileNav()"
                 >
-                  <span
+                  <svg
                     class="nav-icon"
-                    aria-hidden="true"
-                  >
-                    ⋯
-                  </span>
+                    lucideShieldCheck
+                    [size]="20"
+                    [strokeWidth]="2"
+                  ></svg>
 
                   <span class="nav-label">
                     Solicitudes
@@ -392,12 +420,12 @@
                 </span>
               </span>
 
-              <span
+              <svg
                 class="user-caret"
-                aria-hidden="true"
-              >
-                ▾
-              </span>
+                lucideChevronDown
+                [size]="16"
+                [strokeWidth]="2"
+              ></svg>
             </button>
 
             @if (userMenuOpen()) {
@@ -566,12 +594,12 @@
         "
         aria-label="Ir a Inicio"
       >
-        <span
+        <svg
           class="nav-icon"
-          aria-hidden="true"
-        >
-          ⌂
-        </span>
+          lucideHouse
+          [size]="20"
+          [strokeWidth]="2"
+        ></svg>
 
         <span class="nav-label">
           Inicio
@@ -588,12 +616,12 @@
         "
         aria-label="Ir a Entrenar"
       >
-        <span
+        <svg
           class="nav-icon"
-          aria-hidden="true"
-        >
-          ◫
-        </span>
+          lucideDumbbell
+          [size]="20"
+          [strokeWidth]="2"
+        ></svg>
 
         <span class="nav-label">
           Entrenar
@@ -610,12 +638,12 @@
         "
         aria-label="Ir a Nutrición"
       >
-        <span
+        <svg
           class="nav-icon"
-          aria-hidden="true"
-        >
-          ◉
-        </span>
+          lucideApple
+          [size]="20"
+          [strokeWidth]="2"
+        ></svg>
 
         <span class="nav-label">
           Nutrición
@@ -632,12 +660,12 @@
         "
         aria-label="Ir a Salud"
       >
-        <span
+        <svg
           class="nav-icon"
-          aria-hidden="true"
-        >
-          ♡
-        </span>
+          lucideHeartPulse
+          [size]="20"
+          [strokeWidth]="2"
+        ></svg>
 
         <span class="nav-label">
           Salud
@@ -655,12 +683,12 @@
         "
         aria-label="Ir a Ajustes"
       >
-        <span
+        <svg
           class="nav-icon"
-          aria-hidden="true"
-        >
-          ⚙
-        </span>
+          lucideSettings
+          [size]="20"
+          [strokeWidth]="2"
+        ></svg>
 
         <span class="nav-label">
           Ajustes

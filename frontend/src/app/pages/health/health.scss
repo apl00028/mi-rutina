@@ -37,9 +37,16 @@
   grid-template-columns:
     repeat(4, minmax(0, 1fr));
 
-  gap: 14px;
+  gap: 1px;
+
+  padding: 1px;
 
   margin-bottom: 20px;
+
+  border-radius: var(--aptus-radius-md);
+  overflow: hidden;
+
+  background: var(--aptus-border);
 }
 
 .metric-card,
@@ -47,7 +54,7 @@
   border:
     1px solid var(--aptus-border);
 
-  border-radius: 14px;
+  border-radius: var(--aptus-radius-md);
 
   background: var(--aptus-surface);
 }
@@ -57,6 +64,9 @@
   gap: 8px;
 
   padding: 18px;
+
+  border: 0;
+  border-radius: 0;
 }
 
 .metric-card > span {
@@ -67,6 +77,7 @@
 }
 
 .metric-card strong {
+  overflow-wrap: anywhere;
   color: var(--aptus-text);
 
   font-size: 1.5rem;
@@ -137,7 +148,7 @@ select {
   border:
     1px solid var(--aptus-border);
 
-  border-radius: 9px;
+  border-radius: var(--aptus-radius-md);
 
   background: var(--aptus-bg);
   color: var(--aptus-text);
@@ -148,7 +159,7 @@ select {
 input:focus,
 select:focus {
   outline:
-    2px solid var(--aptus-accent);
+    2px solid var(--aptus-focus-ring);
 
   outline-offset: 1px;
 }
@@ -157,7 +168,7 @@ select:focus {
   min-height: 44px;
 
   border: 0;
-  border-radius: 10px;
+  border-radius: var(--aptus-radius-md);
 
   background: var(--aptus-accent);
   color: var(--aptus-accent-contrast);
@@ -222,7 +233,7 @@ select:focus {
 
   padding: 12px 14px;
 
-  border-radius: 10px;
+  border-radius: var(--aptus-radius-md);
 }
 
 .message.error {
@@ -237,20 +248,12 @@ select:focus {
     1px solid var(--aptus-accent);
 }
 
-@media (max-width: 900px) {
-  .summary-grid {
-    grid-template-columns:
-      repeat(2, minmax(0, 1fr));
-  }
-}
-
 @media (max-width: 700px) {
   .health-page {
     padding: 20px 16px;
   }
 
-  .health-grid,
-  .summary-grid {
+  .health-grid {
     grid-template-columns:
       minmax(0, 1fr);
   }
@@ -271,7 +274,7 @@ select:focus {
   grid-column: 1 / -1;
 
   border: 1px solid var(--aptus-border);
-  border-radius: 10px;
+  border-radius: var(--aptus-radius-md);
 
   background: var(--aptus-surface-muted);
 }
@@ -305,13 +308,12 @@ select:focus {
   place-items: center;
 
   border: 1px solid var(--aptus-border);
-  border-radius: 9px;
+  border-radius: var(--aptus-radius-md);
 
   background: transparent;
   color: var(--aptus-text-muted);
 
   font: inherit;
-  font-size: 1.2rem;
   cursor: pointer;
 }
 
@@ -335,13 +337,13 @@ select:focus {
   width: fit-content;
 
   border: 1px solid var(--aptus-border);
-  border-radius: 12px;
-  background: var(--aptus-surface);
+  border-radius: var(--aptus-radius-md);
+  background: var(--aptus-surface-muted);
 }
 
 .health-tabs button {
   border: 0;
-  border-radius: 9px;
+  border-radius: var(--aptus-radius-sm);
   padding: 10px 18px;
 
   background: transparent;
@@ -353,8 +355,8 @@ select:focus {
 }
 
 .health-tabs button.active {
-  background: var(--aptus-text);
-  color: var(--aptus-bg);
+  background: var(--aptus-brand-soft);
+  color: var(--aptus-accent-text);
 }
 
 .health-section-hidden {
@@ -414,82 +416,6 @@ select:focus {
   display: block;
 }
 
-.evolution-panel {
-  margin-top: 24px;
-}
-
-.chart-controls {
-  display: grid;
-  gap: 12px;
-  margin-bottom: 18px;
-}
-
-.chart-selector {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.chart-selector button {
-  border: 1px solid var(--aptus-border);
-  background: var(--aptus-surface);
-  border-radius: 999px;
-  padding: 8px 12px;
-  cursor: pointer;
-}
-
-.chart-selector button.active {
-  border-color: var(--aptus-brand);
-  font-weight: 700;
-}
-
-.chart-summary,
-.chart-dates {
-  display: flex;
-  justify-content: space-between;
-  gap: 16px;
-  font-size: 0.85rem;
-  color: var(--aptus-text-muted);
-}
-
-.health-chart {
-  height: 240px;
-  margin: 12px 0;
-}
-
-.health-chart svg {
-  width: 100%;
-  height: 100%;
-  overflow: visible;
-}
-
-.chart-axis {
-  stroke: var(--aptus-border);
-  stroke-width: 0.7;
-}
-
-.chart-line {
-  stroke: currentColor;
-  stroke-width: 1.8;
-  vector-effect: non-scaling-stroke;
-}
-
-.chart-point {
-  fill: currentColor;
-}
-
-.chart-empty {
-  margin: 0;
-  color: var(--aptus-text-muted);
-}
-
-@media (min-width: 720px) {
-  .chart-controls {
-    grid-template-columns: 1fr auto;
-    align-items: center;
-  }
-}
-
 .registration-panel {
   margin-bottom: 16px;
 }
@@ -528,40 +454,35 @@ select:focus {
   margin: 4px 0 0;
 }
 
-.chart-period-selector,
-.chart-metric-selector {
+.chart-period-selector {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: 4px;
 }
 
-.chart-period-selector button,
-.chart-metric-selector button {
+.chart-period-selector button {
   appearance: none;
   border: 1px solid transparent;
   background: transparent;
-  border-radius: 999px;
+  border-radius: var(--aptus-radius-sm);
   padding: 7px 12px;
   font: inherit;
   font-size: 0.86rem;
   cursor: pointer;
-  opacity: 0.66;
+  color: var(--aptus-text-muted);
   transition:
-    opacity 120ms ease,
     border-color 120ms ease,
     background 120ms ease;
 }
 
-.chart-period-selector button:hover,
-.chart-metric-selector button:hover {
-  opacity: 1;
+.chart-period-selector button:hover {
+  color: var(--aptus-text);
 }
 
-.chart-period-selector button.active,
-.chart-metric-selector button.active {
-  opacity: 1;
-  border-color: var(--aptus-border);
-  background: var(--aptus-surface);
+.chart-period-selector button.active {
+  border-color: var(--aptus-brand);
+  background: var(--aptus-brand-soft);
+  color: var(--aptus-accent-text);
   font-weight: 700;
 }
 
@@ -592,13 +513,13 @@ select:focus {
 .chart-secondary-stat span,
 .chart-secondary-stat small {
   font-size: 0.78rem;
-  opacity: 0.62;
+  color: var(--aptus-text-muted);
 }
 
 .chart-primary-stat strong {
   font-size: clamp(2rem, 5vw, 3rem);
   line-height: 1;
-  letter-spacing: -0.035em;
+  letter-spacing: 0;
   font-variant-numeric: tabular-nums;
 }
 
@@ -627,7 +548,7 @@ select:focus {
 .chart-y-axis span {
   font-size: 0.72rem;
   line-height: 1;
-  opacity: 0.52;
+  color: var(--aptus-text-subtle);
   font-variant-numeric: tabular-nums;
 }
 
@@ -680,7 +601,7 @@ select:focus {
   transform: translateX(-50%);
   white-space: nowrap;
   font-size: 0.7rem;
-  opacity: 0.52;
+  color: var(--aptus-text-subtle);
   font-variant-numeric: tabular-nums;
 }
 
@@ -689,7 +610,7 @@ select:focus {
   margin: 16px 0 0 60px;
   font-size: 0.78rem;
   line-height: 1.45;
-  opacity: 0.56;
+  color: var(--aptus-text-muted);
 }
 
 .chart-empty-state {
@@ -704,7 +625,7 @@ select:focus {
 
 .chart-empty-state span {
   font-size: 0.87rem;
-  opacity: 0.62;
+  color: var(--aptus-text-muted);
 }
 
 @media (max-width: 700px) {
@@ -741,12 +662,12 @@ select:focus {
   gap: 18px;
 
   margin: 14px 0 16px;
-  padding: 14px 16px;
+  padding: 12px 0;
 
-  border: 1px solid var(--aptus-border);
-  border-radius: 12px;
+  border-top: 1px solid var(--aptus-border);
+  border-bottom: 1px solid var(--aptus-border);
 
-  background: var(--aptus-surface);
+  background: transparent;
 }
 
 .health-metric-family-selector label,
@@ -768,7 +689,7 @@ select:focus {
   min-width: 190px;
 
   border: 1px solid var(--aptus-border);
-  border-radius: 999px;
+  border-radius: var(--aptus-radius-md);
 
   padding: 8px 34px 8px 12px;
 
@@ -829,7 +750,7 @@ select:focus {
   margin-left: auto;
 
   border: 1px solid var(--aptus-border);
-  border-radius: 9px;
+  border-radius: var(--aptus-radius-sm);
 
   padding: 8px 13px;
 
@@ -930,7 +851,7 @@ select:focus {
 
     box-sizing: border-box;
 
-    border-radius: 14px;
+    border-radius: var(--aptus-radius-md);
   }
 
   .health-tabs button,
@@ -948,7 +869,7 @@ select:focus {
 
     border: 0;
 
-    border-radius: 10px;
+    border-radius: var(--aptus-radius-sm);
 
     font-size: 0.75rem;
     line-height: 1.1;
@@ -999,7 +920,7 @@ select:focus {
   .state-panel {
     padding: 14px;
 
-    border-radius: 15px;
+    border-radius: var(--aptus-radius-md);
   }
 
   .panel-heading {
@@ -1106,7 +1027,7 @@ select:focus {
         minmax(0, 1fr)
       );
 
-    gap: 8px;
+    gap: 1px;
 
     margin-bottom: 12px;
   }
@@ -1118,7 +1039,7 @@ select:focus {
 
     padding: 12px;
 
-    border-radius: 13px;
+    border-radius: 0;
   }
 
   .metric-card:first-child {

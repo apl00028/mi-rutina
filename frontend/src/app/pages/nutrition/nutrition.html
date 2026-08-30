@@ -184,7 +184,11 @@
               )
             "
           >
-            ‹
+            <svg
+              lucideChevronLeft
+              [size]="20"
+              [strokeWidth]="2"
+            ></svg>
           </button>
 
 
@@ -223,7 +227,7 @@
                       optionDay
                     )
                     === optionDay.meals.length
-                      ? '✓'
+                      ? 'Completado'
                       : ''
                   }}
                 </option>
@@ -249,7 +253,11 @@
               )
             "
           >
-            ›
+            <svg
+              lucideChevronRight
+              [size]="20"
+              [strokeWidth]="2"
+            ></svg>
           </button>
 
         </div>
@@ -398,7 +406,12 @@
                               meal.mealId
                             )
                           ) {
-                            ✓ Hecha
+                            <svg
+                              lucideCheck
+                              [size]="15"
+                              [strokeWidth]="2.25"
+                            ></svg>
+                            Hecha
                           } @else {
                             Marcar
                           }
@@ -1055,7 +1068,11 @@
             aria-label="Cerrar receta"
             (click)="closeRecipe()"
           >
-            ×
+            <svg
+              lucideX
+              [size]="20"
+              [strokeWidth]="2"
+            ></svg>
           </button>
 
         </header>
@@ -1078,7 +1095,11 @@
               type="button"
               (click)="decreaseRecipeServings()"
             >
-              −
+              <svg
+                lucideMinus
+                [size]="18"
+                [strokeWidth]="2"
+              ></svg>
             </button>
 
             <strong>
@@ -1089,7 +1110,11 @@
               type="button"
               (click)="increaseRecipeServings()"
             >
-              +
+              <svg
+                lucidePlus
+                [size]="18"
+                [strokeWidth]="2"
+              ></svg>
             </button>
 
           </div>

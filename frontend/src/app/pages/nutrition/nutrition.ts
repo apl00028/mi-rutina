@@ -5,6 +5,14 @@ import {
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import {
+  LucideCheck,
+  LucideChevronLeft,
+  LucideChevronRight,
+  LucideMinus,
+  LucidePlus,
+  LucideX
+} from '@lucide/angular';
+import {
   HttpClient,
   HttpHeaders
 } from '@angular/common/http';
@@ -140,7 +148,13 @@ interface NutritionMealCompletion {
   selector: 'app-nutrition',
   standalone: true,
   imports: [
-    CommonModule
+    CommonModule,
+    LucideCheck,
+    LucideChevronLeft,
+    LucideChevronRight,
+    LucideMinus,
+    LucidePlus,
+    LucideX
   ],
   templateUrl: './nutrition.html',
   styleUrl: './nutrition.scss'

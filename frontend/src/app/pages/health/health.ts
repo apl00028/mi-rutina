@@ -4,6 +4,9 @@ import {
   signal
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import {
+  LucideTrash2
+} from '@lucide/angular';
 
 import {
   Capacitor
@@ -131,7 +134,8 @@ interface WeeklyCheckIn {
   selector: 'app-health',
   standalone: true,
   imports: [
-    CommonModule
+    CommonModule,
+    LucideTrash2
   ],
   templateUrl: './health.html',
   styleUrl: './health.scss'

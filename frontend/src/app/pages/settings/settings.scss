@@ -76,7 +76,7 @@
 .settings-back:focus-visible,
 .settings-toggle-row:focus-visible,
 .segmented-control button:focus-visible {
-  outline: 3px solid rgb(37 99 235 / 22%);
+  outline: 3px solid var(--aptus-focus-ring);
   outline-offset: 2px;
 }
 
@@ -354,7 +354,7 @@
 
 .settings-action:focus-visible,
 .settings-danger-action:focus-visible {
-  outline: 3px solid rgb(37 99 235 / 22%);
+  outline: 3px solid var(--aptus-focus-ring);
   outline-offset: 2px;
 }
 
@@ -459,7 +459,7 @@
 }
 
 .settings-password-form input:focus {
-  outline: 3px solid rgb(37 99 235 / 18%);
+  outline: 3px solid var(--aptus-focus-ring);
   outline-offset: 1px;
 }
 

@@ -40,7 +40,7 @@ p {
   gap: 6px;
   padding-bottom: 18px;
   margin-bottom: 26px;
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid var(--aptus-border);
 }
 
 .nutrition-tabs button {
@@ -60,8 +60,8 @@ p {
 }
 
 .nutrition-tabs button.active {
-  border-color: var(--border);
-  background: var(--card);
+  border-color: var(--aptus-border);
+  background: var(--aptus-surface);
   opacity: 1;
 }
 
@@ -76,9 +76,9 @@ p {
 .shopping-category,
 .issues-card,
 .empty-card {
-  border: 1px solid var(--border);
+  border: 1px solid var(--aptus-border);
   border-radius: 16px;
-  background: var(--card);
+  background: var(--aptus-surface);
 }
 
 .week-heading-card,
@@ -98,11 +98,11 @@ p {
 }
 
 .message.error {
-  border: 1px solid var(--danger);
+  border: 1px solid var(--aptus-danger);
 }
 
 .message.success {
-  border: 1px solid var(--brand);
+  border: 1px solid var(--aptus-brand);
 }
 
 
@@ -124,7 +124,7 @@ p {
 }
 
 .secondary-button {
-  border: 1px solid var(--border);
+  border: 1px solid var(--aptus-border);
   background: transparent;
   color: inherit;
 }
@@ -177,7 +177,7 @@ p {
 .nutrition-targets div {
   min-width: 100px;
   padding: 9px 12px;
-  border-left: 1px solid var(--border);
+  border-left: 1px solid var(--aptus-border);
 }
 
 .nutrition-targets span,
@@ -212,14 +212,14 @@ p {
 
 .nutrition-day-card {
   min-width: 0;
-  border: 1px solid var(--border);
+  border: 1px solid var(--aptus-border);
   border-radius: 15px;
-  background: var(--card);
+  background: var(--aptus-surface);
   overflow: hidden;
 }
 
 .nutrition-day-card.today {
-  outline: 1px solid var(--brand);
+  outline: 1px solid var(--aptus-brand);
   outline-offset: -1px;
 }
 
@@ -229,7 +229,7 @@ p {
   align-items: flex-start;
   gap: 10px;
   padding: 17px 18px 14px;
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid var(--aptus-border);
 }
 
 .day-heading span {
@@ -245,7 +245,7 @@ p {
 }
 
 .today-label {
-  border: 1px solid var(--border);
+  border: 1px solid var(--aptus-border);
   border-radius: 999px;
   padding: 4px 8px;
   opacity: 1 !important;
@@ -257,7 +257,7 @@ p {
 }
 
 .calendar-meal {
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid var(--aptus-border);
 }
 
 .calendar-meal:last-child {
@@ -384,7 +384,7 @@ p {
   display: grid;
   gap: 3px;
   padding: 9px 0;
-  border-top: 1px solid var(--border);
+  border-top: 1px solid var(--aptus-border);
 }
 
 .issue span {
@@ -413,7 +413,7 @@ p {
   display: grid;
   gap: 3px;
   padding: 11px 12px;
-  border: 1px solid var(--border);
+  border: 1px solid var(--aptus-border);
   border-radius: 10px;
 }
 
@@ -468,7 +468,7 @@ p {
   justify-content: space-between;
   align-items: center;
   padding: 16px 18px;
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid var(--aptus-border);
 }
 
 .shopping-category h3 {
@@ -479,7 +479,7 @@ p {
 .shopping-category header span {
   min-width: 27px;
   padding: 3px 7px;
-  border: 1px solid var(--border);
+  border: 1px solid var(--aptus-border);
   border-radius: 999px;
   text-align: center;
   font-size: 0.7rem;
@@ -491,7 +491,7 @@ p {
   justify-content: space-between;
   gap: 16px;
   padding: 11px 18px;
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid var(--aptus-border);
 }
 
 .shopping-item:last-child {
@@ -549,7 +549,7 @@ p {
 
   .nutrition-targets div {
     border-left: 0;
-    border-top: 1px solid var(--border);
+    border-top: 1px solid var(--aptus-border);
   }
 
   .week-calendar {
@@ -585,7 +585,7 @@ p {
 
 .calendar-meal-card {
   padding: 15px 4px;
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid var(--aptus-border);
 }
 
 .calendar-meal-card:last-child {
@@ -675,9 +675,9 @@ p {
   padding: 30px;
 
   border-left:
-    1px solid var(--border);
+    1px solid var(--aptus-border);
 
-  background: var(--bg);
+  background: var(--aptus-bg);
   box-shadow: -18px 0 40px rgb(0 0 0 / 18%);
 }
 
@@ -689,7 +689,7 @@ p {
 
   padding-bottom: 24px;
   border-bottom:
-    1px solid var(--border);
+    1px solid var(--aptus-border);
 }
 
 .recipe-modal-header h2 {
@@ -711,7 +711,7 @@ p {
   height: 38px;
 
   border:
-    1px solid var(--border);
+    1px solid var(--aptus-border);
 
   border-radius: 50%;
 
@@ -735,7 +735,7 @@ p {
   padding: 5px 8px;
 
   border:
-    1px solid var(--border);
+    1px solid var(--aptus-border);
 
   border-radius: 999px;
 
@@ -755,7 +755,7 @@ p {
   padding: 22px 0;
 
   border-bottom:
-    1px solid var(--border);
+    1px solid var(--aptus-border);
 }
 
 .recipe-servings > div:first-child {
@@ -778,7 +778,7 @@ p {
   align-items: center;
 
   border:
-    1px solid var(--border);
+    1px solid var(--aptus-border);
 
   border-radius: 999px;
   overflow: hidden;
@@ -808,7 +808,7 @@ p {
   padding: 27px 0;
 
   border-bottom:
-    1px solid var(--border);
+    1px solid var(--aptus-border);
 }
 
 .recipe-section-heading {
@@ -835,7 +835,7 @@ p {
 
 .recipe-ingredient + .recipe-ingredient {
   border-top:
-    1px solid var(--border);
+    1px solid var(--aptus-border);
 }
 
 .recipe-ingredient > div {
@@ -885,7 +885,7 @@ p {
   height: 30px;
 
   border:
-    1px solid var(--border);
+    1px solid var(--aptus-border);
 
   border-radius: 50%;
 
@@ -908,7 +908,7 @@ p {
   padding: 17px 18px;
 
   border:
-    1px solid var(--border);
+    1px solid var(--aptus-border);
 
   border-radius: 12px;
 }
@@ -934,7 +934,7 @@ p {
 
     border-left: 0;
     border-top:
-      1px solid var(--border);
+      1px solid var(--aptus-border);
 
     border-radius:
       18px 18px 0 0;
@@ -951,7 +951,7 @@ p {
 
 .save-servings-button {
   flex: 0 0 auto;
-  border: 1px solid var(--border);
+  border: 1px solid var(--aptus-border);
   border-radius: 9px;
   padding: 9px 12px;
   background: transparent;
@@ -986,9 +986,9 @@ p {
   margin-bottom: 16px;
   padding: 15px 18px;
 
-  border: 1px solid var(--border);
+  border: 1px solid var(--aptus-border);
   border-radius: 14px;
-  background: var(--card);
+  background: var(--aptus-surface);
 }
 
 .shopping-progress-copy {
@@ -1021,7 +1021,7 @@ p {
 
   border-radius: inherit;
 
-  background: var(--brand);
+  background: var(--aptus-brand);
 
   transition:
     width 180ms ease;
@@ -1053,7 +1053,7 @@ p {
   padding: 14px 18px;
 
   border-bottom:
-    1px solid var(--border);
+    1px solid var(--aptus-border);
 
   transition:
     opacity 150ms ease;
@@ -1099,7 +1099,7 @@ p {
   box-sizing: border-box;
 
   border:
-    1px solid var(--border);
+    1px solid var(--aptus-border);
 
   border-radius: 5px;
 }
@@ -1107,8 +1107,8 @@ p {
 .shopping-check
 input:checked
 + .shopping-checkbox {
-  border-color: var(--brand);
-  background: var(--brand);
+  border-color: var(--aptus-brand);
+  background: var(--aptus-brand);
 }
 
 .shopping-check
@@ -1270,7 +1270,7 @@ input:checked
 
 .recipe-open-button {
   padding: 5px 8px;
-  border: 1px solid var(--border);
+  border: 1px solid var(--aptus-border);
   border-radius: 999px;
   white-space: nowrap;
 }
@@ -1281,7 +1281,7 @@ input:checked
   align-items: center;
   justify-content: center;
 
-  background: var(--brand);
+  background: var(--aptus-brand);
   color: white;
 
   min-height: 42px;
@@ -1294,7 +1294,7 @@ input:checked
 
   min-height: 42px;
 
-  background: var(--card);
+  background: var(--aptus-surface);
 }
 
 .plan-management-card {
@@ -1345,7 +1345,7 @@ input:checked
   .nutrition-targets div {
     border-left: 0;
     border-top:
-      1px solid var(--border);
+      1px solid var(--aptus-border);
   }
 }
 
@@ -1509,7 +1509,7 @@ input:checked
   min-width: 74px;
   padding: 7px 11px;
 
-  border: 1px solid var(--border);
+  border: 1px solid var(--aptus-border);
   border-radius: 999px;
 
   background: transparent;
@@ -1523,7 +1523,7 @@ input:checked
 }
 
 .meal-completion-button:hover:not(:disabled) {
-  border-color: var(--brand);
+  border-color: var(--aptus-brand);
 }
 
 .meal-completion-button.completed {
@@ -1617,7 +1617,7 @@ input:checked
 
     border:
       1px solid
-      var(--border);
+      var(--aptus-border);
 
     border-radius: 14px;
   }
@@ -1644,7 +1644,7 @@ input:checked
     border: 0;
 
     background:
-      var(--card);
+      var(--aptus-surface);
   }
 
 
@@ -1695,7 +1695,7 @@ input:checked
   .nutrition-targets div:nth-child(n + 3) {
     border-top:
       1px solid
-      var(--border);
+      var(--aptus-border);
   }
 
   .nutrition-targets span {

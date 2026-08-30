@@ -417,7 +417,7 @@
 }
 
 .mobile-brand:focus-visible {
-  outline: 3px solid rgb(37 99 235 / 18%);
+  outline: 3px solid var(--aptus-focus-ring);
   outline-offset: 2px;
 }
 
@@ -462,7 +462,7 @@
 }
 
 .user-button:focus-visible {
-  outline: 3px solid rgb(37 99 235 / 18%);
+  outline: 3px solid var(--aptus-focus-ring);
   outline-offset: 2px;
 }
 
@@ -649,7 +649,7 @@
 
 .user-dropdown button:focus-visible,
 .user-dropdown-link:focus-visible {
-  outline: 3px solid rgb(37 99 235 / 18%);
+  outline: 3px solid var(--aptus-focus-ring);
   outline-offset: 1px;
 }
 
@@ -816,7 +816,7 @@
   }
 
   .mobile-nav-menu a:focus-visible {
-    outline: 3px solid rgb(37 99 235 / 22%);
+    outline: 3px solid var(--aptus-focus-ring);
     outline-offset: 2px;
   }
 
@@ -950,7 +950,7 @@
   }
 
   .bottom-nav a:focus-visible {
-    outline: 3px solid rgb(37 99 235 / 22%);
+    outline: 3px solid var(--aptus-focus-ring);
     outline-offset: 2px;
   }
 

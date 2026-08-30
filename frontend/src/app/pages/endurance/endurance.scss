@@ -2,13 +2,17 @@
   width: 100%;
   max-width: 1180px;
   margin: 0 auto;
+  padding-bottom: 48px;
 }
 
+.page-header {
+  margin-bottom: 16px;
+  border-bottom: 1px solid var(--aptus-border);
+}
 
-
-
-
-
+.page-header app-training-navigation {
+  display: block;
+}
 
 .eyebrow {
   display: block;
@@ -19,39 +23,44 @@
   font-weight: 700;
 
   text-transform: uppercase;
-  letter-spacing: 0.09em;
+  letter-spacing: 0;
 
-  opacity: 0.62;
+  color: var(--aptus-text-muted);
 }
 
 
 .discipline-card {
   border:
-    1px solid var(--border);
+    1px solid var(--aptus-border);
 
-  border-radius: 16px;
+  border-radius: var(--aptus-radius-md);
 
-  padding: 22px;
+  padding: 20px;
 
-  background: var(--card);
+  background: var(--aptus-surface);
 }
 
 .discipline-card h2 {
   margin:
     0 0 8px;
+
+  font-size: 1.2rem;
+  line-height: 1.25;
+  letter-spacing: 0;
 }
 
 .discipline-card p {
   margin: 0;
-  opacity: 0.65;
+  color: var(--aptus-text-muted);
 }
 
 /* Session presentation */
 
 .endurance-session {
   display: grid;
-  gap: 10px;
-  padding: 14px 16px;
+  gap: 16px;
+  padding: 20px;
+  border-top: 3px solid var(--aptus-brand);
 }
 
 .endurance-session + .endurance-session {
@@ -64,11 +73,13 @@
   justify-content: space-between;
   gap: 12px;
 
-  margin-bottom: 2px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--aptus-border);
 }
 
 .endurance-session-header h2 {
   margin: 2px 0 0;
+  font-size: 1.25rem;
 }
 
 .endurance-session-header .eyebrow {
@@ -76,8 +87,10 @@
 }
 
 .endurance-distance {
-  font-size: 1.25rem;
+  font-family: var(--aptus-font-heading);
+  font-size: 1.5rem;
   line-height: 1;
+  letter-spacing: 0;
   white-space: nowrap;
 }
 
@@ -87,10 +100,12 @@
   grid-template-columns:
     repeat(
       auto-fit,
-      minmax(140px, 1fr)
+      minmax(150px, 1fr)
     );
 
-  gap: 6px 14px;
+  gap: 0;
+  border-top: 1px solid var(--aptus-border);
+  border-left: 1px solid var(--aptus-border);
 }
 
 .endurance-metrics-grid > div {
@@ -99,27 +114,19 @@
 
   min-width: 0;
 
-  border:
-    1px solid var(--border);
-
-  border-radius: 12px;
-
-  padding: 7px 8px;
-
-  background: var(--bg);
+  padding: 11px 12px;
+  border-right: 1px solid var(--aptus-border);
+  border-bottom: 1px solid var(--aptus-border);
+  background: transparent;
 }
 
 .endurance-metrics-grid
   > .swimming-metrics-section-title {
   grid-column: 1 / -1;
 
-  margin-top: 8px;
-  padding: 8px 0 2px;
-
-  border: 0;
-  border-radius: 0;
-
-  background: transparent;
+  margin: 0;
+  padding: 10px 12px 7px;
+  background: var(--aptus-surface-muted);
 }
 
 .endurance-metrics-grid
@@ -127,27 +134,33 @@
   .eyebrow {
   font-size: 0.7rem;
   font-weight: 700;
-  letter-spacing: 0.08em;
+  letter-spacing: 0;
   text-transform: uppercase;
-  opacity: 0.62;
+  color: var(--aptus-text-muted);
 }
 
 
 .endurance-metrics-grid span {
   font-size: 0.72rem;
-  opacity: 0.62;
+  color: var(--aptus-text-muted);
 }
 
 .endurance-metrics-grid strong {
   font-size: 0.96rem;
   line-height: 1.2;
+  font-variant-numeric: tabular-nums;
+}
+
+.endurance-metrics-grid > div:nth-child(-n + 2) strong {
+  font-family: var(--aptus-font-heading);
+  font-size: 1.08rem;
 }
 
 .endurance-note {
   margin-top: -2px;
 
   font-size: 0.74rem;
-  opacity: 0.58;
+  color: var(--aptus-text-subtle);
 }
 
 .endurance-toolbar {
@@ -155,11 +168,15 @@
   gap: 10px;
 
   margin-bottom: 12px;
+  padding: 12px;
+  border: 1px solid var(--aptus-border);
+  border-radius: var(--aptus-radius-md);
+  background: var(--aptus-surface-muted);
 }
 
 .endurance-session-selector {
   display: grid;
-  gap: 4px;
+  gap: 6px;
 }
 
 .endurance-session-selector label {
@@ -167,7 +184,7 @@
 
   font-size: 0.74rem;
   font-weight: 700;
-  opacity: 0.62;
+  color: var(--aptus-text-muted);
 }
 
 .endurance-session-selector select {
@@ -175,36 +192,53 @@
   min-height: 46px;
 
   border:
-    1px solid var(--border);
+    1px solid var(--aptus-border);
 
-  border-radius: 12px;
+  border-radius: var(--aptus-radius-md);
 
   padding: 8px 10px;
 
-  background: var(--card);
+  background: var(--aptus-bg);
   color: inherit;
 
   font: inherit;
   font-weight: 700;
 }
 
+.endurance-session-selector select:focus-visible,
+.swimming-comparison-selector select:focus-visible {
+  border-color: var(--aptus-brand);
+  outline: 3px solid var(--aptus-focus-ring);
+  outline-offset: 1px;
+}
+
 .discipline-card button {
   margin-top: 16px;
 
   border:
-    1px solid var(--border);
+    1px solid var(--aptus-border);
 
-  border-radius: 10px;
+  border-radius: var(--aptus-radius-md);
 
   padding: 10px 14px;
 
-  background: var(--card);
+  background: var(--aptus-surface);
   color: inherit;
 
   font: inherit;
   font-weight: 700;
 
   cursor: pointer;
+}
+
+.discipline-card button:hover {
+  border-color: var(--aptus-border-strong);
+  background: var(--aptus-surface-muted);
+}
+
+.discipline-card button:focus-visible {
+  outline: 3px solid var(--aptus-focus-ring);
+  outline-offset: 2px;
 }
 
 
@@ -222,12 +256,17 @@
 
 @media (max-width: 700px) {
 
+  .endurance-page {
+    padding-bottom: 24px;
+  }
 
-
-
+  .page-header {
+    margin-bottom: 12px;
+  }
 
   .endurance-toolbar {
     gap: 8px;
+    padding: 10px;
   }
 
   .endurance-metrics-grid {
@@ -237,6 +276,20 @@
 
   .discipline-card.endurance-session {
     margin-top: 0;
+    padding: 16px;
+  }
+
+  .endurance-session-header {
+    align-items: flex-end;
+    padding-bottom: 12px;
+  }
+
+  .endurance-distance {
+    font-size: 1.25rem;
+  }
+
+  .endurance-metrics-grid > div {
+    padding: 10px;
   }
 }
 
@@ -260,7 +313,9 @@
       minmax(140px, 1fr)
     );
 
-  gap: 8px;
+  gap: 0;
+  border-top: 1px solid var(--aptus-border);
+  border-left: 1px solid var(--aptus-border);
 }
 
 .swimming-analysis-grid > div {
@@ -269,29 +324,26 @@
 
   min-width: 0;
 
-  padding: 10px 11px;
-
-  border:
-    1px solid var(--border);
-
-  border-radius: 12px;
-
-  background: var(--bg);
+  padding: 11px 12px;
+  border-right: 1px solid var(--aptus-border);
+  border-bottom: 1px solid var(--aptus-border);
+  background: transparent;
 }
 
 .swimming-analysis-grid span {
   font-size: 0.72rem;
-  opacity: 0.62;
+  color: var(--aptus-text-muted);
 }
 
 .swimming-analysis-grid strong {
   font-size: 1rem;
   line-height: 1.2;
+  font-variant-numeric: tabular-nums;
 }
 
 .swimming-analysis-grid small {
   font-size: 0.72rem;
-  opacity: 0.58;
+  color: var(--aptus-text-subtle);
 }
 
 .swimming-analysis-summary {
@@ -323,8 +375,6 @@
   .swimming-analysis-grid {
     grid-template-columns:
       repeat(2, minmax(0, 1fr));
-
-    gap: 7px;
   }
 
   .swimming-analysis-grid > div {
@@ -343,6 +393,10 @@
   gap: 10px;
 
   margin-bottom: 12px;
+  padding: 12px;
+  border: 1px solid var(--aptus-border);
+  border-radius: var(--aptus-radius-md);
+  background: var(--aptus-surface-muted);
 }
 
 .swimming-comparison-selector > div {
@@ -353,7 +407,7 @@
 .swimming-comparison-selector label {
   font-size: 0.72rem;
   font-weight: 700;
-  opacity: 0.62;
+  color: var(--aptus-text-muted);
 }
 
 .swimming-comparison-selector select {
@@ -364,12 +418,11 @@
   border:
     1px solid var(--aptus-border);
 
-  border-radius: 12px;
+  border-radius: var(--aptus-radius-md);
 
   padding: 8px 10px;
 
-  background:
-    var(--aptus-surface);
+  background: var(--aptus-bg);
 
   color: inherit;
 
@@ -409,12 +462,14 @@
 .swimming-routine-header p {
   margin: 0;
   max-width: 680px;
-  opacity: 0.7;
+  color: var(--aptus-text-muted);
 }
 
 .swimming-routine-distance {
   flex: 0 0 auto;
+  font-family: var(--aptus-font-heading);
   font-size: 1.35rem;
+  font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
 
@@ -422,7 +477,9 @@
   display: grid;
   grid-template-columns:
     repeat(3, minmax(0, 1fr));
-  gap: 8px;
+  gap: 0;
+  border-top: 1px solid var(--aptus-border);
+  border-left: 1px solid var(--aptus-border);
 }
 
 .swimming-routine-summary > div {
@@ -431,15 +488,18 @@
 
   padding: 10px 12px;
 
-  border: 1px solid var(--border);
-  border-radius: 12px;
-
-  background: var(--bg);
+  border-right: 1px solid var(--aptus-border);
+  border-bottom: 1px solid var(--aptus-border);
+  background: transparent;
 }
 
 .swimming-routine-summary span {
   font-size: 0.72rem;
-  opacity: 0.62;
+  color: var(--aptus-text-muted);
+}
+
+.swimming-routine-summary strong {
+  font-variant-numeric: tabular-nums;
 }
 
 .swimming-routine-map {
@@ -455,7 +515,7 @@
 }
 
 .swimming-pool-label small {
-  opacity: 0.58;
+  color: var(--aptus-text-subtle);
 }
 
 .swimming-routine-block {
@@ -464,10 +524,10 @@
 
   padding: 12px;
 
-  border: 1px solid var(--border);
-  border-radius: 14px;
+  border: 1px solid var(--aptus-border);
+  border-radius: var(--aptus-radius-md);
 
-  background: var(--bg);
+  background: var(--aptus-bg);
 }
 
 .swimming-routine-block-header {
@@ -481,7 +541,7 @@
 }
 
 .swimming-routine-block-header small {
-  opacity: 0.58;
+  color: var(--aptus-text-subtle);
 }
 
 .swimming-routine-length {
@@ -541,7 +601,7 @@
   width: 24px;
   height: 24px;
 
-  border: 1px solid var(--border);
+  border: 1px solid var(--aptus-border);
   border-radius: 999px;
 
   font-size: 0.72rem;
@@ -588,7 +648,7 @@
 
   padding-top: 10px;
 
-  border-top: 1px solid var(--border);
+  border-top: 1px solid var(--aptus-border);
 }
 
 .swimming-routine-series-row:first-child {
@@ -602,7 +662,7 @@
   font-size: 0.8rem;
   line-height: 1.35;
 
-  opacity: 0.72;
+  color: var(--aptus-text-muted);
 }
 
 
@@ -622,13 +682,13 @@
   width: 22px;
   height: 22px;
 
-  border: 1px solid var(--border);
+  border: 1px solid var(--aptus-border);
   border-radius: 999px;
 
   font-size: 0.68rem;
   font-weight: 700;
 
-  opacity: 0.65;
+  color: var(--aptus-text-muted);
 }
 
 @media (max-width: 700px) {
@@ -664,7 +724,7 @@
 
   padding: 5px 8px;
 
-  border: 1px solid var(--border);
+  border: 1px solid var(--aptus-border);
   border-radius: 8px;
 }
 
@@ -675,7 +735,7 @@
 
   padding-left: 8px;
 
-  border-left: 1px solid var(--border);
+  border-left: 1px solid var(--aptus-border);
 
   font-size: 0.72rem;
   font-weight: 700;
@@ -683,7 +743,7 @@
   text-align: left;
   white-space: nowrap;
 
-  opacity: 0.62;
+  color: var(--aptus-text-muted);
 }
 
 @media (max-width: 700px) {
@@ -720,7 +780,7 @@
 
 .swimming-routine-series-head > div > span {
   font-size: 0.78rem;
-  opacity: 0.66;
+  color: var(--aptus-text-muted);
 }
 
 .swimming-routine-series-head > small {
@@ -730,7 +790,7 @@
   font-weight: 700;
 
   white-space: nowrap;
-  opacity: 0.68;
+  color: var(--aptus-text-muted);
 }
 
 @media (max-width: 700px) {
@@ -765,10 +825,10 @@
   min-height: 36px;
   padding: 7px 11px;
 
-  border: 1px solid var(--border);
-  border-radius: 9px;
+  border: 1px solid var(--aptus-border);
+  border-radius: var(--aptus-radius-md);
 
-  background: var(--bg);
+  background: var(--aptus-bg);
   color: inherit;
 
   font: inherit;
@@ -796,7 +856,7 @@
 
 .swimming-routine-editor label > span {
   font-size: 0.72rem;
-  opacity: 0.66;
+  color: var(--aptus-text-muted);
 }
 
 .swimming-routine-editor input,
@@ -807,10 +867,10 @@
 
   padding: 9px 10px;
 
-  border: 1px solid var(--border);
-  border-radius: 9px;
+  border: 1px solid var(--aptus-border);
+  border-radius: var(--aptus-radius-md);
 
-  background: var(--bg);
+  background: var(--aptus-bg);
   color: inherit;
 
   font: inherit;
@@ -834,7 +894,7 @@
 
 .swimming-routine-input-unit > span {
   font-size: 0.78rem;
-  opacity: 0.62;
+  color: var(--aptus-text-muted);
 }
 
 .swimming-routine-editor-blocks {
@@ -848,8 +908,8 @@
 
   padding: 12px;
 
-  border: 1px solid var(--border);
-  border-radius: 14px;
+  border: 1px solid var(--aptus-border);
+  border-radius: var(--aptus-radius-md);
 }
 
 .swimming-routine-set-editor {
@@ -858,7 +918,7 @@
 
   padding-top: 12px;
 
-  border-top: 1px solid var(--border);
+  border-top: 1px solid var(--aptus-border);
 }
 
 .swimming-routine-remove-button {

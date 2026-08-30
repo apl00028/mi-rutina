@@ -1,6 +1,21 @@
+@use "@fontsource-variable/manrope";
+@use "@fontsource-variable/sora";
 @use "app/styles/training-navigation";
 
 :root {
+  --aptus-font-heading:
+    "Sora Variable",
+    Sora,
+    sans-serif;
+  --aptus-font-ui:
+    "Manrope Variable",
+    Manrope,
+    sans-serif;
+  --aptus-brand: #0f766e;
+  --aptus-brand-hover: #115e59;
+  --aptus-brand-soft: #ccfbf1;
+  --aptus-on-brand: #ffffff;
+  --aptus-focus-ring: var(--aptus-brand);
   --aptus-bg: #f6f7f9;
   --aptus-surface: #ffffff;
   --aptus-surface-muted: #f9fafb;
@@ -9,13 +24,13 @@
   --aptus-border: #e5e7eb;
   --aptus-border-strong: #d1d5db;
   --aptus-text: #111827;
-  --aptus-text-muted: #6b7280;
-  --aptus-text-subtle: #9ca3af;
-  --aptus-accent: #111827;
-  --aptus-accent-hover: #1f2937;
-  --aptus-accent-soft: #f3f4f6;
-  --aptus-accent-text: #111827;
-  --aptus-accent-contrast: #ffffff;
+  --aptus-text-muted: #4b5563;
+  --aptus-text-subtle: #6b7280;
+  --aptus-accent: var(--aptus-brand);
+  --aptus-accent-hover: var(--aptus-brand-hover);
+  --aptus-accent-soft: var(--aptus-brand-soft);
+  --aptus-accent-text: var(--aptus-brand);
+  --aptus-accent-contrast: var(--aptus-on-brand);
   --aptus-navy: var(--aptus-accent);
   --aptus-danger: #b91c1c;
   --aptus-danger-bg: #fef2f2;
@@ -41,6 +56,9 @@
   --aptus-sidebar-active-text: #111827;
   --aptus-skeleton-start: #f3f4f6;
   --aptus-skeleton-mid: #e5e7eb;
+  --aptus-radius-sm: 4px;
+  --aptus-radius-md: 8px;
+  --aptus-radius-full: 999px;
   --aptus-font-scale: 1;
 
   color-scheme: light;
@@ -51,6 +69,8 @@ html.aptus-theme-light {
 }
 
 html.aptus-theme-dark {
+  --aptus-brand-soft: #134e4a;
+  --aptus-focus-ring: rgb(94 234 212 / 42%);
   --aptus-bg: #0b1120;
   --aptus-surface: #111827;
   --aptus-surface-muted: #1f2937;
@@ -61,11 +81,11 @@ html.aptus-theme-dark {
   --aptus-text: #f8fafc;
   --aptus-text-muted: #cbd5e1;
   --aptus-text-subtle: #94a3b8;
-  --aptus-accent: #e5e7eb;
-  --aptus-accent-hover: #f8fafc;
-  --aptus-accent-soft: #1f2937;
-  --aptus-accent-text: #e5e7eb;
-  --aptus-accent-contrast: #111827;
+  --aptus-accent: var(--aptus-brand);
+  --aptus-accent-hover: var(--aptus-brand-hover);
+  --aptus-accent-soft: var(--aptus-brand-soft);
+  --aptus-accent-text: #5eead4;
+  --aptus-accent-contrast: var(--aptus-on-brand);
   --aptus-navy: var(--aptus-accent);
   --aptus-danger: #fca5a5;
   --aptus-danger-bg: #3f1518;
@@ -97,6 +117,8 @@ html.aptus-theme-dark {
 
 @media (prefers-color-scheme: dark) {
   html.aptus-theme-system {
+    --aptus-brand-soft: #134e4a;
+    --aptus-focus-ring: rgb(94 234 212 / 42%);
     --aptus-bg: #0b1120;
     --aptus-surface: #111827;
     --aptus-surface-muted: #1f2937;
@@ -107,11 +129,11 @@ html.aptus-theme-dark {
     --aptus-text: #f8fafc;
     --aptus-text-muted: #cbd5e1;
     --aptus-text-subtle: #94a3b8;
-    --aptus-accent: #e5e7eb;
-    --aptus-accent-hover: #f8fafc;
-    --aptus-accent-soft: #1f2937;
-    --aptus-accent-text: #e5e7eb;
-    --aptus-accent-contrast: #111827;
+    --aptus-accent: var(--aptus-brand);
+    --aptus-accent-hover: var(--aptus-brand-hover);
+    --aptus-accent-soft: var(--aptus-brand-soft);
+    --aptus-accent-text: #5eead4;
+    --aptus-accent-contrast: var(--aptus-on-brand);
     --aptus-navy: var(--aptus-accent);
     --aptus-danger: #fca5a5;
     --aptus-danger-bg: #3f1518;
@@ -156,8 +178,25 @@ body {
   background: var(--aptus-bg);
   color: var(--aptus-text);
 
+  font-family: var(--aptus-font-ui);
   font-size:
     calc(16px * var(--aptus-font-scale));
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  font-family: var(--aptus-font-heading);
+}
+
+button,
+input,
+select,
+textarea {
+  font-family: inherit;
 }
 
 .aptus-overlay-shell {

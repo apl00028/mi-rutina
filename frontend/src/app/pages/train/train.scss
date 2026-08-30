@@ -48,7 +48,7 @@ button:disabled {
 
   font-size: 0.75rem;
   font-weight: 800;
-  letter-spacing: 0.08em;
+  letter-spacing: 0;
   text-transform: uppercase;
 }
 
@@ -116,13 +116,9 @@ button:disabled {
   box-sizing: border-box;
 
   border: 1px solid var(--aptus-border);
-  border-radius: 16px;
+  border-radius: var(--aptus-radius-md);
 
   background: var(--aptus-surface);
-
-  box-shadow:
-    0 1px 2px
-    rgb(0 0 0 / 4%);
 }
 
 .session-card {
@@ -193,12 +189,11 @@ button:disabled {
 
   box-sizing: border-box;
 
-  border-radius: 10px;
+  border-radius: var(--aptus-radius-md);
 
   font-weight: 750;
 
   transition:
-    transform 120ms ease,
     background 120ms ease,
     border-color 120ms ease;
 }
@@ -210,11 +205,6 @@ button:disabled {
   color: var(--aptus-accent-contrast);
 
   padding: 10px 16px;
-}
-
-.primary-button:hover:not(:disabled),
-.finish-button:hover:not(:disabled) {
-  transform: translateY(-1px);
 }
 
 .start-button {
@@ -292,6 +282,7 @@ button:disabled {
 .exercise-title {
   display: block;
 
+  font-family: var(--aptus-font-heading);
   font-size: 1rem;
   font-weight: 850;
   line-height: 1.2;
@@ -312,11 +303,13 @@ button:disabled {
   align-items: center;
   gap: 5px;
 
-  padding: 4px 7px;
+  padding-right: 8px;
+  border-right: 1px solid var(--aptus-border);
+}
 
-  border-radius: 999px;
-
-  background: var(--aptus-surface-muted);
+.exercise-target span:last-child {
+  padding-right: 0;
+  border-right: 0;
 }
 
 .exercise-target strong {
@@ -373,9 +366,9 @@ button:disabled {
   margin-top: 3px;
   padding: 8px 10px;
 
-  border: 1px solid var(--aptus-border);
-  border-left-width: 3px;
-  border-radius: 8px;
+  border: 0;
+  border-left: 3px solid var(--aptus-border);
+  border-radius: var(--aptus-radius-sm);
 
   background: var(--aptus-surface);
 }
@@ -505,6 +498,13 @@ button:disabled {
   font-weight: 800;
 }
 
+.set-number svg,
+.warmup-complete-button svg,
+.warmup-remove-button svg {
+  display: block;
+  margin: auto;
+}
+
 .completed .set-number {
   background: var(--aptus-success-bg);
   color: var(--aptus-success);
@@ -547,13 +547,13 @@ button:disabled {
 }
 
 .next-set:not(.completed) .set-state {
-  background: var(--aptus-accent);
-  color: var(--aptus-accent-contrast);
+  background: var(--aptus-brand-soft);
+  color: var(--aptus-accent-text);
 }
 
 .in-progress:not(.completed) .set-state {
-  background: var(--aptus-accent);
-  color: var(--aptus-accent-contrast);
+  background: var(--aptus-brand-soft);
+  color: var(--aptus-accent-text);
 }
 
 .completed .set-state {
@@ -610,7 +610,7 @@ button:disabled {
   padding: 8px;
 
   border: 1px solid var(--aptus-border-strong);
-  border-radius: 9px;
+  border-radius: var(--aptus-radius-md);
 
   background: var(--aptus-input-bg);
   color: var(--aptus-text);
@@ -622,11 +622,8 @@ button:disabled {
 }
 
 .set-inputs input:focus {
-  border-color: var(--aptus-text);
-
-  box-shadow:
-    0 0 0 3px
-    var(--aptus-shadow-soft);
+  border-color: var(--aptus-brand);
+  box-shadow: 0 0 0 3px var(--aptus-focus-ring);
 }
 
 .complete-set-button {
@@ -684,7 +681,7 @@ button:disabled {
   padding: 8px 10px;
 
   border: 1px solid var(--aptus-info-border);
-  border-radius: 10px;
+  border-radius: var(--aptus-radius-md);
 
   background: var(--aptus-info-bg);
   color: var(--aptus-info);
@@ -745,15 +742,8 @@ button:disabled {
   padding: 12px;
 
   border: 1px solid var(--aptus-border);
-  border-radius: 14px;
-
-  background: var(--aptus-topbar-bg);
-
-  backdrop-filter: blur(10px);
-
-  box-shadow:
-    0 10px 30px
-    var(--aptus-shadow);
+  border-radius: var(--aptus-radius-md);
+  background: var(--aptus-surface);
 }
 
 .confirm-overlay {
@@ -772,7 +762,7 @@ button:disabled {
   padding: 10px 12px;
 
   border: 1px solid var(--aptus-info-border);
-  border-radius: 12px;
+  border-radius: var(--aptus-radius-md);
 
   background: var(--aptus-info-bg);
   color: var(--aptus-info);
@@ -852,7 +842,7 @@ button:disabled {
   padding: 12px 14px;
 
   border: 1px solid var(--aptus-danger-border);
-  border-radius: 10px;
+  border-radius: var(--aptus-radius-md);
 
   background: var(--aptus-danger-bg);
   color: var(--aptus-danger);
@@ -900,7 +890,7 @@ button:disabled {
   padding: 11px 12px;
 
   border: 1px solid var(--aptus-border-strong);
-  border-radius: 10px;
+  border-radius: var(--aptus-radius-md);
 
   background: var(--aptus-input-bg);
   color: var(--aptus-text);
@@ -1064,7 +1054,11 @@ button:disabled {
     border-right: 0;
     border-bottom: 0;
     border-left: 0;
-    border-radius: 16px 16px 0 0;
+    border-radius:
+      var(--aptus-radius-md)
+      var(--aptus-radius-md)
+      0
+      0;
   }
 
   .rest-timer,
@@ -1122,7 +1116,7 @@ button:disabled {
 
 
 
-/* GYMOS MOBILE TRAINING UX V1 */
+/* Aptus mobile workout layout */
 
 @media (max-width: 600px) {
 
@@ -1159,7 +1153,7 @@ button:disabled {
   .session-card {
     padding: 14px;
 
-    border-radius: 14px;
+    border-radius: var(--aptus-radius-md);
   }
 
   .session-card > header {
@@ -1277,8 +1271,8 @@ button:disabled {
       );
 
     border-radius:
-      14px
-      14px
+      var(--aptus-radius-md)
+      var(--aptus-radius-md)
       0
       0;
   }
@@ -1332,7 +1326,7 @@ button:disabled {
 }
 
 
-/* GYMOS MOBILE TRAINING UX V2 */
+/* Compact mobile set editing */
 
 @media (max-width: 600px) {
 
@@ -1533,7 +1527,7 @@ button:disabled {
 }
 
 
-/* GYMOS MOBILE TRAINING UX V3 */
+/* Active workout mobile header */
 
 @media (max-width: 600px) {
 
@@ -1575,7 +1569,7 @@ button:disabled {
 
     line-height: 1.12;
 
-    letter-spacing: -0.02em;
+    letter-spacing: 0;
   }
 
   .active-workout
@@ -1612,7 +1606,7 @@ button:disabled {
 }
 
 
-/* GYMOS MOBILE TRAINING UX V4 */
+/* Rest-focused mobile actions */
 
 @media (max-width: 600px) {
 
@@ -1672,7 +1666,7 @@ button:disabled {
 
     padding: 10px 11px;
 
-    border-radius: 13px;
+    border-radius: var(--aptus-radius-md);
   }
 
 
@@ -1782,11 +1776,12 @@ button:disabled {
 }
 
 .warmup-section {
-  margin: 12px 14px 6px;
-  padding: 12px;
+  margin: 0;
+  padding: 12px 16px;
 
-  border: 1px solid var(--aptus-border);
-  border-radius: 12px;
+  border: 0;
+  border-bottom: 1px solid var(--aptus-border);
+  border-radius: 0;
 
   background: var(--aptus-surface-muted);
 }
@@ -1821,7 +1816,7 @@ button:disabled {
   padding: 7px 10px;
 
   border: 1px solid var(--aptus-border-strong);
-  border-radius: 9px;
+  border-radius: var(--aptus-radius-md);
 
   background: var(--aptus-surface);
   color: var(--aptus-text);
@@ -1943,15 +1938,17 @@ button:disabled {
   }
 
   .warmup-section {
-    margin-inline: 10px;
+    margin-inline: 0;
+    padding-inline: 12px;
   }
 }
 
 .discomfort-section {
-  margin: 8px 14px 10px;
+  margin: 0;
 
-  border: 1px solid var(--aptus-border);
-  border-radius: 12px;
+  border: 0;
+  border-bottom: 1px solid var(--aptus-border);
+  border-radius: 0;
 
   background: var(--aptus-surface);
 }
@@ -2031,7 +2028,7 @@ button:disabled {
 .discomfort-clear-button {
   min-height: 40px;
 
-  border-radius: 9px;
+  border-radius: var(--aptus-radius-md);
 
   font: inherit;
   font-size: 0.82rem;
@@ -2054,7 +2051,7 @@ button:disabled {
 
 @media (max-width: 560px) {
   .discomfort-section {
-    margin-inline: 10px;
+    margin-inline: 0;
   }
 }
 
@@ -2092,9 +2089,9 @@ button:disabled {
   padding: 12px 14px;
 
   border: 1px solid var(--aptus-border);
-  border-radius: 12px;
+  border-radius: var(--aptus-radius-md);
 
-  background: var(--aptus-surface);
+  background: var(--aptus-surface-muted);
 }
 
 .session-rest-copy {

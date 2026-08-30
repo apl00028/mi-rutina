@@ -6,6 +6,11 @@ import { Component, OnDestroy, OnInit, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { Router } from '@angular/router';
 import { HttpClient, HttpHeaders } from '@angular/common/http';
+import {
+  LucideCheck,
+  LucideCircle,
+  LucideTrash2
+} from '@lucide/angular';
 import { environment } from '../../../environments/environment';
 import { AuthService } from '../../core/auth.service';
 import {
@@ -232,7 +237,12 @@ type AutosaveStatus =
 @Component({
   selector: 'app-train',
   standalone: true,
-  imports: [CommonModule],
+  imports: [
+    CommonModule,
+    LucideCheck,
+    LucideCircle,
+    LucideTrash2
+  ],
   templateUrl: './train.html',
   styleUrl: './train.scss'
 })

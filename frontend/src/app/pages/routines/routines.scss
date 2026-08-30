@@ -13,6 +13,7 @@
 
   font-size: clamp(1.75rem, 4vw, 2.5rem);
   line-height: 1.08;
+  letter-spacing: 0;
 }
 
 .actions {
@@ -44,7 +45,7 @@
 
 .session-card {
   border: 1px solid var(--aptus-border);
-  border-radius: 12px;
+  border-radius: var(--aptus-radius-md);
   padding: 16px;
 
   background: var(--aptus-surface);
@@ -52,12 +53,13 @@
 }
 
 .exercise-card {
-  border: 1px solid var(--aptus-border);
-  border-radius: 10px;
-  padding: 16px;
-  margin: 12px 0;
+  border: 0;
+  border-top: 1px solid var(--aptus-border);
+  border-radius: 0;
+  padding: 14px 0;
+  margin: 0;
 
-  background: var(--aptus-surface);
+  background: transparent;
   color: var(--aptus-text);
 
   display: grid;
@@ -108,6 +110,14 @@ button,
   color: var(--aptus-text);
 
   cursor: pointer;
+}
+
+button:focus-visible,
+.import-button:focus-visible,
+input:focus-visible,
+select:focus-visible {
+  outline: 3px solid var(--aptus-focus-ring);
+  outline-offset: 1px;
 }
 
 .import-button {
@@ -303,8 +313,13 @@ button,
 .routine-actions {
   display: grid;
   grid-template-columns: 1fr;
-  gap: 12px;
+  gap: 0;
   margin: 24px 0;
+
+  overflow: hidden;
+  border: 1px solid var(--aptus-border);
+  border-radius: var(--aptus-radius-md);
+  background: var(--aptus-surface);
 }
 
 .routine-action-card {
@@ -318,8 +333,9 @@ button,
 
   padding: 16px 18px;
 
-  border: 1px solid var(--aptus-border);
-  border-radius: 14px;
+  border: 0;
+  border-bottom: 1px solid var(--aptus-border);
+  border-radius: 0;
 
   background: var(--aptus-surface);
   color: var(--aptus-text);
@@ -327,18 +343,17 @@ button,
   text-align: left;
   cursor: pointer;
 
-  box-shadow: 0 1px 2px rgb(0 0 0 / 4%);
-
   transition:
     border-color 140ms ease,
-    box-shadow 140ms ease,
-    transform 140ms ease;
+    background 140ms ease;
 }
 
 .routine-action-card:hover {
-  border-color: var(--aptus-border-strong);
-  box-shadow: 0 5px 16px rgb(0 0 0 / 6%);
-  transform: translateY(-1px);
+  background: var(--aptus-surface-muted);
+}
+
+.routine-action-card:last-child {
+  border-bottom: 0;
 }
 
 .routine-action-icon {
@@ -348,13 +363,7 @@ button,
   display: grid;
   place-items: center;
 
-  border-radius: 11px;
-
-  background: var(--aptus-surface-hover);
-  color: var(--aptus-text);
-
-  font-size: 1.35rem;
-  font-weight: 700;
+  color: var(--aptus-text-muted);
 }
 
 .routine-action-content {
@@ -376,7 +385,14 @@ button,
 
 .routine-action-arrow {
   color: var(--aptus-text-subtle);
-  font-size: 1.5rem;
+}
+
+.routine-action-icon svg,
+.routine-action-arrow svg,
+.management-icon svg,
+.management-chevron svg {
+  display: block;
+  margin: auto;
 }
 
 .import-action {
@@ -404,7 +420,7 @@ button,
   padding: 16px 18px;
 
   border: 1px solid var(--aptus-border);
-  border-radius: 14px;
+  border-radius: var(--aptus-radius-md);
 
   background: var(--aptus-surface);
   color: var(--aptus-text);
@@ -412,8 +428,6 @@ button,
   cursor: pointer;
   list-style: none;
 
-  box-shadow:
-    0 1px 2px rgb(0 0 0 / 4%);
 }
 
 .routine-management-summary::-webkit-details-marker {
@@ -427,12 +441,7 @@ button,
   display: grid;
   place-items: center;
 
-  border-radius: 11px;
-
-  background: var(--aptus-accent);
-  color: var(--aptus-accent-contrast);
-
-  font-size: 1.1rem;
+  color: var(--aptus-accent-text);
 }
 
 .management-content {
@@ -455,8 +464,6 @@ button,
 
 .management-chevron {
   color: var(--aptus-text-subtle);
-
-  font-size: 1.5rem;
 
   transition:
     transform 160ms ease;
@@ -482,17 +489,29 @@ button,
 
 .analysis-management {
   margin-top: 14px;
+
+  overflow: hidden;
+  border: 1px solid var(--aptus-border);
+  border-radius: var(--aptus-radius-md);
+  background: var(--aptus-surface);
+}
+
+.analysis-management
+.routine-management-summary {
+  border: 0;
+  border-radius: 0;
 }
 
 .analysis-content {
   display: grid;
   gap: 22px;
 
-  margin-top: 12px;
+  margin-top: 0;
   padding: 18px;
 
-  border: 1px solid var(--aptus-border);
-  border-radius: 14px;
+  border: 0;
+  border-top: 1px solid var(--aptus-border);
+  border-radius: 0;
 
   background: var(--aptus-surface);
 }
@@ -502,22 +521,34 @@ button,
   width: 100%;
 }
 
+.analysis-export-action {
+  overflow: hidden;
+  border: 1px solid var(--aptus-border);
+  border-radius: var(--aptus-radius-md);
+}
+
 .analysis-period {
   display: grid;
   gap: 10px;
 }
 
 .period-selector {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
+  display: inline-grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 3px;
+
+  width: fit-content;
+  padding: 3px;
+  border: 1px solid var(--aptus-border);
+  border-radius: var(--aptus-radius-md);
+  background: var(--aptus-surface-muted);
 }
 
 .period-selector button {
   padding: 8px 12px;
 
-  border: 1px solid var(--aptus-border-strong);
-  border-radius: 999px;
+  border: 0;
+  border-radius: var(--aptus-radius-sm);
 
   background: var(--aptus-surface);
   color: var(--aptus-text-muted);
@@ -530,10 +561,8 @@ button,
 }
 
 .period-selector button.active {
-  border-color: var(--aptus-text);
-
-  background: var(--aptus-accent);
-  color: var(--aptus-accent-contrast);
+  background: var(--aptus-brand-soft);
+  color: var(--aptus-accent-text);
 }
 
 .period-selector button:disabled {
@@ -572,7 +601,9 @@ button,
       minmax(0, 1fr)
     );
 
-  gap: 12px;
+  gap: 0;
+  border-top: 1px solid var(--aptus-border);
+  border-left: 1px solid var(--aptus-border);
 }
 
 .metric-card {
@@ -581,10 +612,11 @@ button,
 
   padding: 14px;
 
-  border: 1px solid var(--aptus-border);
-  border-radius: 12px;
-
-  background: var(--aptus-surface-muted);
+  border: 0;
+  border-right: 1px solid var(--aptus-border);
+  border-bottom: 1px solid var(--aptus-border);
+  border-radius: 0;
+  background: transparent;
 }
 
 .metric-card span {
@@ -594,14 +626,16 @@ button,
 }
 
 .metric-card strong {
+  font-family: var(--aptus-font-heading);
   font-size: 1.4rem;
+  font-variant-numeric: tabular-nums;
 }
 
 .analysis-placeholder {
   padding: 16px;
 
   border: 1px dashed var(--aptus-border-strong);
-  border-radius: 12px;
+  border-radius: var(--aptus-radius-md);
 
   background: var(--aptus-surface-muted);
   color: var(--aptus-text-muted);
@@ -618,7 +652,11 @@ button,
 
 .analysis-ranking {
   display: grid;
-  gap: 8px;
+  gap: 0;
+
+  overflow: hidden;
+  border: 1px solid var(--aptus-border);
+  border-radius: var(--aptus-radius-md);
 }
 
 .analysis-ranking-row {
@@ -628,10 +666,15 @@ button,
 
   padding: 10px 12px;
 
-  border: 1px solid var(--aptus-border);
-  border-radius: 10px;
+  border: 0;
+  border-bottom: 1px solid var(--aptus-border);
+  border-radius: 0;
 
   background: var(--aptus-surface);
+}
+
+.analysis-ranking-row:last-child {
+  border-bottom: 0;
 }
 
 .analysis-ranking-row span,
@@ -644,7 +687,7 @@ button,
   overflow-x: auto;
 
   border: 1px solid var(--aptus-border);
-  border-radius: 12px;
+  border-radius: var(--aptus-radius-md);
 }
 
 .analysis-table-row {
@@ -775,7 +818,7 @@ button,
   padding: 9px 10px;
 
   border: 1px solid var(--aptus-border-strong);
-  border-radius: 10px;
+  border-radius: var(--aptus-radius-md);
 
   background: var(--aptus-surface);
   color: var(--aptus-text);
@@ -798,7 +841,9 @@ button,
       4,
       minmax(0, 1fr)
     );
-  gap: 10px;
+  gap: 0;
+  border-top: 1px solid var(--aptus-border);
+  border-left: 1px solid var(--aptus-border);
 }
 
 .selected-trend-summary div {
@@ -807,10 +852,11 @@ button,
 
   padding: 12px;
 
-  border: 1px solid var(--aptus-border);
-  border-radius: 8px;
-
-  background: var(--aptus-surface-muted);
+  border: 0;
+  border-right: 1px solid var(--aptus-border);
+  border-bottom: 1px solid var(--aptus-border);
+  border-radius: 0;
+  background: transparent;
 }
 
 .selected-trend-summary span,
@@ -864,12 +910,7 @@ button,
   border: 1px solid var(--aptus-border);
   border-radius: 8px;
 
-  background:
-    linear-gradient(
-      to bottom,
-      var(--aptus-surface),
-      var(--aptus-surface-muted)
-    );
+  background: var(--aptus-surface);
 }
 
 .e1rm-chart polyline {
@@ -941,11 +982,18 @@ button,
 
     padding: 12px;
 
-    border-radius: 12px;
+  }
+
+  .routine-management-summary {
+    border-radius: var(--aptus-radius-md);
+  }
+
+  .routine-action-card {
+    border-radius: 0;
   }
 
   .routine-actions {
-    gap: 8px;
+    gap: 0;
 
     margin: 12px 0;
   }
@@ -960,9 +1008,6 @@ button,
     width: 34px;
     height: 34px;
 
-    border-radius: 9px;
-
-    font-size: 1rem;
   }
 
   .management-content strong,
@@ -977,18 +1022,13 @@ button,
     line-height: 1.32;
   }
 
-  .management-chevron,
-  .routine-action-arrow {
-    font-size: 1.25rem;
-  }
-
   .analysis-content {
     gap: 16px;
 
-    margin-top: 8px;
+    margin-top: 0;
     padding: 12px;
 
-    border-radius: 12px;
+    border-radius: 0;
   }
 
   .analysis-section {
@@ -1012,7 +1052,8 @@ button,
     display: grid;
     grid-template-columns:
       repeat(2, minmax(0, 1fr));
-    gap: 8px;
+    gap: 3px;
+    width: 100%;
   }
 
   .period-selector button {
@@ -1100,6 +1141,12 @@ button,
   display: none;
 }
 
+.routines-page.analysis-only
+> .analysis-management
+> .analysis-content {
+  border-top: 0;
+}
+
 .training-hub-header {
   margin-bottom: 28px;
 }
@@ -1113,9 +1160,8 @@ button,
   font-weight: 700;
 
   text-transform: uppercase;
-  letter-spacing: 0.09em;
-
-  opacity: 0.62;
+  letter-spacing: 0;
+  color: var(--aptus-text-muted);
 }
 
 .training-hub-header h1 {
@@ -1201,6 +1247,10 @@ button,
   font-size: 1rem;
 
   cursor: pointer;
+}
+
+.analysis-delete-record svg {
+  display: block;
 }
 
 .analysis-delete-record:hover:not(:disabled) {

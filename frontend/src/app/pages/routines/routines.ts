@@ -6,6 +6,15 @@ import {
   Router
 } from '@angular/router';
 import { HttpClient, HttpHeaders } from '@angular/common/http';
+import {
+  LucideChartNoAxesCombined,
+  LucideChevronRight,
+  LucideDownload,
+  LucideFileSpreadsheet,
+  LucidePlus,
+  LucideTrash2,
+  LucideUpload
+} from '@lucide/angular';
 import { environment } from '../../../environments/environment';
 import {
   Capacitor
@@ -201,7 +210,14 @@ interface ChartPoint {
   standalone: true,
   imports: [
     CommonModule,
-    FormsModule
+    FormsModule,
+    LucideChartNoAxesCombined,
+    LucideChevronRight,
+    LucideDownload,
+    LucideFileSpreadsheet,
+    LucidePlus,
+    LucideTrash2,
+    LucideUpload
   ],
   templateUrl: './routines.html',
   styleUrl: './routines.scss'

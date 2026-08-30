@@ -247,7 +247,11 @@
           (click)="startManualRoutine()"
         >
           <span class="routine-action-icon">
-            +
+            <svg
+              lucidePlus
+              [size]="22"
+              [strokeWidth]="2"
+            ></svg>
           </span>
 
           <span class="routine-action-content">
@@ -263,7 +267,11 @@
           </span>
 
           <span class="routine-action-arrow">
-            ›
+            <svg
+              lucideChevronRight
+              [size]="20"
+              [strokeWidth]="2"
+            ></svg>
           </span>
         </button>
 
@@ -271,7 +279,11 @@
           class="routine-action-card import-action"
         >
           <span class="routine-action-icon">
-            ↑
+            <svg
+              lucideUpload
+              [size]="22"
+              [strokeWidth]="2"
+            ></svg>
           </span>
 
           <span class="routine-action-content">
@@ -287,7 +299,11 @@
           </span>
 
           <span class="routine-action-arrow">
-            ›
+            <svg
+              lucideChevronRight
+              [size]="20"
+              [strokeWidth]="2"
+            ></svg>
           </span>
 
           <input
@@ -304,7 +320,11 @@
           (click)="downloadChatGPTRoutineTemplate()"
         >
           <span class="routine-action-icon">
-            ↓
+            <svg
+              lucideDownload
+              [size]="22"
+              [strokeWidth]="2"
+            ></svg>
           </span>
 
           <span class="routine-action-content">
@@ -320,7 +340,11 @@
           </span>
 
           <span class="routine-action-arrow">
-            ›
+            <svg
+              lucideChevronRight
+              [size]="20"
+              [strokeWidth]="2"
+            ></svg>
           </span>
         </button>
 
@@ -334,7 +358,11 @@
 >
   <summary class="routine-management-summary">
     <span class="management-icon">
-      📊
+      <svg
+        lucideChartNoAxesCombined
+        [size]="22"
+        [strokeWidth]="2"
+      ></svg>
     </span>
 
     <span class="management-content">
@@ -349,7 +377,11 @@
     </span>
 
     <span class="management-chevron">
-      ›
+      <svg
+        lucideChevronRight
+        [size]="20"
+        [strokeWidth]="2"
+      ></svg>
     </span>
   </summary>
 
@@ -362,7 +394,11 @@
           (click)="openExportRecords()"
         >
           <span class="routine-action-icon">
-            ↗
+            <svg
+              lucideFileSpreadsheet
+              [size]="22"
+              [strokeWidth]="2"
+            ></svg>
           </span>
 
           <span class="routine-action-content">
@@ -378,7 +414,11 @@
           </span>
 
           <span class="routine-action-arrow">
-            ›
+            <svg
+              lucideChevronRight
+              [size]="20"
+              [strokeWidth]="2"
+            ></svg>
           </span>
         </button>
       </div>
@@ -932,7 +972,11 @@
                       ) {
                         …
                       } @else {
-                        ×
+                        <svg
+                          lucideTrash2
+                          [size]="16"
+                          [strokeWidth]="2"
+                        ></svg>
                       }
                     </button>
                   </span>

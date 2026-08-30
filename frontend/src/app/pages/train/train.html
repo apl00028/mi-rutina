@@ -394,11 +394,19 @@
                             )
                           "
                         >
-                          {{
-                            warmup.completedAt
-                              ? '✓'
-                              : '○'
-                          }}
+                          @if (warmup.completedAt) {
+                            <svg
+                              lucideCheck
+                              [size]="18"
+                              [strokeWidth]="2"
+                            ></svg>
+                          } @else {
+                            <svg
+                              lucideCircle
+                              [size]="18"
+                              [strokeWidth]="2"
+                            ></svg>
+                          }
                         </button>
 
                         <button
@@ -411,7 +419,11 @@
                             )
                           "
                         >
-                          ×
+                          <svg
+                            lucideTrash2
+                            [size]="17"
+                            [strokeWidth]="2"
+                          ></svg>
                         </button>
                       </div>
                     }
@@ -610,7 +622,11 @@
                             $index
                           )
                         ) {
-                          ✓
+                          <svg
+                            lucideCheck
+                            [size]="17"
+                            [strokeWidth]="2.25"
+                          ></svg>
                         } @else {
                           {{ $index + 1 }}
                         }

@@ -141,6 +141,39 @@ export interface HealthConnectSwimmingMetrics {
 }
 
 
+export interface HealthConnectRunningMetricSession {
+  exerciseType: number;
+  startTime: string;
+  endTime: string;
+  durationSeconds: number;
+  lapCount: number;
+  segmentCount: number;
+  hasRoute: boolean;
+
+  distanceMeters?: number;
+  distanceError?: string;
+
+  heartRateAverageBpm?: number;
+  heartRateMaxBpm?: number;
+  heartRateSampleCount: number;
+  heartRateError?: string;
+
+  speedAverageMetersPerSecond?: number;
+  speedMaxMetersPerSecond?: number;
+  speedSampleCount: number;
+  paceSecondsPerKmFromSpeed?: number;
+  speedError?: string;
+}
+
+
+export interface HealthConnectRunningMetrics {
+  sourcePackage: string;
+  lookbackDays: number;
+  count: number;
+  sessions: HealthConnectRunningMetricSession[];
+}
+
+
 export interface HealthConnectExerciseSessions {
   sourcePackage: string;
   lookbackDays: number;
@@ -168,6 +201,9 @@ export interface HealthConnectPlugin {
 
   readGarminSwimmingMetrics():
     Promise<HealthConnectSwimmingMetrics>;
+
+  readGarminRunningMetrics():
+    Promise<HealthConnectRunningMetrics>;
 }
 
 

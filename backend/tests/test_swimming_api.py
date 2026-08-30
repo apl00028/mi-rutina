@@ -100,6 +100,48 @@ def test_swimming_fit_import_rejects_empty_file():
     }
 
 
+def test_swimming_fit_import_rejects_oversized_file(
+    monkeypatch,
+):
+    from app.domains.swimming import router as swimming_api
+
+    monkeypatch.setattr(
+        swimming_api,
+        "MAX_FIT_FILE_SIZE_BYTES",
+        8,
+    )
+
+    app.dependency_overrides[
+        require_user
+    ] = authenticated_user
+
+    try:
+        response = client.post(
+            "/api/v1/swimming/import-fit",
+            headers={
+                "Authorization":
+                    "Bearer token-123"
+            },
+            files={
+                "file": (
+                    "activity.fit",
+                    b"too-large",
+                    "application/octet-stream",
+                )
+            },
+        )
+    finally:
+        app.dependency_overrides.pop(
+            require_user,
+            None,
+        )
+
+    assert response.status_code == 413
+    assert response.json() == {
+        "detail": "FIT file is too large"
+    }
+
+
 def test_swimming_fit_import_returns_parsed_session(
     monkeypatch,
 ):
@@ -231,6 +273,45 @@ def test_swimming_fit_import_rejects_invalid_fit(
     assert response.status_code == 422
     assert response.json() == {
         "detail": "Invalid or unsupported FIT file"
+    }
+
+
+def test_swimming_fit_import_rejects_non_swimming_activity(
+    monkeypatch,
+):
+    from app.domains.swimming import router as swimming_api
+    from app.domains.swimming.fit_parser import NonSwimmingFitError
+
+    async def fake_import_user_swimming_fit(user, path, contents):
+        raise NonSwimmingFitError(
+            "FIT file is not a swimming activity"
+        )
+
+    monkeypatch.setattr(
+        swimming_api,
+        "import_user_swimming_fit",
+        fake_import_user_swimming_fit,
+    )
+    app.dependency_overrides[require_user] = authenticated_user
+
+    try:
+        response = client.post(
+            "/api/v1/swimming/import-fit",
+            headers={"Authorization": "Bearer token-123"},
+            files={
+                "file": (
+                    "activity.fit",
+                    b"running-fit",
+                    "application/octet-stream",
+                )
+            },
+        )
+    finally:
+        app.dependency_overrides.pop(require_user, None)
+
+    assert response.status_code == 422
+    assert response.json() == {
+        "detail": "FIT file is not a swimming activity"
     }
 
 

@@ -1,6 +1,7 @@
 from datetime import datetime, timezone
 
 import asyncio
+import httpx
 
 from app.core.auth import AuthenticatedUser
 from app.domains.swimming.models import SwimmingFitSession
@@ -169,6 +170,62 @@ def test_existing_fit_is_returned_without_reparse(
 
     assert result.distance_meters == 1200
     assert result.total_strokes == 758
+
+
+def test_unique_conflict_returns_concurrently_created_fit(
+    monkeypatch,
+    tmp_path,
+):
+    from app.domains.swimming import service
+
+    path = tmp_path / "activity.fit"
+    contents = b"concurrent-fit"
+    path.write_bytes(contents)
+    stored_data = sample_session().model_dump(
+        mode="json",
+        exclude_none=True,
+    )
+    reads = 0
+
+    async def fake_get(user, source_file_hash):
+        nonlocal reads
+        reads += 1
+        return None if reads == 1 else {"data": stored_data}
+
+    async def fake_create(user, payload):
+        request = httpx.Request(
+            "POST",
+            "https://example.test/swimming_sessions",
+        )
+        response = httpx.Response(409, request=request)
+        raise httpx.HTTPStatusError(
+            "duplicate key",
+            request=request,
+            response=response,
+        )
+
+    monkeypatch.setattr(
+        service,
+        "get_swimming_session_by_hash",
+        fake_get,
+    )
+    monkeypatch.setattr(
+        service,
+        "parse_swimming_fit",
+        lambda parsed_path: sample_session(),
+    )
+    monkeypatch.setattr(
+        service,
+        "create_swimming_session",
+        fake_create,
+    )
+
+    result = asyncio.run(
+        import_user_swimming_fit(USER, path, contents)
+    )
+
+    assert reads == 2
+    assert result.distance_meters == 1200
 
 
 def test_list_user_swimming_sessions(

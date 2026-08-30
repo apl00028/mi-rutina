@@ -1,5 +1,7 @@
 import {
   Component,
+  Inject,
+  InjectionToken,
   OnInit,
   signal
 } from '@angular/core';
@@ -40,6 +42,9 @@ import {
 } from '../../../environments/environment';
 
 import type {
+  HealthConnectRunningMetrics,
+  HealthConnectRunningMetricSession,
+  HealthConnectSwimmingMetrics,
   HealthConnectSwimmingMetricSession
 } from '../../core/health-connect.plugin';
 
@@ -183,6 +188,28 @@ export interface SwimmingSessionView {
 }
 
 
+interface EnduranceHealthConnect {
+  readGarminSwimmingMetrics():
+    Promise<HealthConnectSwimmingMetrics>;
+
+  readGarminRunningMetrics():
+    Promise<HealthConnectRunningMetrics>;
+}
+
+
+export const ENDURANCE_HEALTH_CONNECT =
+  new InjectionToken<EnduranceHealthConnect>(
+    'ENDURANCE_HEALTH_CONNECT',
+    {
+      providedIn: 'root',
+      factory: () => HealthConnect
+    }
+  );
+
+const RUNNING_EXERCISE_TYPE = 33;
+const RUNNING_TREADMILL_EXERCISE_TYPE = 34;
+
+
 @Component({
   selector: 'app-endurance',
   standalone: true,
@@ -221,6 +248,44 @@ export class Endurance
         label: 'Análisis'
       }
     ];
+
+
+  readonly runningTabs:
+    TrainingNavigationTab[] = [
+      {
+        id: 'session',
+        label: 'Sesión'
+      },
+      {
+        id: 'routine',
+        label: 'Rutina'
+      },
+      {
+        id: 'analytics',
+        label: 'Análisis'
+      }
+    ];
+
+  readonly runningLoading =
+    signal(false);
+
+  readonly runningError =
+    signal<string | null>(null);
+
+  readonly runningSessions =
+    signal<HealthConnectRunningMetricSession[]>(
+      []
+    );
+
+  readonly selectedRunningSessionIndex =
+    signal(0);
+
+  readonly runningView =
+    signal<
+      'session'
+      | 'routine'
+      | 'analytics'
+    >('session');
 
 
   readonly swimmingLoading =
@@ -319,22 +384,14 @@ export class Endurance
       null
     );
 
-  readonly importedSwimmingFit =
-    signal<SwimmingFitImportResponse | null>(
-      null
-    );
-
-  readonly fitSwimmingSessions =
-    signal<SwimmingFitImportResponse[]>(
-      []
-    );
-
-
   constructor(
     private route: ActivatedRoute,
     private router: Router,
     private http: HttpClient,
-    private auth: AuthService
+    private auth: AuthService,
+    @Inject(ENDURANCE_HEALTH_CONNECT)
+    private healthConnect:
+      EnduranceHealthConnect
   ) {}
 
 
@@ -361,6 +418,11 @@ export class Endurance
     ) {
       void this.loadSwimming();
       void this.loadActiveSwimmingRoutine();
+    } else if (
+      this.discipline() ===
+      'running'
+    ) {
+      void this.loadRunning();
     }
   }
 
@@ -487,6 +549,53 @@ export class Endurance
 
     } finally {
       this.swimmingRoutineLoading.set(false);
+    }
+  }
+
+
+  async loadRunning(): Promise<void> {
+
+    if (this.runningLoading()) {
+      return;
+    }
+
+    this.runningLoading.set(true);
+    this.runningError.set(null);
+
+    try {
+      const result =
+        await this.healthConnect
+          .readGarminRunningMetrics();
+
+      const sessions = [
+        ...result.sessions
+      ].sort(
+        (left, right) =>
+          new Date(
+            right.startTime
+          ).getTime()
+          -
+          new Date(
+            left.startTime
+          ).getTime()
+      );
+
+      this.runningSessions.set(
+        sessions
+      );
+
+      this.selectedRunningSessionIndex.set(
+        0
+      );
+
+    } catch (error: any) {
+      this.runningError.set(
+        error?.message
+        ?? 'No se pudieron cargar las sesiones de carrera.'
+      );
+
+    } finally {
+      this.runningLoading.set(false);
     }
   }
 
@@ -838,6 +947,32 @@ export class Endurance
       return;
     }
 
+    if (
+      draft.blocks.some(
+        block =>
+          block.sets.some(
+            set =>
+              !Number.isFinite(
+                set.repetitions
+              )
+              || set.repetitions <= 0
+              || !Number.isFinite(
+                set.distanceMeters
+              )
+              || set.distanceMeters <= 0
+              || !Number.isFinite(
+                set.restSeconds
+              )
+              || set.restSeconds < 0
+          )
+      )
+    ) {
+      this.swimmingRoutineSaveError.set(
+        'Las series necesitan repeticiones y distancia mayores que 0.'
+      );
+      return;
+    }
+
     this.swimmingRoutineSaving.set(true);
     this.swimmingRoutineSaveError.set(
       null
@@ -912,7 +1047,8 @@ export class Endurance
 
               technicalFocus:
                 draft.technicalFocus
-            }
+            },
+            ...stored.sessions.slice(1)
           ]
         };
 
@@ -977,10 +1113,6 @@ export class Endurance
       null
     );
 
-    this.importedSwimmingFit.set(
-      null
-    );
-
     this.swimmingFitImporting.set(
       true
     );
@@ -1010,17 +1142,12 @@ export class Endurance
         file.name
       );
 
-      const result =
-        await firstValueFrom(
-          this.http.post<SwimmingFitImportResponse>(
-            `${this.apiUrl}/swimming/import-fit`,
-            formData,
-            { headers }
-          )
-        );
-
-      this.importedSwimmingFit.set(
-        result
+      await firstValueFrom(
+        this.http.post<SwimmingFitImportResponse>(
+          `${this.apiUrl}/swimming/import-fit`,
+          formData,
+          { headers }
+        )
       );
 
       await this.loadSwimming();
@@ -1059,10 +1186,6 @@ export class Endurance
       const fitSessions =
         await this.loadPersistedSwimmingSessions();
 
-      this.fitSwimmingSessions.set(
-        fitSessions
-      );
-
       const fitViews =
         fitSessions.map(
           session =>
@@ -1080,23 +1203,30 @@ export class Endurance
           'android';
 
       if (isAndroid) {
-        const result =
-          await HealthConnect
-            .readGarminSwimmingMetrics();
+        try {
+          const result =
+            await this.healthConnect
+              .readGarminSwimmingMetrics();
 
-        const healthConnectViews =
-          result.sessions.map(
-            session =>
-              this.toSwimmingSessionView(
-                session
-              )
-          );
+          const healthConnectViews =
+            result.sessions.map(
+              session =>
+                this.toSwimmingSessionView(
+                  session
+                )
+            );
 
-        sessions =
-          this.mergeSwimmingSessions(
-            healthConnectViews,
-            fitViews
-          );
+          sessions =
+            this.mergeSwimmingSessions(
+              healthConnectViews,
+              fitViews
+            );
+
+        } catch (error: unknown) {
+          if (fitViews.length === 0) {
+            throw error;
+          }
+        }
 
       } else {
         this.swimmingRequiresAndroid.set(
@@ -1745,6 +1875,149 @@ export class Endurance
   }
 
 
+  selectedRunningSession():
+    HealthConnectRunningMetricSession | null {
+
+    return this.runningSessions()[
+      this.selectedRunningSessionIndex()
+    ] ?? null;
+  }
+
+
+  selectRunningSession(
+    value: string
+  ): void {
+
+    const index =
+      Number(value);
+
+    if (
+      Number.isInteger(index)
+      && index >= 0
+      && index <
+        this.runningSessions().length
+    ) {
+      this.selectedRunningSessionIndex.set(
+        index
+      );
+    }
+  }
+
+
+  setEnduranceView(
+    view: string
+  ): void {
+
+    if (this.discipline() === 'swimming') {
+      this.setSwimmingView(view);
+    } else if (
+      this.discipline() === 'running'
+    ) {
+      this.setRunningView(view);
+    }
+  }
+
+
+  setRunningView(
+    view: string
+  ): void {
+
+    if (
+      view === 'session'
+      || view === 'routine'
+      || view === 'analytics'
+    ) {
+      this.runningView.set(view);
+    }
+  }
+
+
+  runningSessionTypeLabel(
+    exerciseType: number
+  ): string {
+
+    if (
+      exerciseType ===
+        RUNNING_TREADMILL_EXERCISE_TYPE
+    ) {
+      return 'Cinta';
+    }
+
+    if (
+      exerciseType ===
+        RUNNING_EXERCISE_TYPE
+    ) {
+      return 'Exterior';
+    }
+
+    return 'Carrera';
+  }
+
+
+  formatRunningDistance(
+    distanceMeters:
+      number | null | undefined
+  ): string {
+
+    if (
+      distanceMeters === null
+      || distanceMeters === undefined
+      || !Number.isFinite(distanceMeters)
+      || distanceMeters < 0
+    ) {
+      return '—';
+    }
+
+    if (distanceMeters >= 1000) {
+      return `${(
+        distanceMeters / 1000
+      ).toFixed(2)} km`;
+    }
+
+    return `${Math.round(distanceMeters)} m`;
+  }
+
+
+  formatRunningPace(
+    secondsPerKm:
+      number | null | undefined
+  ): string {
+
+    if (
+      secondsPerKm === null
+      || secondsPerKm === undefined
+      || !Number.isFinite(secondsPerKm)
+      || secondsPerKm <= 0
+    ) {
+      return '—';
+    }
+
+    return `${this.formatDuration(
+      secondsPerKm
+    )} /km`;
+  }
+
+
+  formatRunningSpeed(
+    metersPerSecond:
+      number | null | undefined
+  ): string {
+
+    if (
+      metersPerSecond === null
+      || metersPerSecond === undefined
+      || !Number.isFinite(metersPerSecond)
+      || metersPerSecond < 0
+    ) {
+      return '—';
+    }
+
+    return `${(
+      metersPerSecond * 3.6
+    ).toFixed(1)} km/h`;
+  }
+
+
   swimmingRoutineSetGroups(
     repetitions: number,
     distanceMeters: number,
@@ -1780,34 +2053,6 @@ export class Endurance
             )
             + lengthIndex
         )
-    );
-  }
-
-
-  swimmingRoutineSetLengths(
-    repetitions: number,
-    distanceMeters: number,
-    poolLengthMeters: number
-  ): number[] {
-
-    if (
-      repetitions <= 0
-      || distanceMeters <= 0
-      || poolLengthMeters <= 0
-    ) {
-      return [];
-    }
-
-    const lengths =
-      Math.round(
-        repetitions
-        * distanceMeters
-        / poolLengthMeters
-      );
-
-    return Array.from(
-      { length: lengths },
-      (_, index) => index
     );
   }
 

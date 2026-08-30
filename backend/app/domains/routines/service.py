@@ -139,7 +139,15 @@ async def get_user_active_routine(
     if routine_row is None:
         return None
 
-    return routine_row_to_model(routine_row)
+    routine = routine_row_to_model(routine_row)
+    routine_discipline = (
+        routine.discipline or "strength"
+    )
+
+    if routine_discipline != discipline:
+        return None
+
+    return routine
 
 
 async def activate_user_routine(

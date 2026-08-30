@@ -8,6 +8,36 @@ from app.domains.swimming.models import (
 )
 
 
+class NonSwimmingFitError(ValueError):
+    pass
+
+
+_SWIMMING_SPORT_VALUES = {"swimming", 5}
+_SWIMMING_SUB_SPORT_VALUES = {
+    None,
+    "generic",
+    "lap_swimming",
+    "open_water",
+    0,
+    17,
+    18,
+}
+
+
+def _normalized_fit_value(value):
+    if isinstance(value, str):
+        return value.strip().lower().replace("-", "_").replace(" ", "_")
+
+    return value
+
+
+def _is_swimming_activity(sport, sub_sport) -> bool:
+    return (
+        _normalized_fit_value(sport) in _SWIMMING_SPORT_VALUES
+        and _normalized_fit_value(sub_sport) in _SWIMMING_SUB_SPORT_VALUES
+    )
+
+
 def _field(frame: fitdecode.FitDataMessage, name: str):
     try:
         return frame.get_value(name)
@@ -31,6 +61,8 @@ def parse_swimming_fit(
 
             if frame.name == "session":
                 session_data = {
+                    "sport": _field(frame, "sport"),
+                    "sub_sport": _field(frame, "sub_sport"),
                     "start_time": _field(
                         frame,
                         "start_time",
@@ -130,6 +162,14 @@ def parse_swimming_fit(
     if not session_data:
         raise ValueError(
             "FIT file does not contain a session message"
+        )
+
+    sport = session_data.pop("sport")
+    sub_sport = session_data.pop("sub_sport")
+
+    if not _is_swimming_activity(sport, sub_sport):
+        raise NonSwimmingFitError(
+            "FIT file is not a swimming activity"
         )
 
     average_speed = session_data.get(

@@ -1,6 +1,8 @@
 from hashlib import sha256
 from typing import Any
 
+import httpx
+
 from app.core.auth import AuthenticatedUser
 from app.domains.swimming.fit_parser import (
     parse_swimming_fit,
@@ -102,10 +104,24 @@ async def import_user_swimming_fit(
         source_file_hash,
     )
 
-    row = await create_swimming_session(
-        user,
-        payload,
-    )
+    try:
+        row = await create_swimming_session(
+            user,
+            payload,
+        )
+    except httpx.HTTPStatusError as exc:
+        if exc.response.status_code != 409:
+            raise
+
+        existing = await get_swimming_session_by_hash(
+            user,
+            source_file_hash,
+        )
+
+        if existing is None:
+            raise
+
+        row = existing
 
     return swimming_row_to_model(
         row

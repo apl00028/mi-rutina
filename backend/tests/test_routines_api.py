@@ -71,6 +71,35 @@ def routine_payload(routine_id="routine-1", revision=1):
     }
 
 
+def swimming_routine_model(routine_id="swim-1"):
+    return Routine(
+        schemaVersion="4.2",
+        routineId=routine_id,
+        revision=1,
+        discipline="swimming",
+        sessions=[
+            {
+                "sessionId": "swim-a",
+                "poolLengthMeters": 25,
+                "blocks": [
+                    {
+                        "sets": [
+                            {
+                                "repetitions": 4,
+                                "distanceMeters": 100,
+                                "restSeconds": 30,
+                                "stroke": "freestyle",
+                                "workType": "swim",
+                                "intensity": "controlled",
+                            }
+                        ]
+                    }
+                ],
+            }
+        ],
+    )
+
+
 def test_list_routines_returns_user_routines(monkeypatch):
     from app.domains.routines import router as routines_api
 
@@ -645,9 +674,7 @@ def test_get_active_routine_accepts_discipline(monkeypatch):
         captured["user_id"] = user.id
         captured["discipline"] = discipline
 
-        routine = routine_model("swim-1")
-        routine.discipline = "swimming"
-        return routine
+        return swimming_routine_model()
 
     app.dependency_overrides[require_user] = authenticated_user
     monkeypatch.setattr(

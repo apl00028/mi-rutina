@@ -62,6 +62,38 @@ public class HealthConnectPlugin
     private static final int MINIMUM_SDK = 34;
 
 
+    static boolean isRunningExerciseType(
+            int exerciseType
+    ) {
+        return exerciseType ==
+                ExerciseSessionType
+                        .EXERCISE_SESSION_TYPE_RUNNING ||
+                exerciseType ==
+                        ExerciseSessionType
+                                .EXERCISE_SESSION_TYPE_RUNNING_TREADMILL;
+    }
+
+
+    static Double paceSecondsForDistance(
+            double averageSpeedMetersPerSecond,
+            double distanceMeters
+    ) {
+        if (
+                !Double.isFinite(
+                        averageSpeedMetersPerSecond
+                ) ||
+                averageSpeedMetersPerSecond <= 0 ||
+                !Double.isFinite(distanceMeters) ||
+                distanceMeters <= 0
+        ) {
+            return null;
+        }
+
+        return distanceMeters /
+                averageSpeedMetersPerSecond;
+    }
+
+
     @Override
     public void load() {
         super.load();
@@ -952,11 +984,11 @@ public class HealthConnectPlugin
 
                             sessions.put(session);
 
-                            launchSwimmingSubread(
+                            launchMetricSubread(
                                     session,
                                     "distanceError",
                                     finishPart,
-                                    done -> readSwimmingDistance(
+                                    done -> readExerciseDistance(
                                             manager,
                                             executor,
                                             garminOrigin,
@@ -967,7 +999,7 @@ public class HealthConnectPlugin
                                     )
                             );
 
-                            launchSwimmingSubread(
+                            launchMetricSubread(
                                     session,
                                     "distanceRecordsError",
                                     finishPart,
@@ -982,11 +1014,11 @@ public class HealthConnectPlugin
                                     )
                             );
 
-                            launchSwimmingSubread(
+                            launchMetricSubread(
                                     session,
                                     "heartRateError",
                                     finishPart,
-                                    done -> readSwimmingHeartRate(
+                                    done -> readExerciseHeartRate(
                                             manager,
                                             executor,
                                             garminOrigin,
@@ -997,16 +1029,18 @@ public class HealthConnectPlugin
                                     )
                             );
 
-                            launchSwimmingSubread(
+                            launchMetricSubread(
                                     session,
                                     "speedError",
                                     finishPart,
-                                    done -> readSwimmingSpeed(
+                                    done -> readExerciseSpeed(
                                             manager,
                                             executor,
                                             garminOrigin,
                                             record.getStartTime(),
                                             record.getEndTime(),
+                                            "paceSecondsPer100mFromSpeed",
+                                            100.0,
                                             session,
                                             done
                                     )
@@ -1025,7 +1059,260 @@ public class HealthConnectPlugin
     }
 
 
-    private void launchSwimmingSubread(
+    @PluginMethod
+    public void readGarminRunningMetrics(
+            PluginCall call
+    ) {
+        final HealthConnectManager manager =
+                manager();
+
+        if (manager == null) {
+            call.reject(
+                    "Health Connect no está disponible."
+            );
+            return;
+        }
+
+        final String[] permissions = {
+                "android.permission.health.READ_EXERCISE",
+                "android.permission.health.READ_DISTANCE",
+                "android.permission.health.READ_SPEED",
+                "android.permission.health.READ_HEART_RATE"
+        };
+
+        for (String permission : permissions) {
+            if (!hasHealthPermission(permission)) {
+                call.reject(
+                        "Falta permiso para diagnóstico de carrera: " +
+                        permission
+                );
+                return;
+            }
+        }
+
+        final String garminPackage =
+                "com.garmin.android.apps.connectmobile";
+
+        final DataOrigin garminOrigin =
+                new DataOrigin.Builder()
+                        .setPackageName(garminPackage)
+                        .build();
+
+        final Instant end =
+                Instant.now();
+
+        final Instant start =
+                end.minus(
+                        Duration.ofDays(30)
+                );
+
+        final Executor executor =
+                getContext().getMainExecutor();
+
+        readExerciseSessionPages(
+                manager,
+                executor,
+                garminOrigin,
+                start,
+                end,
+                false,
+                -1,
+                new ArrayList<>(),
+                records -> {
+                    ArrayList<ExerciseSessionRecord>
+                            runningSessions =
+                            new ArrayList<>();
+
+                    for (
+                            ExerciseSessionRecord record :
+                            records
+                    ) {
+                        if (
+                                isRunningExerciseType(
+                                        record.getExerciseType()
+                                )
+                        ) {
+                            runningSessions.add(record);
+                        }
+                    }
+
+                    JSArray sessions =
+                            new JSArray();
+
+                    JSObject response =
+                            new JSObject();
+
+                    response.put(
+                            "sourcePackage",
+                            garminPackage
+                    );
+
+                    response.put(
+                            "lookbackDays",
+                            30
+                    );
+
+                    response.put(
+                            "count",
+                            runningSessions.size()
+                    );
+
+                    response.put(
+                            "sessions",
+                            sessions
+                    );
+
+                    if (runningSessions.isEmpty()) {
+                        call.resolve(response);
+                        return;
+                    }
+
+                    AtomicInteger pending =
+                            new AtomicInteger(
+                                    runningSessions.size()
+                                            * 3
+                            );
+
+                    AtomicBoolean resolved =
+                            new AtomicBoolean(false);
+
+                    Runnable finishPart =
+                            () -> {
+                                if (
+                                        pending
+                                                .decrementAndGet()
+                                                == 0 &&
+                                        resolved.compareAndSet(
+                                                false,
+                                                true
+                                        )
+                                ) {
+                                    call.resolve(response);
+                                }
+                            };
+
+                    for (
+                            ExerciseSessionRecord record :
+                            runningSessions
+                    ) {
+                        JSObject session =
+                                new JSObject();
+
+                        session.put(
+                                "exerciseType",
+                                record.getExerciseType()
+                        );
+
+                        session.put(
+                                "startTime",
+                                record
+                                        .getStartTime()
+                                        .toString()
+                        );
+
+                        session.put(
+                                "endTime",
+                                record
+                                        .getEndTime()
+                                        .toString()
+                        );
+
+                        session.put(
+                                "durationSeconds",
+                                Duration
+                                        .between(
+                                                record.getStartTime(),
+                                                record.getEndTime()
+                                        )
+                                        .toMillis()
+                                        / 1000.0
+                        );
+
+                        session.put(
+                                "lapCount",
+                                record.getLaps().size()
+                        );
+
+                        session.put(
+                                "segmentCount",
+                                record.getSegments().size()
+                        );
+
+                        session.put(
+                                "hasRoute",
+                                record.hasRoute()
+                        );
+
+                        session.put(
+                                "heartRateSampleCount",
+                                0
+                        );
+
+                        session.put(
+                                "speedSampleCount",
+                                0
+                        );
+
+                        sessions.put(session);
+
+                        launchMetricSubread(
+                                session,
+                                "distanceError",
+                                finishPart,
+                                done -> readExerciseDistance(
+                                        manager,
+                                        executor,
+                                        garminOrigin,
+                                        record.getStartTime(),
+                                        record.getEndTime(),
+                                        session,
+                                        done
+                                )
+                        );
+
+                        launchMetricSubread(
+                                session,
+                                "heartRateError",
+                                finishPart,
+                                done -> readExerciseHeartRate(
+                                        manager,
+                                        executor,
+                                        garminOrigin,
+                                        record.getStartTime(),
+                                        record.getEndTime(),
+                                        session,
+                                        done
+                                )
+                        );
+
+                        launchMetricSubread(
+                                session,
+                                "speedError",
+                                finishPart,
+                                done -> readExerciseSpeed(
+                                        manager,
+                                        executor,
+                                        garminOrigin,
+                                        record.getStartTime(),
+                                        record.getEndTime(),
+                                        "paceSecondsPerKmFromSpeed",
+                                        1000.0,
+                                        session,
+                                        done
+                                )
+                        );
+                    }
+                },
+                error -> call.reject(
+                        "No se pudieron localizar las sesiones de carrera: " +
+                        error,
+                        error
+                )
+        );
+    }
+
+
+    private void launchMetricSubread(
             JSObject session,
             String errorField,
             Runnable finished,
@@ -1059,7 +1346,7 @@ public class HealthConnectPlugin
     }
 
 
-    private void readSwimmingDistance(
+    private void readExerciseDistance(
             HealthConnectManager manager,
             Executor executor,
             DataOrigin garminOrigin,
@@ -1312,7 +1599,7 @@ public class HealthConnectPlugin
     }
 
 
-    private void readSwimmingHeartRate(
+    private void readExerciseHeartRate(
             HealthConnectManager manager,
             Executor executor,
             DataOrigin garminOrigin,
@@ -1415,12 +1702,14 @@ public class HealthConnectPlugin
     }
 
 
-    private void readSwimmingSpeed(
+    private void readExerciseSpeed(
             HealthConnectManager manager,
             Executor executor,
             DataOrigin garminOrigin,
             Instant start,
             Instant end,
+            String paceField,
+            double paceDistanceMeters,
             JSObject session,
             Runnable done
     ) {
@@ -1493,11 +1782,16 @@ public class HealthConnectPlugin
                                     speedMax
                             );
 
-                            if (average > 0) {
+                            Double pace =
+                                    paceSecondsForDistance(
+                                            average,
+                                            paceDistanceMeters
+                                    );
+
+                            if (pace != null) {
                                 session.put(
-                                        "paceSecondsPer100mFromSpeed",
-                                        100.0 /
-                                        average
+                                        paceField,
+                                        pace
                                 );
                             }
                         }

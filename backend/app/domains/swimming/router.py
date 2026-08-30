@@ -17,6 +17,7 @@ from app.core.auth import (
 from app.domains.swimming.models import (
     SwimmingFitSession,
 )
+from app.domains.swimming.fit_parser import NonSwimmingFitError
 from app.domains.swimming.service import (
     import_user_swimming_fit,
     list_user_swimming_sessions,
@@ -26,6 +27,8 @@ from app.domains.swimming.service import (
 router = APIRouter(
     tags=["Swimming"]
 )
+
+MAX_FIT_FILE_SIZE_BYTES = 10 * 1024 * 1024
 
 
 @router.get(
@@ -58,7 +61,17 @@ async def import_swimming_fit(
             detail="Only FIT files are supported",
         )
 
-    contents = await file.read()
+    contents = await file.read(
+        MAX_FIT_FILE_SIZE_BYTES + 1
+    )
+
+    if len(contents) > MAX_FIT_FILE_SIZE_BYTES:
+        raise HTTPException(
+            status_code=(
+                status.HTTP_413_REQUEST_ENTITY_TOO_LARGE
+            ),
+            detail="FIT file is too large",
+        )
 
     if not contents:
         raise HTTPException(
@@ -84,6 +97,11 @@ async def import_swimming_fit(
 
     except HTTPException:
         raise
+    except NonSwimmingFitError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=str(exc),
+        ) from exc
     except Exception as exc:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,

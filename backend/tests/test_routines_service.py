@@ -37,6 +37,36 @@ def routine_row():
     }
 
 
+def swimming_routine_row():
+    row = routine_row()
+    row["data"].update(
+        {
+            "discipline": "swimming",
+            "sessions": [
+                {
+                    "sessionId": "swim-a",
+                    "poolLengthMeters": 25,
+                    "blocks": [
+                        {
+                            "sets": [
+                                {
+                                    "repetitions": 4,
+                                    "distanceMeters": 100,
+                                    "restSeconds": 30,
+                                    "stroke": "freestyle",
+                                    "workType": "swim",
+                                    "intensity": "controlled",
+                                }
+                            ]
+                        }
+                    ],
+                }
+            ],
+        }
+    )
+    return row
+
+
 def test_routine_row_to_model_preserves_canonical_data():
     routine = service.routine_row_to_model(routine_row())
 
@@ -211,7 +241,7 @@ def test_get_user_active_routine_passes_discipline(monkeypatch):
         }
 
     async def fake_get_routine_by_id(user, routine_id):
-        return routine_row()
+        return swimming_routine_row()
 
     monkeypatch.setattr(
         service,
@@ -241,9 +271,46 @@ def test_get_user_active_routine_passes_discipline(monkeypatch):
     assert captured["discipline"] == "swimming"
 
 
+def test_get_user_active_routine_rejects_discipline_mismatch(
+    monkeypatch,
+):
+    async def fake_get_active_routine(user, discipline):
+        return {
+            "routine_id": "routine-1",
+        }
+
+    async def fake_get_routine_by_id(user, routine_id):
+        return routine_row()
+
+    monkeypatch.setattr(
+        service,
+        "get_active_routine",
+        fake_get_active_routine,
+    )
+    monkeypatch.setattr(
+        service,
+        "get_routine_by_id",
+        fake_get_routine_by_id,
+    )
+
+    user = AuthenticatedUser(
+        id="user-123",
+        email="test@example.com",
+        access_token="token-123",
+    )
+
+    routine = asyncio.run(
+        service.get_user_active_routine(
+            user,
+            "swimming",
+        )
+    )
+
+    assert routine is None
+
+
 def test_activate_user_routine_uses_routine_discipline(monkeypatch):
-    row = routine_row()
-    row["data"]["discipline"] = "swimming"
+    row = swimming_routine_row()
 
     captured = {}
 

@@ -7,18 +7,22 @@
         [tabs]="
           discipline() === 'swimming'
             ? swimmingTabs
-            : []
+            : discipline() === 'running'
+              ? runningTabs
+              : []
         "
         [activeTab]="
           discipline() === 'swimming'
             ? swimmingView()
-            : null
+            : discipline() === 'running'
+              ? runningView()
+              : null
         "
         (disciplineChange)="
           changeTrainingDiscipline($event)
         "
         (tabChange)="
-          setSwimmingView($event)
+          setEnduranceView($event)
         "
       />
     </div>
@@ -39,7 +43,10 @@
             <input
               type="file"
               accept=".fit"
-              [disabled]="swimmingFitImporting()"
+              [disabled]="
+                swimmingFitImporting()
+                || swimmingLoading()
+              "
               (change)="importSwimmingFit($event)"
             >
           </label>
@@ -133,9 +140,9 @@
       @if (
         swimmingView() === 'session'
       ) {
-      <section class="swimming-toolbar">
+      <section class="endurance-toolbar">
 
-        <div class="swimming-session-selector">
+        <div class="endurance-session-selector">
           <label for="swimming-session">
             Sesión
           </label>
@@ -911,10 +918,10 @@
           swimmingView() === 'session'
         ) {
           <section
-            class="discipline-card swimming-session"
+            class="discipline-card endurance-session"
           >
 
-            <div class="swimming-session-header">
+            <div class="endurance-session-header">
               <div>
                 <span class="eyebrow">
                   Sesión
@@ -931,7 +938,7 @@
               @if (
                 session.distanceMeters !== null
               ) {
-                <strong class="swimming-distance">
+                <strong class="endurance-distance">
                   {{
                     session.distanceMeters
                       | number:'1.0-0'
@@ -941,7 +948,7 @@
               }
             </div>
 
-            <div class="swimming-metrics-grid">
+            <div class="endurance-metrics-grid">
 
               <div>
                 <span>Tiempo total</span>
@@ -1172,7 +1179,7 @@
 
             </div>
 
-            <small class="swimming-note">
+            <small class="endurance-note">
               El ritmo con descansos usa el tiempo total
               de la sesión.
               @if (session.fitEnriched) {
@@ -1924,7 +1931,7 @@
                 }
 
 
-                <small class="swimming-note">
+                <small class="endurance-note">
                   Evaluación descriptiva basada en datos
                   disponibles y en comparaciones homogéneas
                   cuando es posible. No demuestra por sí sola
@@ -1961,6 +1968,277 @@
 
         }
       }
+    }
+
+  } @else if (
+    discipline() === 'running'
+  ) {
+
+    @if (
+      runningView() !== 'session'
+    ) {
+
+      <section class="discipline-card">
+        <span class="eyebrow">
+          {{
+            runningView() === 'routine'
+              ? 'Rutina'
+              : 'Análisis'
+          }}
+        </span>
+
+        <h2>
+          Próximamente
+        </h2>
+
+        <p>
+          Esta vista de carrera estará disponible
+          en una próxima versión.
+        </p>
+      </section>
+
+    } @else if (runningLoading()) {
+
+      <section class="discipline-card">
+        <p>
+          Cargando sesiones de carrera…
+        </p>
+      </section>
+
+    } @else if (runningError(); as error) {
+
+      <section class="discipline-card">
+        <span class="eyebrow">
+          Health Connect
+        </span>
+
+        <h2>
+          No se pudieron cargar las sesiones
+        </h2>
+
+        <p>
+          {{ error }}
+        </p>
+
+        <button
+          type="button"
+          (click)="loadRunning()"
+        >
+          Reintentar
+        </button>
+      </section>
+
+    } @else if (
+      runningSessions().length === 0
+    ) {
+
+      <section class="discipline-card">
+        <span class="eyebrow">
+          Garmin
+        </span>
+
+        <h2>
+          Sin sesiones recientes
+        </h2>
+
+        <p>
+          No se han encontrado sesiones de carrera
+          de Garmin en los últimos 30 días.
+        </p>
+      </section>
+
+    } @else {
+
+      <section class="endurance-toolbar">
+        <div class="endurance-session-selector">
+          <label for="running-session">
+            Sesión
+          </label>
+
+          <select
+            id="running-session"
+            #runningSessionSelect
+            [value]="selectedRunningSessionIndex()"
+            (change)="
+              selectRunningSession(
+                runningSessionSelect.value
+              )
+            "
+          >
+            @for (
+              session of runningSessions();
+              track session.startTime;
+              let index = $index
+            ) {
+              <option [value]="index">
+                {{
+                  session.startTime
+                    | date:'dd/MM/yyyy'
+                }}
+                ·
+                {{
+                  formatRunningDistance(
+                    session.distanceMeters
+                  )
+                }}
+                ·
+                {{
+                  runningSessionTypeLabel(
+                    session.exerciseType
+                  )
+                }}
+              </option>
+            }
+          </select>
+        </div>
+      </section>
+
+
+      @if (
+        selectedRunningSession();
+        as session
+      ) {
+        <section
+          class="discipline-card endurance-session"
+        >
+          <div class="endurance-session-header">
+            <div>
+              <span class="eyebrow">
+                {{
+                  runningSessionTypeLabel(
+                    session.exerciseType
+                  )
+                }}
+              </span>
+
+              <h2>
+                {{
+                  session.startTime
+                    | date:'dd/MM/yyyy'
+                }}
+              </h2>
+            </div>
+
+            <strong class="endurance-distance">
+              {{
+                formatRunningDistance(
+                  session.distanceMeters
+                )
+              }}
+            </strong>
+          </div>
+
+          <div class="endurance-metrics-grid">
+            <div>
+              <span>Duración</span>
+              <strong>
+                {{
+                  formatDuration(
+                    session.durationSeconds
+                  )
+                }}
+              </strong>
+            </div>
+
+            <div>
+              <span>Ritmo medio</span>
+              <strong>
+                {{
+                  formatRunningPace(
+                    session
+                      .paceSecondsPerKmFromSpeed
+                  )
+                }}
+              </strong>
+            </div>
+
+            <div>
+              <span>FC media</span>
+              <strong>
+                @if (
+                  session.heartRateAverageBpm !==
+                    undefined
+                ) {
+                  {{ session.heartRateAverageBpm }} ppm
+                } @else {
+                  —
+                }
+              </strong>
+            </div>
+
+            <div>
+              <span>FC máxima</span>
+              <strong>
+                @if (
+                  session.heartRateMaxBpm !==
+                    undefined
+                ) {
+                  {{ session.heartRateMaxBpm }} ppm
+                } @else {
+                  —
+                }
+              </strong>
+            </div>
+
+            <div>
+              <span>Velocidad media</span>
+              <strong>
+                {{
+                  formatRunningSpeed(
+                    session
+                      .speedAverageMetersPerSecond
+                  )
+                }}
+              </strong>
+            </div>
+
+            <div>
+              <span>Velocidad máxima</span>
+              <strong>
+                {{
+                  formatRunningSpeed(
+                    session
+                      .speedMaxMetersPerSecond
+                  )
+                }}
+              </strong>
+            </div>
+
+            <div>
+              <span>Vueltas</span>
+              <strong>
+                {{ session.lapCount }}
+              </strong>
+            </div>
+
+            <div>
+              <span>Segmentos</span>
+              <strong>
+                {{ session.segmentCount }}
+              </strong>
+            </div>
+
+            <div>
+              <span>Ruta</span>
+              <strong>
+                {{ session.hasRoute ? 'Sí' : 'No' }}
+              </strong>
+            </div>
+
+            <div>
+              <span>Tipo</span>
+              <strong>
+                {{
+                  runningSessionTypeLabel(
+                    session.exerciseType
+                  )
+                }}
+              </strong>
+            </div>
+          </div>
+        </section>
+      }
+
     }
 
   } @else {

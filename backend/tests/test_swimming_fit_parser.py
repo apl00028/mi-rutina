@@ -1,13 +1,94 @@
+from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest
 
-from app.domains.swimming.fit_parser import parse_swimming_fit
+from app.domains.swimming import fit_parser
+from app.domains.swimming.fit_parser import (
+    NonSwimmingFitError,
+    parse_swimming_fit,
+)
 
 
 FIT_PATH = Path(
     "/data/24138679140_ACTIVITY.fit"
 )
+
+
+class FakeFitDataMessage:
+    def __init__(self, name, values):
+        self.name = name
+        self.values = values
+
+    def get_value(self, name):
+        if name not in self.values:
+            raise KeyError(name)
+        return self.values[name]
+
+
+class FakeFitReader:
+    def __init__(self, frames):
+        self.frames = frames
+
+    def __enter__(self):
+        return iter(self.frames)
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        return False
+
+
+def mock_fit(monkeypatch, *, sport, sub_sport):
+    frames = [
+        FakeFitDataMessage(
+            "session",
+            {
+                "sport": sport,
+                "sub_sport": sub_sport,
+                "start_time": datetime(
+                    2026, 8, 27, tzinfo=timezone.utc
+                ),
+                "pool_length": 25,
+                "total_distance": 1200,
+            },
+        )
+    ]
+    monkeypatch.setattr(
+        fit_parser.fitdecode,
+        "FitDataMessage",
+        FakeFitDataMessage,
+    )
+    monkeypatch.setattr(
+        fit_parser.fitdecode,
+        "FitReader",
+        lambda path: FakeFitReader(frames),
+    )
+
+
+def test_parse_pool_swimming_activity(monkeypatch):
+    mock_fit(
+        monkeypatch,
+        sport="swimming",
+        sub_sport="lap_swimming",
+    )
+
+    session = parse_swimming_fit("swimming.fit")
+
+    assert session.distance_meters == 1200
+    assert session.pool_length_meters == 25
+
+
+def test_parse_non_swimming_activity_fails(monkeypatch):
+    mock_fit(
+        monkeypatch,
+        sport="running",
+        sub_sport="road",
+    )
+
+    with pytest.raises(
+        NonSwimmingFitError,
+        match="not a swimming activity",
+    ):
+        parse_swimming_fit("running.fit")
 
 
 @pytest.mark.skipif(

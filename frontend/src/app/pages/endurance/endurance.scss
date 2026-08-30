@@ -46,19 +46,19 @@
   opacity: 0.65;
 }
 
-/* Swimming */
+/* Session presentation */
 
-.swimming-session {
+.endurance-session {
   display: grid;
   gap: 10px;
   padding: 14px 16px;
 }
 
-.swimming-session + .swimming-session {
+.endurance-session + .endurance-session {
   margin-top: 12px;
 }
 
-.swimming-session-header {
+.endurance-session-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -67,21 +67,21 @@
   margin-bottom: 2px;
 }
 
-.swimming-session-header h2 {
+.endurance-session-header h2 {
   margin: 2px 0 0;
 }
 
-.swimming-session-header .eyebrow {
+.endurance-session-header .eyebrow {
   margin-bottom: 4px;
 }
 
-.swimming-distance {
+.endurance-distance {
   font-size: 1.25rem;
   line-height: 1;
   white-space: nowrap;
 }
 
-.swimming-metrics-grid {
+.endurance-metrics-grid {
   display: grid;
 
   grid-template-columns:
@@ -93,7 +93,7 @@
   gap: 6px 14px;
 }
 
-.swimming-metrics-grid > div {
+.endurance-metrics-grid > div {
   display: grid;
   gap: 3px;
 
@@ -109,7 +109,7 @@
   background: var(--bg);
 }
 
-.swimming-metrics-grid
+.endurance-metrics-grid
   > .swimming-metrics-section-title {
   grid-column: 1 / -1;
 
@@ -122,7 +122,7 @@
   background: transparent;
 }
 
-.swimming-metrics-grid
+.endurance-metrics-grid
   > .swimming-metrics-section-title
   .eyebrow {
   font-size: 0.7rem;
@@ -133,36 +133,36 @@
 }
 
 
-.swimming-metrics-grid span {
+.endurance-metrics-grid span {
   font-size: 0.72rem;
   opacity: 0.62;
 }
 
-.swimming-metrics-grid strong {
+.endurance-metrics-grid strong {
   font-size: 0.96rem;
   line-height: 1.2;
 }
 
-.swimming-note {
+.endurance-note {
   margin-top: -2px;
 
   font-size: 0.74rem;
   opacity: 0.58;
 }
 
-.swimming-toolbar {
+.endurance-toolbar {
   display: grid;
   gap: 10px;
 
   margin-bottom: 12px;
 }
 
-.swimming-session-selector {
+.endurance-session-selector {
   display: grid;
   gap: 4px;
 }
 
-.swimming-session-selector label {
+.endurance-session-selector label {
   margin: 0;
 
   font-size: 0.74rem;
@@ -170,7 +170,7 @@
   opacity: 0.62;
 }
 
-.swimming-session-selector select {
+.endurance-session-selector select {
   width: 100%;
   min-height: 46px;
 
@@ -210,7 +210,7 @@
 
 @media (min-width: 701px) {
 
-  .swimming-toolbar {
+  .endurance-toolbar {
     grid-template-columns:
       minmax(240px, 1fr)
       auto;
@@ -226,16 +226,16 @@
 
 
 
-  .swimming-toolbar {
+  .endurance-toolbar {
     gap: 8px;
   }
 
-  .swimming-metrics-grid {
+  .endurance-metrics-grid {
     grid-template-columns:
       repeat(2, minmax(0, 1fr));
   }
 
-  .discipline-card.swimming-session {
+  .discipline-card.endurance-session {
     margin-top: 0;
   }
 }
@@ -484,26 +484,6 @@
   opacity: 0.58;
 }
 
-.swimming-pool-lane {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 3px;
-
-  min-height: 28px;
-
-  padding: 5px;
-
-  border:
-    1px solid
-    color-mix(
-      in srgb,
-      var(--border) 80%,
-      transparent
-    );
-
-  border-radius: 10px;
-}
-
 .swimming-routine-length {
   display: block;
 
@@ -538,56 +518,6 @@
   data-block-type="cooldown"
 ] {
   opacity: 0.25;
-}
-
-.swimming-routine-sets {
-  display: grid;
-  gap: 7px;
-}
-
-.swimming-routine-set {
-  display: grid;
-  grid-template-columns:
-    minmax(0, 1fr) auto;
-  gap: 3px 12px;
-
-  padding-top: 7px;
-
-  border-top: 1px solid var(--border);
-}
-
-.swimming-routine-set:first-child {
-  padding-top: 0;
-  border-top: 0;
-}
-
-.swimming-routine-set-main {
-  display: flex;
-  align-items: baseline;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-
-.swimming-routine-set-main span {
-  font-size: 0.78rem;
-  opacity: 0.66;
-}
-
-.swimming-routine-rest {
-  font-size: 0.72rem;
-  font-weight: 700;
-  white-space: nowrap;
-  opacity: 0.72;
-}
-
-.swimming-routine-set p {
-  grid-column: 1 / -1;
-
-  margin: 0;
-
-  font-size: 0.8rem;
-  line-height: 1.35;
-  opacity: 0.72;
 }
 
 .swimming-routine-focus {
@@ -638,14 +568,6 @@
     gap: 2px;
   }
 
-  .swimming-routine-set {
-    grid-template-columns: 1fr;
-  }
-
-  .swimming-routine-rest {
-    justify-self: start;
-  }
-
   .swimming-routine-length {
     width: 18px;
     height: 16px;
@@ -674,66 +596,6 @@
   border-top: 0;
 }
 
-.swimming-routine-series-head {
-  display: grid;
-  grid-template-columns:
-    auto minmax(0, 1fr) auto;
-  align-items: baseline;
-  gap: 6px 10px;
-}
-
-.swimming-routine-series-head > strong {
-  white-space: nowrap;
-}
-
-.swimming-routine-series-head > span {
-  font-size: 0.78rem;
-  opacity: 0.66;
-}
-
-.swimming-routine-series-head > small {
-  font-size: 0.72rem;
-  font-weight: 700;
-  white-space: nowrap;
-  opacity: 0.7;
-}
-
-.swimming-routine-series-row
-  .swimming-pool-lane {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-
-  gap: 8px;
-
-  min-height: 34px;
-
-  padding: 6px 0;
-
-  border: 0;
-  border-radius: 0;
-}
-
-.swimming-routine-repetition {
-  display: flex;
-  gap: 3px;
-
-  padding-right: 7px;
-
-  border-right:
-    1px solid
-    color-mix(
-      in srgb,
-      var(--border) 85%,
-      transparent
-    );
-}
-
-.swimming-routine-repetition:last-child {
-  padding-right: 0;
-  border-right: 0;
-}
-
 .swimming-routine-series-instruction {
   margin: 0;
 
@@ -744,24 +606,6 @@
 }
 
 
-@media (max-width: 700px) {
-
-  .swimming-routine-series-head {
-    grid-template-columns:
-      auto 1fr;
-  }
-
-  .swimming-routine-series-head > small {
-    grid-column: 1 / -1;
-  }
-
-  .swimming-routine-series-row
-    .swimming-pool-lane {
-    gap: 6px;
-  }
-}
-
-
 /* Swimming routine repetition lanes */
 
 .swimming-routine-repetitions {
@@ -769,18 +613,6 @@
   gap: 5px;
 
   padding: 6px 0;
-}
-
-.swimming-routine-repetition-row {
-  display: grid;
-
-  grid-template-columns:
-    24px
-    minmax(0, 1fr)
-    auto;
-
-  align-items: center;
-  gap: 8px;
 }
 
 .swimming-routine-repetition-number {
@@ -799,55 +631,11 @@
   opacity: 0.65;
 }
 
-.swimming-routine-repetition-lane {
-  display: flex;
-  align-items: center;
-
-  gap: 3px;
-
-  min-height: 24px;
-}
-
-.swimming-routine-repetition-distance {
-  min-width: 46px;
-
-  font-size: 0.72rem;
-  font-weight: 700;
-
-  text-align: right;
-  white-space: nowrap;
-
-  opacity: 0.62;
-}
-
-
-/*
- * The old horizontal repetition grouping is no longer
- * used by the routine map.
- */
-.swimming-routine-repetition {
-  display: none;
-}
-
-
 @media (max-width: 700px) {
-
-  .swimming-routine-repetition-row {
-    grid-template-columns:
-      22px
-      minmax(0, 1fr)
-      42px;
-
-    gap: 6px;
-  }
 
   .swimming-routine-repetition-number {
     width: 20px;
     height: 20px;
-  }
-
-  .swimming-routine-repetition-distance {
-    min-width: 42px;
   }
 }
 
@@ -855,10 +643,13 @@
 /* Compact pool-lane layout */
 
 .swimming-routine-repetition-row {
+  display: grid;
   grid-template-columns:
     24px
     auto;
 
+  align-items: center;
+  gap: 8px;
   justify-content: start;
 }
 
@@ -869,6 +660,7 @@
   gap: 3px;
 
   width: fit-content;
+  min-height: 24px;
 
   padding: 5px 8px;
 
@@ -885,7 +677,13 @@
 
   border-left: 1px solid var(--border);
 
+  font-size: 0.72rem;
+  font-weight: 700;
+
   text-align: left;
+  white-space: nowrap;
+
+  opacity: 0.62;
 }
 
 @media (max-width: 700px) {
@@ -894,6 +692,8 @@
     grid-template-columns:
       22px
       auto;
+
+    gap: 6px;
   }
 
   .swimming-routine-repetition-lane {
@@ -937,10 +737,13 @@
 
   .swimming-routine-series-head {
     display: grid;
+    grid-template-columns:
+      auto 1fr;
     gap: 3px;
   }
 
   .swimming-routine-series-head > small {
+    grid-column: 1 / -1;
     padding-top: 0;
   }
 }

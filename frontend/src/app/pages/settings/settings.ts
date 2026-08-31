@@ -8,6 +8,15 @@ import {
   Router,
   RouterLink
 } from '@angular/router';
+import {
+  LucideChevronLeft,
+  LucideChevronRight,
+  LucideDatabase,
+  LucideDumbbell,
+  LucideInfo,
+  LucidePalette,
+  LucideUserRound
+} from '@lucide/angular';
 
 import {
   APP_INFO
@@ -47,35 +56,35 @@ import {
 
 const settingsSections = [
   {
-    icon: '◉',
+    icon: 'account',
     title: 'Cuenta',
     description:
       'Identidad, acceso, email y unidades.',
     route: '/ajustes/cuenta'
   },
   {
-    icon: '◫',
+    icon: 'training',
     title: 'Entrenamiento',
     description:
       'Registro, RIR y descanso.',
     route: '/ajustes/entrenamiento'
   },
   {
-    icon: '◐',
+    icon: 'appearance',
     title: 'Apariencia',
     description:
       'Tema, texto y movimiento.',
     route: '/ajustes/apariencia'
   },
   {
-    icon: '⇅',
+    icon: 'data',
     title: 'Datos',
     description:
       'Sincronización y exportación.',
     route: '/ajustes/datos'
   },
   {
-    icon: 'i',
+    icon: 'about',
     title: 'Acerca de',
     description:
       'Versión y entorno.',
@@ -88,7 +97,13 @@ const settingsSections = [
   selector: 'app-settings-hub',
   standalone: true,
   imports: [
-    RouterLink
+    RouterLink,
+    LucideChevronRight,
+    LucideDatabase,
+    LucideDumbbell,
+    LucideInfo,
+    LucidePalette,
+    LucideUserRound
   ],
   template: `
     <section class="settings-page">
@@ -112,7 +127,23 @@ const settingsSections = [
               class="settings-icon"
               aria-hidden="true"
             >
-              {{ section.icon }}
+              @switch (section.icon) {
+                @case ('account') {
+                  <svg lucideUserRound></svg>
+                }
+                @case ('training') {
+                  <svg lucideDumbbell></svg>
+                }
+                @case ('appearance') {
+                  <svg lucidePalette></svg>
+                }
+                @case ('data') {
+                  <svg lucideDatabase></svg>
+                }
+                @default {
+                  <svg lucideInfo></svg>
+                }
+              }
             </span>
 
             <span class="settings-copy">
@@ -125,12 +156,13 @@ const settingsSections = [
               </span>
             </span>
 
-            <span
+            <svg
+              lucideChevronRight
               class="settings-chevron"
+              [size]="18"
+              [strokeWidth]="2"
               aria-hidden="true"
-            >
-              ›
-            </span>
+            ></svg>
           </a>
         }
       </nav>
@@ -148,7 +180,8 @@ export class SettingsHub {
   selector: 'app-settings-account',
   standalone: true,
   imports: [
-    RouterLink
+    RouterLink,
+    LucideChevronLeft
   ],
   template: `
     <section class="settings-page">
@@ -157,12 +190,13 @@ export class SettingsHub {
         routerLink="/ajustes"
         aria-label="Volver a Ajustes"
       >
-        <span
+        <svg
+          lucideChevronLeft
           class="settings-back-icon"
+          [size]="20"
+          [strokeWidth]="2"
           aria-hidden="true"
-        >
-          ‹
-        </span>
+        ></svg>
 
         <span>Ajustes</span>
       </a>
@@ -989,7 +1023,8 @@ export class SettingsAccount
   selector: 'app-settings-training',
   standalone: true,
   imports: [
-    RouterLink
+    RouterLink,
+    LucideChevronLeft
   ],
   template: `
     <section class="settings-page">
@@ -998,12 +1033,13 @@ export class SettingsAccount
         routerLink="/ajustes"
         aria-label="Volver a Ajustes"
       >
-        <span
+        <svg
+          lucideChevronLeft
           class="settings-back-icon"
+          [size]="20"
+          [strokeWidth]="2"
           aria-hidden="true"
-        >
-          ‹
-        </span>
+        ></svg>
 
         <span>Ajustes</span>
       </a>
@@ -1172,7 +1208,8 @@ export class SettingsTraining {
   selector: 'app-settings-appearance',
   standalone: true,
   imports: [
-    RouterLink
+    RouterLink,
+    LucideChevronLeft
   ],
   template: `
     <section class="settings-page">
@@ -1181,12 +1218,13 @@ export class SettingsTraining {
         routerLink="/ajustes"
         aria-label="Volver a Ajustes"
       >
-        <span
+        <svg
+          lucideChevronLeft
           class="settings-back-icon"
+          [size]="20"
+          [strokeWidth]="2"
           aria-hidden="true"
-        >
-          ‹
-        </span>
+        ></svg>
 
         <span>Ajustes</span>
       </a>
@@ -1399,7 +1437,8 @@ export class SettingsAppearance {
   selector: 'app-settings-data',
   standalone: true,
   imports: [
-    RouterLink
+    RouterLink,
+    LucideChevronLeft
   ],
   template: `
     <section class="settings-page">
@@ -1408,12 +1447,13 @@ export class SettingsAppearance {
         routerLink="/ajustes"
         aria-label="Volver a Ajustes"
       >
-        <span
+        <svg
+          lucideChevronLeft
           class="settings-back-icon"
+          [size]="20"
+          [strokeWidth]="2"
           aria-hidden="true"
-        >
-          ‹
-        </span>
+        ></svg>
 
         <span>Ajustes</span>
       </a>
@@ -1887,7 +1927,7 @@ export class SettingsAppearance {
 
               <small>
                 {{ session.startTime }}
-                →
+                a
                 {{ session.endTime }}
               </small>
 
@@ -2031,7 +2071,7 @@ export class SettingsAppearance {
                   {{ numberLabel(record.distanceMeters) }} m
                   · {{ numberLabel(record.durationSeconds) }} s
                   · {{ record.startTime }}
-                  → {{ record.endTime }}
+                  a {{ record.endTime }}
                 </small>
               }
 
@@ -2667,7 +2707,8 @@ export class SettingsData
   selector: 'app-settings-about',
   standalone: true,
   imports: [
-    RouterLink
+    RouterLink,
+    LucideChevronLeft
   ],
   template: `
     <section class="settings-page">
@@ -2676,12 +2717,13 @@ export class SettingsData
         routerLink="/ajustes"
         aria-label="Volver a Ajustes"
       >
-        <span
+        <svg
+          lucideChevronLeft
           class="settings-back-icon"
+          [size]="20"
+          [strokeWidth]="2"
           aria-hidden="true"
-        >
-          ‹
-        </span>
+        ></svg>
 
         <span>Ajustes</span>
       </a>

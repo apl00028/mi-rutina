@@ -26,7 +26,7 @@
   display: grid;
 
   border: 1px solid var(--aptus-border);
-  border-radius: 14px;
+  border-radius: var(--aptus-radius-md);
 
   background: var(--aptus-surface);
 
@@ -58,7 +58,7 @@
 .settings-row {
   display: grid;
   grid-template-columns:
-    34px
+    22px
     minmax(0, 1fr)
     18px;
   align-items: center;
@@ -81,19 +81,18 @@
 }
 
 .settings-icon {
-  width: 34px;
-  height: 34px;
+  width: 22px;
+  height: 22px;
 
   display: grid;
   place-items: center;
 
-  border-radius: 9px;
+  color: var(--aptus-text-muted);
+}
 
-  background: var(--aptus-surface-muted);
-  color: var(--aptus-navy);
-
-  font-size: 1rem;
-  font-weight: 800;
+.settings-icon svg {
+  width: 19px;
+  height: 19px;
 }
 
 .settings-copy,
@@ -134,8 +133,6 @@
 
 .settings-chevron {
   color: var(--aptus-text-muted);
-
-  font-size: 1.35rem;
 }
 
 .settings-back {
@@ -156,20 +153,13 @@
 }
 
 .settings-back-icon {
-  width: 44px;
-  height: 44px;
+  width: 24px;
+  height: 24px;
 
   display: inline-grid;
   place-items: center;
 
-  border: 1px solid var(--aptus-border);
-  border-radius: 12px;
-
-  background: var(--aptus-surface);
   color: var(--aptus-accent-text);
-
-  font-size: 1.55rem;
-  line-height: 1;
 
   transition:
     background 140ms ease,
@@ -178,10 +168,7 @@
 }
 
 .settings-back:hover .settings-back-icon {
-  border-color: var(--aptus-border-strong);
-
-  background: var(--aptus-accent);
-  color: var(--aptus-accent-contrast);
+  color: var(--aptus-accent-hover);
 }
 
 .settings-toggle-row {
@@ -244,7 +231,7 @@
   padding: 4px;
 
   border: 1px solid var(--aptus-border);
-  border-radius: 12px;
+  border-radius: var(--aptus-radius-md);
 
   background: var(--aptus-surface-muted);
 }
@@ -254,7 +241,7 @@
   min-height: 40px;
 
   border: 0;
-  border-radius: 9px;
+  border-radius: var(--aptus-radius-md);
 
   background: transparent;
   color: var(--aptus-text-muted);
@@ -267,8 +254,8 @@
 }
 
 .segmented-control button.active {
-  background: var(--aptus-accent);
-  color: var(--aptus-accent-contrast);
+  background: var(--aptus-accent-soft);
+  color: var(--aptus-accent-text);
 }
 
 .settings-note {
@@ -292,16 +279,18 @@
 
   .settings-row {
     grid-template-columns:
-      32px
+      22px
       minmax(0, 1fr)
       16px;
   }
 
   .settings-icon {
-    width: 32px;
-    height: 32px;
+    width: 22px;
+    height: 22px;
   }
-  .settings-action,
+}
+
+.settings-action,
 .settings-danger-action {
   width: fit-content;
   min-height: 42px;
@@ -310,7 +299,7 @@
   padding: 9px 13px;
 
   border: 1px solid var(--aptus-border);
-  border-radius: 10px;
+  border-radius: var(--aptus-radius-md);
 
   background: var(--aptus-surface-muted);
   color: var(--aptus-text);
@@ -398,7 +387,7 @@
   padding: 10px;
 
   border: 1px solid var(--aptus-border);
-  border-radius: 10px;
+  border-radius: var(--aptus-radius-md);
 
   background: var(--aptus-surface-muted);
 }
@@ -433,7 +422,6 @@
     width: 100%;
   }
 }
-}
 
 .settings-password-form {
   display: grid;
@@ -449,7 +437,7 @@
   padding: 0 12px;
 
   border: 1px solid var(--aptus-border-strong);
-  border-radius: 10px;
+  border-radius: var(--aptus-radius-md);
 
   background: var(--aptus-surface);
   color: var(--aptus-text);
@@ -464,7 +452,7 @@
 }
 
 
-/* GYMOS SETTINGS MOBILE UX V1 */
+/* Aptus settings mobile layout */
 
 @media (max-width: 600px) {
 
@@ -497,12 +485,8 @@
   }
 
   .settings-back-icon {
-    width: 40px;
-    height: 40px;
-
-    border-radius: 11px;
-
-    font-size: 1.25rem;
+    width: 22px;
+    height: 22px;
   }
 
 
@@ -526,14 +510,14 @@
 
   .settings-list,
   .settings-panel {
-    border-radius: 15px;
+    border-radius: var(--aptus-radius-md);
   }
 
   .settings-row {
     min-height: 66px;
 
     grid-template-columns:
-      34px
+      22px
       minmax(0, 1fr)
       16px;
 
@@ -545,10 +529,8 @@
   }
 
   .settings-icon {
-    width: 34px;
-    height: 34px;
-
-    border-radius: 9px;
+    width: 22px;
+    height: 22px;
   }
 
   .settings-copy {
@@ -651,7 +633,7 @@
     padding:
       10px;
 
-    border-radius: 10px;
+    border-radius: var(--aptus-radius-md);
   }
 
   .passkey-copy {

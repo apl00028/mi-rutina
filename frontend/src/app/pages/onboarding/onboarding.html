@@ -860,7 +860,11 @@
               </span>
 
               <span aria-hidden="true">
-                ×
+                <svg
+                  lucideX
+                  [size]="14"
+                  [strokeWidth]="2"
+                ></svg>
               </span>
             </button>
           }
@@ -964,7 +968,11 @@
               </span>
 
               <span aria-hidden="true">
-                ×
+                <svg
+                  lucideX
+                  [size]="14"
+                  [strokeWidth]="2"
+                ></svg>
               </span>
             </button>
           }
@@ -998,7 +1006,13 @@
             class="secondary-button"
             (click)="previousStep()"
           >
-            ← Atrás
+            <svg
+              lucideArrowLeft
+              [size]="17"
+              [strokeWidth]="2"
+              aria-hidden="true"
+            ></svg>
+            Atrás
           </button>
         } @else {
           <div></div>
@@ -1016,7 +1030,11 @@
             </span>
 
             <span class="button-arrow">
-              →
+              <svg
+                lucideArrowRight
+                [size]="17"
+                [strokeWidth]="2"
+              ></svg>
             </span>
           </button>
         } @else {
@@ -1036,7 +1054,11 @@
               </span>
 
               <span class="button-arrow">
-                →
+                <svg
+                  lucideArrowRight
+                  [size]="17"
+                  [strokeWidth]="2"
+                ></svg>
               </span>
             }
           </button>
@@ -1204,7 +1226,11 @@
         </span>
 
         <span class="button-arrow">
-          →
+          <svg
+            lucideArrowRight
+            [size]="17"
+            [strokeWidth]="2"
+          ></svg>
         </span>
       }
     </button>

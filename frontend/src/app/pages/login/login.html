@@ -172,9 +172,12 @@
         (click)="signInWithPasskey()"
         [disabled]="passkeyLoading()"
       >
-        <span class="passkey-icon">
-          P
-        </span>
+        <svg
+          lucideKeyRound
+          [size]="18"
+          [strokeWidth]="2"
+          aria-hidden="true"
+        ></svg>
 
         {{
           passkeyLoading()
@@ -198,10 +201,6 @@
         (click)="signInWithGoogle()"
         [disabled]="googleLoading()"
       >
-        <span class="google-icon">
-          A
-        </span>
-
         {{
           googleLoading()
             ? (

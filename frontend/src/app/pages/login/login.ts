@@ -8,6 +8,9 @@ import {
 import {
   Router
 } from '@angular/router';
+import {
+  LucideKeyRound
+} from '@lucide/angular';
 
 import {
   AuthService,
@@ -23,7 +26,9 @@ import {
 @Component({
   selector: 'app-login',
   standalone: true,
-  imports: [],
+  imports: [
+    LucideKeyRound
+  ],
   templateUrl: './login.html',
   styleUrl: './login.scss'
 })

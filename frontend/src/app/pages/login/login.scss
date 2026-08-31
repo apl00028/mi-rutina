@@ -21,13 +21,7 @@
   box-sizing: border-box;
   padding: 32px 20px;
 
-  background:
-    radial-gradient(
-      circle at 50% -10%,
-      var(--aptus-surface) 0%,
-      var(--aptus-surface-muted) 38%,
-      var(--aptus-bg) 100%
-    );
+  background: var(--aptus-bg);
 }
 
 
@@ -44,13 +38,10 @@
   padding: 34px;
 
   border: 1px solid var(--aptus-border);
-  border-radius: 18px;
+  border-radius: var(--aptus-radius-md);
 
   background: var(--aptus-surface);
 
-  box-shadow:
-    0 24px 60px var(--aptus-shadow),
-    0 2px 8px var(--aptus-shadow-soft);
 }
 
 
@@ -70,12 +61,10 @@
   padding: 3px;
 
   border: 1px solid var(--aptus-border);
-  border-radius: 9px;
+  border-radius: var(--aptus-radius-md);
 
   background: var(--aptus-surface-muted);
 
-  box-shadow:
-    inset 0 0 0 1px rgba(255, 255, 255, 0.45);
 }
 
 .language-switch > span {
@@ -104,8 +93,7 @@
 
   transition:
     background 120ms ease,
-    color 120ms ease,
-    box-shadow 120ms ease;
+    color 120ms ease;
 }
 
 .language-switch button:hover {
@@ -116,9 +104,6 @@
   background: var(--aptus-surface);
   color: var(--aptus-text);
 
-  box-shadow:
-    0 1px 3px var(--aptus-shadow),
-    0 0 0 1px var(--aptus-shadow-soft);
 }
 
 
@@ -145,7 +130,7 @@
   display: grid;
   place-items: center;
 
-  border-radius: 12px;
+  border-radius: var(--aptus-radius-md);
 
   background: var(--aptus-accent);
   color: var(--aptus-accent-contrast);
@@ -153,7 +138,7 @@
   font-size: 16px;
   font-weight: 800;
   line-height: 1;
-  letter-spacing: -0.03em;
+  letter-spacing: 0;
 }
 
 .brand-header h1 {
@@ -164,7 +149,7 @@
   font-size: 20px;
   font-weight: 760;
   line-height: 1.1;
-  letter-spacing: -0.035em;
+  letter-spacing: 0;
 }
 
 .brand-header p {
@@ -209,7 +194,7 @@
   font-size: 28px;
   font-weight: 760;
   line-height: 1.08;
-  letter-spacing: -0.042em;
+  letter-spacing: 0;
 }
 
 .login-intro p {
@@ -241,7 +226,7 @@
 
   box-sizing: border-box;
 
-  border-radius: 10px;
+  border-radius: var(--aptus-radius-md);
 
   font: inherit;
   font-size: 13px;
@@ -252,9 +237,7 @@
   transition:
     background 130ms ease,
     border-color 130ms ease,
-    color 130ms ease,
-    box-shadow 130ms ease,
-    transform 130ms ease;
+    color 130ms ease;
 }
 
 .passkey-button:focus-visible,
@@ -283,8 +266,6 @@
 
   font-weight: 750;
 
-  box-shadow:
-    0 6px 14px var(--aptus-shadow);
 }
 
 .passkey-button:hover:not(:disabled) {
@@ -292,14 +273,9 @@
 
   background: var(--aptus-accent-hover);
 
-  box-shadow:
-    0 8px 18px var(--aptus-shadow);
-
-  transform: translateY(-1px);
 }
 
 .passkey-button:active:not(:disabled) {
-  transform: translateY(0);
 }
 
 .passkey-button:disabled {
@@ -307,27 +283,7 @@
 
   opacity: 0.52;
 
-  transform: none;
-  box-shadow: none;
 }
-
-.passkey-icon {
-  flex: 0 0 auto;
-
-  width: 22px;
-  height: 22px;
-
-  display: grid;
-  place-items: center;
-
-  border: 1px solid currentColor;
-  border-radius: 50%;
-
-  font-size: 11px;
-  font-weight: 800;
-  line-height: 1;
-}
-
 
 /* =========================================================
    GOOGLE
@@ -345,8 +301,6 @@
   background: var(--aptus-surface);
   color: var(--aptus-text);
 
-  box-shadow:
-    0 1px 2px var(--aptus-shadow-soft);
 }
 
 .google-button:hover:not(:disabled) {
@@ -354,29 +308,7 @@
 
   background: var(--aptus-surface-muted);
 
-  box-shadow:
-    0 3px 8px var(--aptus-shadow-soft);
-
-  transform: translateY(-1px);
 }
-
-.google-icon {
-  width: 22px;
-  height: 22px;
-
-  display: grid;
-  place-items: center;
-
-  border: 1px solid var(--aptus-border-strong);
-  border-radius: 50%;
-
-  background: var(--aptus-surface);
-  color: var(--aptus-text-muted);
-
-  font-size: 10px;
-  font-weight: 800;
-}
-
 
 /* =========================================================
    DIVIDER
@@ -432,7 +364,7 @@
   padding: 0 14px;
 
   border: 1px solid var(--aptus-border-strong);
-  border-radius: 10px;
+  border-radius: var(--aptus-radius-md);
 
   outline: 0;
 
@@ -445,8 +377,7 @@
 
   transition:
     background 130ms ease,
-    border-color 130ms ease,
-    box-shadow 130ms ease;
+    border-color 130ms ease;
 }
 
 .email-form input::placeholder {
@@ -460,10 +391,7 @@
 }
 
 .email-form input:focus {
-  border-color: var(--aptus-text-muted);
-
-  box-shadow:
-    0 0 0 3px rgba(100, 116, 139, 0.09);
+  border-color: var(--aptus-accent);
 }
 
 
@@ -479,8 +407,6 @@
   background: var(--aptus-accent);
   color: var(--aptus-accent-contrast);
 
-  box-shadow:
-    0 6px 14px var(--aptus-shadow);
 }
 
 .primary-button:hover:not(:disabled) {
@@ -488,15 +414,10 @@
 
   background: var(--aptus-accent-hover);
 
-  box-shadow:
-    0 8px 18px var(--aptus-shadow);
-
-  transform: translateY(-1px);
 }
 
 .primary-button:active:not(:disabled),
 .google-button:active:not(:disabled) {
-  transform: translateY(0);
 }
 
 .google-button:disabled,
@@ -505,8 +426,6 @@
 
   opacity: 0.52;
 
-  transform: none;
-  box-shadow: none;
 }
 
 
@@ -519,7 +438,7 @@
 
   padding: 11px 12px;
 
-  border-radius: 9px;
+  border-radius: var(--aptus-radius-md);
 
   font-size: 11px;
   font-weight: 600;
@@ -608,7 +527,7 @@
 
     padding: 26px 22px;
 
-    border-radius: 16px;
+    border-radius: var(--aptus-radius-md);
   }
 
   .language-switch {
@@ -626,7 +545,7 @@
     width: 42px;
     height: 42px;
 
-    border-radius: 11px;
+    border-radius: var(--aptus-radius-md);
   }
 
   .brand-header h1 {

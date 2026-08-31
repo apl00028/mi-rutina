@@ -224,7 +224,7 @@
   padding: 28px;
 
   border: 1px solid var(--aptus-border);
-  border-radius: 14px;
+  border-radius: var(--aptus-radius-md);
 
   background: var(--aptus-surface);
 }
@@ -273,16 +273,9 @@
 .global-init-skeleton span {
   height: 46px;
 
-  border-radius: 10px;
+  border-radius: var(--aptus-radius-md);
 
-  background:
-    linear-gradient(
-      90deg,
-      var(--aptus-skeleton-start) 0%,
-      var(--aptus-skeleton-mid) 48%,
-      var(--aptus-skeleton-start) 100%
-    );
-  background-size: 220% 100%;
+  background: var(--aptus-skeleton-start);
 
   animation:
     global-init-pulse 1.35s ease-in-out
@@ -308,7 +301,7 @@
   padding: 10px 16px;
 
   border: 1px solid var(--aptus-accent);
-  border-radius: 10px;
+  border-radius: var(--aptus-radius-md);
 
   background: var(--aptus-accent);
   color: var(--aptus-accent-contrast);
@@ -320,11 +313,11 @@
 
 @keyframes global-init-pulse {
   from {
-    background-position: 120% 0;
+    background: var(--aptus-skeleton-start);
   }
 
   to {
-    background-position: -120% 0;
+    background: var(--aptus-skeleton-mid);
   }
 }
 

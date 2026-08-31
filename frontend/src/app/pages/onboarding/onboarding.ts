@@ -9,6 +9,11 @@ import {
 import {
   FormsModule
 } from '@angular/forms';
+import {
+  LucideArrowLeft,
+  LucideArrowRight,
+  LucideX
+} from '@lucide/angular';
 
 import {
   HttpClient,
@@ -91,7 +96,10 @@ interface CompleteOnboardingResponse {
 
   imports: [
     CommonModule,
-    FormsModule
+    FormsModule,
+    LucideArrowLeft,
+    LucideArrowRight,
+    LucideX
   ],
 
   templateUrl: './onboarding.html',

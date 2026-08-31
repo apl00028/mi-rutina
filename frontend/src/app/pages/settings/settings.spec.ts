@@ -242,11 +242,11 @@ describe('Settings pages', () => {
           .trim()
       )
     ).toEqual([
-      '◉ Cuenta Identidad, acceso, email y unidades. ›',
-      '◫ Entrenamiento Registro, RIR y descanso. ›',
-      '◐ Apariencia Tema, texto y movimiento. ›',
-      '⇅ Datos Sincronización y exportación. ›',
-      'i Acerca de Versión y entorno. ›'
+      'Cuenta Identidad, acceso, email y unidades.',
+      'Entrenamiento Registro, RIR y descanso.',
+      'Apariencia Tema, texto y movimiento.',
+      'Datos Sincronización y exportación.',
+      'Acerca de Versión y entorno.'
     ]);
     expect(
       links.map(link =>
@@ -701,8 +701,8 @@ describe('Settings pages', () => {
     expect(
       back.querySelector(
         '.settings-back-icon'
-      )?.textContent?.trim()
-    ).toBe('‹');
+      )
+    ).not.toBeNull();
 
     back.focus();
 

@@ -214,7 +214,7 @@ textarea {
   overflow: auto;
 
   padding: 20px;
-  border-radius: 12px;
+  border-radius: var(--aptus-radius-md);
 
   background: var(--aptus-surface);
 }

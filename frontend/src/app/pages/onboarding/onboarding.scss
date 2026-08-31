@@ -1,30 +1,10 @@
 :host {
-  --a: var(--aptus-accent);
-  --ac: var(--aptus-accent-contrast);
-  --ah: var(--aptus-accent-hover);
-  --b: var(--aptus-border);
-  --bs: var(--aptus-border-strong);
-  --bg: var(--aptus-bg);
-  --d: var(--aptus-danger);
-  --db: var(--aptus-danger-bg);
-  --dbd: var(--aptus-danger-border);
-  --s: var(--aptus-surface);
-  --sm: var(--aptus-surface-muted);
-  --sh: var(--aptus-shadow);
-  --shs: var(--aptus-shadow-soft);
-  --t: var(--aptus-text);
-  --tm: var(--aptus-text-muted);
-  --ts: var(--aptus-text-subtle);
-  --w: var(--aptus-warning);
-  --wb: var(--aptus-warning-bg);
-  --wbd: var(--aptus-warning-border);
-
   display: block;
   min-height: 100vh;
 
   font-family: var(--aptus-font-ui);
 
-  color: var(--t);
+  color: var(--aptus-text);
 }
 
 
@@ -37,13 +17,7 @@
   box-sizing: border-box;
   padding: 48px 20px 64px;
 
-  background:
-    radial-gradient(
-      circle at 50% -5%,
-      var(--s) 0%,
-      var(--sm) 40%,
-      var(--bg) 100%
-    );
+  background: var(--aptus-bg);
 }
 
 
@@ -67,10 +41,10 @@
   display: grid;
   place-items: center;
 
-  border-radius: 12px;
+  border-radius: var(--aptus-radius-md);
 
-  background: var(--a);
-  color: var(--ac);
+  background: var(--aptus-accent);
+  color: var(--aptus-accent-contrast);
 
   font-size: 16px;
   font-weight: 800;
@@ -85,11 +59,11 @@
   font-size: 19px;
   font-weight: 760;
 
-  letter-spacing: -0.035em;
+  letter-spacing: 0;
 }
 
 .brand-copy span {
-  color: var(--tm);
+  color: var(--aptus-text-muted);
 
   font-size: 11px;
   font-weight: 500;
@@ -107,7 +81,7 @@
 
   margin-bottom: 12px;
 
-  color: var(--tm);
+  color: var(--aptus-text-muted);
 
   font-size: 10px;
   font-weight: 750;
@@ -120,13 +94,13 @@
 .welcome h1 {
   margin: 0;
 
-  color: var(--t);
+  color: var(--aptus-text);
 
   font-size: 36px;
   font-weight: 780;
   line-height: 1.05;
 
-  letter-spacing: -0.045em;
+  letter-spacing: 0;
 }
 
 .welcome h2 {
@@ -134,13 +108,13 @@
 
   margin: 14px 0 0;
 
-  color: var(--tm);
+  color: var(--aptus-text-muted);
 
   font-size: 21px;
   font-weight: 650;
   line-height: 1.25;
 
-  letter-spacing: -0.025em;
+  letter-spacing: 0;
 }
 
 .welcome p {
@@ -148,7 +122,7 @@
 
   margin: 17px 0 0;
 
-  color: var(--tm);
+  color: var(--aptus-text-muted);
 
   font-size: 13px;
   font-weight: 450;
@@ -160,7 +134,7 @@
 
   margin-top: 10px;
 
-  color: var(--ts);
+  color: var(--aptus-text-subtle);
 
   font-size: 11px;
   font-weight: 550;
@@ -173,14 +147,11 @@
 
   padding: 28px;
 
-  border: 1px solid var(--b);
-  border-radius: 18px;
+  border: 1px solid var(--aptus-border);
+  border-radius: var(--aptus-radius-md);
 
-  background: var(--s);
+  background: var(--aptus-surface);
 
-  box-shadow:
-    0 18px 48px var(--sh),
-    0 2px 8px var(--shs);
 }
 
 
@@ -192,7 +163,7 @@
   margin-bottom: 5px;
   padding-bottom: 19px;
 
-  border-bottom: 1px solid var(--b);
+  border-bottom: 1px solid var(--aptus-border);
 }
 
 .step-number {
@@ -204,10 +175,10 @@
 
   flex: 0 0 auto;
 
-  border-radius: 9px;
+  border-radius: var(--aptus-radius-md);
 
-  background: var(--bg);
-  color: var(--tm);
+  background: var(--aptus-bg);
+  color: var(--aptus-text-muted);
 
   font-size: 9px;
   font-weight: 800;
@@ -219,14 +190,14 @@
 }
 
 .section-heading strong {
-  color: var(--t);
+  color: var(--aptus-text);
 
   font-size: 13px;
   font-weight: 700;
 }
 
 .section-heading span:last-child {
-  color: var(--ts);
+  color: var(--aptus-text-subtle);
 
   font-size: 10px;
   font-weight: 500;
@@ -239,7 +210,7 @@ label {
 }
 
 .field-label {
-  color: var(--tm);
+  color: var(--aptus-text-muted);
 
   font-size: 11px;
   font-weight: 650;
@@ -258,34 +229,12 @@ select {
   box-sizing: border-box;
   padding: 0 42px 0 13px;
 
-  border: 1px solid var(--b);
-  border-radius: 9px;
+  border: 1px solid var(--aptus-border);
+  border-radius: var(--aptus-radius-md);
 
-  appearance: none;
-  -webkit-appearance: none;
+  background: var(--aptus-surface);
 
-  background:
-    linear-gradient(
-      45deg,
-      transparent 50%,
-      var(--tm) 50%
-    )
-    calc(100% - 17px)
-    20px / 5px 5px
-    no-repeat,
-
-    linear-gradient(
-      135deg,
-      var(--tm) 50%,
-      transparent 50%
-    )
-    calc(100% - 12px)
-    20px / 5px 5px
-    no-repeat,
-
-    var(--s);
-
-  color: var(--t);
+  color: var(--aptus-text);
 
   font: inherit;
   font-size: 12px;
@@ -297,20 +246,17 @@ select {
 
   transition:
     border-color 120ms ease,
-    box-shadow 120ms ease,
     background-color 120ms ease;
 }
 
 select:hover {
-  border-color: var(--bs);
+  border-color: var(--aptus-border-strong);
 }
 
 select:focus {
-  border-color: var(--ts);
-
-  box-shadow:
-    0 0 0 3px
-      rgba(148, 163, 184, 0.14);
+  border-color: var(--aptus-accent);
+  outline: 3px solid var(--aptus-focus-ring);
+  outline-offset: 1px;
 }
 
 
@@ -326,11 +272,11 @@ select:focus {
   margin-top: 5px;
   padding: 0 18px;
 
-  border: 1px solid var(--a);
-  border-radius: 10px;
+  border: 1px solid var(--aptus-accent);
+  border-radius: var(--aptus-radius-md);
 
-  background: var(--a);
-  color: var(--ac);
+  background: var(--aptus-accent);
+  color: var(--aptus-accent-contrast);
 
   font: inherit;
   font-size: 12px;
@@ -338,28 +284,13 @@ select:focus {
 
   cursor: pointer;
 
-  box-shadow:
-    0 7px 16px
-      var(--sh);
-
   transition:
-    background 130ms ease,
-    box-shadow 130ms ease,
-    transform 130ms ease;
+    background 130ms ease;
 }
 
 .create-button:hover:not(:disabled) {
-  background: var(--ah);
+  background: var(--aptus-accent-hover);
 
-  transform: translateY(-1px);
-
-  box-shadow:
-    0 9px 20px
-      var(--sh);
-}
-
-.create-button:active:not(:disabled) {
-  transform: translateY(0);
 }
 
 .create-button:disabled {
@@ -367,8 +298,6 @@ select:focus {
 
   cursor: default;
 
-  transform: none;
-  box-shadow: none;
 }
 
 .button-arrow {
@@ -376,15 +305,11 @@ select:focus {
   line-height: 1;
 }
 
-.button-loading {
-  opacity: 0.9;
-}
-
 
 .form-footer {
   margin: -3px 0 0;
 
-  color: var(--ts);
+  color: var(--aptus-text-subtle);
 
   font-size: 9px;
   font-weight: 500;
@@ -398,11 +323,11 @@ select:focus {
   margin: 0;
   padding: 11px 12px;
 
-  border: 1px solid var(--dbd);
-  border-radius: 9px;
+  border: 1px solid var(--aptus-danger-border);
+  border-radius: var(--aptus-radius-md);
 
-  background: var(--db);
-  color: var(--d);
+  background: var(--aptus-danger-bg);
+  color: var(--aptus-danger);
 
   font-size: 11px;
   font-weight: 600;
@@ -414,19 +339,17 @@ select:focus {
   margin-top: 30px;
   padding: 28px;
 
-  border: 1px solid var(--b);
-  border-radius: 18px;
+  border: 1px solid var(--aptus-border);
+  border-radius: var(--aptus-radius-md);
 
-  background: var(--s);
+  background: var(--aptus-surface);
 
-  box-shadow:
-    0 18px 48px var(--shs);
 }
 
 .proposal-header {
   padding-bottom: 21px;
 
-  border-bottom: 1px solid var(--b);
+  border-bottom: 1px solid var(--aptus-border);
 }
 
 .proposal-badge {
@@ -437,8 +360,8 @@ select:focus {
 
   border-radius: 999px;
 
-  background: var(--bg);
-  color: var(--tm);
+  background: var(--aptus-bg);
+  color: var(--aptus-text-muted);
 
   font-size: 9px;
   font-weight: 700;
@@ -447,18 +370,18 @@ select:focus {
 .proposal-header h2 {
   margin: 0;
 
-  color: var(--t);
+  color: var(--aptus-text);
 
   font-size: 21px;
   font-weight: 730;
 
-  letter-spacing: -0.025em;
+  letter-spacing: 0;
 }
 
 .proposal-header p {
   margin: 7px 0 0;
 
-  color: var(--ts);
+  color: var(--aptus-text-subtle);
 
   font-size: 11px;
 }
@@ -473,20 +396,20 @@ select:focus {
 .session {
   overflow: hidden;
 
-  border: 1px solid var(--b);
-  border-radius: 12px;
+  border: 1px solid var(--aptus-border);
+  border-radius: var(--aptus-radius-md);
 
-  background: var(--sm);
+  background: var(--aptus-surface-muted);
 }
 
 .session > header {
   padding: 15px;
 
-  border-bottom: 1px solid var(--b);
+  border-bottom: 1px solid var(--aptus-border);
 }
 
 .session > header > span {
-  color: var(--ts);
+  color: var(--aptus-text-subtle);
 
   font-size: 9px;
   font-weight: 700;
@@ -498,7 +421,7 @@ select:focus {
 .session h3 {
   margin: 5px 0 0;
 
-  color: var(--t);
+  color: var(--aptus-text);
 
   font-size: 13px;
   font-weight: 700;
@@ -507,7 +430,7 @@ select:focus {
 .session header p {
   margin: 3px 0 0;
 
-  color: var(--tm);
+  color: var(--aptus-text-muted);
 
   font-size: 10px;
 }
@@ -531,7 +454,7 @@ select:focus {
 }
 
 .session li + li {
-  border-top: 1px solid var(--b);
+  border-top: 1px solid var(--aptus-border);
 }
 
 .exercise-main {
@@ -542,14 +465,14 @@ select:focus {
 }
 
 .exercise-main strong {
-  color: var(--tm);
+  color: var(--aptus-text-muted);
 
   font-size: 11px;
   font-weight: 650;
 }
 
 .exercise-main span {
-  color: var(--tm);
+  color: var(--aptus-text-muted);
 
   font-size: 9px;
   font-weight: 500;
@@ -558,7 +481,7 @@ select:focus {
 .exercise-meta {
   flex: 0 0 auto;
 
-  color: var(--ts);
+  color: var(--aptus-text-subtle);
 
   font-size: 9px;
   font-weight: 550;
@@ -568,11 +491,11 @@ select:focus {
   margin-top: 18px;
   padding: 14px;
 
-  border: 1px solid var(--wbd);
-  border-radius: 10px;
+  border: 1px solid var(--aptus-warning-border);
+  border-radius: var(--aptus-radius-md);
 
-  background: var(--wb);
-  color: var(--w);
+  background: var(--aptus-warning-bg);
+  color: var(--aptus-warning);
 
   font-size: 10px;
   line-height: 1.55;
@@ -622,7 +545,7 @@ select:focus {
   .proposal {
     padding: 21px;
 
-    border-radius: 15px;
+    border-radius: var(--aptus-radius-md);
   }
 
   .field-grid {
@@ -647,146 +570,6 @@ select:focus {
     padding-top: 11px;
     padding-bottom: 11px;
   }
-  .onboarding-section {
-  display: grid;
-  gap: 19px;
-}
-
-.onboarding-section +
-.onboarding-section {
-  margin-top: 8px;
-  padding-top: 26px;
-
-  border-top: 1px solid var(--b);
-}
-
-
-input {
-  width: 100%;
-  min-height: 47px;
-
-  box-sizing: border-box;
-  padding: 0 13px;
-
-  border: 1px solid var(--b);
-  border-radius: 9px;
-
-  background: var(--s);
-  color: var(--t);
-
-  font: inherit;
-  font-size: 12px;
-  font-weight: 600;
-
-  outline: none;
-
-  transition:
-    border-color 120ms ease,
-    box-shadow 120ms ease;
-}
-
-input::placeholder {
-  color: var(--ts);
-  font-weight: 500;
-}
-
-input:hover {
-  border-color: var(--bs);
-}
-
-input:focus {
-  border-color: var(--ts);
-
-  box-shadow:
-    0 0 0 3px
-    rgba(148, 163, 184, 0.14);
-}
-
-
-.input-unit {
-  position: relative;
-}
-
-.input-unit input {
-  padding-right: 45px;
-}
-
-.input-unit > span {
-  position: absolute;
-  top: 50%;
-  right: 13px;
-
-  transform: translateY(-50%);
-
-  color: var(--ts);
-
-  font-size: 10px;
-  font-weight: 650;
-
-  pointer-events: none;
-}
-
-
-.motivation-field {
-  display: grid;
-  gap: 9px;
-}
-
-.motivation-heading {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-
-.motivation-heading > span:last-child {
-  color: var(--ts);
-
-  font-size: 9px;
-  font-weight: 550;
-}
-
-.motivation-options {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.motivation-option {
-  min-height: 35px;
-
-  padding: 0 12px;
-
-  border: 1px solid var(--b);
-  border-radius: 999px;
-
-  background: var(--s);
-  color: var(--tm);
-
-  font: inherit;
-  font-size: 10px;
-  font-weight: 600;
-
-  cursor: pointer;
-
-  transition:
-    background 120ms ease,
-    border-color 120ms ease,
-    color 120ms ease,
-    transform 120ms ease;
-}
-
-.motivation-option:hover {
-  border-color: var(--ts);
-
-  transform: translateY(-1px);
-}
-
-.motivation-option.selected {
-  border-color: var(--t);
-
-  background: var(--a);
-  color: var(--ac);
-}
 }
 
 .onboarding-section {
@@ -797,7 +580,7 @@ input:focus {
 .onboarding-section + .onboarding-section {
   margin-top: 8px;
   padding-top: 26px;
-  border-top: 1px solid var(--b);
+  border-top: 1px solid var(--aptus-border);
 }
 
 
@@ -809,11 +592,11 @@ input:focus {
   box-sizing: border-box;
   padding: 0 13px;
 
-  border: 1px solid var(--b);
-  border-radius: 9px;
+  border: 1px solid var(--aptus-border);
+  border-radius: var(--aptus-radius-md);
 
-  background: var(--s);
-  color: var(--t);
+  background: var(--aptus-surface);
+  color: var(--aptus-text);
 
   font-family: inherit;
   font-size: 12px;
@@ -821,26 +604,22 @@ input:focus {
 
   outline: none;
 
-  transition:
-    border-color 120ms ease,
-    box-shadow 120ms ease;
+  transition: border-color 120ms ease;
 }
 
 .form-section input::placeholder {
-  color: var(--ts);
+  color: var(--aptus-text-subtle);
   font-weight: 500;
 }
 
 .form-section input:hover {
-  border-color: var(--bs);
+  border-color: var(--aptus-border-strong);
 }
 
 .form-section input:focus {
-  border-color: var(--ts);
-
-  box-shadow:
-    0 0 0 3px
-    rgba(148, 163, 184, 0.14);
+  border-color: var(--aptus-accent);
+  outline: 3px solid var(--aptus-focus-ring);
+  outline-offset: 1px;
 }
 
 
@@ -874,7 +653,7 @@ input:focus {
 
   transform: translateY(-50%);
 
-  color: var(--ts);
+  color: var(--aptus-text-subtle);
 
   font-size: 10px;
   font-weight: 700;
@@ -898,7 +677,7 @@ input:focus {
 .motivation-heading > span:last-child {
   flex: 0 0 auto;
 
-  color: var(--ts);
+  color: var(--aptus-text-subtle);
 
   font-size: 9px;
   font-weight: 600;
@@ -916,13 +695,11 @@ input:focus {
 
   padding: 0 13px;
 
-  border: 1px solid var(--b);
+  border: 1px solid var(--aptus-border);
   border-radius: 999px;
 
-  background: var(--s);
-  color: var(--tm);
-
-  box-shadow: none;
+  background: var(--aptus-surface);
+  color: var(--aptus-text-muted);
 
   font-family: inherit;
   font-size: 10px;
@@ -934,22 +711,20 @@ input:focus {
   transition:
     color 120ms ease,
     background 120ms ease,
-    border-color 120ms ease,
-    transform 120ms ease;
+    border-color 120ms ease;
 }
 
 .form-section .motivation-option:hover {
-  border-color: var(--ts);
-  background: var(--sm);
+  border-color: var(--aptus-text-subtle);
+  background: var(--aptus-surface-muted);
 
-  transform: translateY(-1px);
 }
 
 .form-section .motivation-option.selected {
-  border-color: var(--t);
+  border-color: var(--aptus-text);
 
-  background: var(--a);
-  color: var(--ac);
+  background: var(--aptus-accent);
+  color: var(--aptus-accent-contrast);
 }
 
 
@@ -982,11 +757,11 @@ input:focus {
 .form-section .choice-option {
   min-height: 43px;
 
-  border: 1px solid var(--b);
-  border-radius: 9px;
+  border: 1px solid var(--aptus-border);
+  border-radius: var(--aptus-radius-md);
 
-  background: var(--s);
-  color: var(--tm);
+  background: var(--aptus-surface);
+  color: var(--aptus-text-muted);
 
   font: inherit;
   font-size: 11px;
@@ -1001,14 +776,14 @@ input:focus {
 }
 
 .form-section .choice-option:hover {
-  border-color: var(--ts);
-  background: var(--sm);
+  border-color: var(--aptus-text-subtle);
+  background: var(--aptus-surface-muted);
 }
 
 .form-section .choice-option.selected {
-  border-color: var(--t);
-  background: var(--a);
-  color: var(--ac);
+  border-color: var(--aptus-text);
+  background: var(--aptus-accent);
+  color: var(--aptus-accent-contrast);
 }
 
 .limitation-details {
@@ -1017,10 +792,10 @@ input:focus {
 
   padding: 18px;
 
-  border: 1px solid var(--b);
-  border-radius: 12px;
+  border: 1px solid var(--aptus-border);
+  border-radius: var(--aptus-radius-md);
 
-  background: var(--sm);
+  background: var(--aptus-surface-muted);
 }
 
 .form-section textarea {
@@ -1029,11 +804,11 @@ input:focus {
   box-sizing: border-box;
   padding: 12px 13px;
 
-  border: 1px solid var(--b);
-  border-radius: 9px;
+  border: 1px solid var(--aptus-border);
+  border-radius: var(--aptus-radius-md);
 
-  background: var(--s);
-  color: var(--t);
+  background: var(--aptus-surface);
+  color: var(--aptus-text);
 
   font: inherit;
   font-size: 11px;
@@ -1045,19 +820,17 @@ input:focus {
 }
 
 .form-section textarea::placeholder {
-  color: var(--ts);
+  color: var(--aptus-text-subtle);
 }
 
 .form-section textarea:focus {
-  border-color: var(--ts);
-
-  box-shadow:
-    0 0 0 3px
-    rgba(148, 163, 184, 0.14);
+  border-color: var(--aptus-accent);
+  outline: 3px solid var(--aptus-focus-ring);
+  outline-offset: 1px;
 }
 
 .field-help {
-  color: var(--ts);
+  color: var(--aptus-text-subtle);
 
   font-size: 9px;
   font-weight: 500;
@@ -1074,7 +847,7 @@ input:focus {
   margin-top: 4px;
   padding-top: 19px;
 
-  border-top: 1px solid var(--b);
+  border-top: 1px solid var(--aptus-border);
 }
 
 .preference-heading > div {
@@ -1098,14 +871,10 @@ input:focus {
 
   overflow: hidden;
 
-  border: 1px solid var(--b);
-  border-radius: 10px;
+  border: 1px solid var(--aptus-border);
+  border-radius: var(--aptus-radius-md);
 
-  background: var(--s);
-
-  box-shadow:
-    0 12px 30px
-    var(--sh);
+  background: var(--aptus-surface);
 }
 
 .form-section .exercise-result {
@@ -1122,8 +891,8 @@ input:focus {
   border: 0;
   border-radius: 0;
 
-  background: var(--s);
-  color: var(--t);
+  background: var(--aptus-surface);
+  color: var(--aptus-text);
 
   font: inherit;
   text-align: left;
@@ -1133,11 +902,11 @@ input:focus {
 
 .form-section .exercise-result +
 .exercise-result {
-  border-top: 1px solid var(--b);
+  border-top: 1px solid var(--aptus-border);
 }
 
 .form-section .exercise-result:hover {
-  background: var(--sm);
+  background: var(--aptus-surface-muted);
 }
 
 .exercise-result > div {
@@ -1158,7 +927,7 @@ input:focus {
 }
 
 .exercise-result div span {
-  color: var(--ts);
+  color: var(--aptus-text-subtle);
 
   font-size: 8px;
 }
@@ -1166,7 +935,7 @@ input:focus {
 .result-action {
   flex: 0 0 auto;
 
-  color: var(--tm);
+  color: var(--aptus-text-muted);
 
   font-size: 9px;
   font-weight: 650;
@@ -1188,11 +957,11 @@ input:focus {
 
   padding: 0 10px;
 
-  border: 1px solid var(--b);
+  border: 1px solid var(--aptus-border);
   border-radius: 999px;
 
-  background: var(--sm);
-  color: var(--tm);
+  background: var(--aptus-surface-muted);
+  color: var(--aptus-text-muted);
 
   font: inherit;
   font-size: 9px;
@@ -1202,27 +971,27 @@ input:focus {
 }
 
 .form-section .selected-exercise:hover {
-  border-color: var(--ts);
+  border-color: var(--aptus-text-subtle);
 }
 
 .form-section
 .selected-exercise.preferred {
-  background: var(--sm);
+  background: var(--aptus-surface-muted);
 }
 
 .form-section
 .selected-exercise.avoided {
-  background: var(--db);
+  background: var(--aptus-danger-bg);
 }
 
 .catalog-message {
   padding: 12px 13px;
 
-  border: 1px solid var(--b);
-  border-radius: 9px;
+  border: 1px solid var(--aptus-border);
+  border-radius: var(--aptus-radius-md);
 
-  background: var(--sm);
-  color: var(--tm);
+  background: var(--aptus-surface-muted);
+  color: var(--aptus-text-muted);
 
   font-size: 10px;
   line-height: 1.5;
@@ -1235,7 +1004,7 @@ input:focus {
   margin-top: 24px;
   padding-top: 22px;
 
-  border-top: 1px solid var(--b);
+  border-top: 1px solid var(--aptus-border);
 }
 
 .proposal-ready {
@@ -1244,14 +1013,14 @@ input:focus {
 }
 
 .proposal-ready strong {
-  color: var(--t);
+  color: var(--aptus-text);
 
   font-size: 12px;
   font-weight: 700;
 }
 
 .proposal-ready span {
-  color: var(--tm);
+  color: var(--aptus-text-muted);
 
   font-size: 10px;
   font-weight: 500;
@@ -1272,7 +1041,7 @@ input:focus {
 
   border-radius: 999px;
 
-  background: var(--b);
+  background: var(--aptus-border);
 }
 
 .progress-value {
@@ -1280,7 +1049,7 @@ input:focus {
 
   border-radius: inherit;
 
-  background: var(--a);
+  background: var(--aptus-accent);
 
   transition:
     width 180ms ease;
@@ -1302,11 +1071,11 @@ input:focus {
 
   padding: 0 9px;
 
-  border: 1px solid var(--b);
-  border-radius: 10px;
+  border: 1px solid var(--aptus-border);
+  border-radius: var(--aptus-radius-md);
 
-  background: var(--s);
-  color: var(--tm);
+  background: var(--aptus-surface);
+  color: var(--aptus-text-muted);
 
   font: inherit;
 
@@ -1319,22 +1088,22 @@ input:focus {
 }
 
 .progress-steps button:hover {
-  border-color: var(--ts);
+  border-color: var(--aptus-text-subtle);
 
-  background: var(--sm);
+  background: var(--aptus-surface-muted);
 }
 
 .progress-steps button.active {
-  border-color: var(--t);
+  border-color: var(--aptus-text);
 
-  color: var(--t);
+  color: var(--aptus-text);
 }
 
 .progress-steps button.completed {
-  border-color: var(--t);
+  border-color: var(--aptus-text);
 
-  background: var(--a);
-  color: var(--ac);
+  background: var(--aptus-accent);
+  color: var(--aptus-accent-contrast);
 }
 
 .progress-steps span {
@@ -1348,7 +1117,7 @@ input:focus {
 
   border-radius: 999px;
 
-  background: var(--bg);
+  background: var(--aptus-bg);
   color: inherit;
 
   font-size: 10px;
@@ -1356,7 +1125,8 @@ input:focus {
 }
 
 .progress-steps button.completed span {
-  background: rgba(255, 255, 255, 0.16);
+  border: 1px solid currentColor;
+  background: transparent;
 }
 
 .progress-steps strong {
@@ -1385,7 +1155,7 @@ input:focus {
   margin-top: 5px;
   padding-top: 22px;
 
-  border-top: 1px solid var(--b);
+  border-top: 1px solid var(--aptus-border);
 }
 
 .wizard-actions .create-button {
@@ -1399,14 +1169,15 @@ input:focus {
   display: flex;
   align-items: center;
   justify-content: center;
+  gap: 8px;
 
   padding: 0 18px;
 
-  border: 1px solid var(--b);
-  border-radius: 10px;
+  border: 1px solid var(--aptus-border);
+  border-radius: var(--aptus-radius-md);
 
-  background: var(--s);
-  color: var(--tm);
+  background: var(--aptus-surface);
+  color: var(--aptus-text-muted);
 
   font: inherit;
   font-size: 11px;
@@ -1421,10 +1192,10 @@ input:focus {
 }
 
 .secondary-button:hover {
-  border-color: var(--ts);
+  border-color: var(--aptus-text-subtle);
 
-  background: var(--sm);
-  color: var(--t);
+  background: var(--aptus-surface-muted);
+  color: var(--aptus-text);
 }
 
 
@@ -1455,7 +1226,7 @@ input:focus {
   margin-top: 24px;
   padding-top: 22px;
 
-  border-top: 1px solid var(--b);
+  border-top: 1px solid var(--aptus-border);
 }
 
 .proposal-ready {
@@ -1464,14 +1235,14 @@ input:focus {
 }
 
 .proposal-ready strong {
-  color: var(--t);
+  color: var(--aptus-text);
 
   font-size: 12px;
   font-weight: 700;
 }
 
 .proposal-ready span {
-  color: var(--tm);
+  color: var(--aptus-text-muted);
 
   font-size: 10px;
   font-weight: 500;

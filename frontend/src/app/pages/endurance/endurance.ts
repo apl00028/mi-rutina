@@ -72,6 +72,14 @@ import type {
   SwimmingRoutine
 } from '../../features/swimming/domain/swimming-routine';
 
+import {
+  runningRoutineDistance
+} from '../../features/running/domain/running-routine';
+
+import type {
+  RunningRoutine
+} from '../../features/running/domain/running-routine';
+
 import type {
   SwimmingCoachAssessment
 } from '../../features/swimming/domain/swimming-coach-analysis';
@@ -146,6 +154,26 @@ interface StoredSwimmingRoutine {
     estimatedDurationMinutes?: number;
     blocks?: SwimmingRoutine['blocks'];
     technicalFocus?: string[];
+  }>;
+}
+
+
+interface StoredRunningRoutine {
+  routineId: string;
+  schemaVersion: string;
+  revision: number;
+  discipline?: string;
+  name?: string;
+
+  sessions: Array<{
+    sessionId: string;
+    date?: string;
+    title?: string;
+    name?: string;
+    objective?: string;
+    estimatedDurationMinutes?: number;
+    blocks?: RunningRoutine['blocks'];
+    notes?: string;
   }>;
 }
 
@@ -287,6 +315,53 @@ export class Endurance
       | 'analytics'
     >('session');
 
+  readonly runningRoutine =
+    signal<RunningRoutine | null>(
+      null
+    );
+
+  readonly activeRunningRoutineRecord =
+    signal<StoredRunningRoutine | null>(
+      null
+    );
+
+  readonly runningRoutineLoading =
+    signal(false);
+
+  readonly runningRoutineError =
+    signal<string | null>(
+      null
+    );
+
+  readonly runningRoutineDraft =
+    signal<RunningRoutine | null>(
+      null
+    );
+
+  readonly runningRoutineEditing =
+    signal(false);
+
+  readonly runningRoutineSaving =
+    signal(false);
+
+  readonly runningRoutineSaveError =
+    signal<string | null>(
+      null
+    );
+
+  readonly runningRoutineSaveMessage =
+    signal<string | null>(
+      null
+    );
+
+
+  readonly runningRoutineImportText =
+    signal('');
+
+
+
+
+
 
   readonly swimmingLoading =
     signal(false);
@@ -373,6 +448,20 @@ export class Endurance
   }
 
 
+  runningRoutineTotalDistance():
+    number {
+
+    const routine =
+      this.runningRoutine();
+
+    return routine
+      ? runningRoutineDistance(
+          routine
+        )
+      : 0;
+  }
+
+
   readonly swimmingRequiresAndroid =
     signal(false);
 
@@ -423,6 +512,7 @@ export class Endurance
       'running'
     ) {
       void this.loadRunning();
+      void this.loadActiveRunningRoutine();
     }
   }
 
@@ -549,6 +639,1263 @@ export class Endurance
 
     } finally {
       this.swimmingRoutineLoading.set(false);
+    }
+  }
+
+
+  private async loadActiveRunningRoutine():
+    Promise<void> {
+
+    if (this.runningRoutineLoading()) {
+      return;
+    }
+
+    this.runningRoutineLoading.set(true);
+    this.runningRoutineError.set(null);
+
+    try {
+      const token =
+        await this.auth.getAccessToken();
+
+      if (!token) {
+        throw new Error(
+          'Necesitas iniciar sesión.'
+        );
+      }
+
+      const headers =
+        new HttpHeaders({
+          Authorization:
+            `Bearer ${token}`
+        });
+
+      const stored =
+        await firstValueFrom(
+          this.http.get<StoredRunningRoutine>(
+            `${this.apiUrl}/routines/active`,
+            {
+              headers,
+              params: {
+                discipline: 'running'
+              }
+            }
+          )
+        );
+
+      const session =
+        stored.sessions?.[0];
+
+      this.activeRunningRoutineRecord.set(
+        stored
+      );
+
+      if (!session) {
+        throw new Error(
+          'La rutina activa de carrera no contiene ninguna sesión.'
+        );
+      }
+
+      this.runningRoutine.set({
+        id: session.sessionId,
+        date: session.date ?? '',
+        title:
+          session.title
+          ?? session.name
+          ?? stored.name
+          ?? 'Rutina de carrera',
+        objective:
+          session.objective
+          ?? '',
+        estimatedDurationMinutes:
+          session.estimatedDurationMinutes
+          ?? 0,
+        blocks:
+          session.blocks
+          ?? [],
+        notes:
+        session.notes
+        ?? ''
+      });
+
+    } catch (error: any) {
+
+      this.runningRoutine.set(null);
+      this.activeRunningRoutineRecord.set(
+        null
+      );
+
+      if (error?.status === 404) {
+        return;
+      }
+
+      this.runningRoutineError.set(
+        error?.error?.detail
+        ?? error?.message
+        ?? 'No se pudo cargar la rutina de carrera.'
+      );
+
+    } finally {
+      this.runningRoutineLoading.set(false);
+    }
+  }
+
+
+  updateRunningRoutineImportText(
+    value: string
+  ): void {
+
+    this.runningRoutineImportText.set(
+      value
+    );
+
+    this.runningRoutineSaveError.set(
+      null
+    );
+  }
+
+
+  async importRunningRoutineJson():
+    Promise<void> {
+
+    const raw =
+      this.runningRoutineImportText()
+        .trim();
+
+    if (!raw) {
+
+      this.runningRoutineSaveError.set(
+        'Pega primero una rutina de Health OS.'
+      );
+
+      return;
+    }
+
+
+    let routine:
+      StoredRunningRoutine;
+
+
+    try {
+
+      routine =
+        JSON.parse(raw) as StoredRunningRoutine;
+
+    } catch {
+
+      this.runningRoutineSaveError.set(
+        'El JSON de la rutina no es válido.'
+      );
+
+      return;
+    }
+
+
+    if (
+      !routine
+      || typeof routine !== 'object'
+      || !routine.routineId
+      || !routine.schemaVersion
+      || !Number.isFinite(
+        routine.revision
+      )
+      || routine.discipline !==
+        'running'
+      || !Array.isArray(
+        routine.sessions
+      )
+      || routine.sessions.length === 0
+    ) {
+
+      this.runningRoutineSaveError.set(
+        'La rutina no tiene el formato esperado para carrera.'
+      );
+
+      return;
+    }
+
+
+    const session =
+      routine.sessions[0];
+
+
+    if (
+      !session
+      || !session.sessionId
+      || !session.title
+      || !Array.isArray(
+        session.blocks
+      )
+      || session.blocks.length === 0
+    ) {
+
+      this.runningRoutineSaveError.set(
+        'La rutina necesita al menos una sesión de carrera con bloques.'
+      );
+
+      return;
+    }
+
+
+    const invalidBlock =
+      session.blocks.some(
+        block =>
+          !block
+          || !block.id
+          || !block.title
+          || !Array.isArray(
+            block.sets
+          )
+          || block.sets.length === 0
+      );
+
+
+    if (invalidBlock) {
+
+      this.runningRoutineSaveError.set(
+        'Cada bloque debe contener al menos una prescripción.'
+      );
+
+      return;
+    }
+
+
+    const invalidSet =
+      session.blocks.some(
+        block =>
+          block.sets.some(
+            set => {
+
+              if (
+                !set
+                || !Number.isFinite(
+                  set.repetitions
+                )
+                || set.repetitions <= 0
+              ) {
+                return true;
+              }
+
+
+              if (
+                set.targetType ===
+                  'duration'
+              ) {
+
+                return (
+                  set.durationSeconds == null
+                  || !Number.isFinite(
+                    set.durationSeconds
+                  )
+                  || set.durationSeconds <= 0
+                );
+              }
+
+
+              if (
+                set.targetType ===
+                  'distance'
+              ) {
+
+                return (
+                  set.distanceMeters == null
+                  || !Number.isFinite(
+                    set.distanceMeters
+                  )
+                  || set.distanceMeters <= 0
+                );
+              }
+
+
+              return true;
+            }
+          )
+      );
+
+
+    if (invalidSet) {
+
+      this.runningRoutineSaveError.set(
+        'Hay una prescripción de carrera no válida.'
+      );
+
+      return;
+    }
+
+
+    this.runningRoutineSaving.set(
+      true
+    );
+
+    this.runningRoutineSaveError.set(
+      null
+    );
+
+    this.runningRoutineSaveMessage.set(
+      null
+    );
+
+
+    try {
+
+      const token =
+        await this.auth.getAccessToken();
+
+
+      if (!token) {
+
+        throw new Error(
+          'Necesitas iniciar sesión.'
+        );
+      }
+
+
+      const headers =
+        new HttpHeaders({
+          Authorization:
+            `Bearer ${token}`,
+          'Content-Type':
+            'application/json'
+        });
+
+
+      const created =
+        await firstValueFrom(
+          this.http.post<StoredRunningRoutine>(
+            `${this.apiUrl}/routines`,
+            routine,
+            { headers }
+          )
+        );
+
+
+      const activated =
+        await firstValueFrom(
+          this.http.put<StoredRunningRoutine>(
+            `${this.apiUrl}/routines/${
+              encodeURIComponent(
+                created.routineId
+              )
+            }/activate`,
+            {},
+            { headers }
+          )
+        );
+
+
+      const activatedSession =
+        activated.sessions[0];
+
+
+      if (!activatedSession) {
+
+        throw new Error(
+          'La rutina importada no contiene ninguna sesión.'
+        );
+      }
+
+
+      this.activeRunningRoutineRecord.set(
+        activated
+      );
+
+
+      this.runningRoutine.set({
+
+        id:
+          activatedSession.sessionId,
+
+        date:
+          activatedSession.date
+          ?? '',
+
+        title:
+          activatedSession.title
+          ?? activatedSession.name
+          ?? activated.name
+          ?? 'Rutina de carrera',
+
+        objective:
+          activatedSession.objective
+          ?? '',
+
+        estimatedDurationMinutes:
+          activatedSession
+            .estimatedDurationMinutes
+          ?? 0,
+
+        blocks:
+          activatedSession.blocks
+          ?? [],
+
+        notes:
+          activatedSession.notes
+          ?? ''
+      });
+
+
+      this.runningRoutineImportText.set(
+        ''
+      );
+
+
+      this.runningRoutineSaveMessage.set(
+        'Rutina de Health OS importada y activada.'
+      );
+
+
+    } catch (error: any) {
+
+      this.runningRoutineSaveError.set(
+        error?.error?.detail
+        ?? error?.message
+        ?? 'No se pudo importar la rutina de carrera.'
+      );
+
+    } finally {
+
+      this.runningRoutineSaving.set(
+        false
+      );
+    }
+  }
+
+
+  async createDefaultRunningRoutine():
+    Promise<void> {
+
+    this.runningRoutineSaving.set(true);
+
+    this.runningRoutineSaveError.set(
+      null
+    );
+
+    this.runningRoutineSaveMessage.set(
+      null
+    );
+
+    try {
+
+      const token =
+        await this.auth.getAccessToken();
+
+      if (!token) {
+        throw new Error(
+          'Necesitas iniciar sesión.'
+        );
+      }
+
+      const headers =
+        new HttpHeaders({
+          Authorization:
+            `Bearer ${token}`,
+          'Content-Type':
+            'application/json'
+        });
+
+      const routine:
+        StoredRunningRoutine = {
+
+          routineId:
+            `running-${Date.now()}`,
+
+          schemaVersion:
+            '4.2',
+
+          revision:
+            1,
+
+          discipline:
+            'running',
+
+          name:
+            'Rodaje aeróbico controlado',
+
+          sessions: [
+            {
+              sessionId:
+                'running-session-1',
+
+              date:
+                new Date()
+                  .toISOString()
+                  .slice(0, 10),
+
+              title:
+                'Rodaje aeróbico controlado',
+
+              objective:
+                'Acumular carrera continua manteniendo control de intensidad.',
+
+              estimatedDurationMinutes:
+                40,
+
+              blocks: [
+                {
+                  id:
+                    'warmup',
+
+                  type:
+                    'warmup',
+
+                  title:
+                    'Calentamiento',
+
+                  sets: [
+                    {
+                      repetitions:
+                        1,
+
+                      targetType:
+                        'duration',
+
+                      durationSeconds:
+                        600,
+
+                      intensityMode:
+                        'heartRateMax',
+
+                      heartRateMaxBpm:
+                        145,
+
+                      recoverySeconds:
+                        0
+                    }
+                  ]
+                },
+
+                {
+                  id:
+                    'main',
+
+                  type:
+                    'main',
+
+                  title:
+                    'Bloque principal',
+
+                  sets: [
+                    {
+                      repetitions:
+                        1,
+
+                      targetType:
+                        'duration',
+
+                      durationSeconds:
+                        1500,
+
+                      intensityMode:
+                        'heartRateMax',
+
+                      heartRateMaxBpm:
+                        155,
+
+                      recoverySeconds:
+                        0,
+
+                      instruction:
+                        'Mantener esfuerzo cómodo y estable.'
+                    }
+                  ]
+                },
+
+                {
+                  id:
+                    'cooldown',
+
+                  type:
+                    'cooldown',
+
+                  title:
+                    'Vuelta a la calma',
+
+                  sets: [
+                    {
+                      repetitions:
+                        1,
+
+                      targetType:
+                        'duration',
+
+                      durationSeconds:
+                        300,
+
+                      intensityMode:
+                        'free',
+
+                      recoverySeconds:
+                        0
+                    }
+                  ]
+                }
+              ],
+
+              notes:
+                'No perseguir ritmo. Si para respetar el límite de FC hay que reducir ritmo, se reduce.'
+            }
+          ]
+        };
+
+
+      const created =
+        await firstValueFrom(
+          this.http.post<StoredRunningRoutine>(
+            `${this.apiUrl}/routines`,
+            routine,
+            { headers }
+          )
+        );
+
+
+      const activated =
+        await firstValueFrom(
+          this.http.put<StoredRunningRoutine>(
+            `${this.apiUrl}/routines/${
+              encodeURIComponent(
+                created.routineId
+              )
+            }/activate`,
+            {},
+            { headers }
+          )
+        );
+
+
+      this.activeRunningRoutineRecord.set(
+        activated
+      );
+
+
+      const session =
+        activated.sessions[0];
+
+      if (!session) {
+        throw new Error(
+          'La rutina creada no contiene ninguna sesión.'
+        );
+      }
+
+
+      this.runningRoutine.set({
+        id:
+          session.sessionId,
+
+        date:
+          session.date
+          ?? '',
+
+        title:
+          session.title
+          ?? session.name
+          ?? activated.name
+          ?? 'Rutina de carrera',
+
+        objective:
+          session.objective
+          ?? '',
+
+        estimatedDurationMinutes:
+          session.estimatedDurationMinutes
+          ?? 0,
+
+        blocks:
+          session.blocks
+          ?? [],
+
+        notes:
+          session.notes
+          ?? ''
+      });
+
+
+      this.runningRoutineSaveMessage.set(
+        'Rutina de carrera creada y activada.'
+      );
+
+
+    } catch (error: any) {
+
+      this.runningRoutineSaveError.set(
+        error?.error?.detail
+        ?? error?.message
+        ?? 'No se pudo crear la rutina de carrera.'
+      );
+
+    } finally {
+
+      this.runningRoutineSaving.set(
+        false
+      );
+    }
+  }
+
+
+  startEditingRunningRoutine():
+    void {
+
+    const routine =
+      this.runningRoutine();
+
+    if (!routine) {
+      return;
+    }
+
+    this.runningRoutineDraft.set(
+      structuredClone(routine)
+    );
+
+    this.runningRoutineSaveError.set(
+      null
+    );
+
+    this.runningRoutineSaveMessage.set(
+      null
+    );
+
+    this.runningRoutineEditing.set(true);
+  }
+
+
+  cancelEditingRunningRoutine():
+    void {
+
+    this.runningRoutineDraft.set(null);
+
+    this.runningRoutineEditing.set(
+      false
+    );
+
+    this.runningRoutineSaveError.set(
+      null
+    );
+  }
+
+
+  updateRunningRoutineField(
+    field:
+      | 'title'
+      | 'objective'
+      | 'date'
+      | 'estimatedDurationMinutes'
+      | 'notes',
+    value: string
+  ): void {
+
+    const draft =
+      this.runningRoutineDraft();
+
+    if (!draft) {
+      return;
+    }
+
+    if (
+      field ===
+        'estimatedDurationMinutes'
+    ) {
+      const numeric =
+        Number(value);
+
+      this.runningRoutineDraft.set({
+        ...draft,
+        [field]:
+          Number.isFinite(numeric)
+            ? Math.max(0, numeric)
+            : 0
+      });
+
+      return;
+    }
+
+    this.runningRoutineDraft.set({
+      ...draft,
+      [field]: value
+    });
+  }
+
+
+  updateRunningRoutineBlockTitle(
+    blockIndex: number,
+    value: string
+  ): void {
+
+    const draft =
+      this.runningRoutineDraft();
+
+    if (!draft) {
+      return;
+    }
+
+    const blocks =
+      structuredClone(draft.blocks);
+
+    const block =
+      blocks[blockIndex];
+
+    if (!block) {
+      return;
+    }
+
+    block.title = value;
+
+    this.runningRoutineDraft.set({
+      ...draft,
+      blocks
+    });
+  }
+
+
+  updateRunningRoutineSetField(
+    blockIndex: number,
+    setIndex: number,
+    field:
+      | 'repetitions'
+      | 'targetType'
+      | 'durationSeconds'
+      | 'distanceMeters'
+      | 'intensityMode'
+      | 'heartRateMaxBpm'
+      | 'heartRateMinBpm'
+      | 'heartRateMaxRangeBpm'
+      | 'rpeMin'
+      | 'rpeMax'
+      | 'paceMinSecondsPerKm'
+      | 'paceMaxSecondsPerKm'
+      | 'recoverySeconds'
+      | 'instruction',
+    value: string
+  ): void {
+
+    const draft =
+      this.runningRoutineDraft();
+
+    if (!draft) {
+      return;
+    }
+
+    const blocks =
+      structuredClone(draft.blocks);
+
+    const set =
+      blocks[blockIndex]
+        ?.sets[setIndex];
+
+    if (!set) {
+      return;
+    }
+
+    const numericFields = [
+      'repetitions',
+      'durationSeconds',
+      'distanceMeters',
+      'heartRateMaxBpm',
+      'heartRateMinBpm',
+      'heartRateMaxRangeBpm',
+      'rpeMin',
+      'rpeMax',
+      'paceMinSecondsPerKm',
+      'paceMaxSecondsPerKm',
+      'recoverySeconds'
+    ];
+
+    if (numericFields.includes(field)) {
+
+      const numeric =
+        Number(value);
+
+      (set as any)[field] =
+        Number.isFinite(numeric)
+          ? Math.max(0, numeric)
+          : 0;
+
+    } else {
+
+      (set as any)[field] =
+        value;
+    }
+
+
+    if (field === 'targetType') {
+
+      if (value === 'duration') {
+
+        delete set.distanceMeters;
+
+        if (
+          set.durationSeconds == null
+        ) {
+          set.durationSeconds = 600;
+        }
+
+      } else if (
+        value === 'distance'
+      ) {
+
+        delete set.durationSeconds;
+
+        if (
+          set.distanceMeters == null
+        ) {
+          set.distanceMeters = 1000;
+        }
+      }
+    }
+
+
+    if (field === 'intensityMode') {
+
+      delete set.heartRateMaxBpm;
+      delete set.heartRateMinBpm;
+      delete set.heartRateMaxRangeBpm;
+
+      delete set.rpeMin;
+      delete set.rpeMax;
+
+      delete set.paceMinSecondsPerKm;
+      delete set.paceMaxSecondsPerKm;
+    }
+
+
+    this.runningRoutineDraft.set({
+      ...draft,
+      blocks
+    });
+  }
+
+
+  addRunningRoutineSet(
+    blockIndex: number
+  ): void {
+
+    const draft =
+      this.runningRoutineDraft();
+
+    if (!draft) {
+      return;
+    }
+
+    const blocks =
+      structuredClone(draft.blocks);
+
+    const block =
+      blocks[blockIndex];
+
+    if (!block) {
+      return;
+    }
+
+    block.sets.push({
+      repetitions: 1,
+
+      targetType: 'duration',
+
+      durationSeconds: 600,
+
+      intensityMode: 'free',
+
+      recoverySeconds: 0,
+
+      instruction: ''
+    });
+
+    this.runningRoutineDraft.set({
+      ...draft,
+      blocks
+    });
+  }
+
+
+  removeRunningRoutineSet(
+    blockIndex: number,
+    setIndex: number
+  ): void {
+
+    const draft =
+      this.runningRoutineDraft();
+
+    if (!draft) {
+      return;
+    }
+
+    const blocks =
+      structuredClone(draft.blocks);
+
+    const block =
+      blocks[blockIndex];
+
+    if (!block) {
+      return;
+    }
+
+    block.sets.splice(
+      setIndex,
+      1
+    );
+
+    this.runningRoutineDraft.set({
+      ...draft,
+      blocks
+    });
+  }
+
+
+  async saveRunningRoutine():
+    Promise<void> {
+
+    const draft =
+      this.runningRoutineDraft();
+
+    const stored =
+      this.activeRunningRoutineRecord();
+
+    if (!draft || !stored) {
+      return;
+    }
+
+
+    if (!draft.title.trim()) {
+
+      this.runningRoutineSaveError.set(
+        'La rutina necesita un título.'
+      );
+
+      return;
+    }
+
+
+    if (
+      !Number.isFinite(
+        draft.estimatedDurationMinutes
+      )
+      || draft.estimatedDurationMinutes < 0
+    ) {
+
+      this.runningRoutineSaveError.set(
+        'La duración estimada no es válida.'
+      );
+
+      return;
+    }
+
+
+    if (
+      draft.blocks.length === 0
+      || draft.blocks.some(
+        block =>
+          block.sets.length === 0
+      )
+    ) {
+
+      this.runningRoutineSaveError.set(
+        'Cada bloque debe contener al menos una serie.'
+      );
+
+      return;
+    }
+
+
+    const invalidSet =
+      draft.blocks.some(
+        block =>
+          block.sets.some(
+            set => {
+
+              if (
+                !Number.isFinite(
+                  set.repetitions
+                )
+                || set.repetitions <= 0
+              ) {
+                return true;
+              }
+
+
+              const recovery =
+                set.recoverySeconds
+                ?? 0;
+
+              if (
+                !Number.isFinite(recovery)
+                || recovery < 0
+              ) {
+                return true;
+              }
+
+
+              if (
+                set.targetType ===
+                  'duration'
+              ) {
+
+                return (
+                  set.durationSeconds == null
+                  || !Number.isFinite(
+                    set.durationSeconds
+                  )
+                  || set.durationSeconds <= 0
+                );
+              }
+
+
+              return (
+                set.distanceMeters == null
+                || !Number.isFinite(
+                  set.distanceMeters
+                )
+                || set.distanceMeters <= 0
+              );
+            }
+          )
+      );
+
+
+    if (invalidSet) {
+
+      this.runningRoutineSaveError.set(
+        'Las series necesitan repeticiones y duración o distancia mayores que 0.'
+      );
+
+      return;
+    }
+
+
+    this.runningRoutineSaving.set(true);
+
+    this.runningRoutineSaveError.set(
+      null
+    );
+
+    this.runningRoutineSaveMessage.set(
+      null
+    );
+
+
+    try {
+
+      const token =
+        await this.auth.getAccessToken();
+
+
+      if (!token) {
+
+        throw new Error(
+          'Necesitas iniciar sesión.'
+        );
+      }
+
+
+      const headers =
+        new HttpHeaders({
+          Authorization:
+            `Bearer ${token}`,
+          'Content-Type':
+            'application/json'
+        });
+
+
+      const session =
+        stored.sessions[0];
+
+
+      if (!session) {
+
+        throw new Error(
+          'La rutina activa no contiene ninguna sesión.'
+        );
+      }
+
+
+      const payload:
+        StoredRunningRoutine = {
+
+          ...stored,
+
+          discipline: 'running',
+
+          revision:
+            stored.revision + 1,
+
+          name:
+            draft.title,
+
+          sessions: [
+            {
+              ...session,
+
+              sessionId:
+                draft.id,
+
+              date:
+                draft.date,
+
+              title:
+                draft.title,
+
+              objective:
+                draft.objective,
+
+              estimatedDurationMinutes:
+                draft.estimatedDurationMinutes,
+
+              blocks:
+                draft.blocks,
+
+              notes:
+                draft.notes
+            },
+
+            ...stored.sessions.slice(1)
+          ]
+        };
+
+
+      const saved =
+        await firstValueFrom(
+          this.http.put<StoredRunningRoutine>(
+            `${this.apiUrl}/routines/${
+              encodeURIComponent(
+                stored.routineId
+              )
+            }`,
+            payload,
+            { headers }
+          )
+        );
+
+
+      this.activeRunningRoutineRecord.set(
+        saved
+      );
+
+      this.runningRoutine.set(
+        structuredClone(draft)
+      );
+
+      this.runningRoutineDraft.set(
+        null
+      );
+
+      this.runningRoutineEditing.set(
+        false
+      );
+
+      this.runningRoutineSaveMessage.set(
+        'Rutina de carrera guardada.'
+      );
+
+
+    } catch (error: any) {
+
+      this.runningRoutineSaveError.set(
+        error?.error?.detail
+        ?? error?.message
+        ?? 'No se pudo guardar la rutina de carrera.'
+      );
+
+    } finally {
+
+      this.runningRoutineSaving.set(
+        false
+      );
     }
   }
 

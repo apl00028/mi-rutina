@@ -241,6 +241,13 @@ describe('Endurance swimming integration', () => {
 
 describe('Endurance running session', () => {
 
+  const http = {
+    get: vi.fn(),
+    post: vi.fn(),
+    put: vi.fn()
+  };
+
+
   beforeEach(async () => {
     vi.clearAllMocks();
     healthConnect
@@ -249,6 +256,10 @@ describe('Endurance running session', () => {
     healthConnect
       .readGarminRunningMetrics
       .mockReset();
+
+    http.get.mockReset();
+    http.post.mockReset();
+    http.put.mockReset();
 
     await TestBed.configureTestingModule({
       imports: [
@@ -273,11 +284,7 @@ describe('Endurance running session', () => {
         },
         {
           provide: HttpClient,
-          useValue: {
-            get: vi.fn(),
-            post: vi.fn(),
-            put: vi.fn()
-          }
+          useValue: http
         },
         {
           provide: AuthService,
@@ -365,7 +372,321 @@ describe('Endurance running session', () => {
   }
 
 
+  it('loads the active running routine for the running discipline', async () => {
+    http.get.mockReturnValue(
+      of({
+        routineId: 'running-routine',
+        schemaVersion: '4.2',
+        revision: 1,
+        discipline: 'running',
+        name: 'Plan de carrera',
+        sessions: [
+          {
+            sessionId: 'run-today',
+            date: '2026-08-31',
+            title: 'Rodaje fácil',
+            objective: 'Construir base aeróbica',
+            estimatedDurationMinutes: 35,
+            blocks: [
+              {
+                id: 'warmup',
+                type: 'warmup',
+                title: 'Calentamiento',
+                sets: [
+                  {
+                    repetitions: 1,
+                    targetType: 'duration',
+                    durationSeconds: 600,
+                    intensityMode: 'free',
+                    recoverySeconds: 0
+                  }
+                ]
+              },
+              {
+                id: 'main',
+                type: 'main',
+                title: 'Bloque principal',
+                sets: [
+                  {
+                    repetitions: 1,
+                    targetType: 'distance',
+                    distanceMeters: 4000,
+                    intensityMode: 'free',
+                    recoverySeconds: 0
+                  }
+                ]
+              }
+            ],
+            notes: 'Ritmo cómodo'
+          }
+        ]
+      })
+    );
+
+    const { fixture } =
+      await renderRunning([]);
+
+    expect(http.get)
+      .toHaveBeenCalledWith(
+        expect.stringContaining(
+          '/routines/active'
+        ),
+        expect.objectContaining({
+          params: {
+            discipline: 'running'
+          }
+        })
+      );
+
+    expect(
+      fixture.componentInstance
+        .runningRoutine()
+    ).toEqual(
+      expect.objectContaining({
+        id: 'run-today',
+        title: 'Rodaje fácil',
+        objective:
+          'Construir base aeróbica',
+        estimatedDurationMinutes: 35
+      })
+    );
+
+    expect(
+      fixture.componentInstance
+        .runningRoutineTotalDistance()
+    ).toBe(4000);
+
+    expect(
+      fixture.componentInstance
+        .runningRoutineError()
+    ).toBeNull();
+  });
+
+
+  it('saves an edited running routine and preserves later sessions', async () => {
+    const fixture =
+      TestBed.createComponent(
+        Endurance
+      );
+
+    const component =
+      fixture.componentInstance;
+
+    const stored = {
+      routineId: 'running-routine',
+      schemaVersion: '4.2',
+      revision: 2,
+      discipline: 'running',
+      name: 'Plan anterior',
+      sessions: [
+        {
+          sessionId: 'today',
+          title: 'Hoy'
+        },
+        {
+          sessionId: 'next',
+          title: 'Próxima sesión'
+        }
+      ]
+    };
+
+    component.activeRunningRoutineRecord.set(
+      stored
+    );
+
+    component.runningRoutineDraft.set({
+      id: 'today',
+      date: '2026-08-31',
+      title: 'Rodaje controlado',
+      objective: 'Construir base aeróbica',
+      estimatedDurationMinutes: 40,
+      blocks: [
+        {
+          id: 'main',
+          type: 'main',
+          title: 'Bloque principal',
+          sets: [
+            {
+              repetitions: 1,
+              targetType: 'distance',
+              distanceMeters: 5000,
+              intensityMode: 'free',
+              recoverySeconds: 0,
+              instruction:
+                'Mantener esfuerzo estable'
+            }
+          ]
+        }
+      ],
+      notes: 'Postura relajada'
+    });
+
+    http.put.mockImplementation(
+      (_url, payload) => of(payload)
+    );
+
+    await component.saveRunningRoutine();
+
+    expect(http.put)
+      .toHaveBeenCalledOnce();
+
+    const payload =
+      http.put.mock.calls[0][1];
+
+    expect(payload.discipline)
+      .toBe('running');
+
+    expect(payload.revision)
+      .toBe(3);
+
+    expect(payload.sessions)
+      .toHaveLength(2);
+
+    expect(payload.sessions[0])
+      .toEqual(
+        expect.objectContaining({
+          sessionId: 'today',
+          title: 'Rodaje controlado',
+          objective:
+            'Construir base aeróbica',
+          estimatedDurationMinutes: 40
+        })
+      );
+
+    expect(payload.sessions[1])
+      .toEqual(stored.sessions[1]);
+
+    expect(
+      component.runningRoutine()
+    ).toEqual(
+      expect.objectContaining({
+        title: 'Rodaje controlado'
+      })
+    );
+
+    expect(
+      component.runningRoutineEditing()
+    ).toBe(false);
+
+    expect(
+      component.runningRoutineSaveMessage()
+    ).toBe(
+      'Rutina de carrera guardada.'
+    );
+  });
+
+
+  it('does not save an invalid running set', async () => {
+    const fixture =
+      TestBed.createComponent(
+        Endurance
+      );
+
+    const component =
+      fixture.componentInstance;
+
+    component.activeRunningRoutineRecord.set({
+      routineId: 'running-routine',
+      schemaVersion: '4.2',
+      revision: 1,
+      discipline: 'running',
+      sessions: [
+        {
+          sessionId: 'today'
+        }
+      ]
+    });
+
+    component.runningRoutineDraft.set({
+      id: 'today',
+      date: '2026-08-31',
+      title: 'Rodaje',
+      objective: '',
+      estimatedDurationMinutes: 30,
+      blocks: [
+        {
+          id: 'main',
+          type: 'main',
+          title: 'Principal',
+          sets: [
+            {
+              repetitions: 1,
+              targetType: 'distance',
+              distanceMeters: 0,
+              intensityMode: 'free',
+              recoverySeconds: 0
+            }
+          ]
+        }
+      ],
+      notes: ''
+    });
+
+    await component.saveRunningRoutine();
+
+    expect(http.put)
+      .not.toHaveBeenCalled();
+
+    expect(
+      component.runningRoutineSaveError()
+    ).toBe(
+      'Las series necesitan repeticiones y duración o distancia mayores que 0.'
+    );
+  });
+
+
   it('loads and renders running sessions on the running route', async () => {
+    http.get.mockReturnValue(
+      of({
+        routineId: 'running-routine',
+        schemaVersion: '4.2',
+        revision: 1,
+        discipline: 'running',
+        name: 'Plan de carrera',
+        sessions: [
+          {
+            sessionId: 'run-today',
+            date: '2026-08-31',
+            title: 'Rodaje fácil',
+            objective: 'Construir base aeróbica',
+            estimatedDurationMinutes: 35,
+            blocks: [
+              {
+                id: 'warmup',
+                type: 'warmup',
+                title: 'Calentamiento',
+                sets: [
+                  {
+                    repetitions: 1,
+                    targetType: 'duration',
+                    durationSeconds: 600,
+                    intensityMode: 'free',
+                    recoverySeconds: 0
+                  }
+                ]
+              },
+              {
+                id: 'main',
+                type: 'main',
+                title: 'Bloque principal',
+                sets: [
+                  {
+                    repetitions: 1,
+                    targetType: 'distance',
+                    distanceMeters: 4000,
+                    intensityMode: 'free',
+                    recoverySeconds: 0,
+                    instruction: 'Mantener ritmo cómodo'
+                  }
+                ]
+              }
+            ],
+            notes: 'Cadencia estable'
+          }
+        ]
+      })
+    );
+
     const {
       fixture,
       readGarminRunningMetrics
@@ -400,12 +721,39 @@ describe('Endurance running session', () => {
     routineTab?.click();
     fixture.detectChanges();
 
+    const routineText =
+      fixture.nativeElement.textContent;
+
     expect(
       fixture.componentInstance.runningView()
     ).toBe('routine');
-    expect(
-      fixture.nativeElement.textContent
-    ).toContain('Próximamente');
+
+    expect(routineText)
+      .toContain('Rodaje fácil');
+
+    expect(routineText)
+      .toContain('Construir base aeróbica');
+
+    expect(routineText)
+      .toContain('35');
+
+    expect(routineText)
+      .toContain('4.00 km');
+
+    expect(routineText)
+      .toContain('Calentamiento');
+
+    expect(routineText)
+      .toContain('Bloque principal');
+
+    expect(routineText)
+      .toContain('Mantener ritmo cómodo');
+
+    expect(routineText)
+      .toContain('Cadencia estable');
+
+    expect(routineText)
+      .not.toContain('Próximamente');
   });
 
 

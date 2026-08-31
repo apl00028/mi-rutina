@@ -1975,16 +1975,392 @@
   ) {
 
     @if (
-      runningView() !== 'session'
+      runningView() === 'routine'
+    ) {
+
+      @if (runningRoutineLoading()) {
+
+        <section class="discipline-card">
+          <p>
+            Cargando rutina de carrera…
+          </p>
+        </section>
+
+      } @else if (
+        runningRoutineError();
+        as error
+      ) {
+
+        <section class="discipline-card">
+          <span class="eyebrow">
+            Rutina
+          </span>
+
+          <h2>
+            No se pudo cargar la rutina
+          </h2>
+
+          <p>
+            {{ error }}
+          </p>
+        </section>
+
+      } @else if (
+        runningRoutine();
+        as routine
+      ) {
+
+        <section
+          class="discipline-card running-routine"
+        >
+
+          <div class="swimming-routine-header">
+
+            <div>
+              <span class="eyebrow">
+                Rutina de hoy
+              </span>
+
+              <h2>
+                {{ routine.title }}
+              </h2>
+
+              @if (routine.objective) {
+                <p>
+                  {{ routine.objective }}
+                </p>
+              }
+            </div>
+
+            @if (
+              runningRoutineTotalDistance() > 0
+            ) {
+              <strong
+                class="swimming-routine-distance"
+              >
+                {{
+                  formatRunningDistance(
+                    runningRoutineTotalDistance()
+                  )
+                }}
+              </strong>
+            }
+
+          </div>
+
+
+          <div class="swimming-routine-summary">
+
+            <div>
+              <span>
+                Duración estimada
+              </span>
+
+              <strong>
+                {{
+                  routine.estimatedDurationMinutes
+                }}
+                min
+              </strong>
+            </div>
+
+            <div>
+              <span>
+                Bloques
+              </span>
+
+              <strong>
+                {{ routine.blocks.length }}
+              </strong>
+            </div>
+
+            @if (
+              runningRoutineTotalDistance() > 0
+            ) {
+              <div>
+                <span>
+                  Distancia programada
+                </span>
+
+                <strong>
+                  {{
+                    formatRunningDistance(
+                      runningRoutineTotalDistance()
+                    )
+                  }}
+                </strong>
+              </div>
+            }
+
+          </div>
+
+
+          <div class="swimming-routine-blocks">
+
+            @for (
+              block of routine.blocks;
+              track block.id
+            ) {
+
+              <article
+                class="swimming-routine-block"
+                [attr.data-block-type]="block.type"
+              >
+
+                <div
+                  class="swimming-routine-block-header"
+                >
+                  <div>
+                    <h3>
+                      {{ block.title }}
+                    </h3>
+                  </div>
+                </div>
+
+
+                <div class="swimming-routine-sets">
+
+                  @for (
+                    set of block.sets;
+                    track $index
+                  ) {
+
+                    <div class="swimming-routine-set">
+
+                      <div
+                        class="swimming-routine-set-main"
+                      >
+
+                        <strong>
+                          @if (
+                            set.repetitions > 1
+                          ) {
+                            {{ set.repetitions }} ×
+                          }
+
+                          @if (
+                            set.targetType ===
+                              'distance'
+                            && set.distanceMeters
+                          ) {
+                            {{
+                              formatRunningDistance(
+                                set.distanceMeters
+                              )
+                            }}
+                          } @else if (
+                            set.targetType ===
+                              'duration'
+                            && set.durationSeconds
+                          ) {
+                            {{
+                              formatDuration(
+                                set.durationSeconds
+                              )
+                            }}
+                          }
+                        </strong>
+
+                        <span>
+                          {{
+                            set.intensityMode === 'heartRateMax'
+                              ? 'Límite de FC'
+                              : set.intensityMode === 'heartRateRange'
+                                ? 'Rango de FC'
+                                : set.intensityMode === 'rpeRange'
+                                  ? 'RPE'
+                                  : set.intensityMode === 'paceRange'
+                                    ? 'Ritmo'
+                                    : set.intensityMode === 'sprint'
+                                      ? 'Sprint'
+                                      : 'Libre'
+                          }}
+                        </span>
+
+                      </div>
+
+
+                      @if (
+                        set.intensityMode === 'heartRateMax'
+                        && set.heartRateMaxBpm
+                      ) {
+                        <div class="swimming-routine-set-meta">
+                          FC ≤
+                          {{ set.heartRateMaxBpm }}
+                          ppm
+                        </div>
+                      }
+
+                      @if (
+                        set.intensityMode === 'heartRateRange'
+                        && set.heartRateMinBpm
+                        && set.heartRateMaxRangeBpm
+                      ) {
+                        <div class="swimming-routine-set-meta">
+                          FC
+                          {{ set.heartRateMinBpm }}
+                          –
+                          {{ set.heartRateMaxRangeBpm }}
+                          ppm
+                        </div>
+                      }
+
+                      @if (
+                        set.intensityMode === 'rpeRange'
+                        && set.rpeMin
+                        && set.rpeMax
+                      ) {
+                        <div class="swimming-routine-set-meta">
+                          RPE
+                          {{ set.rpeMin }}
+                          –
+                          {{ set.rpeMax }}
+                        </div>
+                      }
+
+                      @if ((set.recoverySeconds ?? 0) > 0) {
+                        <div
+                          class="swimming-routine-set-meta"
+                        >
+                          Descanso:
+                          {{
+                            formatDuration(
+                              set.recoverySeconds ?? 0
+                            )
+                          }}
+                        </div>
+                      }
+
+
+                      @if (set.instruction) {
+                        <p>
+                          {{ set.instruction }}
+                        </p>
+                      }
+
+                    </div>
+
+                  }
+
+                </div>
+
+              </article>
+
+            }
+
+          </div>
+
+
+          @if (routine.notes) {
+
+            <div class="swimming-routine-focus">
+
+              <span class="eyebrow">
+                Indicaciones
+              </span>
+
+              <p>
+                {{ routine.notes }}
+              </p>
+
+            </div>
+
+          }
+
+          <div class="swimming-routine-focus">
+
+            <span class="eyebrow">
+              Importar desde Health OS
+            </span>
+
+            <p>
+              Pega una rutina de carrera generada por Health OS.
+            </p>
+
+            <textarea
+              rows="8"
+              [value]="runningRoutineImportText()"
+              (input)="updateRunningRoutineImportText(
+                $any($event.target).value
+              )"
+              placeholder="Pega aquí el JSON de la rutina"
+            ></textarea>
+
+            <button
+              type="button"
+              class="primary-action"
+              [disabled]="runningRoutineSaving()"
+              (click)="importRunningRoutineJson()"
+            >
+              {{
+                runningRoutineSaving()
+                  ? 'Importando…'
+                  : 'Importar y activar'
+              }}
+            </button>
+
+            @if (runningRoutineSaveMessage(); as message) {
+              <p>
+                {{ message }}
+              </p>
+            }
+
+            @if (runningRoutineSaveError(); as error) {
+              <p class="error-message">
+                {{ error }}
+              </p>
+            }
+
+          </div>
+
+        </section>
+
+      } @else {
+
+        <section class="discipline-card">
+
+          <span class="eyebrow">
+            Rutina
+          </span>
+
+          <h2>
+            Sin rutina activa
+          </h2>
+
+          <p>
+            No hay una rutina de carrera activa.
+          </p>
+
+          <button
+            type="button"
+            class="primary-action"
+            [disabled]="runningRoutineSaving()"
+            (click)="createDefaultRunningRoutine()"
+          >
+            {{
+              runningRoutineSaving()
+                ? 'Creando…'
+                : 'Crear rutina'
+            }}
+          </button>
+
+          @if (runningRoutineSaveError(); as error) {
+            <p class="error-message">
+              {{ error }}
+            </p>
+          }
+
+        </section>
+
+      }
+
+    } @else if (
+      runningView() === 'analytics'
     ) {
 
       <section class="discipline-card">
         <span class="eyebrow">
-          {{
-            runningView() === 'routine'
-              ? 'Rutina'
-              : 'Análisis'
-          }}
+          Análisis
         </span>
 
         <h2>
@@ -1992,7 +2368,7 @@
         </h2>
 
         <p>
-          Esta vista de carrera estará disponible
+          El análisis de carrera estará disponible
           en una próxima versión.
         </p>
       </section>

@@ -1413,6 +1413,34 @@ export class Endurance
   }
 
 
+  updateRunningRoutineSetMinutes(
+    blockIndex: number,
+    setIndex: number,
+    value: string
+  ): void {
+
+    const minutes =
+      Number(value);
+
+    const seconds =
+      Number.isFinite(minutes)
+        ? Math.max(
+            0,
+            Math.round(
+              minutes * 60
+            )
+          )
+        : 0;
+
+    this.updateRunningRoutineSetField(
+      blockIndex,
+      setIndex,
+      'durationSeconds',
+      String(seconds)
+    );
+  }
+
+
   updateRunningRoutineBlockTitle(
     blockIndex: number,
     value: string
@@ -1554,6 +1582,124 @@ export class Endurance
       delete set.paceMaxSecondsPerKm;
     }
 
+
+    this.runningRoutineDraft.set({
+      ...draft,
+      blocks
+    });
+  }
+
+
+  updateRunningRoutineBlockType(
+    blockIndex: number,
+    value: string
+  ): void {
+
+    const draft =
+      this.runningRoutineDraft();
+
+    if (!draft) {
+      return;
+    }
+
+    const allowed = [
+      'warmup',
+      'main',
+      'intervals',
+      'sprints',
+      'cooldown'
+    ] as const;
+
+    if (
+      !allowed.includes(
+        value as typeof allowed[number]
+      )
+    ) {
+      return;
+    }
+
+    const blocks =
+      structuredClone(draft.blocks);
+
+    const block =
+      blocks[blockIndex];
+
+    if (!block) {
+      return;
+    }
+
+    block.type =
+      value as typeof block.type;
+
+    this.runningRoutineDraft.set({
+      ...draft,
+      blocks
+    });
+  }
+
+
+  addRunningRoutineBlock():
+    void {
+
+    const draft =
+      this.runningRoutineDraft();
+
+    if (!draft) {
+      return;
+    }
+
+    const blocks =
+      structuredClone(draft.blocks);
+
+    blocks.push({
+      id:
+        `block-${Date.now()}-${blocks.length}`,
+      type: 'main',
+      title: 'Nuevo bloque',
+      sets: [
+        {
+          repetitions: 1,
+          targetType: 'duration',
+          durationSeconds: 600,
+          intensityMode: 'free',
+          recoverySeconds: 0,
+          instruction: ''
+        }
+      ]
+    });
+
+    this.runningRoutineDraft.set({
+      ...draft,
+      blocks
+    });
+  }
+
+
+  removeRunningRoutineBlock(
+    blockIndex: number
+  ): void {
+
+    const draft =
+      this.runningRoutineDraft();
+
+    if (!draft) {
+      return;
+    }
+
+    if (draft.blocks.length <= 1) {
+      this.runningRoutineSaveError.set(
+        'La rutina debe mantener al menos un bloque.'
+      );
+      return;
+    }
+
+    const blocks =
+      structuredClone(draft.blocks);
+
+    blocks.splice(
+      blockIndex,
+      1
+    );
 
     this.runningRoutineDraft.set({
       ...draft,
@@ -1900,9 +2046,26 @@ export class Endurance
   }
 
 
+  runningHealthConnectSupported():
+    boolean {
+
+    return (
+      Capacitor.isNativePlatform()
+      && Capacitor.getPlatform() === 'android'
+    );
+  }
+
+
   async loadRunning(): Promise<void> {
 
     if (this.runningLoading()) {
+      return;
+    }
+
+    if (!this.runningHealthConnectSupported()) {
+      this.runningSessions.set([]);
+      this.runningError.set(null);
+      this.runningLoading.set(false);
       return;
     }
 

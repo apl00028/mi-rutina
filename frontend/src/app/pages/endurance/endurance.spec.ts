@@ -361,6 +361,11 @@ describe('Endurance running session', () => {
     const fixture =
       TestBed.createComponent(Endurance);
 
+    vi.spyOn(
+      fixture.componentInstance,
+      'runningHealthConnectSupported'
+    ).mockReturnValue(true);
+
     fixture.detectChanges();
     await fixture.whenStable();
     fixture.detectChanges();
@@ -370,6 +375,49 @@ describe('Endurance running session', () => {
       readGarminRunningMetrics
     };
   }
+
+
+  it('does not call Health Connect for running on web', async () => {
+    const readGarminRunningMetrics =
+      mockRunningSessions([
+        runningSession()
+      ]);
+
+    const fixture =
+      TestBed.createComponent(
+        Endurance
+      );
+
+    vi.spyOn(
+      fixture.componentInstance,
+      'runningHealthConnectSupported'
+    ).mockReturnValue(false);
+
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect(
+      readGarminRunningMetrics
+    ).not.toHaveBeenCalled();
+
+    expect(
+      fixture.componentInstance
+        .runningError()
+    ).toBeNull();
+
+    expect(
+      fixture.nativeElement.textContent
+    ).toContain(
+      'Disponible en Android'
+    );
+
+    expect(
+      fixture.nativeElement.textContent
+    ).toContain(
+      'Health Connect solo está disponible'
+    );
+  });
 
 
   it('loads the active running routine for the running discipline', async () => {
@@ -838,6 +886,11 @@ describe('Endurance running session', () => {
 
     const fixture =
       TestBed.createComponent(Endurance);
+
+    vi.spyOn(
+      fixture.componentInstance,
+      'runningHealthConnectSupported'
+    ).mockReturnValue(true);
 
     fixture.detectChanges();
     await fixture.whenStable();

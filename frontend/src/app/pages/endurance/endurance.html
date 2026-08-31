@@ -2267,51 +2267,529 @@
 
           }
 
-          <div class="swimming-routine-focus">
+          @if (!runningRoutineEditing()) {
 
-            <span class="eyebrow">
-              Importar desde Health OS
-            </span>
+            <div class="swimming-routine-focus">
 
-            <p>
-              Pega una rutina de carrera generada por Health OS.
-            </p>
+              <button
+                type="button"
+                class="primary-action"
+                (click)="startEditingRunningRoutine()"
+              >
+                Editar rutina
+              </button>
 
-            <textarea
-              rows="8"
-              [value]="runningRoutineImportText()"
-              (input)="updateRunningRoutineImportText(
-                $any($event.target).value
-              )"
-              placeholder="Pega aquí el JSON de la rutina"
-            ></textarea>
+              @if (runningRoutineSaveMessage(); as message) {
+                <p>
+                  {{ message }}
+                </p>
+              }
 
-            <button
-              type="button"
-              class="primary-action"
-              [disabled]="runningRoutineSaving()"
-              (click)="importRunningRoutineJson()"
-            >
-              {{
-                runningRoutineSaving()
-                  ? 'Importando…'
-                  : 'Importar y activar'
-              }}
-            </button>
+              @if (runningRoutineSaveError(); as error) {
+                <p class="error-message">
+                  {{ error }}
+                </p>
+              }
 
-            @if (runningRoutineSaveMessage(); as message) {
-              <p>
-                {{ message }}
-              </p>
-            }
+            </div>
 
-            @if (runningRoutineSaveError(); as error) {
-              <p class="error-message">
-                {{ error }}
-              </p>
-            }
+          } @else if (runningRoutineDraft(); as draft) {
 
-          </div>
+            <div class="swimming-routine-focus">
+
+              <span class="eyebrow">
+                Editor de rutina
+              </span>
+
+              <label>
+                Título
+
+                <input
+                  type="text"
+                  [value]="draft.title"
+                  (input)="updateRunningRoutineField(
+                    'title',
+                    $any($event.target).value
+                  )"
+                />
+              </label>
+
+
+              <label>
+                Objetivo
+
+                <textarea
+                  rows="3"
+                  [value]="draft.objective"
+                  (input)="updateRunningRoutineField(
+                    'objective',
+                    $any($event.target).value
+                  )"
+                ></textarea>
+              </label>
+
+
+              <label>
+                Duración estimada (min)
+
+                <input
+                  type="number"
+                  min="0"
+                  [value]="draft.estimatedDurationMinutes"
+                  (input)="updateRunningRoutineField(
+                    'estimatedDurationMinutes',
+                    $any($event.target).value
+                  )"
+                />
+              </label>
+
+
+              <div class="swimming-routine-blocks">
+
+                @for (
+                  block of draft.blocks;
+                  track block.id;
+                  let blockIndex = $index
+                ) {
+
+                  <div class="swimming-routine-block">
+
+                    <label>
+                      Tipo de bloque
+
+                      <select
+                        [value]="block.type"
+                        (change)="updateRunningRoutineBlockType(
+                          blockIndex,
+                          $any($event.target).value
+                        )"
+                      >
+                        <option value="warmup">
+                          Calentamiento
+                        </option>
+
+                        <option value="main">
+                          Principal
+                        </option>
+
+                        <option value="intervals">
+                          Intervalos
+                        </option>
+
+                        <option value="sprints">
+                          Sprints
+                        </option>
+
+                        <option value="cooldown">
+                          Vuelta a la calma
+                        </option>
+                      </select>
+                    </label>
+
+
+                    <label>
+                      Nombre del bloque
+
+                      <input
+                        type="text"
+                        [value]="block.title"
+                        (input)="updateRunningRoutineBlockTitle(
+                          blockIndex,
+                          $any($event.target).value
+                        )"
+                      />
+                    </label>
+
+
+                    @if (draft.blocks.length > 1) {
+
+                      <button
+                        type="button"
+                        (click)="removeRunningRoutineBlock(
+                          blockIndex
+                        )"
+                      >
+                        Eliminar bloque
+                      </button>
+
+                    }
+
+
+                    <div class="swimming-routine-sets">
+
+                      @for (
+                        set of block.sets;
+                        track $index;
+                        let setIndex = $index
+                      ) {
+
+                        <div class="swimming-routine-set">
+
+                          <label>
+                            Repeticiones
+
+                            <input
+                              type="number"
+                              min="1"
+                              [value]="set.repetitions"
+                              (input)="updateRunningRoutineSetField(
+                                blockIndex,
+                                setIndex,
+                                'repetitions',
+                                $any($event.target).value
+                              )"
+                            />
+                          </label>
+
+
+                          <label>
+                            Trabajo por
+
+                            <select
+                              [value]="set.targetType"
+                              (change)="updateRunningRoutineSetField(
+                                blockIndex,
+                                setIndex,
+                                'targetType',
+                                $any($event.target).value
+                              )"
+                            >
+                              <option value="duration">
+                                Tiempo
+                              </option>
+
+                              <option value="distance">
+                                Distancia
+                              </option>
+                            </select>
+                          </label>
+
+
+                          @if (
+                            set.targetType === 'duration'
+                          ) {
+
+                            <label>
+                              Trabajo (min)
+
+                              <input
+                                type="number"
+                                min="0"
+                                step="0.5"
+                                [value]="
+                                  (set.durationSeconds ?? 0)
+                                  / 60
+                                "
+                                (input)="updateRunningRoutineSetMinutes(
+                                  blockIndex,
+                                  setIndex,
+                                  $any($event.target).value
+                                )"
+                              />
+                            </label>
+
+                          } @else {
+
+                            <label>
+                              Distancia (m)
+
+                              <input
+                                type="number"
+                                min="0"
+                                step="100"
+                                [value]="set.distanceMeters ?? 0"
+                                (input)="updateRunningRoutineSetField(
+                                  blockIndex,
+                                  setIndex,
+                                  'distanceMeters',
+                                  $any($event.target).value
+                                )"
+                              />
+                            </label>
+
+                          }
+
+
+                          <label>
+                            Objetivo de intensidad
+
+                            <select
+                              [value]="set.intensityMode"
+                              (change)="updateRunningRoutineSetField(
+                                blockIndex,
+                                setIndex,
+                                'intensityMode',
+                                $any($event.target).value
+                              )"
+                            >
+
+                              <option value="free">
+                                Libre
+                              </option>
+
+                              <option value="heartRateMax">
+                                No superar FC
+                              </option>
+
+                              <option value="heartRateRange">
+                                Rango de FC
+                              </option>
+
+                              <option value="rpeRange">
+                                Rango de RPE
+                              </option>
+
+                              <option value="paceRange">
+                                Rango de ritmo
+                              </option>
+
+                              <option value="sprint">
+                                Sprint
+                              </option>
+
+                            </select>
+                          </label>
+
+
+                          @if (
+                            set.intensityMode === 'heartRateMax'
+                          ) {
+
+                            <label>
+                              FC máxima (ppm)
+
+                              <input
+                                type="number"
+                                min="0"
+                                [value]="set.heartRateMaxBpm ?? ''"
+                                (input)="updateRunningRoutineSetField(
+                                  blockIndex,
+                                  setIndex,
+                                  'heartRateMaxBpm',
+                                  $any($event.target).value
+                                )"
+                              />
+                            </label>
+
+                          }
+
+
+                          @if (
+                            set.intensityMode === 'heartRateRange'
+                          ) {
+
+                            <label>
+                              FC mínima (ppm)
+
+                              <input
+                                type="number"
+                                min="0"
+                                [value]="set.heartRateMinBpm ?? ''"
+                                (input)="updateRunningRoutineSetField(
+                                  blockIndex,
+                                  setIndex,
+                                  'heartRateMinBpm',
+                                  $any($event.target).value
+                                )"
+                              />
+                            </label>
+
+                            <label>
+                              FC máxima (ppm)
+
+                              <input
+                                type="number"
+                                min="0"
+                                [value]="set.heartRateMaxRangeBpm ?? ''"
+                                (input)="updateRunningRoutineSetField(
+                                  blockIndex,
+                                  setIndex,
+                                  'heartRateMaxRangeBpm',
+                                  $any($event.target).value
+                                )"
+                              />
+                            </label>
+
+                          }
+
+
+                          @if (
+                            set.intensityMode === 'rpeRange'
+                          ) {
+
+                            <label>
+                              RPE mínimo
+
+                              <input
+                                type="number"
+                                min="1"
+                                max="10"
+                                [value]="set.rpeMin ?? ''"
+                                (input)="updateRunningRoutineSetField(
+                                  blockIndex,
+                                  setIndex,
+                                  'rpeMin',
+                                  $any($event.target).value
+                                )"
+                              />
+                            </label>
+
+                            <label>
+                              RPE máximo
+
+                              <input
+                                type="number"
+                                min="1"
+                                max="10"
+                                [value]="set.rpeMax ?? ''"
+                                (input)="updateRunningRoutineSetField(
+                                  blockIndex,
+                                  setIndex,
+                                  'rpeMax',
+                                  $any($event.target).value
+                                )"
+                              />
+                            </label>
+
+                          }
+
+
+                          @if (
+                            set.repetitions > 1
+                          ) {
+
+                            <label>
+                              Recuperación (s)
+
+                              <input
+                                type="number"
+                                min="0"
+                                step="15"
+                                [value]="set.recoverySeconds ?? 0"
+                                (input)="updateRunningRoutineSetField(
+                                  blockIndex,
+                                  setIndex,
+                                  'recoverySeconds',
+                                  $any($event.target).value
+                                )"
+                              />
+                            </label>
+
+                          }
+
+
+                          <label>
+                            Indicaciones
+
+                            <textarea
+                              rows="2"
+                              [value]="set.instruction ?? ''"
+                              (input)="updateRunningRoutineSetField(
+                                blockIndex,
+                                setIndex,
+                                'instruction',
+                                $any($event.target).value
+                              )"
+                            ></textarea>
+                          </label>
+
+
+                          @if (block.sets.length > 1) {
+
+                            <button
+                              type="button"
+                              (click)="removeRunningRoutineSet(
+                                blockIndex,
+                                setIndex
+                              )"
+                            >
+                              Eliminar prescripción
+                            </button>
+
+                          }
+
+                        </div>
+
+                      }
+
+                    </div>
+
+
+                    <button
+                      type="button"
+                      (click)="addRunningRoutineSet(
+                        blockIndex
+                      )"
+                    >
+                      + Añadir prescripción
+                    </button>
+
+                  </div>
+
+                }
+
+              </div>
+
+
+              <button
+                type="button"
+                (click)="addRunningRoutineBlock()"
+              >
+                + Añadir bloque
+              </button>
+
+
+              <label>
+                Notas generales
+
+                <textarea
+                  rows="3"
+                  [value]="draft.notes ?? ''"
+                  (input)="updateRunningRoutineField(
+                    'notes',
+                    $any($event.target).value
+                  )"
+                ></textarea>
+              </label>
+
+
+              @if (runningRoutineSaveError(); as error) {
+
+                <p class="error-message">
+                  {{ error }}
+                </p>
+
+              }
+
+
+              <div>
+
+                <button
+                  type="button"
+                  [disabled]="runningRoutineSaving()"
+                  (click)="cancelEditingRunningRoutine()"
+                >
+                  Cancelar
+                </button>
+
+                <button
+                  type="button"
+                  class="primary-action"
+                  [disabled]="runningRoutineSaving()"
+                  (click)="saveRunningRoutine()"
+                >
+                  {{
+                    runningRoutineSaving()
+                      ? 'Guardando…'
+                      : 'Guardar rutina'
+                  }}
+                </button>
+
+              </div>
+
+            </div>
+
+          }
 
         </section>
 
@@ -2371,6 +2849,84 @@
           El análisis de carrera estará disponible
           en una próxima versión.
         </p>
+      </section>
+
+    } @else if (
+      !runningHealthConnectSupported()
+    ) {
+
+      <section class="discipline-card">
+
+        <span class="eyebrow">
+          Sesiones de carrera
+        </span>
+
+        <h2>
+          Disponible en Android
+        </h2>
+
+        <p>
+          Health Connect solo está disponible
+          en la app Android.
+        </p>
+
+        <p>
+          Tus sesiones registradas con Garmin
+          se consultan desde Aptus en el móvil.
+        </p>
+
+      </section>
+
+    } @else if (
+      !runningHealthConnectSupported()
+    ) {
+
+      <section class="discipline-card">
+
+        <span class="eyebrow">
+          Sesiones de carrera
+        </span>
+
+        <h2>
+          Disponible en Android
+        </h2>
+
+        <p>
+          Health Connect solo está disponible
+          en la app Android.
+        </p>
+
+        <p>
+          Tus sesiones registradas con Garmin
+          se consultan desde Aptus en el móvil.
+        </p>
+
+      </section>
+
+    } @else if (
+      !runningHealthConnectSupported()
+    ) {
+
+      <section class="discipline-card">
+
+        <span class="eyebrow">
+          Sesiones de carrera
+        </span>
+
+        <h2>
+          Disponible en Android
+        </h2>
+
+        <p>
+          Health Connect solo está disponible
+          en la app Android.
+        </p>
+
+        <p>
+          Tus sesiones registradas con Garmin
+          se consultan desde Aptus en el móvil.
+        </p>
+
       </section>
 
     } @else if (runningLoading()) {

@@ -2238,7 +2238,7 @@ describe('Train first workout flow', () => {
         'dumbbell-bench-press'
       )
     ).toBe(
-      '82.5 kg × 8 @2 · 82.5 kg × 7 @3'
+      '82.5 kg × 8 RIR 2 · 82.5 kg × 7 RIR 3'
     );
 
     component.openExercise(
@@ -2253,7 +2253,7 @@ describe('Train first workout flow', () => {
       'Última vez'
     );
     expect(text).toContain(
-      '82.5 kg × 8 @2 · 82.5 kg × 7 @3'
+      '82.5 kg × 8 RIR 2 · 82.5 kg × 7 RIR 3'
     );
     expect(text).not.toContain(
       '100 kg × 1'

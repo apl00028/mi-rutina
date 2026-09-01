@@ -2393,7 +2393,7 @@ export class Train implements OnInit, OnDestroy {
       set.rir !== undefined &&
       Number.isFinite(set.rir)
     ) {
-      parts.push(`@${set.rir}`);
+      parts.push(`RIR ${set.rir}`);
     }
 
     return parts.join(' ');

@@ -661,10 +661,21 @@ button:disabled {
 .weight-input-row {
   display: grid;
   grid-template-columns:
-    minmax(0, 1fr)
+    minmax(90px, 1fr)
     auto;
   gap: 6px;
   align-items: center;
+}
+
+@media (max-width: 760px) {
+  .weight-input-row {
+    grid-template-columns: 1fr;
+    gap: 6px;
+  }
+
+  .reuse-weight-button {
+    width: 100%;
+  }
 }
 
 .set-timer-panel {

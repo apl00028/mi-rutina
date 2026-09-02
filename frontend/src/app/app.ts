@@ -30,7 +30,8 @@ import {
   LucidePanelLeftClose,
   LucidePanelLeftOpen,
   LucideSettings,
-  LucideShieldCheck
+  LucideShieldCheck,
+  LucideUserRound
 } from '@lucide/angular';
 
 import {
@@ -68,7 +69,8 @@ type AppInitializationState =
     LucidePanelLeftClose,
     LucidePanelLeftOpen,
     LucideSettings,
-    LucideShieldCheck
+    LucideShieldCheck,
+    LucideUserRound
   ],
   templateUrl: './app.html',
   styleUrl: './app.scss'
@@ -393,6 +395,17 @@ export class App implements OnDestroy {
     return (
       me?.access_status === 'active' &&
       me?.role === 'admin'
+    );
+  }
+
+
+  isTrainer(): boolean {
+    const me =
+      this.aptusMe();
+
+    return (
+      me?.access_status === 'active' &&
+      me?.role === 'trainer'
     );
   }
 

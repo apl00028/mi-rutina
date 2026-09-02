@@ -1,0 +1,338 @@
+:host {
+  display: block;
+}
+
+.trainer-page {
+  width: min(100%, 1040px);
+  margin: 0 auto;
+  padding: 32px;
+  box-sizing: border-box;
+}
+
+.page-header,
+.section-heading {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 20px;
+}
+
+.page-header {
+  margin-bottom: 26px;
+}
+
+.eyebrow {
+  display: block;
+  margin-bottom: 7px;
+
+  color: var(--aptus-text-muted);
+
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+h1,
+h2,
+p {
+  margin-top: 0;
+}
+
+h1 {
+  margin-bottom: 8px;
+
+  color: var(--aptus-text);
+
+  font-size: 28px;
+  font-weight: 760;
+  line-height: 1.1;
+  letter-spacing: 0;
+}
+
+.page-header p,
+.muted {
+  margin-bottom: 0;
+
+  color: var(--aptus-text-muted);
+
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.view-switch {
+  display: inline-flex;
+  gap: 4px;
+
+  padding: 4px;
+
+  border: 1px solid var(--aptus-border);
+  border-radius: var(--aptus-radius-md);
+
+  background: var(--aptus-surface);
+}
+
+.view-switch button,
+.secondary-button,
+.primary-button {
+  min-height: 38px;
+
+  border-radius: var(--aptus-radius-md);
+
+  font: inherit;
+  font-size: 12px;
+  font-weight: 720;
+
+  cursor: pointer;
+}
+
+.view-switch button {
+  padding: 0 12px;
+
+  border: 0;
+
+  background: transparent;
+  color: var(--aptus-text-muted);
+}
+
+.view-switch button.active {
+  background: var(--aptus-accent);
+  color: var(--aptus-accent-contrast);
+}
+
+.trainer-section {
+  display: grid;
+  gap: 16px;
+}
+
+.section-heading h2 {
+  margin-bottom: 0;
+
+  color: var(--aptus-text);
+
+  font-size: 18px;
+}
+
+.secondary-button,
+.primary-button {
+  padding: 0 14px;
+}
+
+.secondary-button {
+  border: 1px solid var(--aptus-border);
+
+  background: var(--aptus-surface);
+  color: var(--aptus-text-muted);
+}
+
+.primary-button {
+  border: 1px solid var(--aptus-accent);
+
+  background: var(--aptus-accent);
+  color: var(--aptus-accent-contrast);
+}
+
+button:disabled,
+select:disabled,
+input:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.athlete-list,
+.template-list {
+  display: grid;
+  gap: 10px;
+}
+
+.athlete-card,
+.template-card,
+.assignment-panel,
+.state-card,
+.empty-state {
+  box-sizing: border-box;
+
+  border: 1px solid var(--aptus-border);
+  border-radius: var(--aptus-radius-md);
+
+  background: var(--aptus-surface);
+}
+
+.athlete-card {
+  padding: 16px;
+}
+
+.athlete-card div {
+  min-width: 0;
+
+  display: grid;
+  gap: 4px;
+}
+
+.athlete-card strong,
+.template-card strong,
+.selected-template strong {
+  overflow: hidden;
+
+  color: var(--aptus-text);
+
+  font-size: 13px;
+  font-weight: 760;
+
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.athlete-card span,
+.template-card span,
+.selected-template span,
+.selected-template small {
+  color: var(--aptus-text-muted);
+
+  font-size: 11px;
+  font-weight: 650;
+}
+
+.template-layout {
+  display: grid;
+  grid-template-columns:
+    minmax(0, 1fr)
+    minmax(280px, 340px);
+  gap: 16px;
+  align-items: start;
+}
+
+.template-card {
+  width: 100%;
+
+  display: grid;
+  gap: 5px;
+
+  padding: 15px;
+
+  text-align: left;
+
+  cursor: pointer;
+}
+
+.template-card.active {
+  border-color: var(--aptus-accent);
+  background: var(--aptus-accent-soft);
+}
+
+.assignment-panel {
+  display: grid;
+  gap: 14px;
+
+  padding: 18px;
+}
+
+.assignment-panel h2 {
+  margin-bottom: 0;
+
+  font-size: 16px;
+}
+
+.selected-template,
+.assignment-panel label {
+  display: grid;
+  gap: 7px;
+}
+
+.assignment-panel label {
+  color: var(--aptus-text-muted);
+
+  font-size: 12px;
+  font-weight: 720;
+}
+
+.assignment-panel select,
+.assignment-panel input {
+  min-height: 40px;
+
+  box-sizing: border-box;
+  padding: 0 11px;
+
+  border: 1px solid var(--aptus-border);
+  border-radius: var(--aptus-radius-md);
+
+  background: var(--aptus-input-bg);
+  color: var(--aptus-text);
+
+  font: inherit;
+  font-size: 13px;
+}
+
+.assignment-actions {
+  display: flex;
+  gap: 9px;
+}
+
+.assignment-actions button {
+  flex: 1;
+}
+
+.state-card,
+.empty-state {
+  padding: 46px 20px;
+
+  color: var(--aptus-text-muted);
+
+  text-align: center;
+}
+
+.empty-state h2 {
+  margin-bottom: 7px;
+
+  color: var(--aptus-text);
+
+  font-size: 16px;
+}
+
+.feedback-message,
+.error-message {
+  padding: 12px 14px;
+
+  border-radius: var(--aptus-radius-md);
+
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.feedback-message {
+  border: 1px solid var(--aptus-success-border);
+
+  background: var(--aptus-success-bg);
+  color: var(--aptus-success);
+}
+
+.error-message {
+  border: 1px solid var(--aptus-danger-border);
+
+  background: var(--aptus-danger-bg);
+  color: var(--aptus-danger);
+}
+
+@media (max-width: 780px) {
+  .trainer-page {
+    padding: 22px 16px;
+  }
+
+  .page-header,
+  .section-heading {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .view-switch {
+    width: 100%;
+  }
+
+  .view-switch button {
+    flex: 1;
+  }
+
+  .template-layout {
+    grid-template-columns: 1fr;
+  }
+}

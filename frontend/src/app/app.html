@@ -149,6 +149,32 @@
           }
         </a>
 
+        @if (isTrainer()) {
+          <a
+            routerLink="/trainer"
+            routerLinkActive="active"
+            [attr.aria-current]="
+              isCurrentRoute('/trainer')
+                ? 'page'
+                : null
+            "
+            title="Entrenador"
+          >
+            <svg
+              class="nav-icon"
+              lucideUserRound
+              [size]="20"
+              [strokeWidth]="2"
+            ></svg>
+
+            @if (sidebarExpanded()) {
+              <span class="nav-label">
+                Entrenador
+              </span>
+            }
+          </a>
+        }
+
 
       </nav>
 
@@ -333,6 +359,36 @@
                 }
               </a>
 
+              @if (isTrainer()) {
+                <a
+                  routerLink="/trainer"
+                  routerLinkActive="active"
+                  [attr.aria-current]="
+                    isCurrentRoute('/trainer')
+                      ? 'page'
+                      : null
+                  "
+                  (click)="closeMobileNav()"
+                >
+                  <svg
+                    class="nav-icon"
+                    lucideUserRound
+                    [size]="20"
+                    [strokeWidth]="2"
+                  ></svg>
+
+                  <span class="nav-label">
+                    Entrenador
+                  </span>
+
+                  @if (isCurrentRoute('/trainer')) {
+                    <span class="active-marker">
+                      Actual
+                    </span>
+                  }
+                </a>
+              }
+
               <a
                 routerLink="/ajustes"
                 routerLinkActive="active"
@@ -479,6 +535,17 @@
                     role="menuitem"
                   >
                     Solicitudes de acceso
+                </a>
+              }
+
+                @if (isTrainer()) {
+                  <a
+                    class="user-dropdown-link"
+                    routerLink="/trainer"
+                    (click)="closeUserMenu()"
+                    role="menuitem"
+                  >
+                    Entrenador
                   </a>
                 }
 

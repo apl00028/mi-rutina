@@ -12,6 +12,10 @@ import {
   accessGuard
 } from './core/access.guard';
 
+import {
+  trainerGuard
+} from './core/trainer.guard';
+
 
 export const routes: Routes = [
   {
@@ -186,6 +190,18 @@ export const routes: Routes = [
       ),
     canActivate: [
       accessGuard
+    ]
+  },
+  {
+    path: 'trainer',
+    loadComponent: () =>
+      import(
+        './pages/trainer/trainer'
+      ).then(
+        module => module.Trainer
+      ),
+    canActivate: [
+      trainerGuard
     ]
   },
   {

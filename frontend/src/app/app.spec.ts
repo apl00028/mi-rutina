@@ -34,6 +34,9 @@ import {
   AuthService
 } from './core/auth.service';
 import {
+  trainerGuard
+} from './core/trainer.guard';
+import {
   WorkoutSessionStateService
 } from './core/workout-session-state.service';
 
@@ -85,6 +88,13 @@ class OnboardingStub {}
   template: 'Admin access'
 })
 class AdminAccessStub {}
+
+@Component({
+  selector: 'app-trainer-stub',
+  standalone: true,
+  template: 'Entrenador protegido'
+})
+class TrainerStub {}
 
 describe('App', () => {
   let authUser:
@@ -142,6 +152,12 @@ describe('App', () => {
               'admin/access',
             component:
               AdminAccessStub
+          },
+          {
+            path:
+              'trainer',
+            component:
+              TrainerStub
           },
           {
             path:
@@ -301,6 +317,8 @@ describe('App', () => {
       .toEqual([accessGuard]);
     expect(routeByPath.get('admin/access')?.canActivate)
       .toEqual([adminGuard]);
+    expect(routeByPath.get('trainer')?.canActivate)
+      .toEqual([trainerGuard]);
   });
 
   it('renders mobile bottom navigation with the same primary routes', async () => {
@@ -549,6 +567,107 @@ describe('App', () => {
       )
     ).toBeTruthy();
     expect(activeLink.textContent).toContain('Actual');
+  });
+
+  it('shows trainer navigation only for active trainers', async () => {
+    waitForSession.mockResolvedValue({
+      access_token:
+        'access-token'
+    });
+    getMe.mockResolvedValue({
+      access_status:
+        'active',
+      role:
+        'trainer'
+    });
+
+    const fixture =
+      await createReadyApp();
+
+    expect(
+      fixture.nativeElement.querySelector(
+        '.sidebar-nav a[href="/trainer"]'
+      )
+    ).toBeTruthy();
+
+    const mobileButton =
+      fixture.nativeElement.querySelector(
+        '.mobile-brand'
+      ) as HTMLButtonElement;
+
+    mobileButton.click();
+    fixture.detectChanges();
+
+    expect(
+      fixture.nativeElement.querySelector(
+        '.mobile-nav-menu a[href="/trainer"]'
+      )
+    ).toBeTruthy();
+
+    authUser.set({
+      email:
+        'trainer@example.com'
+    });
+    fixture.detectChanges();
+
+    const userButton =
+      fixture.nativeElement.querySelector(
+        '.user-button'
+      ) as HTMLButtonElement;
+
+    userButton.click();
+    fixture.detectChanges();
+
+    expect(
+      fixture.nativeElement.querySelector(
+        '.user-dropdown-link[href="/trainer"]'
+      )
+    ).toBeTruthy();
+  });
+
+  it('hides trainer navigation from normal users and admins', async () => {
+    waitForSession.mockResolvedValue({
+      access_token:
+        'access-token'
+    });
+
+    for (
+      const role of [
+        'user',
+        'admin'
+      ]
+    ) {
+      getMe.mockResolvedValue({
+        access_status:
+          'active',
+        role
+      });
+
+      const fixture =
+        await createReadyApp();
+
+      expect(
+        fixture.nativeElement.querySelector(
+          '.sidebar-nav a[href="/trainer"]'
+        )
+      ).toBeNull();
+
+      const mobileButton =
+        fixture.nativeElement.querySelector(
+          '.mobile-brand'
+        ) as HTMLButtonElement;
+
+      mobileButton.click();
+      fixture.detectChanges();
+
+      expect(
+        fixture.nativeElement.querySelector(
+          '.mobile-nav-menu a[href="/trainer"]'
+        )
+      ).toBeNull();
+
+      fixture.destroy();
+    }
   });
 
   it('keeps bottom navigation visible on training when there is no active workout', async () => {

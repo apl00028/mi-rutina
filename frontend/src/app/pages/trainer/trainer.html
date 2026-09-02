@@ -1,0 +1,271 @@
+<section class="trainer-page">
+  <header class="page-header">
+    <div>
+      <span class="eyebrow">
+        Entrenador
+      </span>
+
+      <h1>
+        Clientes y plantillas
+      </h1>
+
+      <p>
+        Clientes activos y plantillas reutilizables.
+      </p>
+    </div>
+
+    <div
+      class="view-switch"
+      role="tablist"
+      aria-label="Vistas de entrenador"
+    >
+      <button
+        type="button"
+        role="tab"
+        [class.active]="activeView() === 'athletes'"
+        [attr.aria-selected]="activeView() === 'athletes'"
+        (click)="setView('athletes')"
+      >
+        Clientes
+      </button>
+
+      <button
+        type="button"
+        role="tab"
+        [class.active]="activeView() === 'templates'"
+        [attr.aria-selected]="activeView() === 'templates'"
+        (click)="setView('templates')"
+      >
+        Plantillas
+      </button>
+    </div>
+  </header>
+
+
+  @if (activeView() === 'athletes') {
+    <section class="trainer-section">
+      <div class="section-heading">
+        <h2>
+          Clientes
+        </h2>
+
+        <button
+          type="button"
+          class="secondary-button"
+          [disabled]="loadingAthletes()"
+          (click)="loadAthletes()"
+        >
+          {{
+            loadingAthletes()
+              ? 'Cargando'
+              : 'Actualizar'
+          }}
+        </button>
+      </div>
+
+      @if (athletesError()) {
+        <div class="error-message">
+          {{ athletesError() }}
+        </div>
+      }
+
+      @if (loadingAthletes()) {
+        <div class="state-card">
+          Cargando clientes...
+        </div>
+      } @else if (athletes().length === 0) {
+        <div class="empty-state">
+          <h2>
+            Sin clientes activos
+          </h2>
+
+          <p>
+            No hay relaciones activas.
+          </p>
+        </div>
+      } @else {
+        <div class="athlete-list">
+          @for (
+            athlete of athletes();
+            track athlete.athlete_id
+          ) {
+            <article class="athlete-card">
+              <div>
+                <strong>
+                  {{ athlete.athlete_id }}
+                </strong>
+
+                <span>
+                  {{ athlete.status }}
+                </span>
+              </div>
+            </article>
+          }
+        </div>
+      }
+    </section>
+  } @else {
+    <section class="trainer-section">
+      <div class="section-heading">
+        <h2>
+          Plantillas
+        </h2>
+
+        <button
+          type="button"
+          class="secondary-button"
+          [disabled]="loadingTemplates()"
+          (click)="loadTemplates()"
+        >
+          {{
+            loadingTemplates()
+              ? 'Cargando'
+              : 'Actualizar'
+          }}
+        </button>
+      </div>
+
+      @if (templatesError()) {
+        <div class="error-message">
+          {{ templatesError() }}
+        </div>
+      }
+
+      @if (assignmentSuccess()) {
+        <div class="feedback-message">
+          {{ assignmentSuccess() }}
+        </div>
+      }
+
+      @if (assignmentError()) {
+        <div class="error-message">
+          {{ assignmentError() }}
+        </div>
+      }
+
+      @if (loadingTemplates()) {
+        <div class="state-card">
+          Cargando plantillas...
+        </div>
+      } @else if (templates().length === 0) {
+        <div class="empty-state">
+          <h2>
+            Sin plantillas
+          </h2>
+
+          <p>
+            No hay plantillas disponibles.
+          </p>
+        </div>
+      } @else {
+        <div class="template-layout">
+          <div class="template-list">
+            @for (
+              template of templates();
+              track template.id
+            ) {
+              <button
+                type="button"
+                class="template-card"
+                [class.active]="selectedTemplateId() === template.id"
+                (click)="selectTemplate(template)"
+              >
+                <strong>
+                  {{ template.name }}
+                </strong>
+
+                <span>
+                  {{ disciplineLabel(template.discipline) }}
+                </span>
+              </button>
+            }
+          </div>
+
+          <aside class="assignment-panel">
+            <h2>
+              Asignar plantilla
+            </h2>
+
+            @if (selectedTemplate(); as template) {
+              <div class="selected-template">
+                <span>
+                  Plantilla
+                </span>
+
+                <strong>
+                  {{ template.name }}
+                </strong>
+
+                <small>
+                  {{ disciplineLabel(template.discipline) }}
+                </small>
+              </div>
+
+              <label>
+                Cliente
+
+                <select
+                  [ngModel]="selectedAthleteId()"
+                  (ngModelChange)="updateAthlete($event)"
+                  [disabled]="
+                    athletes().length === 0 ||
+                    !!assigningTemplateId()
+                  "
+                >
+                  @for (
+                    athlete of athletes();
+                    track athlete.athlete_id
+                  ) {
+                    <option [value]="athlete.athlete_id">
+                      {{ athlete.athlete_id }}
+                    </option>
+                  }
+                </select>
+              </label>
+
+              <label>
+                ID de rutina
+
+                <input
+                  type="text"
+                  autocomplete="off"
+                  [ngModel]="routineId()"
+                  (ngModelChange)="updateRoutineId($event)"
+                  [disabled]="!!assigningTemplateId()"
+                />
+              </label>
+
+              <div class="assignment-actions">
+                <button
+                  type="button"
+                  class="secondary-button"
+                  [disabled]="!!assigningTemplateId()"
+                  (click)="generateRoutineId()"
+                >
+                  Generar ID
+                </button>
+
+                <button
+                  type="button"
+                  class="primary-button"
+                  [disabled]="!canAssign()"
+                  (click)="assignSelectedTemplate()"
+                >
+                  @if (isAssigning(template)) {
+                    Asignando...
+                  } @else {
+                    Asignar
+                  }
+                </button>
+              </div>
+            } @else {
+              <p class="muted">
+                Selecciona una plantilla.
+              </p>
+            }
+          </aside>
+        </div>
+      }
+    </section>
+  }
+</section>

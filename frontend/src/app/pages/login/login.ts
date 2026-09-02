@@ -121,6 +121,9 @@ export class Login {
       params.get('recovery') ===
       '1';
 
+    const recoveryCode =
+      params.get('code');
+
     const authReturnError =
       params.get(
         'error_description'
@@ -146,6 +149,24 @@ export class Login {
       if (
         !recoverySession &&
         !authReturnError &&
+        recoveryCode
+      ) {
+        try {
+          recoverySession =
+            await this.auth
+              .exchangePasswordRecoveryCode(
+                recoveryCode
+              );
+        } catch {
+          recoverySession =
+            null;
+        }
+      }
+
+      if (
+        !recoverySession &&
+        !authReturnError &&
+        !recoveryCode &&
         !session
       ) {
         recoverySession =

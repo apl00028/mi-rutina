@@ -286,6 +286,58 @@ describe(
 
 
     it(
+      'exchanges web recovery codes and marks the returned session',
+      async () => {
+        const recoverySession = {
+          access_token:
+            'code-recovery-token',
+
+          user: {
+            id:
+              'code-recovery-user',
+            email:
+              'code@example.com'
+          }
+        };
+
+        supabaseMock.auth.exchangeCodeForSession
+          .mockResolvedValue({
+            data: {
+              session:
+                recoverySession
+            },
+
+            error:
+              null
+          });
+
+        const session =
+          await service
+            .exchangePasswordRecoveryCode(
+              'abc'
+            );
+
+        expect(
+          supabaseMock.auth
+            .exchangeCodeForSession
+        ).toHaveBeenCalledWith(
+          'abc'
+        );
+
+        expect(session)
+          .toBe(recoverySession);
+
+        expect(
+          service.passwordRecoverySession()
+            ?.access_token
+        ).toBe(
+          'code-recovery-token'
+        );
+      }
+    );
+
+
+    it(
       'marks sessions from native reset-password links as recovery sessions',
       async () => {
         const replace =

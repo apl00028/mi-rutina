@@ -311,6 +311,53 @@ export class AuthService {
   }
 
 
+  async exchangePasswordRecoveryCode(
+    code: string
+  ): Promise<Session> {
+    const authCode =
+      code.trim();
+
+    if (!authCode) {
+      throw new Error(
+        'El enlace de recuperación no es válido.'
+      );
+    }
+
+    const {
+      data,
+      error
+    } =
+      await this.client.auth
+        .exchangeCodeForSession(
+          authCode
+        );
+
+    if (error) {
+      throw error;
+    }
+
+    if (!data.session) {
+      throw new Error(
+        'No se recibió una sesión de recuperación.'
+      );
+    }
+
+    this.applySession(
+      data.session
+    );
+
+    this.markPasswordRecoverySession(
+      data.session
+    );
+
+    this.finishAuthInitialization(
+      data.session
+    );
+
+    return data.session;
+  }
+
+
   private resolvePasswordRecovery(
     session: Session | null
   ): void {

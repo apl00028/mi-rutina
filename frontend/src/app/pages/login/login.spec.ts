@@ -56,6 +56,9 @@ describe(
       waitForPasswordRecoverySession:
         vi.fn(),
 
+      exchangePasswordRecoveryCode:
+        vi.fn(),
+
       consumeNativeAuthError:
         vi.fn(),
 
@@ -168,6 +171,22 @@ describe(
           null
         );
 
+      authMock.exchangePasswordRecoveryCode
+        .mockImplementation(
+          async code => {
+            const session = {
+              access_token:
+                `recovery-${code}`
+            };
+
+            authMock.passwordRecoverySession.set(
+              session
+            );
+
+            return session;
+          }
+        );
+
       authMock.consumeNativeAuthError
         .mockReturnValue(
           null
@@ -257,6 +276,136 @@ describe(
         ]
       });
     });
+
+
+    it(
+      'exchanges web recovery auth codes explicitly',
+      async () => {
+        setLoginSearch(
+          '?recovery=1&code=abc'
+        );
+
+        const fixture =
+          TestBed.createComponent(
+            Login
+          );
+
+        fixture.detectChanges();
+        await fixture.whenStable();
+        await flushPromises();
+        fixture.detectChanges();
+
+        expect(
+          authMock.exchangePasswordRecoveryCode
+        ).toHaveBeenCalledWith(
+          'abc'
+        );
+      }
+    );
+
+
+    it(
+      'shows recovery form after a successful web recovery code exchange',
+      async () => {
+        setLoginSearch(
+          '?recovery=1&code=abc'
+        );
+
+        const fixture =
+          TestBed.createComponent(
+            Login
+          );
+
+        fixture.detectChanges();
+        await fixture.whenStable();
+        await flushPromises();
+        fixture.detectChanges();
+
+        expect(
+          fixture.componentInstance
+            .recoveryMode()
+        ).toBe(true);
+        expect(
+          fixture.nativeElement
+            .querySelector(
+              '.recovery-form'
+            )
+        ).not.toBeNull();
+      }
+    );
+
+
+    it(
+      'does not navigate after a successful web recovery code exchange',
+      async () => {
+        setLoginSearch(
+          '?recovery=1&code=abc'
+        );
+
+        const fixture =
+          TestBed.createComponent(
+            Login
+          );
+
+        fixture.detectChanges();
+        await fixture.whenStable();
+        await flushPromises();
+        fixture.detectChanges();
+
+        expect(
+          authMock.resolveAccess
+        ).not.toHaveBeenCalled();
+        expect(
+          routerMock.navigateByUrl
+        ).not.toHaveBeenCalled();
+      }
+    );
+
+
+    it(
+      'returns to normal login when web recovery code exchange fails',
+      async () => {
+        authMock.exchangePasswordRecoveryCode
+          .mockRejectedValue(
+            new Error(
+              'expired'
+            )
+          );
+
+        setLoginSearch(
+          '?recovery=1&code=abc'
+        );
+
+        const fixture =
+          TestBed.createComponent(
+            Login
+          );
+
+        fixture.detectChanges();
+        await fixture.whenStable();
+        await flushPromises();
+        fixture.detectChanges();
+
+        expect(
+          fixture.componentInstance
+            .recoveryMode()
+        ).toBe(false);
+        expect(
+          fixture.nativeElement
+            .querySelector(
+              '.recovery-form'
+            )
+        ).toBeNull();
+        expect(
+          fixture.componentInstance.error()
+        ).toBe(
+          'El enlace de recuperación no es válido o ha caducado.'
+        );
+        expect(
+          window.location.search
+        ).toBe('');
+      }
+    );
 
 
     it(

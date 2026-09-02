@@ -115,7 +115,13 @@ describe(
             athlete_id:
               'athlete-1',
             status:
-              'active'
+              'active',
+            email:
+              'athlete@example.com',
+            display_name:
+              'Athlete One',
+            client_since:
+              '2026-08-15T10:00:00Z'
           }
         ]);
 
@@ -126,7 +132,13 @@ describe(
               athlete_id:
                 'athlete-1',
               status:
-                'active'
+                'active',
+              email:
+                'athlete@example.com',
+              display_name:
+                'Athlete One',
+              client_since:
+                '2026-08-15T10:00:00Z'
             }
           ]);
       }

@@ -33,26 +33,20 @@ async def list_active_trainer_athletes(
             f"Bearer {trainer.access_token}",
         "apikey":
             key,
-    }
-
-    params = {
-        "trainer_id":
-            f"eq.{trainer.id}",
-        "status":
-            "eq.active",
-        "select":
-            "athlete_id,status",
-        "order":
-            "created_at.asc",
+        "Content-Type":
+            "application/json",
     }
 
     async with httpx.AsyncClient(
         timeout=10.0
     ) as client:
-        response = await client.get(
-            f"{url}/rest/v1/trainer_athletes",
+        response = await client.post(
+            (
+                f"{url}/rest/v1/rpc/"
+                "trainer_list_athlete_identities"
+            ),
             headers=headers,
-            params=params,
+            json={},
         )
 
     response.raise_for_status()

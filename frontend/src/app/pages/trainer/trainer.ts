@@ -310,6 +310,52 @@ export class Trainer implements OnInit {
   }
 
 
+  athleteTitle(
+    athlete: TrainerAthlete
+  ): string {
+    return (
+      athlete.display_name?.trim() ||
+      athlete.email?.trim() ||
+      athlete.athlete_id
+    );
+  }
+
+
+  athleteSubtitle(
+    athlete: TrainerAthlete
+  ): string | null {
+    if (
+      athlete.display_name?.trim() &&
+      athlete.email?.trim()
+    ) {
+      return athlete.email;
+    }
+
+    return null;
+  }
+
+
+  formatClientSince(
+    value: string
+  ): string {
+    const date =
+      new Date(value);
+
+    if (Number.isNaN(date.getTime())) {
+      return value;
+    }
+
+    return new Intl.DateTimeFormat(
+      'es-ES',
+      {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric'
+      }
+    ).format(date);
+  }
+
+
   private ensureRoutineId(): void {
     if (this.routineId().trim()) {
       return;

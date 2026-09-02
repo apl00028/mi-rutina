@@ -90,11 +90,27 @@
             track athlete.athlete_id
           ) {
             <article class="athlete-card">
-              <div>
+              <div class="athlete-identity">
                 <strong>
-                  {{ athlete.athlete_id }}
+                  {{ athleteTitle(athlete) }}
                 </strong>
 
+                @if (athleteSubtitle(athlete); as subtitle) {
+                  <span>
+                    {{ subtitle }}
+                  </span>
+                }
+
+                <small>
+                  Cliente desde {{ formatClientSince(athlete.client_since) }}
+                </small>
+
+                <small>
+                  ID {{ athlete.athlete_id }}
+                </small>
+              </div>
+
+              <div class="athlete-status">
                 <span>
                   {{ athlete.status }}
                 </span>
@@ -217,7 +233,7 @@
                     track athlete.athlete_id
                   ) {
                     <option [value]="athlete.athlete_id">
-                      {{ athlete.athlete_id }}
+                      {{ athleteTitle(athlete) }}
                     </option>
                   }
                 </select>

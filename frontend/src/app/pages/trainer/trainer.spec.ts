@@ -35,6 +35,11 @@ import {
 } from '../../core/auth.service';
 
 import {
+  TrainerAthlete,
+  TrainerRoutineTemplate
+} from '../../core/trainer.service';
+
+import {
   Trainer
 } from './trainer';
 
@@ -102,15 +107,21 @@ describe(
 
 
     async function flushInitial(
-      athletes = [
+      athletes: TrainerAthlete[] = [
         {
           athlete_id:
             'athlete-1',
           status:
-            'active'
+            'active',
+          email:
+            'athlete@example.com',
+          display_name:
+            'Athlete One',
+          client_since:
+            '2026-08-15T10:00:00Z'
         }
       ],
-      templates = [
+      templates: TrainerRoutineTemplate[] = [
         {
           id:
             'strength-base',
@@ -154,10 +165,96 @@ describe(
 
         expect(
           fixture.nativeElement.textContent
-        ).toContain('athlete-1');
+        ).toContain('Athlete One');
+        expect(
+          fixture.nativeElement.textContent
+        ).toContain('athlete@example.com');
+        expect(
+          fixture.nativeElement.textContent
+        ).toContain('Cliente desde 15/08/2026');
+        expect(
+          fixture.nativeElement.textContent
+        ).toContain('ID athlete-1');
         expect(
           fixture.nativeElement.textContent
         ).toContain('active');
+      }
+    );
+
+
+    it(
+      'uses email as athlete title when display name is missing',
+      async () => {
+        createPage();
+        await flushInitial([
+          {
+            athlete_id:
+              'athlete-1',
+            status:
+              'active',
+            email:
+              'athlete@example.com',
+            display_name:
+              null,
+            client_since:
+              '2026-08-15T10:00:00Z'
+          }
+        ]);
+        await settle();
+
+        const athlete =
+          fixture.componentInstance
+            .athletes()[0]!;
+
+        expect(
+          fixture.componentInstance
+            .athleteTitle(athlete)
+        ).toBe('athlete@example.com');
+        expect(
+          fixture.componentInstance
+            .athleteSubtitle(athlete)
+        ).toBeNull();
+        expect(
+          fixture.nativeElement.textContent
+        ).toContain('athlete@example.com');
+        expect(
+          fixture.nativeElement.textContent
+        ).toContain('ID athlete-1');
+      }
+    );
+
+
+    it(
+      'uses UUID as athlete title when name and email are missing',
+      async () => {
+        createPage();
+        await flushInitial([
+          {
+            athlete_id:
+              'athlete-1',
+            status:
+              'active',
+            email:
+              null,
+            display_name:
+              null,
+            client_since:
+              '2026-08-15T10:00:00Z'
+          }
+        ]);
+        await settle();
+
+        const athlete =
+          fixture.componentInstance
+            .athletes()[0]!;
+
+        expect(
+          fixture.componentInstance
+            .athleteTitle(athlete)
+        ).toBe('athlete-1');
+        expect(
+          fixture.nativeElement.textContent
+        ).toContain('ID athlete-1');
       }
     );
 
@@ -195,7 +292,13 @@ describe(
               athlete_id:
                 'athlete-1',
               status:
-                'active'
+                'active',
+              email:
+                'athlete@example.com',
+              display_name:
+                'Athlete One',
+              client_since:
+                '2026-08-15T10:00:00Z'
             }
           ],
           [
@@ -268,13 +371,25 @@ describe(
               athlete_id:
                 'athlete-1',
               status:
-                'active'
+                'active',
+              email:
+                'athlete@example.com',
+              display_name:
+                'Athlete One',
+              client_since:
+                '2026-08-15T10:00:00Z'
             },
             {
               athlete_id:
                 'client-2',
               status:
-                'active'
+                'active',
+              email:
+                'client-2@example.com',
+              display_name:
+                'Client Two',
+              client_since:
+                '2026-08-16T10:00:00Z'
             }
           ]
         );

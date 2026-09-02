@@ -4,6 +4,7 @@ import inspect
 import httpx
 
 from app.core.auth import AuthenticatedUser
+from app.domains.trainer.models import TrainerAthlete
 from app.domains.trainer import repository, service
 
 
@@ -39,6 +40,9 @@ def test_list_active_trainer_athletes_filters_authenticated_trainer(
                 {
                     "athlete_id": "athlete-1",
                     "status": "active",
+                    "email": "athlete@example.com",
+                    "display_name": "Athlete One",
+                    "client_since": "2026-08-15T10:00:00Z",
                 }
             ]
 
@@ -52,11 +56,16 @@ def test_list_active_trainer_athletes_filters_authenticated_trainer(
         async def __aexit__(self, exc_type, exc, tb):
             pass
 
-        async def get(self, url, headers, params):
+        async def post(self, url, headers, json):
             captured["url"] = url
             captured["headers"] = headers
-            captured["params"] = params
+            captured["json"] = json
             return FakeResponse()
+
+        async def get(self, url, headers, params):
+            raise AssertionError(
+                "list athletes must use the identity RPC"
+            )
 
     monkeypatch.setattr(
         repository.httpx,
@@ -74,23 +83,22 @@ def test_list_active_trainer_athletes_filters_authenticated_trainer(
         {
             "athlete_id": "athlete-1",
             "status": "active",
+            "email": "athlete@example.com",
+            "display_name": "Athlete One",
+            "client_since": "2026-08-15T10:00:00Z",
         }
     ]
     assert captured["timeout"] == 10.0
     assert captured["url"] == (
-        "https://example.supabase.co/rest/v1/"
-        "trainer_athletes"
+        "https://example.supabase.co/rest/v1/rpc/"
+        "trainer_list_athlete_identities"
     )
     assert captured["headers"] == {
         "Authorization": "Bearer access-token",
         "apikey": "publishable-key",
+        "Content-Type": "application/json",
     }
-    assert captured["params"] == {
-        "trainer_id": "eq.trainer-123",
-        "status": "eq.active",
-        "select": "athlete_id,status",
-        "order": "created_at.asc",
-    }
+    assert captured["json"] == {}
 
 
 def test_trainer_service_exposes_no_foreign_trainer_selector():
@@ -101,6 +109,23 @@ def test_trainer_service_exposes_no_foreign_trainer_selector():
     assert list(signature.parameters) == [
         "trainer"
     ]
+
+
+def test_trainer_athlete_contract_includes_client_since():
+    athlete = TrainerAthlete.model_validate(
+        {
+            "athlete_id": "athlete-1",
+            "status": "active",
+            "email": "athlete@example.com",
+            "display_name": "Athlete One",
+            "client_since": "2026-08-15T10:00:00Z",
+        }
+    )
+
+    assert (
+        athlete.client_since.isoformat()
+        == "2026-08-15T10:00:00+00:00"
+    )
 
 
 def test_list_routine_templates_filters_trainer_and_discipline(

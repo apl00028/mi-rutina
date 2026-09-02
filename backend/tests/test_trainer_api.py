@@ -105,6 +105,9 @@ def test_trainer_can_list_active_athlete_relationships(monkeypatch):
             {
                 "athlete_id": "athlete-1",
                 "status": "active",
+                "email": "athlete@example.com",
+                "display_name": "Athlete One",
+                "client_since": "2026-08-15T10:00:00Z",
             }
         ]
 
@@ -136,6 +139,59 @@ def test_trainer_can_list_active_athlete_relationships(monkeypatch):
         {
             "athlete_id": "athlete-1",
             "status": "active",
+            "email": "athlete@example.com",
+            "display_name": "Athlete One",
+            "client_since": "2026-08-15T10:00:00Z",
+        }
+    ]
+
+
+def test_trainer_can_list_athlete_identity_nulls(monkeypatch):
+    from app.domains.trainer import router as trainer_api
+
+    async def fake_list(trainer):
+        assert trainer.id == "trainer-123"
+        return [
+            {
+                "athlete_id": "athlete-1",
+                "status": "active",
+                "email": None,
+                "display_name": None,
+                "client_since": "2026-08-15T10:00:00Z",
+            }
+        ]
+
+    app.dependency_overrides[
+        require_user
+    ] = trainer_user
+    monkeypatch.setattr(
+        trainer_api,
+        "list_authenticated_trainer_athletes",
+        fake_list,
+    )
+
+    try:
+        response = client.get(
+            "/api/v1/trainer/athletes",
+            headers={
+                "Authorization":
+                    "Bearer token-123"
+            },
+        )
+    finally:
+        app.dependency_overrides.pop(
+            require_user,
+            None,
+        )
+
+    assert response.status_code == 200
+    assert response.json() == [
+        {
+            "athlete_id": "athlete-1",
+            "status": "active",
+            "email": None,
+            "display_name": None,
+            "client_since": "2026-08-15T10:00:00Z",
         }
     ]
 

@@ -159,14 +159,23 @@ input:disabled {
 }
 
 .athlete-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+
   padding: 16px;
 }
 
-.athlete-card div {
+.athlete-identity {
   min-width: 0;
 
   display: grid;
   gap: 4px;
+}
+
+.athlete-status {
+  flex: 0 0 auto;
 }
 
 .athlete-card strong,
@@ -183,7 +192,8 @@ input:disabled {
   white-space: nowrap;
 }
 
-.athlete-card span,
+.athlete-identity span,
+.athlete-identity small,
 .template-card span,
 .selected-template span,
 .selected-template small {
@@ -191,6 +201,24 @@ input:disabled {
 
   font-size: 11px;
   font-weight: 650;
+}
+
+.athlete-status span {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  min-height: 28px;
+  padding: 0 10px;
+
+  border: 1px solid var(--aptus-border);
+  border-radius: var(--aptus-radius-md);
+
+  background: var(--aptus-accent-soft);
+  color: var(--aptus-text);
+
+  font-size: 11px;
+  font-weight: 760;
 }
 
 .template-layout {

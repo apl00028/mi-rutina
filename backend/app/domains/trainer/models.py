@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import Any, Literal
 
 from pydantic import (
@@ -22,6 +23,9 @@ class TrainerAthlete(BaseModel):
         "active",
         "inactive",
     ]
+    email: str | None = None
+    display_name: str | None = None
+    client_since: datetime
 
 
 class RoutineTemplateCreate(BaseModel):

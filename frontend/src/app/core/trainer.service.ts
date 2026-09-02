@@ -30,6 +30,9 @@ export type TrainerDiscipline =
 export interface TrainerAthlete {
   athlete_id: string;
   status: 'active' | 'inactive';
+  email: string | null;
+  display_name: string | null;
+  client_since: string;
 }
 
 

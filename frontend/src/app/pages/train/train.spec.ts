@@ -243,7 +243,10 @@ describe('Train first workout flow', () => {
           ['duration']
       }
     ],
-    routinePayload: any = routine()
+    routinePayload: any = routine(),
+    options: {
+      resumeActiveWorkout?: boolean;
+    } = {}
   ) {
     const fixture =
       TestBed.createComponent(
@@ -283,6 +286,23 @@ describe('Train first workout flow', () => {
     await waitForHttpTick();
     await fixture.whenStable();
     fixture.detectChanges();
+
+    const hasActiveWorkout =
+      workouts.some(
+        workout =>
+          workout?.status ===
+          'in_progress'
+      );
+
+    if (
+      hasActiveWorkout &&
+      options.resumeActiveWorkout !== false
+    ) {
+      fixture.componentInstance
+        .resumeWorkout();
+
+      fixture.detectChanges();
+    }
 
     return fixture;
   }
@@ -1233,6 +1253,141 @@ describe('Train first workout flow', () => {
         '.exercise-expanded'
       ).length
     ).toBe(0);
+  });
+
+
+  it('restores a persisted workout as paused until the user resumes it', async () => {
+    const fixture =
+      await createLoadedTrain(
+        [
+          activeWorkout()
+        ],
+        undefined,
+        twoExerciseRoutine(),
+        {
+          resumeActiveWorkout: false
+        }
+      );
+
+    const component =
+      fixture.componentInstance;
+
+    const sessionState =
+      TestBed.inject(
+        WorkoutSessionStateService
+      );
+
+    expect(
+      component.activeWorkout()
+        ?.workoutId
+    ).toBe('active-workout');
+
+    expect(
+      component.visibleActiveWorkout()
+    ).toBeNull();
+
+    expect(sessionState.state())
+      .toBe('idle');
+
+    expect(
+      sessionState.shouldHideBottomNav()
+    ).toBe(false);
+
+    expect(
+      pageText(fixture)
+    ).toContain(
+      'Entrenamiento en pausa'
+    );
+
+    expect(
+      pageText(fixture)
+    ).toContain(
+      'Reanudar entrenamiento'
+    );
+
+    expect(
+      pageText(fixture)
+    ).not.toContain(
+      'Entrenamiento en curso'
+    );
+  });
+
+
+  it('resumes a persisted paused workout without creating another workout', async () => {
+    const fixture =
+      await createLoadedTrain(
+        [
+          activeWorkout()
+        ],
+        undefined,
+        twoExerciseRoutine(),
+        {
+          resumeActiveWorkout: false
+        }
+      );
+
+    const component =
+      fixture.componentInstance;
+
+    const sessionState =
+      TestBed.inject(
+        WorkoutSessionStateService
+      );
+
+    const resumeButton =
+      fixture.nativeElement
+        .querySelectorAll('button');
+
+    const button =
+      Array.from(
+        resumeButton
+      ).find(
+        (item: any) =>
+          item.textContent
+            ?.includes(
+              'Reanudar entrenamiento'
+            )
+      ) as HTMLButtonElement | undefined;
+
+    expect(button)
+      .toBeTruthy();
+
+    button!.click();
+
+    fixture.detectChanges();
+
+    expect(
+      component.activeWorkout()
+        ?.workoutId
+    ).toBe('active-workout');
+
+    expect(
+      component.visibleActiveWorkout()
+        ?.workoutId
+    ).toBe('active-workout');
+
+    expect(sessionState.state())
+      .toBe('active');
+
+    expect(
+      sessionState.shouldHideBottomNav()
+    ).toBe(true);
+
+    expect(
+      pageText(fixture)
+    ).toContain(
+      'Entrenamiento en curso'
+    );
+
+    expect(
+      pageText(fixture)
+    ).not.toContain(
+      'Reanudar entrenamiento'
+    );
+
+    http.expectNone(
+      `${environment.apiUrl}/workouts`
+    );
   });
 
 

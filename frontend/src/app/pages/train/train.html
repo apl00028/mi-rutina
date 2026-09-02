@@ -1,5 +1,5 @@
 <main class="train-page">
-  @if (activeWorkout(); as workout) {
+  @if (visibleActiveWorkout(); as workout) {
     @if (activeSession(); as session) {
       <section class="active-workout">
         <header class="workout-header">
@@ -1233,7 +1233,7 @@
           <button
             type="button"
             class="secondary-button"
-            (click)="saveWorkout()"
+            (click)="pauseWorkoutAndExit()"
             [disabled]="
               workoutLoading() ||
               cancellingWorkout()
@@ -1242,7 +1242,7 @@
             {{
               workoutLoading()
                 ? 'Guardando...'
-                : 'Guardar y salir'
+                : 'Pausar entrenamiento'
             }}
           </button>
 
@@ -1454,6 +1454,54 @@
         </section>
       }
 
+      @if (
+        activeWorkout();
+        as pausedWorkout
+      ) {
+
+        @if (
+          activeSession();
+          as pausedSession
+        ) {
+
+          <section class="state-card">
+
+            <span class="eyebrow">
+              Entrenamiento en pausa
+            </span>
+
+            <h2>
+              {{
+                pausedSession.label
+                || pausedSession.name
+              }}
+            </h2>
+
+            <p>
+              Tu progreso está guardado.
+              Puedes continuar exactamente
+              donde lo dejaste.
+            </p>
+
+            <button
+              type="button"
+              class="primary-button"
+              (click)="resumeWorkout()"
+              [disabled]="
+                workoutLoading()
+                || cancellingWorkout()
+              "
+            >
+              Reanudar entrenamiento
+            </button>
+
+          </section>
+
+        }
+
+      }
+
+
       @if (loading()) {
         <section class="state-card">
           <p>
@@ -1527,12 +1575,17 @@
                 type="button"
                 class="primary-button start-button"
                 (click)="startWorkout(session)"
-                [disabled]="workoutLoading()"
+                [disabled]="
+                  workoutLoading()
+                  || !!activeWorkout()
+                "
               >
                 {{
                   workoutLoading()
                     ? 'Iniciando...'
-                    : 'Empezar entrenamiento'
+                    : activeWorkout()
+                      ? 'Entrenamiento en pausa'
+                      : 'Empezar entrenamiento'
                 }}
               </button>
             </article>

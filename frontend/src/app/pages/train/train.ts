@@ -253,6 +253,9 @@ export class Train implements OnInit, OnDestroy {
 
   activeWorkout = signal<Workout | null>(null);
   activeSession = signal<RoutineSession | null>(null);
+
+  workoutExecutionVisible =
+    signal(false);
   workoutHistory = signal<Workout[]>([]);
   workoutFinishSummary =
     signal<WorkoutFinishSummary | null>(null);
@@ -724,9 +727,90 @@ export class Train implements OnInit, OnDestroy {
 
     this.activeWorkout.set(active);
     this.activeSession.set(session);
+
+    /*
+     * Un entrenamiento restaurado existe,
+     * pero no forzamos al usuario a entrar
+     * directamente en modo ejecución.
+     */
+    this.workoutExecutionVisible.set(false);
+
+    this.workoutSessionState
+      .setIdle();
+  }
+
+
+  visibleActiveWorkout():
+    Workout | null {
+
+    if (!this.workoutExecutionVisible()) {
+      return null;
+    }
+
+    return this.activeWorkout();
+  }
+
+
+  resumeWorkout(): void {
+
+    if (
+      !this.activeWorkout()
+      || !this.activeSession()
+    ) {
+      return;
+    }
+
+    this.workoutExecutionVisible.set(true);
+
     this.workoutSessionState
       .setActive();
+
     this.syncExpandedWorkoutStep();
+  }
+
+
+  async pauseWorkoutAndExit():
+    Promise<void> {
+
+    const workout =
+      this.activeWorkout();
+
+    if (
+      !workout
+      || this.workoutLoading()
+      || this.cancellingWorkout()
+    ) {
+      return;
+    }
+
+    this.cancelAutosaveTimer();
+
+    try {
+
+      await this.saveLatestWorkout({
+        showLoading: true
+      });
+
+      this.clearSetTimer();
+      this.clearRestTimer();
+
+      this.workoutExecutionVisible.set(
+        false
+      );
+
+      this.workoutSessionState
+        .setIdle();
+
+      this.workoutError.set(null);
+
+    } catch (err: any) {
+
+      this.workoutError.set(
+        err?.error?.detail
+        ?? err?.message
+        ?? 'No se pudo pausar el entrenamiento.'
+      );
+    }
   }
 
 
@@ -3368,6 +3452,7 @@ export class Train implements OnInit, OnDestroy {
 
       this.activeWorkout.set(created);
       this.activeSession.set(session);
+      this.workoutExecutionVisible.set(true);
       this.unilateralExecution.set(null);
       this.workoutSessionState
         .setActive();

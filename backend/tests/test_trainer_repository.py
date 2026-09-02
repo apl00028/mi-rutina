@@ -1,6 +1,8 @@
 import asyncio
 import inspect
 
+import httpx
+
 from app.core.auth import AuthenticatedUser
 from app.domains.trainer import repository, service
 
@@ -318,4 +320,221 @@ def test_template_service_exposes_no_foreign_trainer_selector():
         assert (
             list(signature.parameters)[0]
             == "trainer"
+        )
+
+
+def test_get_active_trainer_athlete_filters_relationship(
+    monkeypatch,
+):
+    monkeypatch.setenv(
+        "SUPABASE_URL",
+        "https://example.supabase.co",
+    )
+    monkeypatch.setenv(
+        "SUPABASE_PUBLISHABLE_KEY",
+        "publishable-key",
+    )
+
+    captured = {}
+
+    class FakeResponse:
+        def raise_for_status(self):
+            pass
+
+        def json(self):
+            return [
+                {
+                    "athlete_id": "athlete-1",
+                    "status": "active",
+                }
+            ]
+
+    class FakeClient:
+        def __init__(self, timeout):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):
+            pass
+
+        async def get(self, url, headers, params):
+            captured["url"] = url
+            captured["headers"] = headers
+            captured["params"] = params
+            return FakeResponse()
+
+    monkeypatch.setattr(
+        repository.httpx,
+        "AsyncClient",
+        FakeClient,
+    )
+
+    row = asyncio.run(
+        repository.get_active_trainer_athlete(
+            _trainer(),
+            "athlete-1",
+        )
+    )
+
+    assert row["athlete_id"] == "athlete-1"
+    assert captured["url"] == (
+        "https://example.supabase.co/rest/v1/"
+        "trainer_athletes"
+    )
+    assert captured["params"] == {
+        "trainer_id": "eq.trainer-123",
+        "athlete_id": "eq.athlete-1",
+        "status": "eq.active",
+        "select": "athlete_id,status",
+        "limit": "1",
+    }
+
+
+def test_assign_routine_template_calls_rpc_with_authenticated_trainer(
+    monkeypatch,
+):
+    monkeypatch.setenv(
+        "SUPABASE_URL",
+        "https://example.supabase.co",
+    )
+    monkeypatch.setenv(
+        "SUPABASE_PUBLISHABLE_KEY",
+        "publishable-key",
+    )
+
+    captured = {}
+
+    class FakeResponse:
+        def raise_for_status(self):
+            pass
+
+        def json(self):
+            return [
+                {
+                    "assignment_id": "assignment-1",
+                    "athlete_id": "athlete-1",
+                    "template_id": "template-1",
+                    "routine_id": "routine-1",
+                    "discipline": "strength",
+                    "assigned_at": "2026-09-02T10:00:00Z",
+                }
+            ]
+
+    class FakeClient:
+        def __init__(self, timeout):
+            captured["timeout"] = timeout
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):
+            pass
+
+        async def post(self, url, headers, json):
+            captured["url"] = url
+            captured["headers"] = headers
+            captured["json"] = json
+            return FakeResponse()
+
+    monkeypatch.setattr(
+        repository.httpx,
+        "AsyncClient",
+        FakeClient,
+    )
+
+    row = asyncio.run(
+        repository.assign_routine_template(
+            _trainer(),
+            athlete_id="athlete-1",
+            template_id="template-1",
+            routine_id="routine-1",
+        )
+    )
+
+    assert row["assignment_id"] == "assignment-1"
+    assert captured["url"] == (
+        "https://example.supabase.co/rest/v1/rpc/"
+        "trainer_assign_routine_template"
+    )
+    assert captured["headers"] == {
+        "Authorization": "Bearer access-token",
+        "apikey": "publishable-key",
+        "Content-Type": "application/json",
+    }
+    assert captured["json"] == {
+        "p_athlete_id": "athlete-1",
+        "p_template_id": "template-1",
+        "p_routine_id": "routine-1",
+    }
+    assert set(captured["json"]) == {
+        "p_athlete_id",
+        "p_template_id",
+        "p_routine_id",
+    }
+
+
+def test_assign_routine_template_propagates_duplicate_conflict(
+    monkeypatch,
+):
+    monkeypatch.setenv(
+        "SUPABASE_URL",
+        "https://example.supabase.co",
+    )
+    monkeypatch.setenv(
+        "SUPABASE_PUBLISHABLE_KEY",
+        "publishable-key",
+    )
+
+    class FakeResponse:
+        def raise_for_status(self):
+            request = httpx.Request(
+                "POST",
+                "https://example.supabase.co/rest/v1/rpc/"
+                "trainer_assign_routine_template",
+            )
+            response = httpx.Response(
+                409,
+                request=request,
+            )
+            raise httpx.HTTPStatusError(
+                "conflict",
+                request=request,
+                response=response,
+            )
+
+    class FakeClient:
+        def __init__(self, timeout):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):
+            pass
+
+        async def post(self, url, headers, json):
+            return FakeResponse()
+
+    monkeypatch.setattr(
+        repository.httpx,
+        "AsyncClient",
+        FakeClient,
+    )
+
+    try:
+        asyncio.run(
+            repository.assign_routine_template(
+                _trainer(),
+                athlete_id="athlete-1",
+                template_id="template-1",
+                routine_id="routine-1",
+            )
+        )
+    except httpx.HTTPStatusError as exc:
+        assert exc.response.status_code == 409
+    else:
+        raise AssertionError(
+            "Expected duplicate routine conflict"
         )

@@ -16,12 +16,17 @@ from app.domains.trainer.models import (
     RoutineTemplate,
     RoutineTemplateCreate,
     RoutineTemplateUpdate,
+    TemplateAssignment,
+    TemplateAssignmentCreate,
     TrainerAthlete,
 )
 from app.domains.trainer.repository import (
     SupabaseConfigError,
 )
 from app.domains.trainer.service import (
+    TrainerAthleteRelationshipNotFound,
+    TrainerTemplateNotFound,
+    assign_authenticated_trainer_template,
     create_authenticated_trainer_template,
     delete_authenticated_trainer_template,
     get_authenticated_trainer_template,
@@ -300,3 +305,70 @@ async def delete_trainer_template(
             ),
             detail="Trainer template not found",
         )
+
+
+@router.post(
+    "/templates/{template_id}/assign",
+    response_model=TemplateAssignment,
+    status_code=status.HTTP_201_CREATED,
+)
+async def assign_trainer_template(
+    template_id: str,
+    request: TemplateAssignmentCreate,
+    trainer: AuthenticatedUser = Depends(
+        require_trainer
+    ),
+) -> TemplateAssignment:
+    try:
+        return await assign_authenticated_trainer_template(
+            trainer,
+            template_id,
+            request,
+        )
+    except TrainerTemplateNotFound as exc:
+        raise HTTPException(
+            status_code=(
+                status.HTTP_404_NOT_FOUND
+            ),
+            detail="Trainer template not found",
+        ) from exc
+    except TrainerAthleteRelationshipNotFound as exc:
+        raise HTTPException(
+            status_code=(
+                status.HTTP_404_NOT_FOUND
+            ),
+            detail=(
+                "Trainer athlete relationship not found"
+            ),
+        ) from exc
+    except ValidationError as exc:
+        raise HTTPException(
+            status_code=(
+                status.HTTP_422_UNPROCESSABLE_ENTITY
+            ),
+            detail=str(exc),
+        ) from exc
+    except SupabaseConfigError as exc:
+        raise HTTPException(
+            status_code=(
+                status.HTTP_503_SERVICE_UNAVAILABLE
+            ),
+            detail="Supabase is not configured.",
+        ) from exc
+    except httpx.HTTPStatusError as exc:
+        if exc.response.status_code == 409:
+            raise HTTPException(
+                status_code=(
+                    status.HTTP_409_CONFLICT
+                ),
+                detail="Routine already exists",
+            ) from exc
+
+        raise HTTPException(
+            status_code=(
+                status.HTTP_502_BAD_GATEWAY
+            ),
+            detail=(
+                "Could not assign trainer template"
+            ),
+        ) from exc

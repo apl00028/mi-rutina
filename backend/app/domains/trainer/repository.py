@@ -67,6 +67,53 @@ async def list_active_trainer_athletes(
     return data
 
 
+async def get_active_trainer_athlete(
+    trainer: AuthenticatedUser,
+    athlete_id: str,
+) -> dict[str, Any] | None:
+    url, key = _supabase_config()
+
+    headers = {
+        "Authorization":
+            f"Bearer {trainer.access_token}",
+        "apikey":
+            key,
+    }
+
+    params = {
+        "trainer_id":
+            f"eq.{trainer.id}",
+        "athlete_id":
+            f"eq.{athlete_id}",
+        "status":
+            "eq.active",
+        "select":
+            "athlete_id,status",
+        "limit":
+            "1",
+    }
+
+    async with httpx.AsyncClient(
+        timeout=10.0
+    ) as client:
+        response = await client.get(
+            f"{url}/rest/v1/trainer_athletes",
+            headers=headers,
+            params=params,
+        )
+
+    response.raise_for_status()
+
+    data = response.json()
+
+    if not isinstance(data, list):
+        raise RuntimeError(
+            "Unexpected Supabase response."
+        )
+
+    return data[0] if data else None
+
+
 def _template_headers(
     trainer: AuthenticatedUser,
     *,
@@ -349,3 +396,57 @@ async def delete_routine_template(
         )
 
     return bool(data)
+
+
+async def assign_routine_template(
+    trainer: AuthenticatedUser,
+    *,
+    athlete_id: str,
+    template_id: str,
+    routine_id: str,
+) -> dict[str, Any]:
+    url, key = _supabase_config()
+
+    headers = {
+        "Authorization":
+            f"Bearer {trainer.access_token}",
+        "apikey":
+            key,
+        "Content-Type":
+            "application/json",
+    }
+
+    payload = {
+        "p_athlete_id":
+            athlete_id,
+        "p_template_id":
+            template_id,
+        "p_routine_id":
+            routine_id,
+    }
+
+    async with httpx.AsyncClient(
+        timeout=10.0
+    ) as client:
+        response = await client.post(
+            (
+                f"{url}/rest/v1/rpc/"
+                "trainer_assign_routine_template"
+            ),
+            headers=headers,
+            json=payload,
+        )
+
+    response.raise_for_status()
+
+    data = response.json()
+
+    if (
+        not isinstance(data, list)
+        or len(data) != 1
+    ):
+        raise RuntimeError(
+            "Unexpected Supabase response."
+        )
+
+    return data[0]

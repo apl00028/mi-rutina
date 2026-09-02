@@ -82,3 +82,34 @@ class RoutineTemplate(BaseModel):
     data: dict[str, Any]
     created_at: str
     updated_at: str
+
+
+class TemplateAssignmentCreate(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid"
+    )
+
+    athlete_id: str
+    routine_id: str
+
+    @field_validator("athlete_id", "routine_id")
+    @classmethod
+    def validate_trimmed_non_empty(
+        cls,
+        value: str,
+    ) -> str:
+        if value != value.strip() or not value:
+            raise ValueError(
+                "value must be trimmed and non-empty"
+            )
+
+        return value
+
+
+class TemplateAssignment(BaseModel):
+    assignment_id: str
+    athlete_id: str
+    template_id: str
+    routine_id: str
+    discipline: RoutineDiscipline
+    assigned_at: str

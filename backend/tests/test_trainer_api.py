@@ -1,4 +1,5 @@
 from fastapi.testclient import TestClient
+import httpx
 
 from app.core.auth import AuthenticatedUser, require_user
 from main import app
@@ -661,3 +662,270 @@ def test_trainer_templates_route_does_not_accept_trainer_id_query():
     ] == [
         "discipline"
     ]
+
+
+def _assignment_payload():
+    return {
+        "athlete_id": "athlete-1",
+        "routine_id": "athlete-routine-1",
+    }
+
+
+def _assignment_response():
+    return {
+        "assignment_id": "assignment-1",
+        "athlete_id": "athlete-1",
+        "template_id": "template-1",
+        "routine_id": "athlete-routine-1",
+        "discipline": "strength",
+        "assigned_at": "2026-09-02T10:00:00Z",
+    }
+
+
+def test_assign_template_requires_authentication():
+    response = client.post(
+        "/api/v1/trainer/templates/template-1/assign",
+        json=_assignment_payload(),
+    )
+
+    assert response.status_code == 401
+
+
+def test_normal_user_cannot_assign_template():
+    app.dependency_overrides[
+        require_user
+    ] = normal_user
+
+    try:
+        response = client.post(
+            "/api/v1/trainer/templates/template-1/assign",
+            headers={
+                "Authorization":
+                    "Bearer token-123"
+            },
+            json=_assignment_payload(),
+        )
+    finally:
+        app.dependency_overrides.pop(
+            require_user,
+            None,
+        )
+
+    assert response.status_code == 403
+
+
+def test_admin_cannot_assign_template():
+    app.dependency_overrides[
+        require_user
+    ] = admin_user
+
+    try:
+        response = client.post(
+            "/api/v1/trainer/templates/template-1/assign",
+            headers={
+                "Authorization":
+                    "Bearer token-123"
+            },
+            json=_assignment_payload(),
+        )
+    finally:
+        app.dependency_overrides.pop(
+            require_user,
+            None,
+        )
+
+    assert response.status_code == 403
+
+
+def test_trainer_can_assign_template(monkeypatch):
+    from app.domains.trainer import router as trainer_api
+
+    seen = {}
+
+    async def fake_assign(trainer, template_id, request):
+        seen["trainer_id"] = trainer.id
+        seen["template_id"] = template_id
+        seen["request"] = request
+        return _assignment_response()
+
+    app.dependency_overrides[
+        require_user
+    ] = trainer_user
+    monkeypatch.setattr(
+        trainer_api,
+        "assign_authenticated_trainer_template",
+        fake_assign,
+    )
+
+    try:
+        response = client.post(
+            "/api/v1/trainer/templates/template-1/assign",
+            headers={
+                "Authorization":
+                    "Bearer token-123"
+            },
+            json=_assignment_payload(),
+        )
+    finally:
+        app.dependency_overrides.pop(
+            require_user,
+            None,
+        )
+
+    assert response.status_code == 201
+    assert response.json() == _assignment_response()
+    assert seen["trainer_id"] == "trainer-123"
+    assert seen["template_id"] == "template-1"
+    assert not hasattr(
+        seen["request"],
+        "trainer_id",
+    )
+
+
+def test_assign_template_rejects_trainer_id_override():
+    app.dependency_overrides[
+        require_user
+    ] = trainer_user
+
+    try:
+        response = client.post(
+            "/api/v1/trainer/templates/template-1/assign",
+            headers={
+                "Authorization":
+                    "Bearer token-123"
+            },
+            json={
+                **_assignment_payload(),
+                "trainer_id": "other-trainer",
+            },
+        )
+    finally:
+        app.dependency_overrides.pop(
+            require_user,
+            None,
+        )
+
+    assert response.status_code == 422
+
+
+def test_assign_foreign_template_returns_404(monkeypatch):
+    from app.domains.trainer import router as trainer_api
+    from app.domains.trainer.service import TrainerTemplateNotFound
+
+    async def fake_assign(trainer, template_id, request):
+        raise TrainerTemplateNotFound(
+            "Trainer template not found"
+        )
+
+    app.dependency_overrides[
+        require_user
+    ] = trainer_user
+    monkeypatch.setattr(
+        trainer_api,
+        "assign_authenticated_trainer_template",
+        fake_assign,
+    )
+
+    try:
+        response = client.post(
+            "/api/v1/trainer/templates/foreign-template/assign",
+            headers={
+                "Authorization":
+                    "Bearer token-123"
+            },
+            json=_assignment_payload(),
+        )
+    finally:
+        app.dependency_overrides.pop(
+            require_user,
+            None,
+        )
+
+    assert response.status_code == 404
+
+
+def test_assign_unrelated_or_inactive_athlete_returns_404(monkeypatch):
+    from app.domains.trainer import router as trainer_api
+    from app.domains.trainer.service import (
+        TrainerAthleteRelationshipNotFound,
+    )
+
+    async def fake_assign(trainer, template_id, request):
+        raise TrainerAthleteRelationshipNotFound(
+            "Trainer athlete relationship not found"
+        )
+
+    app.dependency_overrides[
+        require_user
+    ] = trainer_user
+    monkeypatch.setattr(
+        trainer_api,
+        "assign_authenticated_trainer_template",
+        fake_assign,
+    )
+
+    try:
+        response = client.post(
+            "/api/v1/trainer/templates/template-1/assign",
+            headers={
+                "Authorization":
+                    "Bearer token-123"
+            },
+            json=_assignment_payload(),
+        )
+    finally:
+        app.dependency_overrides.pop(
+            require_user,
+            None,
+        )
+
+    assert response.status_code == 404
+
+
+def test_assign_duplicate_routine_id_returns_409(monkeypatch):
+    from app.domains.trainer import router as trainer_api
+
+    async def fake_assign(trainer, template_id, request):
+        http_request = httpx.Request(
+            "POST",
+            "https://example.supabase.co/rest/v1/rpc/"
+            "trainer_assign_routine_template",
+        )
+        response = httpx.Response(
+            409,
+            request=http_request,
+        )
+        raise httpx.HTTPStatusError(
+            "conflict",
+            request=http_request,
+            response=response,
+        )
+
+    app.dependency_overrides[
+        require_user
+    ] = trainer_user
+    monkeypatch.setattr(
+        trainer_api,
+        "assign_authenticated_trainer_template",
+        fake_assign,
+    )
+
+    try:
+        response = client.post(
+            "/api/v1/trainer/templates/template-1/assign",
+            headers={
+                "Authorization":
+                    "Bearer token-123"
+            },
+            json=_assignment_payload(),
+        )
+    finally:
+        app.dependency_overrides.pop(
+            require_user,
+            None,
+        )
+
+    assert response.status_code == 409
+    assert response.json() == {
+        "detail": "Routine already exists"
+    }

@@ -42,10 +42,18 @@ describe(
       nativeLoginCompleted:
         signal(0),
 
+      passwordRecoverySession:
+        signal<{
+          access_token: string;
+        } | null>(null),
+
       isPasskeySupported:
         vi.fn(),
 
       waitForSession:
+        vi.fn(),
+
+      waitForPasswordRecoverySession:
         vi.fn(),
 
       consumeNativeAuthError:
@@ -90,8 +98,48 @@ describe(
     };
 
 
+    function deferred<T>() {
+      let resolve:
+        (value: T) => void =
+          () => {};
+
+      const promise =
+        new Promise<T>(
+          promiseResolve => {
+            resolve =
+              promiseResolve;
+          }
+        );
+
+      return {
+        promise,
+        resolve
+      };
+    }
+
+
+    async function flushPromises():
+      Promise<void> {
+      await Promise.resolve();
+      await Promise.resolve();
+    }
+
+
+    function setLoginSearch(
+      search: string
+    ): void {
+      window.history.pushState(
+        {},
+        '',
+        `/login${search}`
+      );
+    }
+
+
     beforeEach(() => {
       vi.clearAllMocks();
+
+      setLoginSearch('');
 
       languageMock.language.set(
         'es'
@@ -101,12 +149,21 @@ describe(
         0
       );
 
+      authMock.passwordRecoverySession.set(
+        null
+      );
+
       authMock.isPasskeySupported
         .mockReturnValue(
           true
         );
 
       authMock.waitForSession
+        .mockResolvedValue(
+          null
+        );
+
+      authMock.waitForPasswordRecoverySession
         .mockResolvedValue(
           null
         );
@@ -200,6 +257,191 @@ describe(
         ]
       });
     });
+
+
+    it(
+      'shows recovery form when PASSWORD_RECOVERY arrives after an initial null session',
+      async () => {
+        const recovery =
+          deferred<{
+            access_token: string;
+          }>();
+
+        authMock.waitForSession
+          .mockResolvedValue(null);
+        authMock.waitForPasswordRecoverySession
+          .mockReturnValue(
+            recovery.promise
+          );
+
+        setLoginSearch(
+          '?recovery=1'
+        );
+
+        const fixture =
+          TestBed.createComponent(
+            Login
+          );
+
+        fixture.detectChanges();
+        await flushPromises();
+        fixture.detectChanges();
+
+        expect(
+          fixture.componentInstance
+            .recoveryMode()
+        ).toBe(false);
+        expect(
+          fixture.nativeElement
+            .querySelector(
+              '.recovery-form'
+            )
+        ).toBeNull();
+
+        recovery.resolve({
+          access_token:
+            'recovery-token'
+        });
+
+        await fixture.whenStable();
+        await flushPromises();
+        fixture.detectChanges();
+
+        expect(
+          fixture.componentInstance
+            .recoveryMode()
+        ).toBe(true);
+        expect(
+          fixture.nativeElement
+            .querySelector(
+              '.recovery-form'
+            )
+        ).not.toBeNull();
+        expect(
+          fixture.componentInstance.error()
+        ).toBeNull();
+      }
+    );
+
+
+    it(
+      'does not allow a normal session to enter recovery from the query param alone',
+      async () => {
+        authMock.waitForSession
+          .mockResolvedValue({
+            access_token:
+              'normal-token'
+          });
+
+        setLoginSearch(
+          '?recovery=1'
+        );
+
+        const fixture =
+          TestBed.createComponent(
+            Login
+          );
+
+        fixture.detectChanges();
+        await fixture.whenStable();
+        fixture.detectChanges();
+
+        expect(
+          authMock.waitForPasswordRecoverySession
+        ).not.toHaveBeenCalled();
+        expect(
+          authMock.updatePassword
+        ).not.toHaveBeenCalled();
+        expect(
+          fixture.componentInstance
+            .recoveryMode()
+        ).toBe(false);
+        expect(
+          fixture.nativeElement
+            .querySelector(
+              '.recovery-form'
+            )
+        ).toBeNull();
+      }
+    );
+
+
+    it(
+      'does not navigate to home during password recovery',
+      async () => {
+        const recoverySession = {
+          access_token:
+            'recovery-token'
+        };
+
+        authMock.passwordRecoverySession.set(
+          recoverySession
+        );
+        authMock.waitForSession
+          .mockResolvedValue(null);
+        authMock.waitForPasswordRecoverySession
+          .mockResolvedValue(
+            recoverySession
+          );
+
+        setLoginSearch(
+          '?recovery=1'
+        );
+
+        const fixture =
+          TestBed.createComponent(
+            Login
+          );
+
+        fixture.detectChanges();
+        await fixture.whenStable();
+        fixture.detectChanges();
+
+        expect(
+          authMock.resolveAccess
+        ).not.toHaveBeenCalled();
+        expect(
+          routerMock.navigateByUrl
+        ).not.toHaveBeenCalled();
+        expect(
+          fixture.componentInstance
+            .recoveryMode()
+        ).toBe(true);
+      }
+    );
+
+
+    it(
+      'shows an error for invalid recovery callbacks',
+      async () => {
+        authMock.waitForSession
+          .mockResolvedValue(null);
+
+        setLoginSearch(
+          '?recovery=1&error_description=Expired'
+        );
+
+        const fixture =
+          TestBed.createComponent(
+            Login
+          );
+
+        fixture.detectChanges();
+        await fixture.whenStable();
+        fixture.detectChanges();
+
+        expect(
+          authMock.waitForPasswordRecoverySession
+        ).not.toHaveBeenCalled();
+        expect(
+          fixture.componentInstance
+            .recoveryMode()
+        ).toBe(false);
+        expect(
+          fixture.componentInstance.error()
+        ).toBe('Expired');
+      }
+    );
 
 
     it(
@@ -334,17 +576,36 @@ describe(
     it(
       'updates the password during recovery and returns to sign-in',
       async () => {
+        const recoverySession = {
+          access_token:
+            'recovery-token'
+        };
+
+        authMock.passwordRecoverySession.set(
+          recoverySession
+        );
+        authMock.waitForSession
+          .mockResolvedValue(null);
+        authMock.waitForPasswordRecoverySession
+          .mockResolvedValue(
+            recoverySession
+          );
+
+        setLoginSearch(
+          '?recovery=1'
+        );
+
         const fixture =
           TestBed.createComponent(
             Login
           );
 
+        fixture.detectChanges();
+        await fixture.whenStable();
+        fixture.detectChanges();
+
         const component =
           fixture.componentInstance;
-
-        component.recoveryMode.set(
-          true
-        );
 
         component.recoveryPassword.set(
           'new-password'

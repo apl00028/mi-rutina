@@ -41,6 +41,12 @@ const supabaseMock =
         onAuthStateChange:
           vi.fn(),
 
+        exchangeCodeForSession:
+          vi.fn(),
+
+        setSession:
+          vi.fn(),
+
         signInWithOtp:
           vi.fn(),
 
@@ -69,7 +75,23 @@ const supabaseMock =
       },
 
       createClient:
-        vi.fn()
+        vi.fn(),
+
+      authStateCallback:
+        undefined as
+          | ((
+              event: string,
+              session:
+                | {
+                    access_token: string;
+                    user: {
+                      id: string;
+                      email: string;
+                    };
+                  }
+                | null
+            ) => void)
+          | undefined
     };
   });
 
@@ -145,15 +167,44 @@ describe(
             null
         });
 
-      supabaseMock.auth.onAuthStateChange
-        .mockReturnValue({
+      supabaseMock.auth.exchangeCodeForSession
+        .mockResolvedValue({
           data: {
-            subscription: {
-              unsubscribe:
-                vi.fn()
-            }
-          }
+            session:
+              supabaseMock.session
+          },
+
+          error:
+            null
         });
+
+      supabaseMock.auth.setSession
+        .mockResolvedValue({
+          data: {
+            session:
+              supabaseMock.session
+          },
+
+          error:
+            null
+        });
+
+      supabaseMock.auth.onAuthStateChange
+        .mockImplementation(
+          callback => {
+            supabaseMock.authStateCallback =
+              callback;
+
+            return {
+              data: {
+                subscription: {
+                  unsubscribe:
+                    vi.fn()
+                }
+              }
+            };
+          }
+        );
 
       supabaseMock.createClient
         .mockReturnValue({
@@ -186,6 +237,144 @@ describe(
 
       vi.clearAllMocks();
     });
+
+
+    it(
+      'recognizes PASSWORD_RECOVERY and exposes the recovery session',
+      async () => {
+        const recoverySession = {
+          access_token:
+            'recovery-token',
+
+          user: {
+            id:
+              'recovery-user',
+            email:
+              'recovery@example.com'
+            }
+        };
+
+        const recovery =
+          service.waitForPasswordRecoverySession();
+
+        supabaseMock.authStateCallback?.(
+          'PASSWORD_RECOVERY',
+          recoverySession
+        );
+
+        await expect(
+          recovery
+        ).resolves.toBe(
+          recoverySession
+        );
+
+        expect(
+          service.session()
+            ?.access_token
+        ).toBe(
+          'recovery-token'
+        );
+
+        expect(
+          service.passwordRecoverySession()
+            ?.access_token
+        ).toBe(
+          'recovery-token'
+        );
+      }
+    );
+
+
+    it(
+      'marks sessions from native reset-password links as recovery sessions',
+      async () => {
+        const replace =
+          vi.fn();
+
+        const originalLocation =
+          window.location;
+
+        Object.defineProperty(
+          window,
+          'location',
+          {
+            configurable:
+              true,
+            value: {
+              ...originalLocation,
+              replace
+            }
+          }
+        );
+
+        const recoverySession = {
+          access_token:
+            'native-recovery-token',
+
+          user: {
+            id:
+              'native-recovery-user',
+            email:
+              'native@example.com'
+          }
+        };
+
+        supabaseMock.auth.setSession
+          .mockResolvedValue({
+            data: {
+              session:
+                recoverySession
+            },
+
+            error:
+              null
+          });
+
+        await (
+          service as unknown as {
+            handleNativeAuthUrl:
+              (url: string) => Promise<void>;
+          }
+        ).handleNativeAuthUrl(
+          (
+            'com.adrianpelaez.aptus://reset-password' +
+            '#access_token=token&refresh_token=refresh'
+          )
+        );
+
+        expect(
+          supabaseMock.auth.setSession
+        ).toHaveBeenCalledWith({
+          access_token:
+            'token',
+          refresh_token:
+            'refresh'
+        });
+
+        expect(
+          service.passwordRecoverySession()
+            ?.access_token
+        ).toBe(
+          'native-recovery-token'
+        );
+
+        expect(replace)
+          .toHaveBeenCalledWith(
+            '/login?recovery=1'
+          );
+
+        Object.defineProperty(
+          window,
+          'location',
+          {
+            configurable:
+              true,
+            value:
+              originalLocation
+          }
+        );
+      }
+    );
 
 
     it(

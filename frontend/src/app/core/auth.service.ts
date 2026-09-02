@@ -97,6 +97,9 @@ export class AuthService {
   me =
     signal<AptusMe | null>(null);
 
+  passwordRecoverySession =
+    signal<Session | null>(null);
+
   loading =
     signal(true);
 
@@ -118,6 +121,10 @@ export class AuthService {
 
   private authReadyResolved =
     false;
+
+  private passwordRecoveryResolvers:
+    Array<(session: Session | null) => void> =
+    [];
 
 
   constructor(
@@ -153,6 +160,19 @@ export class AuthService {
         this.applySession(
           session
         );
+
+        if (
+          event === 'PASSWORD_RECOVERY' &&
+          session
+        ) {
+          this.markPasswordRecoverySession(
+            session
+          );
+
+          this.finishAuthInitialization(
+            session
+          );
+        }
 
         if (
           event === 'INITIAL_SESSION' ||
@@ -229,6 +249,9 @@ export class AuthService {
     if (!session) {
       this.me.set(null);
       this.meRequest = null;
+      this.passwordRecoverySession.set(
+        null
+      );
     }
   }
 
@@ -266,6 +289,55 @@ export class AuthService {
     await this.authReadyPromise;
 
     return this.session();
+  }
+
+
+  async waitForPasswordRecoverySession():
+    Promise<Session | null> {
+    const recoverySession =
+      this.passwordRecoverySession();
+
+    if (recoverySession) {
+      return recoverySession;
+    }
+
+    return await new Promise<Session | null>(
+      resolve => {
+        this.passwordRecoveryResolvers.push(
+          resolve
+        );
+      }
+    );
+  }
+
+
+  private resolvePasswordRecovery(
+    session: Session | null
+  ): void {
+    const resolvers =
+      this.passwordRecoveryResolvers;
+
+    this.passwordRecoveryResolvers =
+      [];
+
+    for (
+      const resolve of resolvers
+    ) {
+      resolve(session);
+    }
+  }
+
+
+  private markPasswordRecoverySession(
+    session: Session
+  ): void {
+    this.passwordRecoverySession.set(
+      session
+    );
+
+    this.resolvePasswordRecovery(
+      session
+    );
   }
 
 
@@ -345,6 +417,9 @@ export class AuthService {
       const parsed =
         new URL(url);
 
+      let recoverySession:
+        Session | null = null;
+
       const authError =
         parsed.searchParams.get(
           'error_description'
@@ -366,6 +441,7 @@ export class AuthService {
 
       if (code) {
         const {
+          data,
           error
         } =
           await this.client.auth
@@ -376,6 +452,9 @@ export class AuthService {
         if (error) {
           throw error;
         }
+
+        recoverySession =
+          data.session ?? null;
       } else {
         const hash =
           new URLSearchParams(
@@ -405,6 +484,7 @@ export class AuthService {
         }
 
         const {
+          data,
           error
         } =
           await this.client.auth.setSession({
@@ -417,9 +497,22 @@ export class AuthService {
         if (error) {
           throw error;
         }
+
+        recoverySession =
+          data.session ?? null;
       }
 
       if (isRecovery) {
+        if (!recoverySession) {
+          throw new Error(
+            'No se recibió una sesión de recuperación.'
+          );
+        }
+
+        this.markPasswordRecoverySession(
+          recoverySession
+        );
+
         window.location.replace(
           '/login?recovery=1'
         );
@@ -976,7 +1069,9 @@ export class AuthService {
     this.session.set(null);
     this.user.set(null);
     this.me.set(null);
+    this.passwordRecoverySession.set(null);
     this.meRequest = null;
+    this.resolvePasswordRecovery(null);
   }
 
 
@@ -1043,7 +1138,9 @@ export class AuthService {
     this.session.set(null);
     this.user.set(null);
     this.me.set(null);
+    this.passwordRecoverySession.set(null);
     this.meRequest = null;
+    this.resolvePasswordRecovery(null);
   }
 
 
@@ -1166,7 +1263,9 @@ export class AuthService {
     this.session.set(null);
     this.user.set(null);
     this.me.set(null);
+    this.passwordRecoverySession.set(null);
     this.meRequest = null;
+    this.resolvePasswordRecovery(null);
   }
 
 

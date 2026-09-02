@@ -121,11 +121,11 @@ export class Login {
       params.get('recovery') ===
       '1';
 
-    if (recoveryReturn) {
-      this.recoveryMode.set(
-        true
-      );
-    }
+    const authReturnError =
+      params.get(
+        'error_description'
+      ) ??
+      params.get('error');
 
     const nativeError =
       this.auth.consumeNativeAuthError();
@@ -139,55 +139,77 @@ export class Login {
     const session =
       await this.auth.waitForSession();
 
-    if (!session) {
+    if (recoveryReturn) {
+      let recoverySession =
+        this.auth.passwordRecoverySession();
+
       if (
-        !this.error() &&
-        (
-          oauthReturn ||
-          recoveryReturn
-        )
+        !recoverySession &&
+        !authReturnError &&
+        !session
       ) {
-        this.error.set(
-          this.language() === 'es'
-            ? (
-                recoveryReturn
-                  ? 'El enlace de recuperación no es válido o ha caducado.'
-                  : 'No se pudo completar el acceso.'
-              )
-            : (
-                recoveryReturn
-                  ? 'The recovery link is invalid or has expired.'
-                  : 'Sign-in could not be completed.'
-              )
-        );
+        recoverySession =
+          await this.auth
+            .waitForPasswordRecoverySession();
       }
 
-      if (recoveryReturn) {
+      if (!recoverySession) {
+        if (!this.error()) {
+          this.error.set(
+            authReturnError ??
+            (
+              this.language() === 'es'
+                ? 'El enlace de recuperación no es válido o ha caducado.'
+                : 'The recovery link is invalid or has expired.'
+            )
+          );
+        }
+
         this.recoveryMode.set(
           false
         );
+
+        window.history.replaceState(
+          {},
+          document.title,
+          '/login'
+        );
+
+        return;
       }
 
+      this.recoveryMode.set(
+        true
+      );
+
+      window.history.replaceState(
+        {},
+        document.title,
+        '/login'
+      );
+
+      return;
+    }
+
+    if (!session) {
       if (
-        oauthReturn ||
-        recoveryReturn
+        !this.error() &&
+        oauthReturn
       ) {
+        this.error.set(
+          this.language() === 'es'
+            ? 'No se pudo completar el acceso.'
+            : 'Sign-in could not be completed.'
+        );
+      }
+
+      if (oauthReturn) {
         window.history.replaceState(
           {},
           document.title,
           '/login'
         );
       }
-
-      return;
-    }
-
-    if (recoveryReturn) {
-      window.history.replaceState(
-        {},
-        document.title,
-        '/login'
-      );
 
       return;
     }
@@ -357,6 +379,10 @@ export class Login {
     event.preventDefault();
 
     if (this.recoveryLoading()) {
+      return;
+    }
+
+    if (!this.recoveryMode()) {
       return;
     }
 

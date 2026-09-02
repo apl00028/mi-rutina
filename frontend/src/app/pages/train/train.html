@@ -1522,7 +1522,12 @@
             session of routine.sessions;
             track session.sessionId
           ) {
-            <article class="session-card">
+            @if (
+              !activeWorkout()
+              || session.sessionId !==
+                activeWorkout()?.sessionId
+            ) {
+              <article class="session-card">
               <header>
                 <div>
                   <span class="eyebrow">
@@ -1589,6 +1594,7 @@
                 }}
               </button>
             </article>
+            }
           }
         </div>
 

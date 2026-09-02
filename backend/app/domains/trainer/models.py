@@ -1,6 +1,19 @@
-from typing import Literal
+from typing import Any, Literal
 
-from pydantic import BaseModel
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    field_validator,
+)
+
+
+RoutineDiscipline = Literal[
+    "strength",
+    "swimming",
+    "cycling",
+    "running",
+]
 
 
 class TrainerAthlete(BaseModel):
@@ -9,3 +22,63 @@ class TrainerAthlete(BaseModel):
         "active",
         "inactive",
     ]
+
+
+class RoutineTemplateCreate(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid"
+    )
+
+    id: str
+    name: str
+    discipline: RoutineDiscipline
+    data: dict[str, Any] = Field(
+        default_factory=dict
+    )
+
+    @field_validator("id", "name")
+    @classmethod
+    def validate_trimmed_non_empty(
+        cls,
+        value: str,
+    ) -> str:
+        if value != value.strip() or not value:
+            raise ValueError(
+                "value must be trimmed and non-empty"
+            )
+
+        return value
+
+
+class RoutineTemplateUpdate(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid"
+    )
+
+    name: str
+    discipline: RoutineDiscipline
+    data: dict[str, Any] = Field(
+        default_factory=dict
+    )
+
+    @field_validator("name")
+    @classmethod
+    def validate_trimmed_non_empty(
+        cls,
+        value: str,
+    ) -> str:
+        if value != value.strip() or not value:
+            raise ValueError(
+                "value must be trimmed and non-empty"
+            )
+
+        return value
+
+
+class RoutineTemplate(BaseModel):
+    id: str
+    name: str
+    discipline: RoutineDiscipline
+    data: dict[str, Any]
+    created_at: str
+    updated_at: str

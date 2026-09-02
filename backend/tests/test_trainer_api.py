@@ -191,3 +191,473 @@ def test_trainer_athletes_route_does_not_accept_trainer_id_parameter(
         param.name
         for param in route.dependant.query_params
     ] == []
+
+
+def _template_payload():
+    return {
+        "id": "template-1",
+        "name": "Base strength",
+        "discipline": "strength",
+        "data": {
+            "routineId": "template-1",
+            "schemaVersion": "4.2",
+            "revision": 1,
+            "discipline": "strength",
+            "sessions": [],
+        },
+    }
+
+
+def _template_response(template_id="template-1"):
+    return {
+        "id": template_id,
+        "name": "Base strength",
+        "discipline": "strength",
+        "data": {
+            "routineId": template_id,
+            "schemaVersion": "4.2",
+            "revision": 1,
+            "discipline": "strength",
+            "sessions": [],
+        },
+        "created_at": "2026-09-02T10:00:00Z",
+        "updated_at": "2026-09-02T10:00:00Z",
+    }
+
+
+def test_trainer_templates_require_authentication():
+    response = client.get(
+        "/api/v1/trainer/templates"
+    )
+
+    assert response.status_code == 401
+
+
+def test_normal_user_cannot_list_trainer_templates():
+    app.dependency_overrides[
+        require_user
+    ] = normal_user
+
+    try:
+        response = client.get(
+            "/api/v1/trainer/templates",
+            headers={
+                "Authorization":
+                    "Bearer token-123"
+            },
+        )
+    finally:
+        app.dependency_overrides.pop(
+            require_user,
+            None,
+        )
+
+    assert response.status_code == 403
+
+
+def test_admin_cannot_list_trainer_templates():
+    app.dependency_overrides[
+        require_user
+    ] = admin_user
+
+    try:
+        response = client.get(
+            "/api/v1/trainer/templates",
+            headers={
+                "Authorization":
+                    "Bearer token-123"
+            },
+        )
+    finally:
+        app.dependency_overrides.pop(
+            require_user,
+            None,
+        )
+
+    assert response.status_code == 403
+
+
+def test_trainer_can_list_templates_with_discipline_filter(
+    monkeypatch,
+):
+    from app.domains.trainer import router as trainer_api
+
+    seen = {}
+
+    async def fake_list(trainer, discipline=None):
+        seen["trainer_id"] = trainer.id
+        seen["discipline"] = discipline
+        return [
+            _template_response()
+        ]
+
+    app.dependency_overrides[
+        require_user
+    ] = trainer_user
+    monkeypatch.setattr(
+        trainer_api,
+        "list_authenticated_trainer_templates",
+        fake_list,
+    )
+
+    try:
+        response = client.get(
+            "/api/v1/trainer/templates?discipline=strength",
+            headers={
+                "Authorization":
+                    "Bearer token-123"
+            },
+        )
+    finally:
+        app.dependency_overrides.pop(
+            require_user,
+            None,
+        )
+
+    assert response.status_code == 200
+    assert response.json() == [
+        _template_response()
+    ]
+    assert seen == {
+        "trainer_id": "trainer-123",
+        "discipline": "strength",
+    }
+
+
+def test_trainer_can_get_template(monkeypatch):
+    from app.domains.trainer import router as trainer_api
+
+    async def fake_get(trainer, template_id):
+        assert trainer.id == "trainer-123"
+        assert template_id == "template-1"
+        return _template_response()
+
+    app.dependency_overrides[
+        require_user
+    ] = trainer_user
+    monkeypatch.setattr(
+        trainer_api,
+        "get_authenticated_trainer_template",
+        fake_get,
+    )
+
+    try:
+        response = client.get(
+            "/api/v1/trainer/templates/template-1",
+            headers={
+                "Authorization":
+                    "Bearer token-123"
+            },
+        )
+    finally:
+        app.dependency_overrides.pop(
+            require_user,
+            None,
+        )
+
+    assert response.status_code == 200
+    assert response.json()["id"] == "template-1"
+
+
+def test_foreign_trainer_template_get_returns_404(monkeypatch):
+    from app.domains.trainer import router as trainer_api
+
+    async def fake_get(trainer, template_id):
+        assert trainer.id == "trainer-123"
+        return None
+
+    app.dependency_overrides[
+        require_user
+    ] = trainer_user
+    monkeypatch.setattr(
+        trainer_api,
+        "get_authenticated_trainer_template",
+        fake_get,
+    )
+
+    try:
+        response = client.get(
+            "/api/v1/trainer/templates/foreign-template",
+            headers={
+                "Authorization":
+                    "Bearer token-123"
+            },
+        )
+    finally:
+        app.dependency_overrides.pop(
+            require_user,
+            None,
+        )
+
+    assert response.status_code == 404
+
+
+def test_trainer_can_create_template_without_trainer_id_override(
+    monkeypatch,
+):
+    from app.domains.trainer import router as trainer_api
+
+    seen = {}
+
+    async def fake_create(trainer, request):
+        seen["trainer_id"] = trainer.id
+        seen["request"] = request
+        return _template_response()
+
+    app.dependency_overrides[
+        require_user
+    ] = trainer_user
+    monkeypatch.setattr(
+        trainer_api,
+        "create_authenticated_trainer_template",
+        fake_create,
+    )
+
+    try:
+        response = client.post(
+            "/api/v1/trainer/templates",
+            headers={
+                "Authorization":
+                    "Bearer token-123"
+            },
+            json=_template_payload(),
+        )
+    finally:
+        app.dependency_overrides.pop(
+            require_user,
+            None,
+        )
+
+    assert response.status_code == 201
+    assert seen["trainer_id"] == "trainer-123"
+    assert not hasattr(
+        seen["request"],
+        "trainer_id",
+    )
+
+
+def test_create_template_rejects_trainer_id_body_override():
+    app.dependency_overrides[
+        require_user
+    ] = trainer_user
+
+    payload = {
+        **_template_payload(),
+        "trainer_id": "other-trainer",
+    }
+
+    try:
+        response = client.post(
+            "/api/v1/trainer/templates",
+            headers={
+                "Authorization":
+                    "Bearer token-123"
+            },
+            json=payload,
+        )
+    finally:
+        app.dependency_overrides.pop(
+            require_user,
+            None,
+        )
+
+    assert response.status_code == 422
+
+
+def test_trainer_can_update_template(monkeypatch):
+    from app.domains.trainer import router as trainer_api
+
+    seen = {}
+
+    async def fake_update(trainer, template_id, request):
+        seen["trainer_id"] = trainer.id
+        seen["template_id"] = template_id
+        seen["request"] = request
+        return _template_response()
+
+    app.dependency_overrides[
+        require_user
+    ] = trainer_user
+    monkeypatch.setattr(
+        trainer_api,
+        "replace_authenticated_trainer_template",
+        fake_update,
+    )
+
+    payload = _template_payload()
+    payload.pop("id")
+
+    try:
+        response = client.put(
+            "/api/v1/trainer/templates/template-1",
+            headers={
+                "Authorization":
+                    "Bearer token-123"
+            },
+            json=payload,
+        )
+    finally:
+        app.dependency_overrides.pop(
+            require_user,
+            None,
+        )
+
+    assert response.status_code == 200
+    assert seen["trainer_id"] == "trainer-123"
+    assert seen["template_id"] == "template-1"
+    assert not hasattr(
+        seen["request"],
+        "trainer_id",
+    )
+
+
+def test_foreign_trainer_template_update_returns_404(monkeypatch):
+    from app.domains.trainer import router as trainer_api
+
+    async def fake_update(trainer, template_id, request):
+        assert trainer.id == "trainer-123"
+        return None
+
+    app.dependency_overrides[
+        require_user
+    ] = trainer_user
+    monkeypatch.setattr(
+        trainer_api,
+        "replace_authenticated_trainer_template",
+        fake_update,
+    )
+
+    payload = _template_payload()
+    payload.pop("id")
+
+    try:
+        response = client.put(
+            "/api/v1/trainer/templates/foreign-template",
+            headers={
+                "Authorization":
+                    "Bearer token-123"
+            },
+            json=payload,
+        )
+    finally:
+        app.dependency_overrides.pop(
+            require_user,
+            None,
+        )
+
+    assert response.status_code == 404
+
+
+def test_update_template_rejects_trainer_id_body_override():
+    app.dependency_overrides[
+        require_user
+    ] = trainer_user
+
+    payload = _template_payload()
+    payload.pop("id")
+    payload["trainer_id"] = "other-trainer"
+
+    try:
+        response = client.put(
+            "/api/v1/trainer/templates/template-1",
+            headers={
+                "Authorization":
+                    "Bearer token-123"
+            },
+            json=payload,
+        )
+    finally:
+        app.dependency_overrides.pop(
+            require_user,
+            None,
+        )
+
+    assert response.status_code == 422
+
+
+def test_trainer_can_delete_template(monkeypatch):
+    from app.domains.trainer import router as trainer_api
+
+    seen = {}
+
+    async def fake_delete(trainer, template_id):
+        seen["trainer_id"] = trainer.id
+        seen["template_id"] = template_id
+        return True
+
+    app.dependency_overrides[
+        require_user
+    ] = trainer_user
+    monkeypatch.setattr(
+        trainer_api,
+        "delete_authenticated_trainer_template",
+        fake_delete,
+    )
+
+    try:
+        response = client.delete(
+            "/api/v1/trainer/templates/template-1",
+            headers={
+                "Authorization":
+                    "Bearer token-123"
+            },
+        )
+    finally:
+        app.dependency_overrides.pop(
+            require_user,
+            None,
+        )
+
+    assert response.status_code == 204
+    assert seen == {
+        "trainer_id": "trainer-123",
+        "template_id": "template-1",
+    }
+
+
+def test_foreign_trainer_template_delete_returns_404(monkeypatch):
+    from app.domains.trainer import router as trainer_api
+
+    async def fake_delete(trainer, template_id):
+        assert trainer.id == "trainer-123"
+        return False
+
+    app.dependency_overrides[
+        require_user
+    ] = trainer_user
+    monkeypatch.setattr(
+        trainer_api,
+        "delete_authenticated_trainer_template",
+        fake_delete,
+    )
+
+    try:
+        response = client.delete(
+            "/api/v1/trainer/templates/foreign-template",
+            headers={
+                "Authorization":
+                    "Bearer token-123"
+            },
+        )
+    finally:
+        app.dependency_overrides.pop(
+            require_user,
+            None,
+        )
+
+    assert response.status_code == 404
+
+
+def test_trainer_templates_route_does_not_accept_trainer_id_query():
+    route = next(
+        route
+        for route in app.routes
+        if getattr(route, "path", None)
+        == "/api/v1/trainer/templates"
+    )
+    assert [
+        param.name
+        for param in route.dependant.query_params
+    ] == [
+        "discipline"
+    ]

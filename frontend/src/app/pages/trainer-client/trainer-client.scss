@@ -179,25 +179,10 @@ dd {
   overflow: hidden;
 }
 
-.accordion-trigger {
-  width: 100%;
-  padding: 18px;
-  border: 0;
-
-  background: transparent;
-  color: var(--aptus-text);
-
-  cursor: pointer;
-  font: inherit;
-  font-size: 15px;
-  font-weight: 760;
-  text-align: left;
-}
-
 .performance-body {
   display: grid;
   gap: 16px;
-  padding: 0 18px 18px;
+  padding: 18px;
 }
 
 .compact-state {
@@ -298,29 +283,82 @@ h3 {
 }
 
 .calendar-day.has-session {
-  background: color-mix(
-    in srgb,
-    var(--aptus-accent, #2563eb) 9%,
-    var(--aptus-surface)
-  );
+  background: var(--aptus-accent-soft);
   color: var(--aptus-text);
   cursor: pointer;
 }
 
 .calendar-day.selected {
-  border-color: var(--aptus-accent, #2563eb);
-  box-shadow: 0 0 0 1px var(--aptus-accent, #2563eb);
+  border-color: var(--aptus-accent);
+  box-shadow: 0 0 0 1px var(--aptus-accent);
 }
 
 .calendar-day.outside-month {
   opacity: 0.38;
 }
 
-.calendar-day small {
-  color: var(--aptus-text-muted);
+.calendar-marks {
+  display: flex;
+  gap: 3px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.calendar-marks span,
+.performance-legend span,
+.same-day-list small[class^="performance-"] {
+  display: inline-grid;
+  place-items: center;
+  min-width: 17px;
+  min-height: 17px;
+  border-radius: 999px;
 
   font-size: 10px;
-  font-weight: 760;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.performance-strength {
+  background: var(--aptus-accent-soft);
+  color: var(--aptus-accent-text);
+}
+
+.performance-swimming {
+  border: 1px solid var(--aptus-border-strong);
+  background: var(--aptus-surface-muted);
+  color: var(--aptus-text);
+}
+
+.performance-running {
+  background: var(--aptus-success-bg);
+  color: var(--aptus-success);
+}
+
+.performance-cycling {
+  background: var(--aptus-warning-bg);
+  color: var(--aptus-warning);
+}
+
+.performance-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  align-items: center;
+
+  color: var(--aptus-text-muted);
+
+  font-size: 11px;
+  font-weight: 650;
+}
+
+.day-sessions,
+.strength-detail {
+  display: grid;
+  gap: 12px;
+}
+
+.day-sessions h3 {
+  margin-bottom: 0;
 }
 
 .same-day-list {
@@ -338,10 +376,16 @@ h3 {
 }
 
 .same-day-list button.selected {
-  border-color: var(--aptus-accent, #2563eb);
+  border-color: var(--aptus-accent);
 }
 
-.same-day-list small {
+.same-day-list span {
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.same-day-list > button > small:not([class]) {
   color: var(--aptus-text-muted);
 
   font-size: 11px;

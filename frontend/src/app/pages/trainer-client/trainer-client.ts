@@ -36,11 +36,19 @@ type StrengthMetricColumn =
   | 'effort';
 
 
-interface StrengthCalendarDay {
+interface PerformanceCalendarEvent {
+  id: string;
+  discipline: TrainerDiscipline;
+  finished_at: string | null;
+  title: string;
+}
+
+
+interface PerformanceCalendarDay {
   dateKey: string;
   dayNumber: number;
   inMonth: boolean;
-  sessions: TrainerStrengthSession[];
+  events: PerformanceCalendarEvent[];
   selected: boolean;
 }
 
@@ -65,25 +73,19 @@ export class TrainerClient implements OnInit {
   error =
     signal<string | null>(null);
 
-  strengthOpen =
+  performanceLoading =
     signal(false);
 
-  strengthLoading =
-    signal(false);
-
-  strengthLoaded =
-    signal(false);
-
-  strengthError =
+  performanceError =
     signal<string | null>(null);
 
   strengthSessions =
     signal<TrainerStrengthSession[]>([]);
 
-  selectedStrengthWorkoutId =
+  selectedPerformanceEventId =
     signal<string | null>(null);
 
-  strengthCalendarMonth =
+  performanceCalendarMonth =
     signal<string | null>(null);
 
   readonly disciplines: TrainerDiscipline[] = [
@@ -109,24 +111,83 @@ export class TrainerClient implements OnInit {
       );
     });
 
-  readonly currentStrengthSession =
+  readonly performanceEvents =
     computed(() => {
-      const sessions =
-        this.strengthSessions();
-      const selectedId =
-        this.selectedStrengthWorkoutId();
+      const events =
+        this.strengthSessions()
+          .map(session =>
+            this.strengthSessionToEvent(
+              session
+            )
+          );
 
-      return (
-        sessions.find(session =>
-          session.workout_id === selectedId
-        ) ?? sessions[0] ?? null
+      return events.sort((left, right) =>
+        this.eventTime(right) -
+        this.eventTime(left)
       );
     });
 
-  readonly strengthCalendarDays =
+  readonly currentPerformanceEvent =
+    computed(() => {
+      const events =
+        this.performanceEvents();
+      const selectedId =
+        this.selectedPerformanceEventId();
+
+      return (
+        events.find(event =>
+          event.id === selectedId
+        ) ?? events[0] ?? null
+      );
+    });
+
+  readonly currentStrengthSession =
+    computed(() => {
+      const selected =
+        this.currentPerformanceEvent();
+
+      if (
+        !selected ||
+        selected.discipline !== 'strength'
+      ) {
+        return null;
+      }
+
+      return (
+        this.strengthSessions()
+          .find(session =>
+            this.strengthEventId(session) ===
+              selected.id
+          ) ?? null
+      );
+    });
+
+  readonly selectedPerformanceDateKey =
+    computed(() => {
+      const selected =
+        this.currentPerformanceEvent();
+
+      return selected
+        ? this.dateKeyFromValue(
+          selected.finished_at
+        )
+        : null;
+    });
+
+  readonly selectedDayEvents =
+    computed(() => {
+      const dateKey =
+        this.selectedPerformanceDateKey();
+
+      return dateKey
+        ? this.performanceEventsForDate(dateKey)
+        : [];
+    });
+
+  readonly performanceCalendarDays =
     computed(() => {
       const monthKey =
-        this.strengthCalendarMonth();
+        this.performanceCalendarMonth();
 
       if (!monthKey) {
         return [];
@@ -149,7 +210,7 @@ export class TrainerClient implements OnInit {
         {
           length: 42
         },
-        (_, index): StrengthCalendarDay => {
+        (_, index): PerformanceCalendarDay => {
           const date =
             new Date(gridStart);
 
@@ -159,8 +220,8 @@ export class TrainerClient implements OnInit {
 
           const dateKey =
             this.dateKeyFromDate(date);
-          const sessions =
-            this.strengthSessionsForDate(dateKey);
+          const events =
+            this.performanceEventsForDate(dateKey);
 
           return {
             dateKey,
@@ -169,11 +230,11 @@ export class TrainerClient implements OnInit {
             inMonth:
               this.monthKeyFromDate(date) ===
               monthKey,
-            sessions,
+            events,
             selected:
-              sessions.some(session =>
-                session.workout_id ===
-                  this.selectedStrengthWorkoutId()
+              events.some(event =>
+                event.id ===
+                  this.selectedPerformanceEventId()
               )
           };
         }
@@ -215,6 +276,7 @@ export class TrainerClient implements OnInit {
           .getAthleteOverview(athleteId);
 
       this.overview.set(overview);
+      void this.loadStrengthSessions();
     } catch (error) {
       this.error.set(
         this.errorMessage(
@@ -224,23 +286,6 @@ export class TrainerClient implements OnInit {
       );
     } finally {
       this.loading.set(false);
-    }
-  }
-
-
-  async toggleStrengthPerformance():
-    Promise<void> {
-    const open =
-      !this.strengthOpen();
-
-    this.strengthOpen.set(open);
-
-    if (
-      open &&
-      !this.strengthLoaded() &&
-      !this.strengthLoading()
-    ) {
-      await this.loadStrengthSessions();
     }
   }
 
@@ -256,8 +301,8 @@ export class TrainerClient implements OnInit {
       return;
     }
 
-    this.strengthLoading.set(true);
-    this.strengthError.set(null);
+    this.performanceLoading.set(true);
+    this.performanceError.set(null);
 
     try {
       const sessions =
@@ -265,59 +310,61 @@ export class TrainerClient implements OnInit {
           .listStrengthSessions(athleteId);
 
       this.strengthSessions.set(sessions);
-      this.selectedStrengthWorkoutId.set(
-        sessions[0]?.workout_id ?? null
+      const firstEvent =
+        this.performanceEvents()[0] ?? null;
+
+      this.selectedPerformanceEventId.set(
+        firstEvent?.id ?? null
       );
-      this.strengthCalendarMonth.set(
+      this.performanceCalendarMonth.set(
         this.monthKeyFromValue(
-          sessions[0]?.finished_at
+          firstEvent?.finished_at
         )
       );
-      this.strengthLoaded.set(true);
     } catch (error) {
-      this.strengthError.set(
+      this.performanceError.set(
         this.errorMessage(
           error,
           'No se pudo cargar el rendimiento de fuerza.'
         )
       );
     } finally {
-      this.strengthLoading.set(false);
+      this.performanceLoading.set(false);
     }
   }
 
 
-  previousStrengthMonth(): void {
-    this.shiftStrengthMonth(-1);
+  previousPerformanceMonth(): void {
+    this.shiftPerformanceMonth(-1);
   }
 
 
-  nextStrengthMonth(): void {
-    this.shiftStrengthMonth(1);
+  nextPerformanceMonth(): void {
+    this.shiftPerformanceMonth(1);
   }
 
 
-  selectStrengthDay(
-    day: StrengthCalendarDay
+  selectPerformanceDay(
+    day: PerformanceCalendarDay
   ): void {
-    const session =
-      day.sessions[0];
+    const event =
+      day.events[0];
 
-    if (session) {
-      this.selectStrengthSession(session);
+    if (event) {
+      this.selectPerformanceEvent(event);
     }
   }
 
 
-  selectStrengthSession(
-    session: TrainerStrengthSession
+  selectPerformanceEvent(
+    event: PerformanceCalendarEvent
   ): void {
-    this.selectedStrengthWorkoutId.set(
-      session.workout_id
+    this.selectedPerformanceEventId.set(
+      event.id
     );
-    this.strengthCalendarMonth.set(
+    this.performanceCalendarMonth.set(
       this.monthKeyFromValue(
-        session.finished_at
+        event.finished_at
       )
     );
   }
@@ -474,9 +521,9 @@ export class TrainerClient implements OnInit {
   }
 
 
-  strengthMonthLabel(): string {
+  performanceMonthLabel(): string {
     const monthKey =
-      this.strengthCalendarMonth();
+      this.performanceCalendarMonth();
 
     if (!monthKey) {
       return '—';
@@ -494,41 +541,30 @@ export class TrainerClient implements OnInit {
   }
 
 
-  strengthSessionsForDate(
+  performanceEventsForDate(
     dateKey: string
-  ): TrainerStrengthSession[] {
-    return this.strengthSessions()
-      .filter(session =>
+  ): PerformanceCalendarEvent[] {
+    return this.performanceEvents()
+      .filter(event =>
         this.dateKeyFromValue(
-          session.finished_at
+          event.finished_at
         ) === dateKey
       );
   }
 
 
-  strengthSessionDateKey(
-    session: TrainerStrengthSession
+  performanceEventTime(
+    event: PerformanceCalendarEvent
   ): string {
-    return (
-      this.dateKeyFromValue(
-        session.finished_at
-      ) ?? ''
-    );
-  }
-
-
-  strengthSessionTime(
-    session: TrainerStrengthSession
-  ): string {
-    if (!session.finished_at) {
-      return this.sessionTitle(session);
+    if (!event.finished_at) {
+      return event.title;
     }
 
     const date =
-      new Date(session.finished_at);
+      new Date(event.finished_at);
 
     if (Number.isNaN(date.getTime())) {
-      return this.sessionTitle(session);
+      return event.title;
     }
 
     return new Intl.DateTimeFormat(
@@ -538,6 +574,22 @@ export class TrainerClient implements OnInit {
         minute: '2-digit'
       }
     ).format(date);
+  }
+
+
+  performanceDisciplineInitial(
+    discipline: TrainerDiscipline
+  ): string {
+    switch (discipline) {
+      case 'swimming':
+        return 'N';
+      case 'running':
+        return 'C';
+      case 'cycling':
+        return 'B';
+      default:
+        return 'F';
+    }
   }
 
 
@@ -689,11 +741,50 @@ export class TrainerClient implements OnInit {
   }
 
 
-  private shiftStrengthMonth(
+  private strengthSessionToEvent(
+    session: TrainerStrengthSession
+  ): PerformanceCalendarEvent {
+    return {
+      id:
+        this.strengthEventId(session),
+      discipline:
+        'strength',
+      finished_at:
+        session.finished_at,
+      title:
+        this.sessionTitle(session)
+    };
+  }
+
+
+  private strengthEventId(
+    session: TrainerStrengthSession
+  ): string {
+    return `strength:${session.workout_id}`;
+  }
+
+
+  private eventTime(
+    event: PerformanceCalendarEvent
+  ): number {
+    if (!event.finished_at) {
+      return 0;
+    }
+
+    const date =
+      new Date(event.finished_at);
+
+    return Number.isNaN(date.getTime())
+      ? 0
+      : date.getTime();
+  }
+
+
+  private shiftPerformanceMonth(
     delta: number
   ): void {
     const monthKey =
-      this.strengthCalendarMonth();
+      this.performanceCalendarMonth();
 
     if (!monthKey) {
       return;
@@ -706,7 +797,7 @@ export class TrainerClient implements OnInit {
       date.getUTCMonth() + delta
     );
 
-    this.strengthCalendarMonth.set(
+    this.performanceCalendarMonth.set(
       this.monthKeyFromDate(date)
     );
   }

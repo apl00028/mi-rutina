@@ -99,11 +99,14 @@ describe(
       Promise<void> {
       await Promise.resolve();
       await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
     }
 
 
     async function createPage(
-      response = athleteOverview()
+      response = athleteOverview(),
+      strengthResponse: unknown[] = []
     ): Promise<void> {
       fixture =
         TestBed.createComponent(
@@ -116,6 +119,12 @@ describe(
       http.expectOne(
         `${environment.apiUrl}/trainer/athletes/athlete-1`
       ).flush(response);
+
+      await flushPromises();
+
+      http.expectOne(
+        strengthSessionsUrl()
+      ).flush(strengthResponse);
 
       await flushPromises();
       fixture.detectChanges();
@@ -233,52 +242,20 @@ describe(
 
 
     it(
-      'opens and closes strength performance',
-      async () => {
-        await createPage();
-
-        clickButton('Fuerza');
-        await flushPromises();
-
-        http.expectOne(
-          (
-            `${environment.apiUrl}/trainer/athletes/` +
-            'athlete-1/strength-sessions'
-          )
-        ).flush([
-          strengthSession()
-        ]);
-
-        await flushPromises();
-        fixture.detectChanges();
-
-        expect(
-          fixture.nativeElement.textContent
-        ).toContain('Press de banca');
-
-        clickButton('Fuerza');
-        fixture.detectChanges();
-
-        expect(
-          fixture.nativeElement.textContent
-        ).not.toContain('Press de banca');
-      }
-    );
-
-
-    it(
       'renders strength session exercises and sets',
       async () => {
-        await createPage();
-
-        await openStrength([
-          strengthSession()
-        ]);
+        await createPage(
+          athleteOverview(),
+          [
+            strengthSession()
+          ]
+        );
 
         const text =
           fixture.nativeElement.textContent;
 
         expect(text).toContain('Rendimiento');
+        expect(text).toContain('Sesiones · 02/09/2026');
         expect(text).toContain('Empuje');
         expect(text).toContain('02/09/2026');
         expect(text).toContain('septiembre de 2026');
@@ -294,40 +271,17 @@ describe(
 
 
     it(
-      'marks days with sessions and selects by calendar day',
+      'shows strength sessions on the shared calendar',
       async () => {
-        await createPage();
-
-        await openStrength([
-          strengthSession(),
-          strengthSession({
-            workout_id:
-              'workout-2',
-            session_name:
-              'Pierna',
-            finished_at:
-              '2026-08-31T09:30:00Z',
-            exercises: [
-              {
-                exercise_id:
-                  'leg-press',
-                exercise_name:
-                  'Prensa',
-                sets: []
-              }
-            ]
-          })
-        ]);
-
-        expect(
-          fixture.nativeElement.textContent
-        ).toContain('septiembre de 2026');
-        expect(
-          fixture.nativeElement.textContent
-        ).toContain('Empuje');
+        await createPage(
+          athleteOverview(),
+          [
+            strengthSession()
+          ]
+        );
 
         const markedDay =
-          calendarDay('2');
+          calendarMarkedDay('2');
 
         expect(
           markedDay.classList.contains(
@@ -339,6 +293,46 @@ describe(
             'selected'
           )
         ).toBe(true);
+        expect(
+          markedDay.textContent
+        ).toContain('F');
+      }
+    );
+
+
+    it(
+      'marks days with sessions and selects by calendar day',
+      async () => {
+        await createPage(
+          athleteOverview(),
+          [
+            strengthSession(),
+            strengthSession({
+              workout_id:
+                'workout-2',
+              session_name:
+                'Pierna',
+              finished_at:
+                '2026-08-31T09:30:00Z',
+              exercises: [
+                {
+                  exercise_id:
+                    'leg-press',
+                  exercise_name:
+                    'Prensa',
+                  sets: []
+                }
+              ]
+            })
+          ]
+        );
+
+        expect(
+          fixture.nativeElement.textContent
+        ).toContain('septiembre de 2026');
+        expect(
+          fixture.nativeElement.textContent
+        ).toContain('Empuje');
 
         clickButton('←');
         fixture.detectChanges();
@@ -352,6 +346,9 @@ describe(
 
         expect(
           fixture.nativeElement.textContent
+        ).toContain('Sesiones · 31/08/2026');
+        expect(
+          fixture.nativeElement.textContent
         ).toContain('Prensa');
       }
     );
@@ -360,28 +357,29 @@ describe(
     it(
       'shows a selector for multiple sessions on the same day',
       async () => {
-        await createPage();
-
-        await openStrength([
-          strengthSession(),
-          strengthSession({
-            workout_id:
-              'workout-2',
-            session_name:
-              'Pierna',
-            finished_at:
-              '2026-09-02T17:30:00Z',
-            exercises: [
-              {
-                exercise_id:
-                  'leg-press',
-                exercise_name:
-                  'Prensa',
-                sets: []
-              }
-            ]
-          })
-        ]);
+        await createPage(
+          athleteOverview(),
+          [
+            strengthSession(),
+            strengthSession({
+              workout_id:
+                'workout-2',
+              session_name:
+                'Pierna',
+              finished_at:
+                '2026-09-02T17:30:00Z',
+              exercises: [
+                {
+                  exercise_id:
+                    'leg-press',
+                  exercise_name:
+                    'Prensa',
+                  sets: []
+                }
+              ]
+            })
+          ]
+        );
 
         const text =
           fixture.nativeElement.textContent;
@@ -401,48 +399,132 @@ describe(
 
 
     it(
-      'restarts visible set numbering by exercise',
+      'changes calendar month without new requests',
+      async () => {
+        await createPage(
+          athleteOverview(),
+          [
+            strengthSession()
+          ]
+        );
+
+        clickButton('←');
+        fixture.detectChanges();
+
+        expect(
+          fixture.nativeElement.textContent
+        ).toContain('agosto de 2026');
+
+        clickButton('→');
+        fixture.detectChanges();
+
+        expect(
+          fixture.nativeElement.textContent
+        ).toContain('septiembre de 2026');
+
+        http.expectNone(
+          strengthSessionsUrl()
+        );
+      }
+    );
+
+
+    it(
+      'keeps days without sessions disabled',
+      async () => {
+        await createPage(
+          athleteOverview(),
+          [
+            strengthSession()
+          ]
+        );
+
+        expect(
+          calendarDay('3').disabled
+        ).toBe(true);
+      }
+    );
+
+
+    it(
+      'keeps discipline indicators ready for multiple sports',
       async () => {
         await createPage();
 
-        await openStrength([
-          strengthSession({
-            exercises: [
-              {
-                exercise_id:
-                  'bench-press',
-                exercise_name:
-                  'Press de banca',
-                sets: [
-                  strengthSet({
-                    set_order:
-                      3
-                  }),
-                  strengthSet({
-                    set_index:
-                      1,
-                    set_order:
-                      4
-                  })
-                ]
-              },
-              {
-                exercise_id:
-                  'leg-press',
-                exercise_name:
-                  'Prensa',
-                sets: [
-                  strengthSet({
-                    set_index:
-                      2,
-                    set_order:
-                      5
-                  })
-                ]
-              }
-            ]
-          })
-        ]);
+        const component =
+          fixture.componentInstance;
+        const text =
+          fixture.nativeElement.textContent;
+
+        expect(
+          component.performanceDisciplineInitial(
+            'strength'
+          )
+        ).toBe('F');
+        expect(
+          component.performanceDisciplineInitial(
+            'swimming'
+          )
+        ).toBe('N');
+        expect(
+          component.performanceDisciplineInitial(
+            'running'
+          )
+        ).toBe('C');
+        expect(
+          component.performanceDisciplineInitial(
+            'cycling'
+          )
+        ).toBe('B');
+        expect(text).toContain('No hay sesiones completadas.');
+      }
+    );
+
+
+    it(
+      'restarts visible set numbering by exercise',
+      async () => {
+        await createPage(
+          athleteOverview(),
+          [
+            strengthSession({
+              exercises: [
+                {
+                  exercise_id:
+                    'bench-press',
+                  exercise_name:
+                    'Press de banca',
+                  sets: [
+                    strengthSet({
+                      set_order:
+                        3
+                    }),
+                    strengthSet({
+                      set_index:
+                        1,
+                      set_order:
+                        4
+                    })
+                  ]
+                },
+                {
+                  exercise_id:
+                    'leg-press',
+                  exercise_name:
+                    'Prensa',
+                  sets: [
+                    strengthSet({
+                      set_index:
+                        2,
+                      set_order:
+                        5
+                    })
+                  ]
+                }
+              ]
+            })
+          ]
+        );
 
         const rows =
           setRows();
@@ -460,34 +542,35 @@ describe(
     it(
       'shows duration only when it is present',
       async () => {
-        await createPage();
-
-        await openStrength([
-          strengthSession({
-            exercises: [
-              {
-                exercise_id:
-                  'plank',
-                exercise_name:
-                  'Plancha',
-                sets: [
-                  strengthSet({
-                    set_index:
-                      0,
-                    set_order:
-                      1,
-                    reps:
-                      null,
-                    weight_kg:
-                      null,
-                    duration_seconds:
-                      47
-                  })
-                ]
-              }
-            ]
-          })
-        ]);
+        await createPage(
+          athleteOverview(),
+          [
+            strengthSession({
+              exercises: [
+                {
+                  exercise_id:
+                    'plank',
+                  exercise_name:
+                    'Plancha',
+                  sets: [
+                    strengthSet({
+                      set_index:
+                        0,
+                      set_order:
+                        1,
+                      reps:
+                        null,
+                      weight_kg:
+                        null,
+                      duration_seconds:
+                        47
+                    })
+                  ]
+                }
+              ]
+            })
+          ]
+        );
 
         const text =
           (
@@ -507,13 +590,14 @@ describe(
     it(
       'shows a message for sessions without exercises',
       async () => {
-        await createPage();
-
-        await openStrength([
-          strengthSession({
-            exercises: []
-          })
-        ]);
+        await createPage(
+          athleteOverview(),
+          [
+            strengthSession({
+              exercises: []
+            })
+          ]
+        );
 
         expect(
           fixture.nativeElement.textContent
@@ -525,41 +609,14 @@ describe(
 
 
     it(
-      'renders empty state when strength has no sessions',
+      'renders empty state when performance has no sessions',
       async () => {
         await createPage();
-
-        await openStrength([]);
 
         expect(
           fixture.nativeElement.textContent
         ).toContain(
-          'No hay sesiones de fuerza completadas.'
-        );
-      }
-    );
-
-
-    it(
-      'lazy loads strength sessions only once',
-      async () => {
-        await createPage();
-
-        await openStrength([
-          strengthSession()
-        ]);
-
-        clickButton('Fuerza');
-        fixture.detectChanges();
-        clickButton('Fuerza');
-
-        await flushPromises();
-
-        http.expectNone(
-          (
-            `${environment.apiUrl}/trainer/athletes/` +
-            'athlete-1/strength-sessions'
-          )
+          'No hay sesiones completadas.'
         );
       }
     );
@@ -593,7 +650,9 @@ describe(
     ): HTMLButtonElement {
       const buttons = Array.from(
         fixture.nativeElement
-          .querySelectorAll('.calendar-day')
+          .querySelectorAll(
+            '.calendar-day:not(.outside-month)'
+          )
       ) as HTMLButtonElement[];
       const button =
         buttons.find(candidate =>
@@ -646,21 +705,11 @@ describe(
     }
 
 
-    async function openStrength(
-      response: unknown[]
-    ): Promise<void> {
-      clickButton('Fuerza');
-      await flushPromises();
-
-      http.expectOne(
-        (
-          `${environment.apiUrl}/trainer/athletes/` +
-          'athlete-1/strength-sessions'
-        )
-      ).flush(response);
-
-      await flushPromises();
-      fixture.detectChanges();
+    function strengthSessionsUrl(): string {
+      return (
+        `${environment.apiUrl}/trainer/athletes/` +
+        'athlete-1/strength-sessions'
+      );
     }
   }
 );

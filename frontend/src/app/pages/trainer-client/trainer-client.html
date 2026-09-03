@@ -239,236 +239,235 @@
       </h2>
 
       <article class="overview-card performance-card">
-        <button
-          type="button"
-          class="accordion-trigger"
-          (click)="toggleStrengthPerformance()"
-          [attr.aria-expanded]="strengthOpen()"
-        >
-          <span>
-            {{ strengthOpen() ? '▾' : '▸' }}
-            Fuerza
-          </span>
-        </button>
-
-        @if (strengthOpen()) {
+        @if (performanceLoading()) {
+          <div class="state-card compact-state">
+            Cargando rendimiento...
+          </div>
+        } @else if (performanceError()) {
+          <div class="error-message compact-state">
+            {{ performanceError() }}
+          </div>
+        } @else if (performanceEvents().length === 0) {
+          <div class="state-card compact-state">
+            No hay sesiones completadas.
+          </div>
+        } @else {
           <div class="performance-body">
-            @if (strengthLoading()) {
-              <div class="state-card compact-state">
-                Cargando rendimiento...
+            <div class="calendar-panel">
+              <div class="calendar-header">
+                <button
+                  type="button"
+                  (click)="previousPerformanceMonth()"
+                >
+                  ←
+                </button>
+
+                <h3>
+                  {{ performanceMonthLabel() }}
+                </h3>
+
+                <button
+                  type="button"
+                  (click)="nextPerformanceMonth()"
+                >
+                  →
+                </button>
               </div>
-            } @else if (strengthError()) {
-              <div class="error-message compact-state">
-                {{ strengthError() }}
+
+              <div class="calendar-weekdays">
+                <span>L</span>
+                <span>M</span>
+                <span>X</span>
+                <span>J</span>
+                <span>V</span>
+                <span>S</span>
+                <span>D</span>
               </div>
-            } @else if (strengthSessions().length === 0) {
-              <div class="state-card compact-state">
-                No hay sesiones de fuerza completadas.
-              </div>
-            } @else if (
-              currentStrengthSession();
-              as session
-            ) {
-              <div class="calendar-panel">
-                <div class="calendar-header">
+
+              <div class="calendar-grid">
+                @for (
+                  day of performanceCalendarDays();
+                  track day.dateKey
+                ) {
                   <button
                     type="button"
-                    (click)="previousStrengthMonth()"
+                    class="calendar-day"
+                    [class.outside-month]="!day.inMonth"
+                    [class.has-session]="day.events.length > 0"
+                    [class.selected]="day.selected"
+                    [disabled]="day.events.length === 0"
+                    (click)="selectPerformanceDay(day)"
                   >
-                    ←
+                    <span>
+                      {{ day.dayNumber }}
+                    </span>
+                    @if (day.events.length > 0) {
+                      <small class="calendar-marks">
+                        @for (
+                          event of day.events;
+                          track event.id
+                        ) {
+                          <span
+                            [class]="
+                              'performance-' +
+                              event.discipline
+                            "
+                          >
+                            {{
+                              performanceDisciplineInitial(
+                                event.discipline
+                              )
+                            }}
+                          </span>
+                        }
+                      </small>
+                    }
                   </button>
-
-                  <h3>
-                    {{ strengthMonthLabel() }}
-                  </h3>
-
-                  <button
-                    type="button"
-                    (click)="nextStrengthMonth()"
-                  >
-                    →
-                  </button>
-                </div>
-
-                <div class="calendar-weekdays">
-                  <span>L</span>
-                  <span>M</span>
-                  <span>X</span>
-                  <span>J</span>
-                  <span>V</span>
-                  <span>S</span>
-                  <span>D</span>
-                </div>
-
-                <div class="calendar-grid">
-                  @for (
-                    day of strengthCalendarDays();
-                    track day.dateKey
-                  ) {
-                    <button
-                      type="button"
-                      class="calendar-day"
-                      [class.outside-month]="!day.inMonth"
-                      [class.has-session]="day.sessions.length > 0"
-                      [class.selected]="day.selected"
-                      [disabled]="day.sessions.length === 0"
-                      (click)="selectStrengthDay(day)"
-                    >
-                      <span>
-                        {{ day.dayNumber }}
-                      </span>
-                      @if (day.sessions.length > 0) {
-                        <small>
-                          {{ day.sessions.length }}
-                        </small>
-                      }
-                    </button>
-                  }
-                </div>
+                }
               </div>
 
-              @if (
-                strengthSessionsForDate(
-                  strengthSessionDateKey(session)
-                ).length > 1
-              ) {
+              <div class="performance-legend">
+                <span class="performance-strength">F</span>
+                Fuerza
+                <span class="performance-swimming">N</span>
+                Natación
+                <span class="performance-running">C</span>
+                Carrera
+                <span class="performance-cycling">B</span>
+                Bicicleta
+              </div>
+            </div>
+
+            @if (currentPerformanceEvent(); as event) {
+              <section class="day-sessions">
+                <h3>
+                  Sesiones · {{ formatDate(event.finished_at) }}
+                </h3>
+
                 <div class="same-day-list">
                   @for (
-                    sameDaySession of strengthSessionsForDate(
-                      strengthSessionDateKey(session)
-                    );
-                    track sameDaySession.workout_id
+                    dayEvent of selectedDayEvents();
+                    track dayEvent.id
                   ) {
                     <button
                       type="button"
                       [class.selected]="
-                        sameDaySession.workout_id
-                          === session.workout_id
+                        dayEvent.id === event.id
                       "
-                      (click)="
-                        selectStrengthSession(sameDaySession)
-                      "
+                      (click)="selectPerformanceEvent(dayEvent)"
                     >
                       <span>
-                        {{ sessionTitle(sameDaySession) }}
+                        <small
+                          [class]="
+                            'performance-' +
+                            dayEvent.discipline
+                          "
+                        >
+                          {{
+                            performanceDisciplineInitial(
+                              dayEvent.discipline
+                            )
+                          }}
+                        </small>
+                        {{ dayEvent.title }}
                       </span>
                       <small>
-                        {{ strengthSessionTime(sameDaySession) }}
+                        {{ performanceEventTime(dayEvent) }}
                       </small>
                     </button>
                   }
                 </div>
-              }
+              </section>
+            }
 
-              <header class="session-header">
-                <div>
-                  <h3>
-                    {{ sessionTitle(session) }}
-                  </h3>
+            @if (currentStrengthSession(); as session) {
+              <section class="strength-detail">
+                <header class="session-header">
+                  <div>
+                    <h3>
+                      {{ sessionTitle(session) }}
+                    </h3>
 
-                  <p>
-                    {{ formatDate(session.finished_at) }}
-                  </p>
-                </div>
-              </header>
+                    <p>
+                      {{ formatDate(session.finished_at) }}
+                    </p>
+                  </div>
+                </header>
 
-              @if (session.exercises.length === 0) {
-                <div class="state-card compact-state">
-                  Sesión completada sin detalle de series registrado.
-                </div>
-              } @else {
-                <div class="exercise-list">
-                  @for (
-                    exercise of session.exercises;
-                    track exercise.exercise_id
-                  ) {
-                    <section class="exercise-block">
-                      <h4>
-                        {{ exerciseTitle(exercise) }}
-                      </h4>
+                @if (session.exercises.length === 0) {
+                  <div class="state-card compact-state">
+                    Sesión completada sin detalle de series registrado.
+                  </div>
+                } @else {
+                  <div class="exercise-list">
+                    @for (
+                      exercise of session.exercises;
+                      track exercise.exercise_id
+                    ) {
+                      <section class="exercise-block">
+                        <h4>
+                          {{ exerciseTitle(exercise) }}
+                        </h4>
 
-                      @if (exercise.sets.length) {
-                        <div class="set-list">
-                          <div
-                            class="set-row set-row-header"
-                            [style.grid-template-columns]="
-                              strengthSetGridColumns(exercise)
-                            "
-                          >
-                            <span>
-                              Serie
-                            </span>
-                            @for (
-                              column of strengthColumns(exercise);
-                              track column
-                            ) {
-                              <span>
-                                {{ strengthColumnLabel(column) }}
-                              </span>
-                            }
-                          </div>
-
-                          @for (
-                            set of exercise.sets;
-                            track set.set_order;
-                            let setIndex = $index
-                          ) {
+                        @if (exercise.sets.length) {
+                          <div class="set-list">
                             <div
-                              class="set-row"
+                              class="set-row set-row-header"
                               [style.grid-template-columns]="
                                 strengthSetGridColumns(exercise)
                               "
                             >
                               <span>
-                                Serie {{ setIndex + 1 }}
+                                Serie
                               </span>
                               @for (
                                 column of strengthColumns(exercise);
                                 track column
                               ) {
                                 <span>
-                                  {{ strengthSetMetric(set, column) }}
+                                  {{ strengthColumnLabel(column) }}
                                 </span>
                               }
                             </div>
-                          }
-                        </div>
-                      } @else {
-                        <p class="card-note">
-                          —
-                        </p>
-                      }
-                    </section>
-                  }
-                </div>
-              }
+
+                            @for (
+                              set of exercise.sets;
+                              track set.set_order;
+                              let setIndex = $index
+                            ) {
+                              <div
+                                class="set-row"
+                                [style.grid-template-columns]="
+                                  strengthSetGridColumns(exercise)
+                                "
+                              >
+                                <span>
+                                  Serie {{ setIndex + 1 }}
+                                </span>
+                                @for (
+                                  column of strengthColumns(exercise);
+                                  track column
+                                ) {
+                                  <span>
+                                    {{ strengthSetMetric(set, column) }}
+                                  </span>
+                                }
+                              </div>
+                            }
+                          </div>
+                        } @else {
+                          <p class="card-note">
+                            —
+                          </p>
+                        }
+                      </section>
+                    }
+                  </div>
+                }
+              </section>
             }
           </div>
         }
-      </article>
-
-      <article class="overview-card performance-card">
-        <button
-          type="button"
-          class="accordion-trigger"
-          aria-expanded="false"
-        >
-          <span>
-            ▸ Natación
-          </span>
-        </button>
-      </article>
-
-      <article class="overview-card performance-card">
-        <button
-          type="button"
-          class="accordion-trigger"
-          aria-expanded="false"
-        >
-          <span>
-            ▸ Carrera
-          </span>
-        </button>
       </article>
     </section>
   } @else {

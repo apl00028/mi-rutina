@@ -230,8 +230,273 @@ describe(
         ).toContain('—');
       }
     );
+
+
+    it(
+      'opens and closes strength performance',
+      async () => {
+        await createPage();
+
+        clickButton('Fuerza');
+        await flushPromises();
+
+        http.expectOne(
+          (
+            `${environment.apiUrl}/trainer/athletes/` +
+            'athlete-1/strength-sessions'
+          )
+        ).flush([
+          strengthSession()
+        ]);
+
+        await flushPromises();
+        fixture.detectChanges();
+
+        expect(
+          fixture.nativeElement.textContent
+        ).toContain('Press de banca');
+
+        clickButton('Fuerza');
+        fixture.detectChanges();
+
+        expect(
+          fixture.nativeElement.textContent
+        ).not.toContain('Press de banca');
+      }
+    );
+
+
+    it(
+      'renders strength session exercises and sets',
+      async () => {
+        await createPage();
+
+        await openStrength([
+          strengthSession()
+        ]);
+
+        const text =
+          fixture.nativeElement.textContent;
+
+        expect(text).toContain('Rendimiento');
+        expect(text).toContain('Empuje');
+        expect(text).toContain('02/09/2026');
+        expect(text).toContain('1 de 1');
+        expect(text).toContain('Press de banca');
+        expect(text).toContain('Serie 1');
+        expect(text).toContain('8 reps');
+        expect(text).toContain('30 kg');
+        expect(text).toContain('RIR 2');
+      }
+    );
+
+
+    it(
+      'navigates between strength sessions',
+      async () => {
+        await createPage();
+
+        await openStrength([
+          strengthSession(),
+          strengthSession({
+            workout_id:
+              'workout-2',
+            session_name:
+              'Pierna',
+            finished_at:
+              '2026-08-31T09:30:00Z',
+            exercises: [
+              {
+                exercise_id:
+                  'leg-press',
+                exercise_name:
+                  'Prensa',
+                sets: []
+              }
+            ]
+          })
+        ]);
+
+        expect(
+          fixture.nativeElement.textContent
+        ).toContain('1 de 2');
+        expect(
+          fixture.nativeElement.textContent
+        ).toContain('Empuje');
+
+        clickButton('Siguiente');
+        fixture.detectChanges();
+
+        expect(
+          fixture.nativeElement.textContent
+        ).toContain('2 de 2');
+        expect(
+          fixture.nativeElement.textContent
+        ).toContain('Prensa');
+
+        clickButton('Anterior');
+        fixture.detectChanges();
+
+        expect(
+          fixture.nativeElement.textContent
+        ).toContain('1 de 2');
+      }
+    );
+
+
+    it(
+      'renders dashes for null strength set values',
+      async () => {
+        await createPage();
+
+        await openStrength([
+          strengthSession({
+            exercises: [
+              {
+                exercise_id:
+                  'plank',
+                exercise_name:
+                  null,
+                sets: [
+                  {
+                    set_index:
+                      0,
+                    set_order:
+                      1,
+                    set_type:
+                      'working',
+                    reps:
+                      null,
+                    weight_kg:
+                      null,
+                    rir:
+                      null,
+                    rpe:
+                      null,
+                    duration_seconds:
+                      null
+                  }
+                ]
+              }
+            ]
+          })
+        ]);
+
+        const text =
+          fixture.nativeElement.textContent;
+
+        expect(text).toContain('plank');
+        expect(text).toContain('—');
+      }
+    );
+
+
+    it(
+      'renders empty state when strength has no sessions',
+      async () => {
+        await createPage();
+
+        await openStrength([]);
+
+        expect(
+          fixture.nativeElement.textContent
+        ).toContain(
+          'No hay sesiones de fuerza completadas.'
+        );
+      }
+    );
+
+
+    function clickButton(
+      label: string
+    ): void {
+      const buttons = Array.from(
+        fixture.nativeElement
+          .querySelectorAll('button')
+      ) as HTMLButtonElement[];
+      const button =
+        buttons.find(candidate =>
+          candidate.textContent
+            ?.includes(label)
+        );
+
+      if (!button) {
+        throw new Error(
+          `Button not found: ${label}`
+        );
+      }
+
+      button.click();
+    }
+
+
+    async function openStrength(
+      response: unknown[]
+    ): Promise<void> {
+      clickButton('Fuerza');
+      await flushPromises();
+
+      http.expectOne(
+        (
+          `${environment.apiUrl}/trainer/athletes/` +
+          'athlete-1/strength-sessions'
+        )
+      ).flush(response);
+
+      await flushPromises();
+      fixture.detectChanges();
+    }
   }
 );
+
+
+function strengthSession(
+  patch: Record<string, unknown> = {}
+) {
+  return {
+    workout_id:
+      'workout-1',
+    routine_id:
+      'routine-strength',
+    session_id:
+      'push',
+    session_name:
+      'Empuje',
+    started_at:
+      '2026-09-02T08:30:00Z',
+    finished_at:
+      '2026-09-02T09:30:00Z',
+    exercises: [
+      {
+        exercise_id:
+          'bench-press',
+        exercise_name:
+          'Press de banca',
+        sets: [
+          {
+            set_index:
+              0,
+            set_order:
+              1,
+            set_type:
+              'working',
+            reps:
+              8,
+            weight_kg:
+              30,
+            rir:
+              2,
+            rpe:
+              null,
+            duration_seconds:
+              null
+          }
+        ]
+      }
+    ],
+    ...patch
+  };
+}
 
 
 function athleteOverview(

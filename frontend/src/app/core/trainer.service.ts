@@ -101,6 +101,36 @@ export interface TrainerAthleteOverview
 }
 
 
+export interface TrainerStrengthSet {
+  set_index: number | null;
+  set_order: number;
+  set_type: string | null;
+  reps: number | null;
+  weight_kg: number | null;
+  rir: number | null;
+  rpe: number | null;
+  duration_seconds: number | null;
+}
+
+
+export interface TrainerStrengthExercise {
+  exercise_id: string;
+  exercise_name: string | null;
+  sets: TrainerStrengthSet[];
+}
+
+
+export interface TrainerStrengthSession {
+  workout_id: string;
+  routine_id: string | null;
+  session_id: string | null;
+  session_name: string | null;
+  started_at: string | null;
+  finished_at: string | null;
+  exercises: TrainerStrengthExercise[];
+}
+
+
 export interface TrainerRoutineTemplate {
   id: string;
   name: string;
@@ -180,6 +210,27 @@ export class TrainerService {
         (
           `${this.apiUrl}/trainer/athletes/` +
           `${encodeURIComponent(athleteId)}`
+        ),
+        {
+          headers
+        }
+      )
+    );
+  }
+
+
+  async listStrengthSessions(
+    athleteId: string
+  ): Promise<TrainerStrengthSession[]> {
+    const headers =
+      await this.headers();
+
+    return await firstValueFrom(
+      this.http.get<TrainerStrengthSession[]>(
+        (
+          `${this.apiUrl}/trainer/athletes/` +
+          `${encodeURIComponent(athleteId)}/` +
+          'strength-sessions'
         ),
         {
           headers

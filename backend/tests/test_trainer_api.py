@@ -358,6 +358,111 @@ def test_foreign_trainer_athlete_overview_is_not_found(monkeypatch):
         )
 
 
+def test_trainer_can_list_strength_sessions(monkeypatch):
+    from app.domains.trainer import router as trainer_api
+    from app.domains.trainer.models import TrainerStrengthSession
+
+    async def fake_list(trainer, athlete_id):
+        assert trainer.id == "trainer-123"
+        assert athlete_id == "athlete-1"
+        return [
+            TrainerStrengthSession.model_validate(
+                {
+                    "workout_id": "workout-1",
+                    "routine_id": "routine-strength",
+                    "session_id": "push",
+                    "session_name": "Empuje",
+                    "started_at": "2026-09-02T08:30:00Z",
+                    "finished_at": "2026-09-02T09:30:00Z",
+                    "exercises": [
+                        {
+                            "exercise_id": "bench-press",
+                            "exercise_name": "Press de banca",
+                            "sets": [
+                                {
+                                    "set_index": 0,
+                                    "set_order": 1,
+                                    "set_type": "working",
+                                    "reps": 8,
+                                    "weight_kg": 30,
+                                    "rir": 2,
+                                    "rpe": None,
+                                    "duration_seconds": None,
+                                }
+                            ],
+                        }
+                    ],
+                }
+            )
+        ]
+
+    monkeypatch.setattr(
+        trainer_api,
+        "list_authenticated_trainer_strength_sessions",
+        fake_list,
+    )
+
+    sessions = asyncio.run(
+        trainer_api.list_trainer_athlete_strength_sessions_endpoint(
+            "athlete-1",
+            trainer=asyncio.run(trainer_user()),
+        )
+    )
+
+    assert sessions[0].workout_id == "workout-1"
+    assert (
+        sessions[0].exercises[0].sets[0].rir
+        == 2
+    )
+
+
+def test_strength_sessions_upstream_error_is_generic(monkeypatch):
+    from app.domains.trainer import router as trainer_api
+
+    request = httpx.Request(
+        "POST",
+        (
+            "https://example.supabase.co/rest/v1/rpc/"
+            "trainer_list_athlete_strength_sessions"
+        ),
+    )
+    response = httpx.Response(
+        400,
+        request=request,
+        content=b"database detail",
+    )
+
+    async def fake_list(_trainer, _athlete_id):
+        raise httpx.HTTPStatusError(
+            "Bad Request",
+            request=request,
+            response=response,
+        )
+
+    monkeypatch.setattr(
+        trainer_api,
+        "list_authenticated_trainer_strength_sessions",
+        fake_list,
+    )
+
+    try:
+        asyncio.run(
+            trainer_api.list_trainer_athlete_strength_sessions_endpoint(
+                "athlete-1",
+                trainer=asyncio.run(trainer_user()),
+            )
+        )
+    except HTTPException as exc:
+        assert exc.status_code == 502
+        assert exc.detail == (
+            "Could not load trainer strength sessions"
+        )
+    else:
+        raise AssertionError(
+            "Expected HTTPException"
+        )
+
+
 def test_trainer_athletes_route_does_not_accept_trainer_id_parameter(
     monkeypatch,
 ):

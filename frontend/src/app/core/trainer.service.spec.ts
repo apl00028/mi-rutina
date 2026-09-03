@@ -190,6 +190,54 @@ describe(
 
 
     it(
+      'loads trainer strength sessions with the authenticated token',
+      async () => {
+        const promise =
+          service.listStrengthSessions(
+            'athlete 1'
+          );
+
+        await flushPromises();
+
+        const request =
+          http.expectOne(
+            (
+              `${environment.apiUrl}/trainer/athletes/` +
+              'athlete%201/strength-sessions'
+            )
+          );
+
+        expect(request.request.method)
+          .toBe('GET');
+        expect(
+          request.request.headers.get(
+            'Authorization'
+          )
+        ).toBe('Bearer access-token');
+
+        request.flush([
+          strengthSessionResponse()
+        ]);
+
+        await expect(promise)
+          .resolves
+          .toMatchObject([
+            {
+              workout_id:
+                'workout-1',
+              exercises: [
+                {
+                  exercise_name:
+                    'Press de banca'
+                }
+              ]
+            }
+          ]);
+      }
+    );
+
+
+    it(
       'loads trainer templates with the authenticated token',
       async () => {
         const promise =
@@ -299,6 +347,52 @@ describe(
     );
   }
 );
+
+
+function strengthSessionResponse() {
+  return {
+    workout_id:
+      'workout-1',
+    routine_id:
+      'routine-strength',
+    session_id:
+      'push',
+    session_name:
+      'Empuje',
+    started_at:
+      '2026-09-02T08:30:00Z',
+    finished_at:
+      '2026-09-02T09:30:00Z',
+    exercises: [
+      {
+        exercise_id:
+          'bench-press',
+        exercise_name:
+          'Press de banca',
+        sets: [
+          {
+            set_index:
+              0,
+            set_order:
+              1,
+            set_type:
+              'working',
+            reps:
+              8,
+            weight_kg:
+              30,
+            rir:
+              2,
+            rpe:
+              null,
+            duration_seconds:
+              null
+          }
+        ]
+      }
+    ]
+  };
+}
 
 
 function athleteOverviewResponse() {

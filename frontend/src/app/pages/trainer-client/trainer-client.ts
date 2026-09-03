@@ -22,6 +22,9 @@ import {
   TrainerAthleteActiveRoutines,
   TrainerAthleteOverview,
   TrainerDiscipline,
+  TrainerStrengthExercise,
+  TrainerStrengthSession,
+  TrainerStrengthSet,
   TrainerService
 } from '../../core/trainer.service';
 
@@ -46,6 +49,24 @@ export class TrainerClient implements OnInit {
   error =
     signal<string | null>(null);
 
+  strengthOpen =
+    signal(false);
+
+  strengthLoading =
+    signal(false);
+
+  strengthLoaded =
+    signal(false);
+
+  strengthError =
+    signal<string | null>(null);
+
+  strengthSessions =
+    signal<TrainerStrengthSession[]>([]);
+
+  strengthIndex =
+    signal(0);
+
   readonly disciplines: TrainerDiscipline[] = [
     'strength',
     'swimming',
@@ -67,6 +88,16 @@ export class TrainerClient implements OnInit {
         athlete.email?.trim() ||
         athlete.athlete_id
       );
+    });
+
+  readonly currentStrengthSession =
+    computed(() => {
+      const sessions =
+        this.strengthSessions();
+
+      return sessions[
+        this.strengthIndex()
+      ] ?? null;
     });
 
 
@@ -114,6 +145,78 @@ export class TrainerClient implements OnInit {
     } finally {
       this.loading.set(false);
     }
+  }
+
+
+  async toggleStrengthPerformance():
+    Promise<void> {
+    const open =
+      !this.strengthOpen();
+
+    this.strengthOpen.set(open);
+
+    if (
+      open &&
+      !this.strengthLoaded() &&
+      !this.strengthLoading()
+    ) {
+      await this.loadStrengthSessions();
+    }
+  }
+
+
+  async loadStrengthSessions():
+    Promise<void> {
+    const athleteId =
+      this.route.snapshot.paramMap.get(
+        'athleteId'
+      );
+
+    if (!athleteId) {
+      return;
+    }
+
+    this.strengthLoading.set(true);
+    this.strengthError.set(null);
+
+    try {
+      const sessions =
+        await this.trainerService
+          .listStrengthSessions(athleteId);
+
+      this.strengthSessions.set(sessions);
+      this.strengthIndex.set(0);
+      this.strengthLoaded.set(true);
+    } catch (error) {
+      this.strengthError.set(
+        this.errorMessage(
+          error,
+          'No se pudo cargar el rendimiento de fuerza.'
+        )
+      );
+    } finally {
+      this.strengthLoading.set(false);
+    }
+  }
+
+
+  previousStrengthSession(): void {
+    this.strengthIndex.update(index =>
+      Math.max(
+        0,
+        index - 1
+      )
+    );
+  }
+
+
+  nextStrengthSession(): void {
+    this.strengthIndex.update(index =>
+      Math.min(
+        this.strengthSessions().length - 1,
+        index + 1
+      )
+    );
   }
 
 
@@ -208,6 +311,63 @@ export class TrainerClient implements OnInit {
       assignment?.routine_id?.trim() ||
       '—'
     );
+  }
+
+
+  sessionTitle(
+    session: TrainerStrengthSession
+  ): string {
+    return (
+      session.session_name?.trim() ||
+      session.session_id?.trim() ||
+      '—'
+    );
+  }
+
+
+  exerciseTitle(
+    exercise: TrainerStrengthExercise
+  ): string {
+    return (
+      exercise.exercise_name?.trim() ||
+      exercise.exercise_id
+    );
+  }
+
+
+  setValue(
+    value: number | null | undefined,
+    suffix = ''
+  ): string {
+    if (
+      value === null ||
+      value === undefined
+    ) {
+      return '—';
+    }
+
+    return `${value}${suffix}`;
+  }
+
+
+  setRirOrRpe(
+    set: TrainerStrengthSet
+  ): string {
+    if (
+      set.rir !== null &&
+      set.rir !== undefined
+    ) {
+      return `RIR ${set.rir}`;
+    }
+
+    if (
+      set.rpe !== null &&
+      set.rpe !== undefined
+    ) {
+      return `RPE ${set.rpe}`;
+    }
+
+    return '—';
   }
 
 

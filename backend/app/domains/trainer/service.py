@@ -13,6 +13,7 @@ from app.domains.trainer.models import (
     TemplateAssignmentCreate,
     TrainerAthlete,
     TrainerAthleteOverview,
+    TrainerStrengthSession,
 )
 from app.domains.trainer.repository import (
     assign_routine_template,
@@ -21,6 +22,7 @@ from app.domains.trainer.repository import (
     get_active_trainer_athlete,
     get_trainer_athlete_overview,
     get_routine_template_by_id,
+    list_trainer_athlete_strength_sessions,
     list_active_trainer_athletes,
     list_routine_templates,
     replace_routine_template,
@@ -63,6 +65,21 @@ async def get_authenticated_trainer_athlete_overview(
     return TrainerAthleteOverview.model_validate(
         row
     )
+
+
+async def list_authenticated_trainer_strength_sessions(
+    trainer: AuthenticatedUser,
+    athlete_id: str,
+) -> list[TrainerStrengthSession]:
+    rows = await list_trainer_athlete_strength_sessions(
+        trainer,
+        athlete_id,
+    )
+
+    return [
+        TrainerStrengthSession.model_validate(row)
+        for row in rows
+    ]
 
 
 def _validate_template_data(

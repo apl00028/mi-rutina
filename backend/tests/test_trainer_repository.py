@@ -8,6 +8,7 @@ from app.core.auth import AuthenticatedUser
 from app.domains.trainer.models import (
     TrainerAthlete,
     TrainerAthleteOverview,
+    TrainerStrengthSession,
 )
 from app.domains.trainer import repository, service
 
@@ -67,6 +68,45 @@ def _overview_row():
                 "assigned_at": "2026-09-01T12:00:00Z",
             }
         },
+    }
+
+
+def _strength_session_row():
+    return {
+        "workout_id": "workout-1",
+        "routine_id": "routine-strength",
+        "session_id": "push",
+        "session_name": "Empuje",
+        "started_at": "2026-09-02T08:30:00Z",
+        "finished_at": "2026-09-02T09:30:00Z",
+        "exercises": [
+            {
+                "exercise_id": "bench-press",
+                "exercise_name": "Press de banca",
+                "sets": [
+                    {
+                        "set_index": 0,
+                        "set_order": 1,
+                        "set_type": "working",
+                        "reps": 8,
+                        "weight_kg": 30,
+                        "rir": 2,
+                        "rpe": None,
+                        "duration_seconds": None,
+                    },
+                    {
+                        "set_index": 1,
+                        "set_order": 2,
+                        "set_type": "working",
+                        "reps": None,
+                        "weight_kg": None,
+                        "rir": None,
+                        "rpe": None,
+                        "duration_seconds": None,
+                    },
+                ],
+            }
+        ],
     }
 
 
@@ -421,6 +461,103 @@ def test_trainer_athlete_overview_contract_validates_sections():
         .name
         == "Base fuerza"
     )
+
+
+def test_list_strength_sessions_uses_rpc_and_authenticated_token(
+    monkeypatch,
+):
+    monkeypatch.setenv(
+        "SUPABASE_URL",
+        "https://example.supabase.co",
+    )
+    monkeypatch.setenv(
+        "SUPABASE_PUBLISHABLE_KEY",
+        "publishable-key",
+    )
+
+    captured = {}
+    rows = [
+        _strength_session_row()
+    ]
+
+    class FakeResponse:
+        def raise_for_status(self):
+            pass
+
+        def json(self):
+            return rows
+
+    class FakeClient:
+        def __init__(self, timeout):
+            captured["timeout"] = timeout
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):
+            pass
+
+        async def post(self, url, headers, json):
+            captured["url"] = url
+            captured["headers"] = headers
+            captured["json"] = json
+            return FakeResponse()
+
+    monkeypatch.setattr(
+        repository.httpx,
+        "AsyncClient",
+        FakeClient,
+    )
+
+    result = asyncio.run(
+        repository.list_trainer_athlete_strength_sessions(
+            _trainer(),
+            "athlete-1",
+        )
+    )
+
+    assert result == rows
+    assert captured["timeout"] == 10.0
+    assert captured["url"] == (
+        "https://example.supabase.co/rest/v1/rpc/"
+        "trainer_list_athlete_strength_sessions"
+    )
+    assert captured["headers"] == {
+        "Authorization": "Bearer access-token",
+        "apikey": "publishable-key",
+        "Content-Type": "application/json",
+    }
+    assert captured["json"] == {
+        "p_athlete_id": "athlete-1",
+    }
+
+
+def test_strength_session_contract_tolerates_nulls():
+    session = TrainerStrengthSession.model_validate(
+        _strength_session_row()
+    )
+
+    assert session.workout_id == "workout-1"
+    assert session.session_name == "Empuje"
+    assert (
+        session.exercises[0].exercise_name
+        == "Press de banca"
+    )
+    assert session.exercises[0].sets[1].reps is None
+    assert session.exercises[0].sets[0].set_index == 0
+    assert session.exercises[0].sets[0].set_order == 1
+    assert session.exercises[0].sets[0].set_type == "working"
+
+
+def test_strength_session_service_exposes_no_foreign_trainer_selector():
+    signature = inspect.signature(
+        service.list_authenticated_trainer_strength_sessions
+    )
+
+    assert list(signature.parameters) == [
+        "trainer",
+        "athlete_id",
+    ]
 
 
 def test_list_routine_templates_filters_trainer_and_discipline(

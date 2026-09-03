@@ -96,6 +96,37 @@ class TrainerAthleteOverview(TrainerAthlete):
     trainer: TrainerAthleteTrainerInfo
 
 
+class TrainerStrengthSet(BaseModel):
+    set_index: int | None = None
+    set_order: int
+    set_type: str | None = None
+    reps: int | None = None
+    weight_kg: float | None = None
+    rir: float | None = None
+    rpe: float | None = None
+    duration_seconds: int | None = None
+
+
+class TrainerStrengthExercise(BaseModel):
+    exercise_id: str
+    exercise_name: str | None = None
+    sets: list[TrainerStrengthSet] = Field(
+        default_factory=list
+    )
+
+
+class TrainerStrengthSession(BaseModel):
+    workout_id: str
+    routine_id: str | None = None
+    session_id: str | None = None
+    session_name: str | None = None
+    started_at: str | None = None
+    finished_at: str | None = None
+    exercises: list[TrainerStrengthExercise] = Field(
+        default_factory=list
+    )
+
+
 class RoutineTemplateCreate(BaseModel):
     model_config = ConfigDict(
         extra="forbid"

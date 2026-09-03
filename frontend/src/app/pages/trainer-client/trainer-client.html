@@ -232,6 +232,136 @@
         </dl>
       </article>
     </div>
+
+    <section class="performance-section">
+      <h2>
+        Rendimiento
+      </h2>
+
+      <article class="overview-card performance-card">
+        <button
+          type="button"
+          class="accordion-trigger"
+          (click)="toggleStrengthPerformance()"
+          [attr.aria-expanded]="strengthOpen()"
+        >
+          <span>
+            {{ strengthOpen() ? '▾' : '▸' }}
+            Fuerza
+          </span>
+        </button>
+
+        @if (strengthOpen()) {
+          <div class="performance-body">
+            @if (strengthLoading()) {
+              <div class="state-card compact-state">
+                Cargando rendimiento...
+              </div>
+            } @else if (strengthError()) {
+              <div class="error-message compact-state">
+                {{ strengthError() }}
+              </div>
+            } @else if (strengthSessions().length === 0) {
+              <div class="state-card compact-state">
+                No hay sesiones de fuerza completadas.
+              </div>
+            } @else if (
+              currentStrengthSession();
+              as session
+            ) {
+              <header class="session-header">
+                <div>
+                  <h3>
+                    {{ sessionTitle(session) }}
+                  </h3>
+
+                  <p>
+                    Fuerza
+                    · {{ formatDate(session.finished_at) }}
+                  </p>
+                </div>
+              </header>
+
+              <div class="session-nav">
+                <button
+                  type="button"
+                  (click)="previousStrengthSession()"
+                  [disabled]="strengthIndex() === 0"
+                >
+                  ← Anterior
+                </button>
+
+                <span>
+                  {{ strengthIndex() + 1 }}
+                  de
+                  {{ strengthSessions().length }}
+                </span>
+
+                <button
+                  type="button"
+                  (click)="nextStrengthSession()"
+                  [disabled]="
+                    strengthIndex()
+                      >= strengthSessions().length - 1
+                  "
+                >
+                  Siguiente →
+                </button>
+              </div>
+
+              <div class="exercise-list">
+                @for (
+                  exercise of session.exercises;
+                  track exercise.exercise_id
+                ) {
+                  <section class="exercise-block">
+                    <h4>
+                      {{ exerciseTitle(exercise) }}
+                    </h4>
+
+                    @if (exercise.sets.length) {
+                      <div class="set-list">
+                        @for (
+                          set of exercise.sets;
+                          track set.set_order
+                        ) {
+                          <div class="set-row">
+                            <span>
+                              Serie {{ set.set_order }}
+                            </span>
+                            <span>
+                              {{ setValue(set.reps, ' reps') }}
+                            </span>
+                            <span>
+                              {{ setValue(set.weight_kg, ' kg') }}
+                            </span>
+                            <span>
+                              {{ setRirOrRpe(set) }}
+                            </span>
+                            <span>
+                              {{
+                                setValue(
+                                  set.duration_seconds,
+                                  ' s'
+                                )
+                              }}
+                            </span>
+                          </div>
+                        }
+                      </div>
+                    } @else {
+                      <p class="card-note">
+                        —
+                      </p>
+                    }
+                  </section>
+                }
+              </div>
+            }
+          </div>
+        }
+      </article>
+    </section>
   } @else {
     <div class="state-card">
       No hay datos disponibles.

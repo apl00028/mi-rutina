@@ -22,6 +22,7 @@ import {
   TrainerAthleteActiveRoutines,
   TrainerAthleteOverview,
   TrainerDiscipline,
+  TrainerPerformanceSession,
   TrainerStrengthExercise,
   TrainerStrengthSession,
   TrainerStrengthSet,
@@ -39,7 +40,7 @@ type StrengthMetricColumn =
 interface PerformanceCalendarEvent {
   id: string;
   discipline: TrainerDiscipline;
-  finished_at: string | null;
+  event_at: string | null;
   title: string;
 }
 
@@ -50,6 +51,12 @@ interface PerformanceCalendarDay {
   inMonth: boolean;
   events: PerformanceCalendarEvent[];
   selected: boolean;
+}
+
+
+interface PerformanceCalendarMark {
+  discipline: TrainerDiscipline;
+  label: string;
 }
 
 
@@ -81,6 +88,12 @@ export class TrainerClient implements OnInit {
 
   strengthSessions =
     signal<TrainerStrengthSession[]>([]);
+
+  swimmingSessions =
+    signal<TrainerPerformanceSession[]>([]);
+
+  runningSessions =
+    signal<TrainerPerformanceSession[]>([]);
 
   selectedPerformanceEventId =
     signal<string | null>(null);
@@ -114,12 +127,26 @@ export class TrainerClient implements OnInit {
   readonly performanceEvents =
     computed(() => {
       const events =
-        this.strengthSessions()
-          .map(session =>
-            this.strengthSessionToEvent(
-              session
+        [
+          ...this.strengthSessions()
+            .map(session =>
+              this.strengthSessionToEvent(
+                session
+              )
+            ),
+          ...this.swimmingSessions()
+            .map(session =>
+              this.performanceSessionToEvent(
+                session
+              )
+            ),
+          ...this.runningSessions()
+            .map(session =>
+              this.performanceSessionToEvent(
+                session
+              )
             )
-          );
+        ];
 
       return events.sort((left, right) =>
         this.eventTime(right) -
@@ -162,6 +189,19 @@ export class TrainerClient implements OnInit {
       );
     });
 
+  readonly currentEnduranceEvent =
+    computed(() => {
+      const selected =
+        this.currentPerformanceEvent();
+
+      return (
+        selected &&
+        selected.discipline !== 'strength'
+          ? selected
+          : null
+      );
+    });
+
   readonly selectedPerformanceDateKey =
     computed(() => {
       const selected =
@@ -169,7 +209,7 @@ export class TrainerClient implements OnInit {
 
       return selected
         ? this.dateKeyFromValue(
-          selected.finished_at
+          selected.event_at
         )
         : null;
     });
@@ -276,7 +316,7 @@ export class TrainerClient implements OnInit {
           .getAthleteOverview(athleteId);
 
       this.overview.set(overview);
-      void this.loadStrengthSessions();
+      void this.loadPerformanceSessions();
     } catch (error) {
       this.error.set(
         this.errorMessage(
@@ -290,7 +330,7 @@ export class TrainerClient implements OnInit {
   }
 
 
-  async loadStrengthSessions():
+  async loadPerformanceSessions():
     Promise<void> {
     const athleteId =
       this.route.snapshot.paramMap.get(
@@ -305,11 +345,28 @@ export class TrainerClient implements OnInit {
     this.performanceError.set(null);
 
     try {
-      const sessions =
-        await this.trainerService
-          .listStrengthSessions(athleteId);
+      const [
+        strengthSessions,
+        swimmingSessions,
+        runningSessions
+      ] = await Promise.all([
+        this.trainerService
+          .listStrengthSessions(athleteId),
+        this.trainerService
+          .listSwimmingSessions(athleteId),
+        this.trainerService
+          .listRunningSessions(athleteId)
+      ]);
 
-      this.strengthSessions.set(sessions);
+      this.strengthSessions.set(
+        strengthSessions
+      );
+      this.swimmingSessions.set(
+        swimmingSessions
+      );
+      this.runningSessions.set(
+        runningSessions
+      );
       const firstEvent =
         this.performanceEvents()[0] ?? null;
 
@@ -318,14 +375,14 @@ export class TrainerClient implements OnInit {
       );
       this.performanceCalendarMonth.set(
         this.monthKeyFromValue(
-          firstEvent?.finished_at
+          firstEvent?.event_at
         )
       );
     } catch (error) {
       this.performanceError.set(
         this.errorMessage(
           error,
-          'No se pudo cargar el rendimiento de fuerza.'
+          'No se pudo cargar el rendimiento.'
         )
       );
     } finally {
@@ -364,7 +421,7 @@ export class TrainerClient implements OnInit {
     );
     this.performanceCalendarMonth.set(
       this.monthKeyFromValue(
-        event.finished_at
+        event.event_at
       )
     );
   }
@@ -547,8 +604,45 @@ export class TrainerClient implements OnInit {
     return this.performanceEvents()
       .filter(event =>
         this.dateKeyFromValue(
-          event.finished_at
+          event.event_at
         ) === dateKey
+      );
+  }
+
+
+  calendarDayMarks(
+    day: PerformanceCalendarDay
+  ): PerformanceCalendarMark[] {
+    return this.disciplines
+      .map(discipline => {
+        const count =
+          day.events.filter(event =>
+            event.discipline === discipline
+          ).length;
+
+        if (count === 0) {
+          return null;
+        }
+
+        return {
+          discipline,
+          label:
+            count > 1
+              ? `${
+                this.performanceDisciplineInitial(
+                  discipline
+                )
+              }×${count}`
+              : this.performanceDisciplineInitial(
+                discipline
+              )
+        };
+      })
+      .filter(
+        (
+          mark
+        ): mark is PerformanceCalendarMark =>
+          mark !== null
       );
   }
 
@@ -556,12 +650,12 @@ export class TrainerClient implements OnInit {
   performanceEventTime(
     event: PerformanceCalendarEvent
   ): string {
-    if (!event.finished_at) {
+    if (!event.event_at) {
       return event.title;
     }
 
     const date =
-      new Date(event.finished_at);
+      new Date(event.event_at);
 
     if (Number.isNaN(date.getTime())) {
       return event.title;
@@ -749,10 +843,26 @@ export class TrainerClient implements OnInit {
         this.strengthEventId(session),
       discipline:
         'strength',
-      finished_at:
+      event_at:
         session.finished_at,
       title:
         this.sessionTitle(session)
+    };
+  }
+
+
+  private performanceSessionToEvent(
+    session: TrainerPerformanceSession
+  ): PerformanceCalendarEvent {
+    return {
+      id:
+        `${session.discipline}:${session.id}`,
+      discipline:
+        session.discipline,
+      event_at:
+        session.event_at,
+      title:
+        session.title?.trim() || '—'
     };
   }
 
@@ -767,12 +877,12 @@ export class TrainerClient implements OnInit {
   private eventTime(
     event: PerformanceCalendarEvent
   ): number {
-    if (!event.finished_at) {
+    if (!event.event_at) {
       return 0;
     }
 
     const date =
-      new Date(event.finished_at);
+      new Date(event.event_at);
 
     return Number.isNaN(date.getTime())
       ? 0

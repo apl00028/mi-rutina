@@ -127,6 +127,19 @@ class TrainerStrengthSession(BaseModel):
     )
 
 
+class TrainerPerformanceSession(BaseModel):
+    id: str
+    discipline: RoutineDiscipline
+    title: str
+    event_at: str
+    finished_at: str | None = None
+    started_at: str | None = None
+    duration_seconds: float | None = None
+    routine_id: str | None = None
+    session_id: str | None = None
+    source: str | None = None
+
+
 class RoutineTemplateCreate(BaseModel):
     model_config = ConfigDict(
         extra="forbid"

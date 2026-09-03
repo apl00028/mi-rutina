@@ -463,6 +463,129 @@ def test_strength_sessions_upstream_error_is_generic(monkeypatch):
         )
 
 
+def test_trainer_can_list_swimming_sessions(monkeypatch):
+    from app.domains.trainer import router as trainer_api
+    from app.domains.trainer.models import TrainerPerformanceSession
+
+    async def fake_list(trainer, athlete_id):
+        assert trainer.id == "trainer-123"
+        assert athlete_id == "athlete-1"
+        return [
+            TrainerPerformanceSession(
+                id="swim-1",
+                discipline="swimming",
+                title="Natación",
+                event_at="2026-09-01T07:00:00Z",
+                started_at="2026-09-01T07:00:00Z",
+                duration_seconds=2700,
+                source="garmin_fit",
+            )
+        ]
+
+    monkeypatch.setattr(
+        trainer_api,
+        "list_authenticated_trainer_swimming_sessions",
+        fake_list,
+    )
+
+    sessions = asyncio.run(
+        trainer_api.list_trainer_athlete_swimming_sessions_endpoint(
+            "athlete-1",
+            trainer=asyncio.run(trainer_user()),
+        )
+    )
+
+    assert sessions[0].discipline == "swimming"
+    assert sessions[0].title == "Natación"
+
+
+def test_trainer_can_list_running_sessions(monkeypatch):
+    from app.domains.trainer import router as trainer_api
+    from app.domains.trainer.models import TrainerPerformanceSession
+
+    async def fake_list(trainer, athlete_id):
+        assert trainer.id == "trainer-123"
+        assert athlete_id == "athlete-1"
+        return [
+            TrainerPerformanceSession(
+                id="run-1",
+                discipline="running",
+                title="Control aeróbico",
+                event_at="2026-09-03T06:40:00Z",
+                routine_id="run-routine",
+                session_id="run-session",
+                started_at="2026-09-03T06:00:00Z",
+                finished_at="2026-09-03T06:40:00Z",
+            )
+        ]
+
+    monkeypatch.setattr(
+        trainer_api,
+        "list_authenticated_trainer_running_sessions",
+        fake_list,
+    )
+
+    sessions = asyncio.run(
+        trainer_api.list_trainer_athlete_running_sessions_endpoint(
+            "athlete-1",
+            trainer=asyncio.run(trainer_user()),
+        )
+    )
+
+    assert sessions[0].discipline == "running"
+    assert sessions[0].title == "Control aeróbico"
+
+
+def test_normal_user_cannot_list_swimming_sessions():
+    app.dependency_overrides[
+        require_user
+    ] = normal_user
+
+    try:
+        response = client.get(
+            (
+                "/api/v1/trainer/athletes/"
+                "athlete-1/swimming-sessions"
+            ),
+            headers={
+                "Authorization":
+                    "Bearer token-123"
+            },
+        )
+    finally:
+        app.dependency_overrides.pop(
+            require_user,
+            None,
+        )
+
+    assert response.status_code == 403
+
+
+def test_admin_cannot_list_running_sessions():
+    app.dependency_overrides[
+        require_user
+    ] = admin_user
+
+    try:
+        response = client.get(
+            (
+                "/api/v1/trainer/athletes/"
+                "athlete-1/running-sessions"
+            ),
+            headers={
+                "Authorization":
+                    "Bearer token-123"
+            },
+        )
+    finally:
+        app.dependency_overrides.pop(
+            require_user,
+            None,
+        )
+
+    assert response.status_code == 403
+
+
 def test_trainer_athletes_route_does_not_accept_trainer_id_parameter(
     monkeypatch,
 ):

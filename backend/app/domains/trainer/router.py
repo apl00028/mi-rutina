@@ -20,6 +20,7 @@ from app.domains.trainer.models import (
     TemplateAssignmentCreate,
     TrainerAthlete,
     TrainerAthleteOverview,
+    TrainerPerformanceSession,
     TrainerStrengthSession,
 )
 from app.domains.trainer.repository import (
@@ -33,7 +34,9 @@ from app.domains.trainer.service import (
     delete_authenticated_trainer_template,
     get_authenticated_trainer_athlete_overview,
     get_authenticated_trainer_template,
+    list_authenticated_trainer_running_sessions,
     list_authenticated_trainer_strength_sessions,
+    list_authenticated_trainer_swimming_sessions,
     list_authenticated_trainer_athletes,
     list_authenticated_trainer_templates,
     replace_authenticated_trainer_template,
@@ -167,6 +170,72 @@ async def list_trainer_athlete_strength_sessions_endpoint(
             ),
             detail=(
                 "Could not load trainer strength sessions"
+            ),
+        ) from exc
+
+
+@router.get(
+    "/athletes/{athlete_id}/swimming-sessions",
+    response_model=list[TrainerPerformanceSession],
+)
+async def list_trainer_athlete_swimming_sessions_endpoint(
+    athlete_id: str,
+    trainer: AuthenticatedUser = Depends(
+        require_trainer
+    ),
+) -> list[TrainerPerformanceSession]:
+    try:
+        return await list_authenticated_trainer_swimming_sessions(
+            trainer,
+            athlete_id,
+        )
+    except SupabaseConfigError as exc:
+        raise HTTPException(
+            status_code=(
+                status.HTTP_503_SERVICE_UNAVAILABLE
+            ),
+            detail="Supabase is not configured.",
+        ) from exc
+    except httpx.HTTPStatusError as exc:
+        raise HTTPException(
+            status_code=(
+                status.HTTP_502_BAD_GATEWAY
+            ),
+            detail=(
+                "Could not load trainer swimming sessions"
+            ),
+        ) from exc
+
+
+@router.get(
+    "/athletes/{athlete_id}/running-sessions",
+    response_model=list[TrainerPerformanceSession],
+)
+async def list_trainer_athlete_running_sessions_endpoint(
+    athlete_id: str,
+    trainer: AuthenticatedUser = Depends(
+        require_trainer
+    ),
+) -> list[TrainerPerformanceSession]:
+    try:
+        return await list_authenticated_trainer_running_sessions(
+            trainer,
+            athlete_id,
+        )
+    except SupabaseConfigError as exc:
+        raise HTTPException(
+            status_code=(
+                status.HTTP_503_SERVICE_UNAVAILABLE
+            ),
+            detail="Supabase is not configured.",
+        ) from exc
+    except httpx.HTTPStatusError as exc:
+        raise HTTPException(
+            status_code=(
+                status.HTTP_502_BAD_GATEWAY
+            ),
+            detail=(
+                "Could not load trainer running sessions"
             ),
         ) from exc
 

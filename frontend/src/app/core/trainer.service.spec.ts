@@ -238,6 +238,98 @@ describe(
 
 
     it(
+      'loads trainer swimming sessions with the authenticated token',
+      async () => {
+        const promise =
+          service.listSwimmingSessions(
+            'athlete 1'
+          );
+
+        await flushPromises();
+
+        const request =
+          http.expectOne(
+            (
+              `${environment.apiUrl}/trainer/athletes/` +
+              'athlete%201/swimming-sessions'
+            )
+          );
+
+        expect(request.request.method)
+          .toBe('GET');
+        expect(
+          request.request.headers.get(
+            'Authorization'
+          )
+        ).toBe('Bearer access-token');
+
+        request.flush([
+          performanceSessionResponse(
+            'swimming'
+          )
+        ]);
+
+        await expect(promise)
+          .resolves
+          .toMatchObject([
+            {
+              id:
+                'swimming-1',
+              discipline:
+                'swimming'
+            }
+          ]);
+      }
+    );
+
+
+    it(
+      'loads trainer running sessions with the authenticated token',
+      async () => {
+        const promise =
+          service.listRunningSessions(
+            'athlete 1'
+          );
+
+        await flushPromises();
+
+        const request =
+          http.expectOne(
+            (
+              `${environment.apiUrl}/trainer/athletes/` +
+              'athlete%201/running-sessions'
+            )
+          );
+
+        expect(request.request.method)
+          .toBe('GET');
+        expect(
+          request.request.headers.get(
+            'Authorization'
+          )
+        ).toBe('Bearer access-token');
+
+        request.flush([
+          performanceSessionResponse(
+            'running'
+          )
+        ]);
+
+        await expect(promise)
+          .resolves
+          .toMatchObject([
+            {
+              id:
+                'running-1',
+              discipline:
+                'running'
+            }
+          ]);
+      }
+    );
+
+
+    it(
       'loads trainer templates with the authenticated token',
       async () => {
         const promise =
@@ -391,6 +483,47 @@ function strengthSessionResponse() {
         ]
       }
     ]
+  };
+}
+
+
+function performanceSessionResponse(
+  discipline: 'swimming' | 'running'
+) {
+  return {
+    id:
+      `${discipline}-1`,
+    discipline,
+    title:
+      discipline === 'swimming'
+        ? 'Técnica de crol'
+        : 'Control aeróbico',
+    event_at:
+      discipline === 'swimming'
+        ? '2026-09-03T06:00:00Z'
+        : '2026-09-03T06:45:00Z',
+    started_at:
+      '2026-09-03T06:00:00Z',
+    finished_at:
+      discipline === 'running'
+        ? '2026-09-03T06:45:00Z'
+        : null,
+    duration_seconds:
+      discipline === 'swimming'
+        ? 2700
+        : null,
+    routine_id:
+      discipline === 'running'
+        ? 'run-routine'
+        : null,
+    session_id:
+      discipline === 'running'
+        ? 'run-session'
+        : null,
+    source:
+      discipline === 'swimming'
+        ? 'garmin_fit'
+        : null
   };
 }
 

@@ -106,7 +106,9 @@ describe(
 
     async function createPage(
       response = athleteOverview(),
-      strengthResponse: unknown[] = []
+      strengthResponse: unknown[] = [],
+      swimmingResponse: unknown[] = [],
+      runningResponse: unknown[] = []
     ): Promise<void> {
       fixture =
         TestBed.createComponent(
@@ -125,6 +127,12 @@ describe(
       http.expectOne(
         strengthSessionsUrl()
       ).flush(strengthResponse);
+      http.expectOne(
+        swimmingSessionsUrl()
+      ).flush(swimmingResponse);
+      http.expectOne(
+        runningSessionsUrl()
+      ).flush(runningResponse);
 
       await flushPromises();
       fixture.detectChanges();
@@ -301,6 +309,145 @@ describe(
 
 
     it(
+      'shows swimming sessions on the shared calendar',
+      async () => {
+        await createPage(
+          athleteOverview(),
+          [],
+          [
+            performanceSession(
+              'swimming'
+            )
+          ]
+        );
+
+        const markedDay =
+          calendarMarkedDay('3');
+
+        expect(markedDay.textContent)
+          .toContain('N');
+        expect(
+          fixture.nativeElement.textContent
+        ).toContain('Técnica de crol');
+      }
+    );
+
+
+    it(
+      'shows running sessions on the shared calendar',
+      async () => {
+        await createPage(
+          athleteOverview(),
+          [],
+          [],
+          [
+            performanceSession(
+              'running'
+            )
+          ]
+        );
+
+        const markedDay =
+          calendarMarkedDay('4');
+
+        expect(markedDay.textContent)
+          .toContain('C');
+        expect(
+          fixture.nativeElement.textContent
+        ).toContain('Control aeróbico');
+      }
+    );
+
+
+    it(
+      'shows multiple disciplines on the same day',
+      async () => {
+        await createPage(
+          athleteOverview(),
+          [
+            strengthSession()
+          ],
+          [
+            performanceSession(
+              'swimming',
+              {
+                event_at:
+                  '2026-09-02T10:30:00Z'
+              }
+            )
+          ]
+        );
+
+        const markedDay =
+          calendarMarkedDay('2');
+
+        expect(markedDay.textContent)
+          .toContain('F');
+        expect(markedDay.textContent)
+          .toContain('N');
+      }
+    );
+
+
+    it(
+      'shows swimming and running on the same day',
+      async () => {
+        await createPage(
+          athleteOverview(),
+          [],
+          [
+            performanceSession(
+              'swimming',
+              {
+                event_at:
+                  '2026-09-04T07:00:00Z'
+              }
+            )
+          ],
+          [
+            performanceSession(
+              'running'
+            )
+          ]
+        );
+
+        const markedDay =
+          calendarMarkedDay('4');
+
+        expect(markedDay.textContent)
+          .toContain('N');
+        expect(markedDay.textContent)
+          .toContain('C');
+      }
+    );
+
+
+    it(
+      'shows one repeated discipline mark with a counter',
+      async () => {
+        await createPage(
+          athleteOverview(),
+          [
+            strengthSession(),
+            strengthSession({
+              workout_id:
+                'workout-2',
+              session_name:
+                'Pierna',
+              finished_at:
+                '2026-09-02T17:30:00Z'
+            })
+          ]
+        );
+
+        expect(
+          calendarMarkedDay('2').textContent
+        ).toContain('F×2');
+      }
+    );
+
+
+    it(
       'marks days with sessions and selects by calendar day',
       async () => {
         await createPage(
@@ -399,6 +546,132 @@ describe(
 
 
     it(
+      'lists sessions from different disciplines on the selected day',
+      async () => {
+        await createPage(
+          athleteOverview(),
+          [
+            strengthSession()
+          ],
+          [
+            performanceSession(
+              'swimming',
+              {
+                event_at:
+                  '2026-09-02T10:30:00Z'
+              }
+            )
+          ],
+          [
+            performanceSession(
+              'running',
+              {
+                event_at:
+                  '2026-09-02T11:30:00Z',
+                finished_at:
+                  '2026-09-02T11:30:00Z'
+              }
+            )
+          ]
+        );
+
+        const text =
+          fixture.nativeElement.textContent;
+
+        expect(text).toContain('Empuje');
+        expect(text).toContain('Técnica de crol');
+        expect(text).toContain('Control aeróbico');
+      }
+    );
+
+
+    it(
+      'selects swimming and running without breaking the detail view',
+      async () => {
+        await createPage(
+          athleteOverview(),
+          [
+            strengthSession()
+          ],
+          [
+            performanceSession(
+              'swimming',
+              {
+                event_at:
+                  '2026-09-02T10:30:00Z'
+              }
+            )
+          ],
+          [
+            performanceSession(
+              'running',
+              {
+                event_at:
+                  '2026-09-02T11:30:00Z',
+                finished_at:
+                  '2026-09-02T11:30:00Z'
+              }
+            )
+          ]
+        );
+
+        clickButton('Técnica de crol');
+        fixture.detectChanges();
+
+        expect(
+          fixture.nativeElement.textContent
+        ).toContain(
+          'Detalle de natación próximamente.'
+        );
+
+        clickButton('Control aeróbico');
+        fixture.detectChanges();
+
+        expect(
+          fixture.nativeElement.textContent
+        ).toContain(
+          'Detalle de carrera próximamente.'
+        );
+      }
+    );
+
+
+    it(
+      'keeps late swimming sessions on the observed start day',
+      async () => {
+        await createPage(
+          athleteOverview(),
+          [],
+          [
+            performanceSession(
+              'swimming',
+              {
+                event_at:
+                  '2026-09-02T23:50:00Z',
+                started_at:
+                  '2026-09-02T23:50:00Z',
+                finished_at:
+                  null,
+                duration_seconds:
+                  1800
+              }
+            )
+          ]
+        );
+
+        expect(
+          calendarMarkedDay('2').textContent
+        ).toContain('N');
+        expect(
+          calendarDay('3').classList.contains(
+            'has-session'
+          )
+        ).toBe(false);
+      }
+    );
+
+
+    it(
       'changes calendar month without new requests',
       async () => {
         await createPage(
@@ -424,6 +697,12 @@ describe(
 
         http.expectNone(
           strengthSessionsUrl()
+        );
+        http.expectNone(
+          swimmingSessionsUrl()
+        );
+        http.expectNone(
+          runningSessionsUrl()
         );
       }
     );
@@ -711,6 +990,22 @@ describe(
         'athlete-1/strength-sessions'
       );
     }
+
+
+    function swimmingSessionsUrl(): string {
+      return (
+        `${environment.apiUrl}/trainer/athletes/` +
+        'athlete-1/swimming-sessions'
+      );
+    }
+
+
+    function runningSessionsUrl(): string {
+      return (
+        `${environment.apiUrl}/trainer/athletes/` +
+        'athlete-1/running-sessions'
+      );
+    }
   }
 );
 
@@ -767,6 +1062,51 @@ function strengthSession(
         ]
       }
     ],
+    ...patch
+  };
+}
+
+
+function performanceSession(
+  discipline: 'swimming' | 'running',
+  patch: Record<string, unknown> = {}
+) {
+  return {
+    id:
+      `${discipline}-1`,
+    discipline,
+    title:
+      discipline === 'swimming'
+        ? 'Técnica de crol'
+        : 'Control aeróbico',
+    started_at:
+      discipline === 'swimming'
+        ? '2026-09-03T07:00:00Z'
+        : '2026-09-04T06:00:00Z',
+    event_at:
+      discipline === 'swimming'
+        ? '2026-09-03T07:00:00Z'
+        : '2026-09-04T06:40:00Z',
+    finished_at:
+      discipline === 'running'
+        ? '2026-09-04T06:40:00Z'
+        : null,
+    duration_seconds:
+      discipline === 'swimming'
+        ? 2700
+        : null,
+    routine_id:
+      discipline === 'running'
+        ? 'run-routine'
+        : null,
+    session_id:
+      discipline === 'running'
+        ? 'run-session'
+        : null,
+    source:
+      discipline === 'swimming'
+        ? 'garmin_fit'
+        : null,
     ...patch
   };
 }

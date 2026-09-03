@@ -131,6 +131,20 @@ export interface TrainerStrengthSession {
 }
 
 
+export interface TrainerPerformanceSession {
+  id: string;
+  discipline: TrainerDiscipline;
+  title: string;
+  event_at: string;
+  finished_at: string | null;
+  started_at: string | null;
+  duration_seconds?: number | null;
+  routine_id?: string | null;
+  session_id?: string | null;
+  source?: string | null;
+}
+
+
 export interface TrainerRoutineTemplate {
   id: string;
   name: string;
@@ -240,6 +254,26 @@ export class TrainerService {
   }
 
 
+  async listSwimmingSessions(
+    athleteId: string
+  ): Promise<TrainerPerformanceSession[]> {
+    return await this.listPerformanceSessions(
+      athleteId,
+      'swimming-sessions'
+    );
+  }
+
+
+  async listRunningSessions(
+    athleteId: string
+  ): Promise<TrainerPerformanceSession[]> {
+    return await this.listPerformanceSessions(
+      athleteId,
+      'running-sessions'
+    );
+  }
+
+
   async listTemplates():
     Promise<TrainerRoutineTemplate[]> {
     const headers =
@@ -280,6 +314,30 @@ export class TrainerService {
           routine_id:
             routineId
         },
+        {
+          headers
+        }
+      )
+    );
+  }
+
+
+  private async listPerformanceSessions(
+    athleteId: string,
+    segment: string
+  ): Promise<TrainerPerformanceSession[]> {
+    const headers =
+      await this.headers();
+
+    return await firstValueFrom(
+      this.http.get<
+        TrainerPerformanceSession[]
+      >(
+        (
+          `${this.apiUrl}/trainer/athletes/` +
+          `${encodeURIComponent(athleteId)}/` +
+          segment
+        ),
         {
           headers
         }

@@ -304,20 +304,16 @@
                     @if (day.events.length > 0) {
                       <small class="calendar-marks">
                         @for (
-                          event of day.events;
-                          track event.id
+                          mark of calendarDayMarks(day);
+                          track mark.discipline
                         ) {
                           <span
                             [class]="
                               'performance-' +
-                              event.discipline
+                              mark.discipline
                             "
                           >
-                            {{
-                              performanceDisciplineInitial(
-                                event.discipline
-                              )
-                            }}
+                            {{ mark.label }}
                           </span>
                         }
                       </small>
@@ -341,7 +337,7 @@
             @if (currentPerformanceEvent(); as event) {
               <section class="day-sessions">
                 <h3>
-                  Sesiones · {{ formatDate(event.finished_at) }}
+                  Sesiones · {{ formatDate(event.event_at) }}
                 </h3>
 
                 <div class="same-day-list">
@@ -464,6 +460,28 @@
                     }
                   </div>
                 }
+              </section>
+            }
+
+            @if (currentEnduranceEvent(); as event) {
+              <section class="endurance-detail">
+                <header class="session-header">
+                  <div>
+                    <h3>
+                      {{ event.title }}
+                    </h3>
+
+                    <p>
+                      {{ formatDate(event.event_at) }}
+                    </p>
+                  </div>
+                </header>
+
+                <div class="state-card compact-state">
+                  Detalle de
+                  {{ disciplineLabel(event.discipline).toLowerCase() }}
+                  próximamente.
+                </div>
               </section>
             }
           </div>

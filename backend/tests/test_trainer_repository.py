@@ -5,7 +5,10 @@ import logging
 import httpx
 
 from app.core.auth import AuthenticatedUser
-from app.domains.trainer.models import TrainerAthlete
+from app.domains.trainer.models import (
+    TrainerAthlete,
+    TrainerAthleteOverview,
+)
 from app.domains.trainer import repository, service
 
 
@@ -16,6 +19,52 @@ def _trainer() -> AuthenticatedUser:
         access_token="access-token",
         role="trainer",
     )
+
+
+def _overview_row():
+    return {
+        "athlete_id": "athlete-1",
+        "status": "active",
+        "email": "athlete@example.com",
+        "display_name": "Athlete One",
+        "client_since": "2026-08-15T10:00:00Z",
+        "health": {
+            "measurement_date": "2026-09-01",
+            "weight_kg": 81.4,
+            "body_fat_percent": 18.2,
+            "muscle_mass_kg": 62.1,
+            "body_water_percent": 55.3,
+            "visceral_fat_index": 7,
+            "waist_cm": 83.5,
+        },
+        "recent_training": {
+            "last_completed": {
+                "workout_id": "workout-1",
+                "routine_id": "routine-strength",
+                "session_id": "push",
+                "session_name": "Empuje",
+                "finished_at": "2026-09-02T09:30:00Z",
+            },
+            "completed_last_7_days": 3,
+        },
+        "active_routines": {
+            "strength": {
+                "routine_id": "routine-strength",
+                "activated_at": "2026-08-20T10:00:00Z",
+            },
+            "swimming": None,
+            "running": None,
+            "cycling": None,
+        },
+        "trainer": {
+            "last_assignment": {
+                "template_id": "template-1",
+                "routine_id": "assigned-routine",
+                "discipline": "strength",
+                "assigned_at": "2026-09-01T12:00:00Z",
+            }
+        },
+    }
 
 
 def test_list_active_trainer_athletes_filters_authenticated_trainer(
@@ -220,6 +269,154 @@ def test_trainer_athlete_contract_includes_client_since():
     assert (
         athlete.client_since.isoformat()
         == "2026-08-15T10:00:00+00:00"
+    )
+
+
+def test_get_trainer_athlete_overview_uses_rpc_and_authenticated_token(
+    monkeypatch,
+):
+    monkeypatch.setenv(
+        "SUPABASE_URL",
+        "https://example.supabase.co",
+    )
+    monkeypatch.setenv(
+        "SUPABASE_PUBLISHABLE_KEY",
+        "publishable-key",
+    )
+
+    captured = {}
+    overview = _overview_row()
+
+    class FakeResponse:
+        def raise_for_status(self):
+            pass
+
+        def json(self):
+            return [overview]
+
+    class FakeClient:
+        def __init__(self, timeout):
+            captured["timeout"] = timeout
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):
+            pass
+
+        async def post(self, url, headers, json):
+            captured["url"] = url
+            captured["headers"] = headers
+            captured["json"] = json
+            return FakeResponse()
+
+        async def get(self, url, headers, params):
+            raise AssertionError(
+                "overview must use the overview RPC"
+            )
+
+    monkeypatch.setattr(
+        repository.httpx,
+        "AsyncClient",
+        FakeClient,
+    )
+
+    row = asyncio.run(
+        repository.get_trainer_athlete_overview(
+            _trainer(),
+            "athlete-1",
+        )
+    )
+
+    assert row == overview
+    assert captured["timeout"] == 10.0
+    assert captured["url"] == (
+        "https://example.supabase.co/rest/v1/rpc/"
+        "trainer_get_athlete_overview"
+    )
+    assert captured["headers"] == {
+        "Authorization": "Bearer access-token",
+        "apikey": "publishable-key",
+        "Content-Type": "application/json",
+    }
+    assert captured["json"] == {
+        "p_athlete_id": "athlete-1",
+    }
+
+
+def test_get_trainer_athlete_overview_returns_none_for_foreign_athlete(
+    monkeypatch,
+):
+    monkeypatch.setenv(
+        "SUPABASE_URL",
+        "https://example.supabase.co",
+    )
+    monkeypatch.setenv(
+        "SUPABASE_PUBLISHABLE_KEY",
+        "publishable-key",
+    )
+
+    class FakeResponse:
+        def raise_for_status(self):
+            pass
+
+        def json(self):
+            return []
+
+    class FakeClient:
+        def __init__(self, timeout):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):
+            pass
+
+        async def post(self, url, headers, json):
+            return FakeResponse()
+
+    monkeypatch.setattr(
+        repository.httpx,
+        "AsyncClient",
+        FakeClient,
+    )
+
+    assert (
+        asyncio.run(
+            repository.get_trainer_athlete_overview(
+                _trainer(),
+                "foreign-athlete",
+            )
+        )
+        is None
+    )
+
+
+def test_trainer_athlete_overview_contract_validates_sections():
+    overview = TrainerAthleteOverview.model_validate(
+        _overview_row()
+    )
+
+    assert overview.athlete_id == "athlete-1"
+    assert overview.health.weight_kg == 81.4
+    assert (
+        overview.recent_training
+        .last_completed
+        .session_name
+        == "Empuje"
+    )
+    assert (
+        overview.active_routines
+        .strength
+        .routine_id
+        == "routine-strength"
+    )
+    assert (
+        overview.trainer
+        .last_assignment
+        .routine_id
+        == "assigned-routine"
     )
 
 

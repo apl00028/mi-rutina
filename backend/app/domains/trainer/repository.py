@@ -17,6 +17,10 @@ ATHLETE_IDENTITIES_RPC = (
     "trainer_list_athlete_identities"
 )
 
+ATHLETE_OVERVIEW_RPC = (
+    "trainer_get_athlete_overview"
+)
+
 
 class SupabaseConfigError(RuntimeError):
     pass
@@ -138,6 +142,48 @@ async def get_active_trainer_athlete(
             f"{url}/rest/v1/trainer_athletes",
             headers=headers,
             params=params,
+        )
+
+    response.raise_for_status()
+
+    data = response.json()
+
+    if not isinstance(data, list):
+        raise RuntimeError(
+            "Unexpected Supabase response."
+        )
+
+    return data[0] if data else None
+
+
+async def get_trainer_athlete_overview(
+    trainer: AuthenticatedUser,
+    athlete_id: str,
+) -> dict[str, Any] | None:
+    url, key = _supabase_config()
+
+    headers = {
+        "Authorization":
+            f"Bearer {trainer.access_token}",
+        "apikey":
+            key,
+        "Content-Type":
+            "application/json",
+    }
+
+    async with httpx.AsyncClient(
+        timeout=10.0
+    ) as client:
+        response = await client.post(
+            (
+                f"{url}/rest/v1/rpc/"
+                f"{ATHLETE_OVERVIEW_RPC}"
+            ),
+            headers=headers,
+            json={
+                "p_athlete_id":
+                    athlete_id,
+            },
         )
 
     response.raise_for_status()

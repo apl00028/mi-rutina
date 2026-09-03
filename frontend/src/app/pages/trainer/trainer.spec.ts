@@ -178,6 +178,11 @@ describe(
         expect(
           fixture.nativeElement.textContent
         ).toContain('active');
+        expect(
+          fixture.nativeElement
+            .querySelector('.athlete-card')
+            .getAttribute('href')
+        ).toBe('/trainer/clients/athlete-1');
       }
     );
 

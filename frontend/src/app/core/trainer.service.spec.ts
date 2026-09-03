@@ -146,6 +146,50 @@ describe(
 
 
     it(
+      'loads trainer athlete overview with the authenticated token',
+      async () => {
+        const promise =
+          service.getAthleteOverview(
+            'athlete 1'
+          );
+
+        await flushPromises();
+
+        const request =
+          http.expectOne(
+            (
+              `${environment.apiUrl}/trainer/athletes/` +
+              'athlete%201'
+            )
+          );
+
+        expect(request.request.method)
+          .toBe('GET');
+        expect(
+          request.request.headers.get(
+            'Authorization'
+          )
+        ).toBe('Bearer access-token');
+
+        request.flush(
+          athleteOverviewResponse()
+        );
+
+        await expect(promise)
+          .resolves
+          .toMatchObject({
+            athlete_id:
+              'athlete-1',
+            health: {
+              weight_kg:
+                81.4
+            }
+          });
+      }
+    );
+
+
+    it(
       'loads trainer templates with the authenticated token',
       async () => {
         const promise =
@@ -255,3 +299,77 @@ describe(
     );
   }
 );
+
+
+function athleteOverviewResponse() {
+  return {
+    athlete_id:
+      'athlete-1',
+    status:
+      'active',
+    email:
+      'athlete@example.com',
+    display_name:
+      'Athlete One',
+    client_since:
+      '2026-08-15T10:00:00Z',
+    health: {
+      measurement_date:
+        '2026-09-01',
+      weight_kg:
+        81.4,
+      body_fat_percent:
+        18.2,
+      muscle_mass_kg:
+        62.1,
+      body_water_percent:
+        55.3,
+      visceral_fat_index:
+        7,
+      waist_cm:
+        83.5
+    },
+    recent_training: {
+      last_completed: {
+        workout_id:
+          'workout-1',
+        routine_id:
+          'routine-strength',
+        session_id:
+          'push',
+        session_name:
+          'Empuje',
+        finished_at:
+          '2026-09-02T09:30:00Z'
+      },
+      completed_last_7_days:
+        3
+    },
+    active_routines: {
+      strength: {
+        routine_id:
+          'routine-strength',
+        activated_at:
+          '2026-08-20T10:00:00Z'
+      },
+      swimming:
+        null,
+      running:
+        null,
+      cycling:
+        null
+    },
+    trainer: {
+      last_assignment: {
+        template_id:
+          'template-1',
+        routine_id:
+          'assigned-routine',
+        discipline:
+          'strength',
+        assigned_at:
+          '2026-09-01T12:00:00Z'
+      }
+    }
+  };
+}

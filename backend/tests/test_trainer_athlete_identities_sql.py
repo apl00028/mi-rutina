@@ -34,7 +34,7 @@ def test_identity_rpc_accepts_no_trainer_id_parameter():
     sql = _sql()
     signature = re.search(
         (
-            r"create or replace function "
+            r"create function "
             r"public\.trainer_list_athlete_identities"
             r"\((.*?)\)\s+returns table"
         ),
@@ -44,6 +44,10 @@ def test_identity_rpc_accepts_no_trainer_id_parameter():
 
     assert signature is not None
     assert signature.group(1).strip() == ""
+    assert (
+        "drop function if exists "
+        "public.trainer_list_athlete_identities();"
+    ) in sql
     assert "p_trainer_id" not in sql
 
 
@@ -98,3 +102,9 @@ def test_identity_rpc_privileges_are_narrow():
         "on function public.trainer_list_athlete_identities()\n"
         "to authenticated"
     ) in sql
+
+
+def test_identity_rpc_reloads_postgrest_schema_cache():
+    sql = _sql()
+
+    assert "notify pgrst, 'reload schema';" in sql

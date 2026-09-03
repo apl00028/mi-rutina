@@ -1,0 +1,254 @@
+<section class="client-page">
+  <header class="page-header">
+    <div>
+      <a
+        class="back-link"
+        routerLink="/trainer"
+      >
+        Clientes
+      </a>
+
+      <h1>
+        {{ title() }}
+      </h1>
+    </div>
+  </header>
+
+  @if (loading()) {
+    <div class="state-card">
+      Cargando ficha...
+    </div>
+  } @else if (error()) {
+    <div class="error-message">
+      {{ error() }}
+    </div>
+  } @else if (overview(); as athlete) {
+    <div class="overview-grid">
+      <article class="overview-card header-card">
+        <div>
+          <span class="eyebrow">
+            Cliente
+          </span>
+
+          <h2>
+            {{ title() }}
+          </h2>
+
+          @if (athleteSubtitle(athlete); as subtitle) {
+            <p>
+              {{ subtitle }}
+            </p>
+          }
+        </div>
+
+        <dl>
+          <div>
+            <dt>
+              Cliente desde
+            </dt>
+            <dd>
+              {{ formatDate(athlete.client_since) }}
+            </dd>
+          </div>
+
+          <div>
+            <dt>
+              Status
+            </dt>
+            <dd>
+              {{ athlete.status }}
+            </dd>
+          </div>
+        </dl>
+      </article>
+
+      <article class="overview-card">
+        <h2>
+          Salud actual
+        </h2>
+
+        <dl class="metric-grid">
+          <div>
+            <dt>
+              Peso
+            </dt>
+            <dd>
+              {{ metric(athlete.health.weight_kg, ' kg') }}
+            </dd>
+          </div>
+
+          <div>
+            <dt>
+              % grasa
+            </dt>
+            <dd>
+              {{ metric(athlete.health.body_fat_percent, '%') }}
+            </dd>
+          </div>
+
+          <div>
+            <dt>
+              Masa muscular
+            </dt>
+            <dd>
+              {{ metric(athlete.health.muscle_mass_kg, ' kg') }}
+            </dd>
+          </div>
+
+          <div>
+            <dt>
+              Agua corporal
+            </dt>
+            <dd>
+              {{ metric(athlete.health.body_water_percent, '%') }}
+            </dd>
+          </div>
+
+          <div>
+            <dt>
+              Grasa visceral
+            </dt>
+            <dd>
+              {{ metric(athlete.health.visceral_fat_index) }}
+            </dd>
+          </div>
+
+          <div>
+            <dt>
+              Cintura
+            </dt>
+            <dd>
+              {{ metric(athlete.health.waist_cm, ' cm') }}
+            </dd>
+          </div>
+        </dl>
+      </article>
+
+      <article class="overview-card">
+        <h2>
+          Entrenamiento reciente
+        </h2>
+
+        <dl>
+          <div>
+            <dt>
+              Último entrenamiento completado
+            </dt>
+            <dd>
+              {{
+                athlete.recent_training.last_completed
+                  ?.workout_id ?? '—'
+              }}
+            </dd>
+          </div>
+
+          <div>
+            <dt>
+              Sesión
+            </dt>
+            <dd>
+              {{
+                athlete.recent_training.last_completed
+                  ?.session_name
+                  ?? athlete.recent_training.last_completed
+                    ?.session_id
+                  ?? '—'
+              }}
+            </dd>
+          </div>
+
+          <div>
+            <dt>
+              Fecha
+            </dt>
+            <dd>
+              {{
+                formatDate(
+                  athlete.recent_training.last_completed
+                    ?.finished_at
+                )
+              }}
+            </dd>
+          </div>
+
+          <div>
+            <dt>
+              Últimos 7 días
+            </dt>
+            <dd>
+              {{
+                athlete.recent_training
+                  .completed_last_7_days
+              }}
+            </dd>
+          </div>
+        </dl>
+      </article>
+
+      <article class="overview-card">
+        <h2>
+          Rutinas activas
+        </h2>
+
+        <dl>
+          @for (
+            discipline of disciplines;
+            track discipline
+          ) {
+            <div>
+              <dt>
+                {{ disciplineLabel(discipline) }}
+              </dt>
+              <dd>
+                {{
+                  activeRoutine(
+                    athlete.active_routines,
+                    discipline
+                  )?.routine_id ?? '—'
+                }}
+              </dd>
+            </div>
+          }
+        </dl>
+      </article>
+
+      <article class="overview-card">
+        <h2>
+          Trainer
+        </h2>
+
+        <dl>
+          <div>
+            <dt>
+              Última rutina asignada
+            </dt>
+            <dd>
+              {{
+                athlete.trainer.last_assignment
+                  ?.routine_id ?? '—'
+              }}
+            </dd>
+          </div>
+
+          <div>
+            <dt>
+              Fecha de asignación
+            </dt>
+            <dd>
+              {{
+                formatDate(
+                  athlete.trainer.last_assignment
+                    ?.assigned_at
+                )
+              }}
+            </dd>
+          </div>
+        </dl>
+      </article>
+    </div>
+  } @else {
+    <div class="state-card">
+      No hay datos disponibles.
+    </div>
+  }
+</section>

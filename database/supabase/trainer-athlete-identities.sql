@@ -1,7 +1,9 @@
 -- Trainer athlete identity listing.
 -- Run this once in the Supabase SQL Editor.
 
-create or replace function public.trainer_list_athlete_identities()
+drop function if exists public.trainer_list_athlete_identities();
+
+create function public.trainer_list_athlete_identities()
 returns table (
   athlete_id uuid,
   status text,
@@ -40,3 +42,5 @@ from public, anon;
 grant execute
 on function public.trainer_list_athlete_identities()
 to authenticated;
+
+notify pgrst, 'reload schema';

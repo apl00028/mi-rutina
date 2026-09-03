@@ -12,12 +12,14 @@ from app.domains.trainer.models import (
     TemplateAssignment,
     TemplateAssignmentCreate,
     TrainerAthlete,
+    TrainerAthleteOverview,
 )
 from app.domains.trainer.repository import (
     assign_routine_template,
     create_routine_template,
     delete_routine_template,
     get_active_trainer_athlete,
+    get_trainer_athlete_overview,
     get_routine_template_by_id,
     list_active_trainer_athletes,
     list_routine_templates,
@@ -44,6 +46,23 @@ async def list_authenticated_trainer_athletes(
         TrainerAthlete.model_validate(row)
         for row in rows
     ]
+
+
+async def get_authenticated_trainer_athlete_overview(
+    trainer: AuthenticatedUser,
+    athlete_id: str,
+) -> TrainerAthleteOverview | None:
+    row = await get_trainer_athlete_overview(
+        trainer,
+        athlete_id,
+    )
+
+    if row is None:
+        return None
+
+    return TrainerAthleteOverview.model_validate(
+        row
+    )
 
 
 def _validate_template_data(

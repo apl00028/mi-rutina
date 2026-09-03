@@ -14,6 +14,10 @@ import {
 } from '@angular/forms';
 
 import {
+  RouterLink
+} from '@angular/router';
+
+import {
   HttpErrorResponse
 } from '@angular/common/http';
 
@@ -34,7 +38,8 @@ type TrainerView =
   standalone: true,
   imports: [
     CommonModule,
-    FormsModule
+    FormsModule,
+    RouterLink
   ],
   templateUrl: './trainer.html',
   styleUrl: './trainer.scss'

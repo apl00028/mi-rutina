@@ -36,6 +36,68 @@ export interface TrainerAthlete {
 }
 
 
+export interface TrainerAthleteHealth {
+  measurement_date: string | null;
+  weight_kg: number | null;
+  body_fat_percent: number | null;
+  muscle_mass_kg: number | null;
+  body_water_percent: number | null;
+  visceral_fat_index: number | null;
+  waist_cm: number | null;
+}
+
+
+export interface TrainerAthleteLastWorkout {
+  workout_id: string | null;
+  routine_id: string | null;
+  session_id: string | null;
+  session_name: string | null;
+  finished_at: string | null;
+}
+
+
+export interface TrainerAthleteRecentTraining {
+  last_completed: TrainerAthleteLastWorkout | null;
+  completed_last_7_days: number;
+}
+
+
+export interface TrainerAthleteActiveRoutine {
+  routine_id: string | null;
+  activated_at: string | null;
+}
+
+
+export interface TrainerAthleteActiveRoutines {
+  strength: TrainerAthleteActiveRoutine | null;
+  swimming: TrainerAthleteActiveRoutine | null;
+  running: TrainerAthleteActiveRoutine | null;
+  cycling: TrainerAthleteActiveRoutine | null;
+}
+
+
+export interface TrainerAthleteLastAssignment {
+  template_id: string | null;
+  routine_id: string | null;
+  discipline: TrainerDiscipline | null;
+  assigned_at: string | null;
+}
+
+
+export interface TrainerAthleteTrainerInfo {
+  last_assignment: TrainerAthleteLastAssignment | null;
+}
+
+
+export interface TrainerAthleteOverview
+  extends TrainerAthlete {
+  health: TrainerAthleteHealth;
+  recent_training: TrainerAthleteRecentTraining;
+  active_routines: TrainerAthleteActiveRoutines;
+  trainer: TrainerAthleteTrainerInfo;
+}
+
+
 export interface TrainerRoutineTemplate {
   id: string;
   name: string;
@@ -96,6 +158,26 @@ export class TrainerService {
     return await firstValueFrom(
       this.http.get<TrainerAthlete[]>(
         `${this.apiUrl}/trainer/athletes`,
+        {
+          headers
+        }
+      )
+    );
+  }
+
+
+  async getAthleteOverview(
+    athleteId: string
+  ): Promise<TrainerAthleteOverview> {
+    const headers =
+      await this.headers();
+
+    return await firstValueFrom(
+      this.http.get<TrainerAthleteOverview>(
+        (
+          `${this.apiUrl}/trainer/athletes/` +
+          `${encodeURIComponent(athleteId)}`
+        ),
         {
           headers
         }

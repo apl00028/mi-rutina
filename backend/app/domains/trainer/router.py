@@ -19,6 +19,7 @@ from app.domains.trainer.models import (
     TemplateAssignment,
     TemplateAssignmentCreate,
     TrainerAthlete,
+    TrainerAthleteOverview,
 )
 from app.domains.trainer.repository import (
     SupabaseConfigError,
@@ -29,6 +30,7 @@ from app.domains.trainer.service import (
     assign_authenticated_trainer_template,
     create_authenticated_trainer_template,
     delete_authenticated_trainer_template,
+    get_authenticated_trainer_athlete_overview,
     get_authenticated_trainer_template,
     list_authenticated_trainer_athletes,
     list_authenticated_trainer_templates,
@@ -89,6 +91,49 @@ async def list_trainer_athletes(
                 "Could not load trainer athletes"
             ),
         ) from exc
+
+
+@router.get(
+    "/athletes/{athlete_id}",
+    response_model=TrainerAthleteOverview,
+)
+async def get_trainer_athlete_overview_endpoint(
+    athlete_id: str,
+    trainer: AuthenticatedUser = Depends(
+        require_trainer
+    ),
+) -> TrainerAthleteOverview:
+    try:
+        overview = await get_authenticated_trainer_athlete_overview(
+            trainer,
+            athlete_id,
+        )
+    except SupabaseConfigError as exc:
+        raise HTTPException(
+            status_code=(
+                status.HTTP_503_SERVICE_UNAVAILABLE
+            ),
+            detail="Supabase is not configured.",
+        ) from exc
+    except httpx.HTTPStatusError as exc:
+        raise HTTPException(
+            status_code=(
+                status.HTTP_502_BAD_GATEWAY
+            ),
+            detail=(
+                "Could not load trainer athlete"
+            ),
+        ) from exc
+
+    if overview is None:
+        raise HTTPException(
+            status_code=(
+                status.HTTP_404_NOT_FOUND
+            ),
+            detail="Trainer athlete not found",
+        )
+
+    return overview
 
 
 @router.get(

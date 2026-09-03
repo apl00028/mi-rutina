@@ -193,6 +193,18 @@ export const routes: Routes = [
     ]
   },
   {
+    path: 'trainer/clients/:athleteId',
+    loadComponent: () =>
+      import(
+        './pages/trainer-client/trainer-client'
+      ).then(
+        module => module.TrainerClient
+      ),
+    canActivate: [
+      trainerGuard
+    ]
+  },
+  {
     path: 'trainer',
     loadComponent: () =>
       import(

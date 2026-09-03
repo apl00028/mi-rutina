@@ -256,6 +256,105 @@ def test_trainer_athletes_keeps_upstream_error_generic(monkeypatch):
         )
 
 
+def test_trainer_can_get_athlete_overview(monkeypatch):
+    from app.domains.trainer import router as trainer_api
+    from app.domains.trainer.models import TrainerAthleteOverview
+
+    async def fake_get(trainer, athlete_id):
+        assert trainer.id == "trainer-123"
+        assert athlete_id == "athlete-1"
+        return TrainerAthleteOverview.model_validate(
+            {
+                "athlete_id": "athlete-1",
+                "status": "active",
+                "email": "athlete@example.com",
+                "display_name": "Athlete One",
+                "client_since": "2026-08-15T10:00:00Z",
+                "health": {
+                    "measurement_date": "2026-09-01",
+                    "weight_kg": 81.4,
+                    "body_fat_percent": 18.2,
+                    "muscle_mass_kg": 62.1,
+                    "body_water_percent": 55.3,
+                    "visceral_fat_index": 7,
+                    "waist_cm": 83.5,
+                },
+                "recent_training": {
+                    "last_completed": {
+                        "workout_id": "workout-1",
+                        "routine_id": "routine-strength",
+                        "session_id": "push",
+                        "session_name": "Empuje",
+                        "finished_at": "2026-09-02T09:30:00Z",
+                    },
+                    "completed_last_7_days": 3,
+                },
+                "active_routines": {
+                    "strength": {
+                        "routine_id": "routine-strength",
+                        "activated_at": "2026-08-20T10:00:00Z",
+                    },
+                    "swimming": None,
+                    "running": None,
+                    "cycling": None,
+                },
+                "trainer": {
+                    "last_assignment": {
+                        "template_id": "template-1",
+                        "routine_id": "assigned-routine",
+                        "discipline": "strength",
+                        "assigned_at": "2026-09-01T12:00:00Z",
+                    }
+                },
+            }
+        )
+
+    monkeypatch.setattr(
+        trainer_api,
+        "get_authenticated_trainer_athlete_overview",
+        fake_get,
+    )
+
+    overview = asyncio.run(
+        trainer_api.get_trainer_athlete_overview_endpoint(
+            "athlete-1",
+            trainer=asyncio.run(trainer_user()),
+        )
+    )
+
+    assert overview.athlete_id == "athlete-1"
+    assert overview.display_name == "Athlete One"
+    assert overview.health.weight_kg == 81.4
+
+
+def test_foreign_trainer_athlete_overview_is_not_found(monkeypatch):
+    from app.domains.trainer import router as trainer_api
+
+    async def fake_get(_trainer, _athlete_id):
+        return None
+
+    monkeypatch.setattr(
+        trainer_api,
+        "get_authenticated_trainer_athlete_overview",
+        fake_get,
+    )
+
+    try:
+        asyncio.run(
+            trainer_api.get_trainer_athlete_overview_endpoint(
+                "foreign-athlete",
+                trainer=asyncio.run(trainer_user()),
+            )
+        )
+    except HTTPException as exc:
+        assert exc.status_code == 404
+        assert exc.detail == "Trainer athlete not found"
+    else:
+        raise AssertionError(
+            "Expected HTTPException"
+        )
+
+
 def test_trainer_athletes_route_does_not_accept_trainer_id_parameter(
     monkeypatch,
 ):

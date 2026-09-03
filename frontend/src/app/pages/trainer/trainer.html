@@ -89,7 +89,13 @@
             athlete of athletes();
             track athlete.athlete_id
           ) {
-            <article class="athlete-card">
+            <a
+              class="athlete-card"
+              [routerLink]="[
+                '/trainer/clients',
+                athlete.athlete_id
+              ]"
+            >
               <div class="athlete-identity">
                 <strong>
                   {{ athleteTitle(athlete) }}
@@ -115,7 +121,7 @@
                   {{ athlete.status }}
                 </span>
               </div>
-            </article>
+            </a>
           }
         </div>
       }

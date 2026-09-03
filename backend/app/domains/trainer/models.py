@@ -28,6 +28,71 @@ class TrainerAthlete(BaseModel):
     client_since: datetime
 
 
+class TrainerAthleteHealth(BaseModel):
+    measurement_date: str | None = None
+    weight_kg: float | None = None
+    body_fat_percent: float | None = None
+    muscle_mass_kg: float | None = None
+    body_water_percent: float | None = None
+    visceral_fat_index: float | None = None
+    waist_cm: float | None = None
+
+
+class TrainerAthleteLastWorkout(BaseModel):
+    workout_id: str | None = None
+    routine_id: str | None = None
+    session_id: str | None = None
+    session_name: str | None = None
+    finished_at: str | None = None
+
+
+class TrainerAthleteRecentTraining(BaseModel):
+    last_completed: (
+        TrainerAthleteLastWorkout | None
+    ) = None
+    completed_last_7_days: int = 0
+
+
+class TrainerAthleteActiveRoutine(BaseModel):
+    routine_id: str | None = None
+    activated_at: str | None = None
+
+
+class TrainerAthleteActiveRoutines(BaseModel):
+    strength: (
+        TrainerAthleteActiveRoutine | None
+    ) = None
+    swimming: (
+        TrainerAthleteActiveRoutine | None
+    ) = None
+    running: (
+        TrainerAthleteActiveRoutine | None
+    ) = None
+    cycling: (
+        TrainerAthleteActiveRoutine | None
+    ) = None
+
+
+class TrainerAthleteLastAssignment(BaseModel):
+    template_id: str | None = None
+    routine_id: str | None = None
+    discipline: RoutineDiscipline | None = None
+    assigned_at: str | None = None
+
+
+class TrainerAthleteTrainerInfo(BaseModel):
+    last_assignment: (
+        TrainerAthleteLastAssignment | None
+    ) = None
+
+
+class TrainerAthleteOverview(TrainerAthlete):
+    health: TrainerAthleteHealth
+    recent_training: TrainerAthleteRecentTraining
+    active_routines: TrainerAthleteActiveRoutines
+    trainer: TrainerAthleteTrainerInfo
+
+
 class RoutineTemplateCreate(BaseModel):
     model_config = ConfigDict(
         extra="forbid"

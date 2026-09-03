@@ -1,10 +1,21 @@
 from datetime import datetime, timezone
+import json
+import logging
 import os
 from typing import Any
 
 import httpx
 
 from app.core.auth import AuthenticatedUser
+
+
+logger = logging.getLogger(
+    "uvicorn.error.aptus.trainer"
+)
+
+ATHLETE_IDENTITIES_RPC = (
+    "trainer_list_athlete_identities"
+)
 
 
 class SupabaseConfigError(RuntimeError):
@@ -27,6 +38,10 @@ async def list_active_trainer_athletes(
     trainer: AuthenticatedUser,
 ) -> list[dict[str, Any]]:
     url, key = _supabase_config()
+    rpc_url = (
+        f"{url}/rest/v1/rpc/"
+        f"{ATHLETE_IDENTITIES_RPC}"
+    )
 
     headers = {
         "Authorization":
@@ -41,12 +56,41 @@ async def list_active_trainer_athletes(
         timeout=10.0
     ) as client:
         response = await client.post(
-            (
-                f"{url}/rest/v1/rpc/"
-                "trainer_list_athlete_identities"
-            ),
+            rpc_url,
             headers=headers,
             json={},
+        )
+
+    if response.is_error:
+        request_id = (
+            response.headers.get(
+                "x-request-id"
+            )
+            or response.headers.get(
+                "request-id"
+            )
+        )
+        payload = {
+            "event":
+                "trainer_athlete_identities_rpc_failed",
+            "rpc":
+                ATHLETE_IDENTITIES_RPC,
+            "url":
+                rpc_url,
+            "status_code":
+                response.status_code,
+            "response_text":
+                response.text,
+        }
+
+        if request_id:
+            payload["request_id"] = request_id
+
+        logger.warning(
+            json.dumps(
+                payload,
+                separators=(",", ":"),
+            )
         )
 
     response.raise_for_status()

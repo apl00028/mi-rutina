@@ -1,3 +1,6 @@
+import asyncio
+
+from fastapi import HTTPException
 from fastapi.testclient import TestClient
 import httpx
 
@@ -194,6 +197,63 @@ def test_trainer_can_list_athlete_identity_nulls(monkeypatch):
             "client_since": "2026-08-15T10:00:00Z",
         }
     ]
+
+
+def test_trainer_athletes_keeps_upstream_error_generic(monkeypatch):
+    from app.domains.trainer import router as trainer_api
+
+    request = httpx.Request(
+        "POST",
+        (
+            "https://example.supabase.co/rest/v1/rpc/"
+            "trainer_list_athlete_identities"
+        ),
+    )
+    response = httpx.Response(
+        400,
+        request=request,
+        content=(
+            "authorization bearer-secret "
+            "apikey publishable-secret "
+            "database detail"
+        ).encode(),
+    )
+
+    async def fake_list(_trainer):
+        raise httpx.HTTPStatusError(
+            "Bad Request",
+            request=request,
+            response=response,
+        )
+
+    monkeypatch.setattr(
+        trainer_api,
+        "list_authenticated_trainer_athletes",
+        fake_list,
+    )
+
+    trainer = asyncio.run(
+        trainer_user()
+    )
+
+    try:
+        asyncio.run(
+            trainer_api.list_trainer_athletes(
+                trainer=trainer
+            )
+        )
+    except HTTPException as exc:
+        assert exc.status_code == 502
+        assert exc.detail == (
+            "Could not load trainer athletes"
+        )
+        assert "bearer-secret" not in exc.detail
+        assert "publishable-secret" not in exc.detail
+        assert "database detail" not in exc.detail
+    else:
+        raise AssertionError(
+            "Expected HTTPException"
+        )
 
 
 def test_trainer_athletes_route_does_not_accept_trainer_id_parameter(

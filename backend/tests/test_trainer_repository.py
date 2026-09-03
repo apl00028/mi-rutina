@@ -1,5 +1,6 @@
 import asyncio
 import inspect
+import logging
 
 import httpx
 
@@ -32,6 +33,8 @@ def test_list_active_trainer_athletes_filters_authenticated_trainer(
     captured = {}
 
     class FakeResponse:
+        is_error = False
+
         def raise_for_status(self):
             pass
 
@@ -99,6 +102,98 @@ def test_list_active_trainer_athletes_filters_authenticated_trainer(
         "Content-Type": "application/json",
     }
     assert captured["json"] == {}
+
+
+def test_list_active_trainer_athletes_logs_upstream_error_without_secrets(
+    monkeypatch,
+    caplog,
+):
+    monkeypatch.setenv(
+        "SUPABASE_URL",
+        "https://example.supabase.co",
+    )
+    monkeypatch.setenv(
+        "SUPABASE_PUBLISHABLE_KEY",
+        "publishable-key",
+    )
+
+    class FakeResponse:
+        is_error = True
+        status_code = 400
+        text = (
+            '{"code":"PGRST202",'
+            '"message":"Could not find function"}'
+        )
+        headers = {
+            "x-request-id":
+                "supabase-request-1"
+        }
+
+        def raise_for_status(self):
+            request = httpx.Request(
+                "POST",
+                (
+                    "https://example.supabase.co"
+                    "/rest/v1/rpc/"
+                    "trainer_list_athlete_identities"
+                ),
+            )
+            response = httpx.Response(
+                self.status_code,
+                request=request,
+                content=self.text.encode(),
+            )
+            raise httpx.HTTPStatusError(
+                "Bad Request",
+                request=request,
+                response=response,
+            )
+
+    class FakeClient:
+        def __init__(self, timeout):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):
+            pass
+
+        async def post(self, url, headers, json):
+            return FakeResponse()
+
+    monkeypatch.setattr(
+        repository.httpx,
+        "AsyncClient",
+        FakeClient,
+    )
+
+    with caplog.at_level(
+        logging.WARNING,
+        logger="uvicorn.error.aptus.trainer",
+    ):
+        try:
+            asyncio.run(
+                repository.list_active_trainer_athletes(
+                    _trainer()
+                )
+            )
+        except httpx.HTTPStatusError:
+            pass
+
+    log_text = caplog.text
+
+    assert (
+        "trainer_athlete_identities_rpc_failed"
+        in log_text
+    )
+    assert "trainer_list_athlete_identities" in log_text
+    assert "supabase-request-1" in log_text
+    assert "PGRST202" in log_text
+    assert "access-token" not in log_text
+    assert "publishable-key" not in log_text
+    assert "authorization" not in log_text.lower()
+    assert "apikey" not in log_text.lower()
 
 
 def test_trainer_service_exposes_no_foreign_trainer_selector():

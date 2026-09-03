@@ -29,7 +29,8 @@ class TrainerAthlete(BaseModel):
 
 
 class TrainerAthleteHealth(BaseModel):
-    measurement_date: str | None = None
+    weight_measurement_date: str | None = None
+    waist_measurement_date: str | None = None
     weight_kg: float | None = None
     body_fat_percent: float | None = None
     muscle_mass_kg: float | None = None
@@ -55,6 +56,7 @@ class TrainerAthleteRecentTraining(BaseModel):
 
 class TrainerAthleteActiveRoutine(BaseModel):
     routine_id: str | None = None
+    name: str | None = None
     activated_at: str | None = None
 
 
@@ -76,6 +78,7 @@ class TrainerAthleteActiveRoutines(BaseModel):
 class TrainerAthleteLastAssignment(BaseModel):
     template_id: str | None = None
     routine_id: str | None = None
+    name: str | None = None
     discipline: RoutineDiscipline | None = None
     assigned_at: str | None = None
 

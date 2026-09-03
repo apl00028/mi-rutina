@@ -147,6 +147,70 @@ export class TrainerClient implements OnInit {
   }
 
 
+  statusLabel(
+    statusValue: string
+  ): string {
+    return statusValue === 'active'
+      ? 'Activo'
+      : statusValue;
+  }
+
+
+  completedSessionsLabel(
+    count: number
+  ): string {
+    return count === 1
+      ? '1 sesión'
+      : `${count} sesiones`;
+  }
+
+
+  lastWorkoutTitle(
+    athlete: TrainerAthleteOverview
+  ): string {
+    const workout =
+      athlete.recent_training.last_completed;
+
+    return (
+      workout?.session_name?.trim() ||
+      workout?.session_id?.trim() ||
+      '—'
+    );
+  }
+
+
+  routineTitle(
+    routines: TrainerAthleteActiveRoutines,
+    discipline: TrainerDiscipline
+  ): string {
+    const routine =
+      this.activeRoutine(
+        routines,
+        discipline
+      );
+
+    return (
+      routine?.name?.trim() ||
+      routine?.routine_id?.trim() ||
+      '—'
+    );
+  }
+
+
+  assignmentTitle(
+    athlete: TrainerAthleteOverview
+  ): string {
+    const assignment =
+      athlete.trainer.last_assignment;
+
+    return (
+      assignment?.name?.trim() ||
+      assignment?.routine_id?.trim() ||
+      '—'
+    );
+  }
+
+
   formatDate(
     value: string | null | undefined
   ): string {

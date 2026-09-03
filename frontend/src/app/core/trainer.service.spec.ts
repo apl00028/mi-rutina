@@ -314,8 +314,10 @@ function athleteOverviewResponse() {
     client_since:
       '2026-08-15T10:00:00Z',
     health: {
-      measurement_date:
+      weight_measurement_date:
         '2026-09-01',
+      waist_measurement_date:
+        '2026-08-30',
       weight_kg:
         81.4,
       body_fat_percent:
@@ -349,6 +351,8 @@ function athleteOverviewResponse() {
       strength: {
         routine_id:
           'routine-strength',
+        name:
+          'Plan fuerza',
         activated_at:
           '2026-08-20T10:00:00Z'
       },
@@ -365,6 +369,8 @@ function athleteOverviewResponse() {
           'template-1',
         routine_id:
           'assigned-routine',
+        name:
+          'Base fuerza',
         discipline:
           'strength',
         assigned_at:

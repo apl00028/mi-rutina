@@ -43,8 +43,10 @@ as $$
     profiles.display_name,
     authorized_relation.client_since,
     pg_catalog.jsonb_build_object(
-      'measurement_date',
+      'weight_measurement_date',
       latest_weight.measurement_date,
+      'waist_measurement_date',
+      latest_body.measurement_date,
       'weight_kg',
       latest_weight.weight_kg,
       'body_fat_percent',
@@ -100,6 +102,11 @@ as $$
           latest_assignment.template_id,
           'routine_id',
           latest_assignment.routine_id,
+          'name',
+          coalesce(
+            latest_assignment.template_name,
+            latest_assignment.routine_name
+          ),
           'discipline',
           latest_assignment.discipline,
           'assigned_at',
@@ -127,6 +134,7 @@ as $$
   ) as latest_weight on true
   left join lateral (
     select
+      health_body_measurements.measurement_date,
       health_body_measurements.waist_cm
     from public.health_body_measurements
     where health_body_measurements.user_id = authorized_relation.athlete_id
@@ -179,10 +187,15 @@ as $$
         select pg_catalog.jsonb_build_object(
           'routine_id',
           active_routines.routine_id,
+          'name',
+          routines.data->>'name',
           'activated_at',
           active_routines.activated_at
         )
         from public.active_routines
+        left join public.routines
+          on routines.user_id = active_routines.user_id
+         and routines.id = active_routines.routine_id
         where active_routines.user_id = authorized_relation.athlete_id
           and active_routines.discipline = 'strength'
         limit 1
@@ -191,10 +204,15 @@ as $$
         select pg_catalog.jsonb_build_object(
             'routine_id',
             active_routines.routine_id,
+            'name',
+            routines.data->>'name',
             'activated_at',
             active_routines.activated_at
         )
         from public.active_routines
+        left join public.routines
+          on routines.user_id = active_routines.user_id
+         and routines.id = active_routines.routine_id
         where active_routines.user_id = authorized_relation.athlete_id
           and active_routines.discipline = 'swimming'
         limit 1
@@ -203,10 +221,15 @@ as $$
         select pg_catalog.jsonb_build_object(
           'routine_id',
           active_routines.routine_id,
+          'name',
+          routines.data->>'name',
           'activated_at',
           active_routines.activated_at
         )
         from public.active_routines
+        left join public.routines
+          on routines.user_id = active_routines.user_id
+         and routines.id = active_routines.routine_id
         where active_routines.user_id = authorized_relation.athlete_id
           and active_routines.discipline = 'running'
         limit 1
@@ -215,10 +238,15 @@ as $$
         select pg_catalog.jsonb_build_object(
           'routine_id',
           active_routines.routine_id,
+          'name',
+          routines.data->>'name',
           'activated_at',
           active_routines.activated_at
         )
         from public.active_routines
+        left join public.routines
+          on routines.user_id = active_routines.user_id
+         and routines.id = active_routines.routine_id
         where active_routines.user_id = authorized_relation.athlete_id
           and active_routines.discipline = 'cycling'
         limit 1
@@ -229,9 +257,19 @@ as $$
       trainer_routine_assignments.id,
       trainer_routine_assignments.template_id,
       trainer_routine_assignments.routine_id,
+      trainer_routine_templates.name as template_name,
+      routines.data->>'name' as routine_name,
       trainer_routine_assignments.discipline,
       trainer_routine_assignments.assigned_at
     from public.trainer_routine_assignments
+    left join public.trainer_routine_templates
+      on trainer_routine_templates.trainer_id
+        = trainer_routine_assignments.trainer_id
+     and trainer_routine_templates.id
+        = trainer_routine_assignments.template_id
+    left join public.routines
+      on routines.user_id = trainer_routine_assignments.athlete_id
+     and routines.id = trainer_routine_assignments.routine_id
     where trainer_routine_assignments.trainer_id = (select auth.uid())
       and trainer_routine_assignments.athlete_id
         = authorized_relation.athlete_id

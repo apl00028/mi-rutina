@@ -72,12 +72,16 @@ def test_overview_rpc_reads_only_real_overview_sources():
     assert "trainer_athletes.created_at as client_since" in sql
     assert "athlete_users.email" in sql
     assert "profiles.display_name" in sql
+    assert "'weight_measurement_date'" in sql
+    assert "'waist_measurement_date'" in sql
     assert "health_weight_entries.weight_kg" in sql
     assert "health_body_measurements.waist_cm" in sql
     assert "workouts.data->>'status' = 'finished'" in sql
     assert "completed_last_7_days" in sql
     assert "session->>'name'" in sql
     assert "session->>'title'" in sql
+    assert "routines.data->>'name'" in sql
+    assert "trainer_routine_templates.name as template_name" in sql
 
 
 def test_overview_rpc_returns_all_active_routine_disciplines_explicitly():
@@ -99,6 +103,8 @@ def test_overview_rpc_returns_all_active_routine_disciplines_explicitly():
             "active_routines.discipline = "
             f"'{discipline}'"
         ) in sql
+
+    assert "'name',\n          routines.data->>'name'" in sql
 
 
 def test_overview_rpc_privileges_and_schema_reload():

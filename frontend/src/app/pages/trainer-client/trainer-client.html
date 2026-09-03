@@ -53,10 +53,10 @@
 
           <div>
             <dt>
-              Status
+              Estado
             </dt>
             <dd>
-              {{ athlete.status }}
+              {{ statusLabel(athlete.status) }}
             </dd>
           </div>
         </dl>
@@ -66,6 +66,11 @@
         <h2>
           Salud actual
         </h2>
+
+        <p class="card-note">
+          Peso {{ formatDate(athlete.health.weight_measurement_date) }}
+          · Cintura {{ formatDate(athlete.health.waist_measurement_date) }}
+        </p>
 
         <dl class="metric-grid">
           <div>
@@ -135,25 +140,7 @@
               Último entrenamiento completado
             </dt>
             <dd>
-              {{
-                athlete.recent_training.last_completed
-                  ?.workout_id ?? '—'
-              }}
-            </dd>
-          </div>
-
-          <div>
-            <dt>
-              Sesión
-            </dt>
-            <dd>
-              {{
-                athlete.recent_training.last_completed
-                  ?.session_name
-                  ?? athlete.recent_training.last_completed
-                    ?.session_id
-                  ?? '—'
-              }}
+              {{ lastWorkoutTitle(athlete) }}
             </dd>
           </div>
 
@@ -177,8 +164,10 @@
             </dt>
             <dd>
               {{
-                athlete.recent_training
-                  .completed_last_7_days
+                completedSessionsLabel(
+                  athlete.recent_training
+                    .completed_last_7_days
+                )
               }}
             </dd>
           </div>
@@ -201,10 +190,10 @@
               </dt>
               <dd>
                 {{
-                  activeRoutine(
+                  routineTitle(
                     athlete.active_routines,
                     discipline
-                  )?.routine_id ?? '—'
+                  )
                 }}
               </dd>
             </div>
@@ -223,10 +212,7 @@
               Última rutina asignada
             </dt>
             <dd>
-              {{
-                athlete.trainer.last_assignment
-                  ?.routine_id ?? '—'
-              }}
+              {{ assignmentTitle(athlete) }}
             </dd>
           </div>
 

@@ -29,7 +29,8 @@ def _overview_row():
         "display_name": "Athlete One",
         "client_since": "2026-08-15T10:00:00Z",
         "health": {
-            "measurement_date": "2026-09-01",
+            "weight_measurement_date": "2026-09-01",
+            "waist_measurement_date": "2026-08-30",
             "weight_kg": 81.4,
             "body_fat_percent": 18.2,
             "muscle_mass_kg": 62.1,
@@ -50,6 +51,7 @@ def _overview_row():
         "active_routines": {
             "strength": {
                 "routine_id": "routine-strength",
+                "name": "Plan fuerza",
                 "activated_at": "2026-08-20T10:00:00Z",
             },
             "swimming": None,
@@ -60,6 +62,7 @@ def _overview_row():
             "last_assignment": {
                 "template_id": "template-1",
                 "routine_id": "assigned-routine",
+                "name": "Base fuerza",
                 "discipline": "strength",
                 "assigned_at": "2026-09-01T12:00:00Z",
             }
@@ -409,14 +412,14 @@ def test_trainer_athlete_overview_contract_validates_sections():
     assert (
         overview.active_routines
         .strength
-        .routine_id
-        == "routine-strength"
+        .name
+        == "Plan fuerza"
     )
     assert (
         overview.trainer
         .last_assignment
-        .routine_id
-        == "assigned-routine"
+        .name
+        == "Base fuerza"
     )
 
 

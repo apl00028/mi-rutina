@@ -134,7 +134,7 @@ describe(
         expect(text).toContain('athlete@example.com');
         expect(text).toContain('Cliente desde');
         expect(text).toContain('15/08/2026');
-        expect(text).toContain('active');
+        expect(text).toContain('Activo');
       }
     );
 
@@ -149,6 +149,8 @@ describe(
 
         expect(text).toContain('Peso');
         expect(text).toContain('81.4 kg');
+        expect(text).toContain('Peso 01/09/2026');
+        expect(text).toContain('Cintura 30/08/2026');
         expect(text).toContain('% grasa');
         expect(text).toContain('18.2%');
         expect(text).toContain('Cintura');
@@ -165,11 +167,11 @@ describe(
         const text =
           fixture.nativeElement.textContent;
 
-        expect(text).toContain('workout-1');
+        expect(text).not.toContain('workout-1');
         expect(text).toContain('Empuje');
         expect(text).toContain('02/09/2026');
         expect(text).toContain('Últimos 7 días');
-        expect(text).toContain('3');
+        expect(text).toContain('3 sesiones');
       }
     );
 
@@ -183,10 +185,10 @@ describe(
           fixture.nativeElement.textContent;
 
         expect(text).toContain('Fuerza');
-        expect(text).toContain('routine-strength');
+        expect(text).toContain('Plan fuerza');
         expect(text).toContain('Natación');
         expect(text).toContain('Última rutina asignada');
-        expect(text).toContain('assigned-routine');
+        expect(text).toContain('Base fuerza');
         expect(text).toContain('01/09/2026');
       }
     );
@@ -198,7 +200,8 @@ describe(
         await createPage(
           athleteOverview({
             health: {
-              measurement_date: null,
+              weight_measurement_date: null,
+              waist_measurement_date: null,
               weight_kg: null,
               body_fat_percent: null,
               muscle_mass_kg: null,
@@ -246,8 +249,10 @@ function athleteOverview(
     client_since:
       '2026-08-15T10:00:00Z',
     health: {
-      measurement_date:
+      weight_measurement_date:
         '2026-09-01',
+      waist_measurement_date:
+        '2026-08-30',
       weight_kg:
         81.4,
       body_fat_percent:
@@ -281,6 +286,8 @@ function athleteOverview(
       strength: {
         routine_id:
           'routine-strength',
+        name:
+          'Plan fuerza',
         activated_at:
           '2026-08-20T10:00:00Z'
       },
@@ -297,6 +304,8 @@ function athleteOverview(
           'template-1',
         routine_id:
           'assigned-routine',
+        name:
+          'Base fuerza',
         discipline:
           'strength',
         assigned_at:

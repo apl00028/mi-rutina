@@ -37,7 +37,8 @@ export interface TrainerAthlete {
 
 
 export interface TrainerAthleteHealth {
-  measurement_date: string | null;
+  weight_measurement_date: string | null;
+  waist_measurement_date: string | null;
   weight_kg: number | null;
   body_fat_percent: number | null;
   muscle_mass_kg: number | null;
@@ -64,6 +65,7 @@ export interface TrainerAthleteRecentTraining {
 
 export interface TrainerAthleteActiveRoutine {
   routine_id: string | null;
+  name: string | null;
   activated_at: string | null;
 }
 
@@ -79,6 +81,7 @@ export interface TrainerAthleteActiveRoutines {
 export interface TrainerAthleteLastAssignment {
   template_id: string | null;
   routine_id: string | null;
+  name: string | null;
   discipline: TrainerDiscipline | null;
   assigned_at: string | null;
 }

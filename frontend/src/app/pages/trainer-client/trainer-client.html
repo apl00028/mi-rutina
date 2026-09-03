@@ -269,6 +269,97 @@
               currentStrengthSession();
               as session
             ) {
+              <div class="calendar-panel">
+                <div class="calendar-header">
+                  <button
+                    type="button"
+                    (click)="previousStrengthMonth()"
+                  >
+                    ←
+                  </button>
+
+                  <h3>
+                    {{ strengthMonthLabel() }}
+                  </h3>
+
+                  <button
+                    type="button"
+                    (click)="nextStrengthMonth()"
+                  >
+                    →
+                  </button>
+                </div>
+
+                <div class="calendar-weekdays">
+                  <span>L</span>
+                  <span>M</span>
+                  <span>X</span>
+                  <span>J</span>
+                  <span>V</span>
+                  <span>S</span>
+                  <span>D</span>
+                </div>
+
+                <div class="calendar-grid">
+                  @for (
+                    day of strengthCalendarDays();
+                    track day.dateKey
+                  ) {
+                    <button
+                      type="button"
+                      class="calendar-day"
+                      [class.outside-month]="!day.inMonth"
+                      [class.has-session]="day.sessions.length > 0"
+                      [class.selected]="day.selected"
+                      [disabled]="day.sessions.length === 0"
+                      (click)="selectStrengthDay(day)"
+                    >
+                      <span>
+                        {{ day.dayNumber }}
+                      </span>
+                      @if (day.sessions.length > 0) {
+                        <small>
+                          {{ day.sessions.length }}
+                        </small>
+                      }
+                    </button>
+                  }
+                </div>
+              </div>
+
+              @if (
+                strengthSessionsForDate(
+                  strengthSessionDateKey(session)
+                ).length > 1
+              ) {
+                <div class="same-day-list">
+                  @for (
+                    sameDaySession of strengthSessionsForDate(
+                      strengthSessionDateKey(session)
+                    );
+                    track sameDaySession.workout_id
+                  ) {
+                    <button
+                      type="button"
+                      [class.selected]="
+                        sameDaySession.workout_id
+                          === session.workout_id
+                      "
+                      (click)="
+                        selectStrengthSession(sameDaySession)
+                      "
+                    >
+                      <span>
+                        {{ sessionTitle(sameDaySession) }}
+                      </span>
+                      <small>
+                        {{ strengthSessionTime(sameDaySession) }}
+                      </small>
+                    </button>
+                  }
+                </div>
+              }
+
               <header class="session-header">
                 <div>
                   <h3>
@@ -276,90 +367,108 @@
                   </h3>
 
                   <p>
-                    Fuerza
-                    · {{ formatDate(session.finished_at) }}
+                    {{ formatDate(session.finished_at) }}
                   </p>
                 </div>
               </header>
 
-              <div class="session-nav">
-                <button
-                  type="button"
-                  (click)="previousStrengthSession()"
-                  [disabled]="strengthIndex() === 0"
-                >
-                  ← Anterior
-                </button>
+              @if (session.exercises.length === 0) {
+                <div class="state-card compact-state">
+                  Sesión completada sin detalle de series registrado.
+                </div>
+              } @else {
+                <div class="exercise-list">
+                  @for (
+                    exercise of session.exercises;
+                    track exercise.exercise_id
+                  ) {
+                    <section class="exercise-block">
+                      <h4>
+                        {{ exerciseTitle(exercise) }}
+                      </h4>
 
-                <span>
-                  {{ strengthIndex() + 1 }}
-                  de
-                  {{ strengthSessions().length }}
-                </span>
-
-                <button
-                  type="button"
-                  (click)="nextStrengthSession()"
-                  [disabled]="
-                    strengthIndex()
-                      >= strengthSessions().length - 1
-                  "
-                >
-                  Siguiente →
-                </button>
-              </div>
-
-              <div class="exercise-list">
-                @for (
-                  exercise of session.exercises;
-                  track exercise.exercise_id
-                ) {
-                  <section class="exercise-block">
-                    <h4>
-                      {{ exerciseTitle(exercise) }}
-                    </h4>
-
-                    @if (exercise.sets.length) {
-                      <div class="set-list">
-                        @for (
-                          set of exercise.sets;
-                          track set.set_order
-                        ) {
-                          <div class="set-row">
+                      @if (exercise.sets.length) {
+                        <div class="set-list">
+                          <div
+                            class="set-row set-row-header"
+                            [style.grid-template-columns]="
+                              strengthSetGridColumns(exercise)
+                            "
+                          >
                             <span>
-                              Serie {{ set.set_order }}
+                              Serie
                             </span>
-                            <span>
-                              {{ setValue(set.reps, ' reps') }}
-                            </span>
-                            <span>
-                              {{ setValue(set.weight_kg, ' kg') }}
-                            </span>
-                            <span>
-                              {{ setRirOrRpe(set) }}
-                            </span>
-                            <span>
-                              {{
-                                setValue(
-                                  set.duration_seconds,
-                                  ' s'
-                                )
-                              }}
-                            </span>
+                            @for (
+                              column of strengthColumns(exercise);
+                              track column
+                            ) {
+                              <span>
+                                {{ strengthColumnLabel(column) }}
+                              </span>
+                            }
                           </div>
-                        }
-                      </div>
-                    } @else {
-                      <p class="card-note">
-                        —
-                      </p>
-                    }
-                  </section>
-                }
-              </div>
+
+                          @for (
+                            set of exercise.sets;
+                            track set.set_order;
+                            let setIndex = $index
+                          ) {
+                            <div
+                              class="set-row"
+                              [style.grid-template-columns]="
+                                strengthSetGridColumns(exercise)
+                              "
+                            >
+                              <span>
+                                Serie {{ setIndex + 1 }}
+                              </span>
+                              @for (
+                                column of strengthColumns(exercise);
+                                track column
+                              ) {
+                                <span>
+                                  {{ strengthSetMetric(set, column) }}
+                                </span>
+                              }
+                            </div>
+                          }
+                        </div>
+                      } @else {
+                        <p class="card-note">
+                          —
+                        </p>
+                      }
+                    </section>
+                  }
+                </div>
+              }
             }
           </div>
         }
+      </article>
+
+      <article class="overview-card performance-card">
+        <button
+          type="button"
+          class="accordion-trigger"
+          aria-expanded="false"
+        >
+          <span>
+            ▸ Natación
+          </span>
+        </button>
+      </article>
+
+      <article class="overview-card performance-card">
+        <button
+          type="button"
+          class="accordion-trigger"
+          aria-expanded="false"
+        >
+          <span>
+            ▸ Carrera
+          </span>
+        </button>
       </article>
     </section>
   } @else {

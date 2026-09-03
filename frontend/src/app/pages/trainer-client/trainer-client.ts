@@ -29,6 +29,22 @@ import {
 } from '../../core/trainer.service';
 
 
+type StrengthMetricColumn =
+  | 'reps'
+  | 'weight'
+  | 'duration'
+  | 'effort';
+
+
+interface StrengthCalendarDay {
+  dateKey: string;
+  dayNumber: number;
+  inMonth: boolean;
+  sessions: TrainerStrengthSession[];
+  selected: boolean;
+}
+
+
 @Component({
   selector: 'app-trainer-client',
   standalone: true,
@@ -64,8 +80,11 @@ export class TrainerClient implements OnInit {
   strengthSessions =
     signal<TrainerStrengthSession[]>([]);
 
-  strengthIndex =
-    signal(0);
+  selectedStrengthWorkoutId =
+    signal<string | null>(null);
+
+  strengthCalendarMonth =
+    signal<string | null>(null);
 
   readonly disciplines: TrainerDiscipline[] = [
     'strength',
@@ -94,10 +113,71 @@ export class TrainerClient implements OnInit {
     computed(() => {
       const sessions =
         this.strengthSessions();
+      const selectedId =
+        this.selectedStrengthWorkoutId();
 
-      return sessions[
-        this.strengthIndex()
-      ] ?? null;
+      return (
+        sessions.find(session =>
+          session.workout_id === selectedId
+        ) ?? sessions[0] ?? null
+      );
+    });
+
+  readonly strengthCalendarDays =
+    computed(() => {
+      const monthKey =
+        this.strengthCalendarMonth();
+
+      if (!monthKey) {
+        return [];
+      }
+
+      const monthStart =
+        new Date(`${monthKey}-01T00:00:00Z`);
+      const firstWeekday =
+        monthStart.getUTCDay() || 7;
+      const gridStart =
+        new Date(monthStart);
+
+      gridStart.setUTCDate(
+        monthStart.getUTCDate() -
+          firstWeekday +
+          1
+      );
+
+      return Array.from(
+        {
+          length: 42
+        },
+        (_, index): StrengthCalendarDay => {
+          const date =
+            new Date(gridStart);
+
+          date.setUTCDate(
+            gridStart.getUTCDate() + index
+          );
+
+          const dateKey =
+            this.dateKeyFromDate(date);
+          const sessions =
+            this.strengthSessionsForDate(dateKey);
+
+          return {
+            dateKey,
+            dayNumber:
+              date.getUTCDate(),
+            inMonth:
+              this.monthKeyFromDate(date) ===
+              monthKey,
+            sessions,
+            selected:
+              sessions.some(session =>
+                session.workout_id ===
+                  this.selectedStrengthWorkoutId()
+              )
+          };
+        }
+      );
     });
 
 
@@ -185,7 +265,14 @@ export class TrainerClient implements OnInit {
           .listStrengthSessions(athleteId);
 
       this.strengthSessions.set(sessions);
-      this.strengthIndex.set(0);
+      this.selectedStrengthWorkoutId.set(
+        sessions[0]?.workout_id ?? null
+      );
+      this.strengthCalendarMonth.set(
+        this.monthKeyFromValue(
+          sessions[0]?.finished_at
+        )
+      );
       this.strengthLoaded.set(true);
     } catch (error) {
       this.strengthError.set(
@@ -200,21 +287,37 @@ export class TrainerClient implements OnInit {
   }
 
 
-  previousStrengthSession(): void {
-    this.strengthIndex.update(index =>
-      Math.max(
-        0,
-        index - 1
-      )
-    );
+  previousStrengthMonth(): void {
+    this.shiftStrengthMonth(-1);
   }
 
 
-  nextStrengthSession(): void {
-    this.strengthIndex.update(index =>
-      Math.min(
-        this.strengthSessions().length - 1,
-        index + 1
+  nextStrengthMonth(): void {
+    this.shiftStrengthMonth(1);
+  }
+
+
+  selectStrengthDay(
+    day: StrengthCalendarDay
+  ): void {
+    const session =
+      day.sessions[0];
+
+    if (session) {
+      this.selectStrengthSession(session);
+    }
+  }
+
+
+  selectStrengthSession(
+    session: TrainerStrengthSession
+  ): void {
+    this.selectedStrengthWorkoutId.set(
+      session.workout_id
+    );
+    this.strengthCalendarMonth.set(
+      this.monthKeyFromValue(
+        session.finished_at
       )
     );
   }
@@ -371,6 +474,172 @@ export class TrainerClient implements OnInit {
   }
 
 
+  strengthMonthLabel(): string {
+    const monthKey =
+      this.strengthCalendarMonth();
+
+    if (!monthKey) {
+      return '—';
+    }
+
+    return new Intl.DateTimeFormat(
+      'es-ES',
+      {
+        month: 'long',
+        year: 'numeric'
+      }
+    ).format(
+      new Date(`${monthKey}-01T00:00:00Z`)
+    );
+  }
+
+
+  strengthSessionsForDate(
+    dateKey: string
+  ): TrainerStrengthSession[] {
+    return this.strengthSessions()
+      .filter(session =>
+        this.dateKeyFromValue(
+          session.finished_at
+        ) === dateKey
+      );
+  }
+
+
+  strengthSessionDateKey(
+    session: TrainerStrengthSession
+  ): string {
+    return (
+      this.dateKeyFromValue(
+        session.finished_at
+      ) ?? ''
+    );
+  }
+
+
+  strengthSessionTime(
+    session: TrainerStrengthSession
+  ): string {
+    if (!session.finished_at) {
+      return this.sessionTitle(session);
+    }
+
+    const date =
+      new Date(session.finished_at);
+
+    if (Number.isNaN(date.getTime())) {
+      return this.sessionTitle(session);
+    }
+
+    return new Intl.DateTimeFormat(
+      'es-ES',
+      {
+        hour: '2-digit',
+        minute: '2-digit'
+      }
+    ).format(date);
+  }
+
+
+  strengthColumns(
+    exercise: TrainerStrengthExercise
+  ): StrengthMetricColumn[] {
+    const columns: StrengthMetricColumn[] = [];
+    const hasReps =
+      exercise.sets.some(set =>
+        set.reps !== null &&
+        set.reps !== undefined
+      );
+    const hasWeight =
+      exercise.sets.some(set =>
+        set.weight_kg !== null &&
+        set.weight_kg !== undefined
+      );
+    const hasDuration =
+      exercise.sets.some(set =>
+        set.duration_seconds !== null &&
+        set.duration_seconds !== undefined
+      );
+    const hasEffort =
+      exercise.sets.some(set =>
+        (
+          set.rir !== null &&
+          set.rir !== undefined
+        ) ||
+        (
+          set.rpe !== null &&
+          set.rpe !== undefined
+        )
+      );
+
+    if (hasReps) {
+      columns.push('reps');
+    }
+
+    if (hasWeight) {
+      columns.push('weight');
+    }
+
+    if (hasDuration) {
+      columns.push('duration');
+    }
+
+    if (hasEffort) {
+      columns.push('effort');
+    }
+
+    return columns;
+  }
+
+
+  strengthColumnLabel(
+    column: StrengthMetricColumn
+  ): string {
+    switch (column) {
+      case 'reps':
+        return 'Reps';
+      case 'weight':
+        return 'Peso';
+      case 'duration':
+        return 'Duración';
+      default:
+        return 'RIR/RPE';
+    }
+  }
+
+
+  strengthSetMetric(
+    set: TrainerStrengthSet,
+    column: StrengthMetricColumn
+  ): string {
+    switch (column) {
+      case 'reps':
+        return this.setValue(set.reps);
+      case 'weight':
+        return this.setValue(
+          set.weight_kg,
+          ' kg'
+        );
+      case 'duration':
+        return this.setValue(
+          set.duration_seconds,
+          ' s'
+        );
+      default:
+        return this.setRirOrRpe(set);
+    }
+  }
+
+
+  strengthSetGridColumns(
+    exercise: TrainerStrengthExercise
+  ): string {
+    return `1fr repeat(${
+      this.strengthColumns(exercise).length
+    }, minmax(0, 1fr))`;
+  }
+
+
   formatDate(
     value: string | null | undefined
   ): string {
@@ -417,6 +686,79 @@ export class TrainerClient implements OnInit {
     discipline: TrainerDiscipline
   ) {
     return routines[discipline];
+  }
+
+
+  private shiftStrengthMonth(
+    delta: number
+  ): void {
+    const monthKey =
+      this.strengthCalendarMonth();
+
+    if (!monthKey) {
+      return;
+    }
+
+    const date =
+      new Date(`${monthKey}-01T00:00:00Z`);
+
+    date.setUTCMonth(
+      date.getUTCMonth() + delta
+    );
+
+    this.strengthCalendarMonth.set(
+      this.monthKeyFromDate(date)
+    );
+  }
+
+
+  private monthKeyFromValue(
+    value: string | null | undefined
+  ): string | null {
+    if (!value) {
+      return null;
+    }
+
+    const date =
+      new Date(value);
+
+    if (Number.isNaN(date.getTime())) {
+      return null;
+    }
+
+    return this.monthKeyFromDate(date);
+  }
+
+
+  private monthKeyFromDate(
+    date: Date
+  ): string {
+    return date.toISOString().slice(0, 7);
+  }
+
+
+  private dateKeyFromValue(
+    value: string | null | undefined
+  ): string | null {
+    if (!value) {
+      return null;
+    }
+
+    const date =
+      new Date(value);
+
+    if (Number.isNaN(date.getTime())) {
+      return null;
+    }
+
+    return this.dateKeyFromDate(date);
+  }
+
+
+  private dateKeyFromDate(
+    date: Date
+  ): string {
+    return date.toISOString().slice(0, 10);
   }
 
 

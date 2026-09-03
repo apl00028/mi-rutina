@@ -281,18 +281,20 @@ describe(
         expect(text).toContain('Rendimiento');
         expect(text).toContain('Empuje');
         expect(text).toContain('02/09/2026');
-        expect(text).toContain('1 de 1');
+        expect(text).toContain('septiembre de 2026');
         expect(text).toContain('Press de banca');
         expect(text).toContain('Serie 1');
-        expect(text).toContain('8 reps');
+        expect(text).toContain('Reps');
+        expect(text).toContain('8');
         expect(text).toContain('30 kg');
         expect(text).toContain('RIR 2');
+        expect(text).not.toContain('Duración');
       }
     );
 
 
     it(
-      'navigates between strength sessions',
+      'marks days with sessions and selects by calendar day',
       async () => {
         await createPage();
 
@@ -319,33 +321,144 @@ describe(
 
         expect(
           fixture.nativeElement.textContent
-        ).toContain('1 de 2');
+        ).toContain('septiembre de 2026');
         expect(
           fixture.nativeElement.textContent
         ).toContain('Empuje');
 
-        clickButton('Siguiente');
+        const markedDay =
+          calendarDay('2');
+
+        expect(
+          markedDay.classList.contains(
+            'has-session'
+          )
+        ).toBe(true);
+        expect(
+          markedDay.classList.contains(
+            'selected'
+          )
+        ).toBe(true);
+
+        clickButton('←');
         fixture.detectChanges();
 
         expect(
           fixture.nativeElement.textContent
-        ).toContain('2 de 2');
+        ).toContain('agosto de 2026');
+
+        calendarMarkedDay('31').click();
+        fixture.detectChanges();
+
         expect(
           fixture.nativeElement.textContent
         ).toContain('Prensa');
-
-        clickButton('Anterior');
-        fixture.detectChanges();
-
-        expect(
-          fixture.nativeElement.textContent
-        ).toContain('1 de 2');
       }
     );
 
 
     it(
-      'renders dashes for null strength set values',
+      'shows a selector for multiple sessions on the same day',
+      async () => {
+        await createPage();
+
+        await openStrength([
+          strengthSession(),
+          strengthSession({
+            workout_id:
+              'workout-2',
+            session_name:
+              'Pierna',
+            finished_at:
+              '2026-09-02T17:30:00Z',
+            exercises: [
+              {
+                exercise_id:
+                  'leg-press',
+                exercise_name:
+                  'Prensa',
+                sets: []
+              }
+            ]
+          })
+        ]);
+
+        const text =
+          fixture.nativeElement.textContent;
+
+        expect(text).toContain('Empuje');
+        expect(text).toContain('Pierna');
+        expect(text).toContain('19:30');
+
+        clickButton('Pierna');
+        fixture.detectChanges();
+
+        expect(
+          fixture.nativeElement.textContent
+        ).toContain('Prensa');
+      }
+    );
+
+
+    it(
+      'restarts visible set numbering by exercise',
+      async () => {
+        await createPage();
+
+        await openStrength([
+          strengthSession({
+            exercises: [
+              {
+                exercise_id:
+                  'bench-press',
+                exercise_name:
+                  'Press de banca',
+                sets: [
+                  strengthSet({
+                    set_order:
+                      3
+                  }),
+                  strengthSet({
+                    set_index:
+                      1,
+                    set_order:
+                      4
+                  })
+                ]
+              },
+              {
+                exercise_id:
+                  'leg-press',
+                exercise_name:
+                  'Prensa',
+                sets: [
+                  strengthSet({
+                    set_index:
+                      2,
+                    set_order:
+                      5
+                  })
+                ]
+              }
+            ]
+          })
+        ]);
+
+        const rows =
+          setRows();
+
+        expect(rows[1].textContent)
+          .toContain('Serie 1');
+        expect(rows[2].textContent)
+          .toContain('Serie 2');
+        expect(rows[4].textContent)
+          .toContain('Serie 1');
+      }
+    );
+
+
+    it(
+      'shows duration only when it is present',
       async () => {
         await createPage();
 
@@ -356,26 +469,20 @@ describe(
                 exercise_id:
                   'plank',
                 exercise_name:
-                  null,
+                  'Plancha',
                 sets: [
-                  {
+                  strengthSet({
                     set_index:
                       0,
                     set_order:
                       1,
-                    set_type:
-                      'working',
                     reps:
                       null,
                     weight_kg:
                       null,
-                    rir:
-                      null,
-                    rpe:
-                      null,
                     duration_seconds:
-                      null
-                  }
+                      47
+                  })
                 ]
               }
             ]
@@ -383,10 +490,36 @@ describe(
         ]);
 
         const text =
-          fixture.nativeElement.textContent;
+          (
+            fixture.nativeElement
+              .querySelector('.performance-section')
+              ?.textContent ?? ''
+          );
 
-        expect(text).toContain('plank');
-        expect(text).toContain('—');
+        expect(text).toContain('Plancha');
+        expect(text).toContain('Duración');
+        expect(text).toContain('47 s');
+        expect(text).not.toContain('Peso');
+      }
+    );
+
+
+    it(
+      'shows a message for sessions without exercises',
+      async () => {
+        await createPage();
+
+        await openStrength([
+          strengthSession({
+            exercises: []
+          })
+        ]);
+
+        expect(
+          fixture.nativeElement.textContent
+        ).toContain(
+          'Sesión completada sin detalle de series registrado.'
+        );
       }
     );
 
@@ -402,6 +535,31 @@ describe(
           fixture.nativeElement.textContent
         ).toContain(
           'No hay sesiones de fuerza completadas.'
+        );
+      }
+    );
+
+
+    it(
+      'lazy loads strength sessions only once',
+      async () => {
+        await createPage();
+
+        await openStrength([
+          strengthSession()
+        ]);
+
+        clickButton('Fuerza');
+        fixture.detectChanges();
+        clickButton('Fuerza');
+
+        await flushPromises();
+
+        http.expectNone(
+          (
+            `${environment.apiUrl}/trainer/athletes/` +
+            'athlete-1/strength-sessions'
+          )
         );
       }
     );
@@ -430,6 +588,64 @@ describe(
     }
 
 
+    function calendarDay(
+      label: string
+    ): HTMLButtonElement {
+      const buttons = Array.from(
+        fixture.nativeElement
+          .querySelectorAll('.calendar-day')
+      ) as HTMLButtonElement[];
+      const button =
+        buttons.find(candidate =>
+          candidate.textContent
+            ?.trim()
+            .startsWith(label)
+        );
+
+      if (!button) {
+        throw new Error(
+          `Calendar day not found: ${label}`
+        );
+      }
+
+      return button;
+    }
+
+
+    function calendarMarkedDay(
+      label: string
+    ): HTMLButtonElement {
+      const buttons = Array.from(
+        fixture.nativeElement
+          .querySelectorAll(
+            '.calendar-day.has-session'
+          )
+      ) as HTMLButtonElement[];
+      const button =
+        buttons.find(candidate =>
+          candidate.textContent
+            ?.trim()
+            .startsWith(label)
+        );
+
+      if (!button) {
+        throw new Error(
+          `Marked calendar day not found: ${label}`
+        );
+      }
+
+      return button;
+    }
+
+
+    function setRows(): HTMLElement[] {
+      return Array.from(
+        fixture.nativeElement
+          .querySelectorAll('.set-row')
+      ) as HTMLElement[];
+    }
+
+
     async function openStrength(
       response: unknown[]
     ): Promise<void> {
@@ -448,6 +664,31 @@ describe(
     }
   }
 );
+
+
+function strengthSet(
+  patch: Record<string, unknown> = {}
+) {
+  return {
+    set_index:
+      0,
+    set_order:
+      1,
+    set_type:
+      'working',
+    reps:
+      8,
+    weight_kg:
+      30,
+    rir:
+      2,
+    rpe:
+      null,
+    duration_seconds:
+      null,
+    ...patch
+  };
+}
 
 
 function strengthSession(
@@ -473,24 +714,7 @@ function strengthSession(
         exercise_name:
           'Press de banca',
         sets: [
-          {
-            set_index:
-              0,
-            set_order:
-              1,
-            set_type:
-              'working',
-            reps:
-              8,
-            weight_kg:
-              30,
-            rir:
-              2,
-            rpe:
-              null,
-            duration_seconds:
-              null
-          }
+          strengthSet()
         ]
       }
     ],

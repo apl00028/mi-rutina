@@ -171,8 +171,7 @@ export class Login {
       if (
         !recoverySession &&
         !authReturnError &&
-        !recoveryCode &&
-        !session
+        !recoveryCode
       ) {
         recoverySession =
           await this.auth

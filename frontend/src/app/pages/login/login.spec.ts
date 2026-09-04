@@ -474,13 +474,18 @@ describe(
 
 
     it(
-      'does not allow a normal session to enter recovery from the query param alone',
+      'does not confuse an existing normal session with a recovery session',
       async () => {
         authMock.waitForSession
           .mockResolvedValue({
             access_token:
               'normal-token'
           });
+
+        authMock.waitForPasswordRecoverySession
+          .mockResolvedValue(
+            null
+          );
 
         setLoginSearch(
           '?recovery=1'
@@ -497,20 +502,89 @@ describe(
 
         expect(
           authMock.waitForPasswordRecoverySession
-        ).not.toHaveBeenCalled();
+        ).toHaveBeenCalledOnce();
+
         expect(
           authMock.updatePassword
         ).not.toHaveBeenCalled();
+
         expect(
           fixture.componentInstance
             .recoveryMode()
         ).toBe(false);
+
         expect(
           fixture.nativeElement
             .querySelector(
               '.recovery-form'
             )
         ).toBeNull();
+      }
+    );
+
+
+    it(
+      'enters recovery when PASSWORD_RECOVERY arrives despite an existing session',
+      async () => {
+        const recoverySession = {
+          access_token:
+            'recovery-token'
+        };
+
+        authMock.waitForSession
+          .mockResolvedValue({
+            access_token:
+              'normal-token'
+          });
+
+        authMock.waitForPasswordRecoverySession
+          .mockImplementation(
+            async () => {
+              authMock.passwordRecoverySession.set(
+                recoverySession
+              );
+
+              return recoverySession;
+            }
+          );
+
+        setLoginSearch(
+          '?recovery=1'
+        );
+
+        const fixture =
+          TestBed.createComponent(
+            Login
+          );
+
+        fixture.detectChanges();
+        await fixture.whenStable();
+        await flushPromises();
+        fixture.detectChanges();
+
+        expect(
+          authMock.waitForPasswordRecoverySession
+        ).toHaveBeenCalledOnce();
+
+        expect(
+          fixture.componentInstance
+            .recoveryMode()
+        ).toBe(true);
+
+        expect(
+          fixture.nativeElement
+            .querySelector(
+              '.recovery-form'
+            )
+        ).not.toBeNull();
+
+        expect(
+          authMock.resolveAccess
+        ).not.toHaveBeenCalled();
+
+        expect(
+          routerMock.navigateByUrl
+        ).not.toHaveBeenCalled();
       }
     );
 

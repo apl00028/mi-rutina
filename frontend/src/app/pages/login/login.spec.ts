@@ -723,7 +723,7 @@ describe(
 
 
     it(
-      'lets a new user choose athlete or trainer access',
+      'switches between athlete and trainer access modes',
       async () => {
         const fixture =
           TestBed.createComponent(
@@ -737,18 +737,14 @@ describe(
         const component =
           fixture.componentInstance;
 
-        component.requestAccess();
-
-        fixture.detectChanges();
-
         expect(
-          component.accessRequestOpen()
-        ).toBe(true);
+          component.requestedAccessRole()
+        ).toBe('athlete');
 
         expect(
           fixture.nativeElement
             .querySelectorAll(
-              '.access-role-option'
+              '.access-role-toggle button'
             ).length
         ).toBe(2);
 
@@ -763,25 +759,21 @@ describe(
         ).toBe('trainer');
 
         expect(
+          fixture.nativeElement
+            .textContent
+        ).toContain(
+          'Accede a tus deportistas'
+        );
+
+        component.requestAccess();
+
+        expect(
           component.message()
         ).toContain(
           'entrenador'
         );
-
-        component.closeAccessRequest();
-
-        fixture.detectChanges();
-
-        expect(
-          component.accessRequestOpen()
-        ).toBe(false);
-
-        expect(
-          component.requestedAccessRole()
-        ).toBeNull();
       }
     );
-
 
 
     it(

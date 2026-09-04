@@ -82,12 +82,9 @@ export class Login {
   error =
     signal<string | null>(null);
 
-  readonly accessRequestOpen =
-    signal(false);
-
   readonly requestedAccessRole =
-    signal<'athlete' | 'trainer' | null>(
-      null
+    signal<'athlete' | 'trainer'>(
+      'athlete'
     );
 
 
@@ -614,15 +611,23 @@ export class Login {
 
   requestAccess():
     void {
-    this.accessRequestOpen.set(
-      true
+    const role =
+      this.requestedAccessRole();
+
+    this.message.set(
+      this.language() === 'es'
+        ? (
+            role === 'trainer'
+              ? 'Las cuentas de entrenador se activan actualmente mediante invitación.'
+              : 'Las nuevas cuentas de deportista se activan actualmente mediante invitación.'
+          )
+        : (
+            role === 'trainer'
+              ? 'Trainer accounts are currently activated by invitation.'
+              : 'New athlete accounts are currently activated by invitation.'
+          )
     );
 
-    this.requestedAccessRole.set(
-      null
-    );
-
-    this.message.set(null);
     this.error.set(null);
   }
 
@@ -634,35 +639,8 @@ export class Login {
       role
     );
 
-    this.message.set(
-      this.language() === 'es'
-        ? (
-            role === 'trainer'
-              ? 'Has seleccionado acceso como entrenador. Por ahora, las cuentas de entrenador se activan mediante invitación.'
-              : 'Has seleccionado acceso como deportista. Por ahora, las cuentas nuevas se activan mediante invitación.'
-          )
-        : (
-            role === 'trainer'
-              ? 'You selected trainer access. Trainer accounts are currently activated by invitation.'
-              : 'You selected athlete access. New accounts are currently activated by invitation.'
-          )
-    );
-
-    this.error.set(null);
-  }
-
-
-  closeAccessRequest():
-    void {
-    this.accessRequestOpen.set(
-      false
-    );
-
-    this.requestedAccessRole.set(
-      null
-    );
-
     this.message.set(null);
+    this.error.set(null);
   }
 
 

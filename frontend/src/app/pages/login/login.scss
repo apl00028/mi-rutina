@@ -655,65 +655,52 @@
   display: none !important;
 }
 
-.access-role-picker {
+.access-role-toggle {
   display: grid;
-  gap: 12px;
-  text-align: left;
-}
+  grid-template-columns: 1fr 1fr;
 
-.access-role-picker > strong {
-  color: var(--aptus-text);
-  font-size: 12px;
-  font-weight: 750;
-  text-align: center;
-}
+  margin-top: 18px;
+  padding: 3px;
 
-.access-role-options {
-  display: grid;
-  gap: 8px;
-}
-
-.access-role-option {
-  width: 100%;
-  display: grid;
-  gap: 4px;
-  padding: 12px 13px;
-  border: 1px solid var(--aptus-border-strong);
+  border: 1px solid var(--aptus-border);
   border-radius: var(--aptus-radius-md);
-  background: var(--aptus-surface);
-  color: var(--aptus-text);
-  text-align: left;
-  cursor: pointer;
-}
 
-.access-role-option:hover {
   background: var(--aptus-surface-muted);
 }
 
-.access-role-option.selected {
-  border-color: var(--aptus-accent);
-}
+.access-role-toggle button {
+  min-height: 36px;
 
-.access-role-title {
-  font-size: 12px;
-  font-weight: 750;
-}
+  padding: 0 12px;
 
-.access-role-option small {
-  color: var(--aptus-text-muted);
-  font-size: 10px;
-  line-height: 1.45;
-}
-
-.request-access-back {
-  justify-self: center;
-  padding: 0;
   border: 0;
+  border-radius: 7px;
+
   background: transparent;
   color: var(--aptus-text-muted);
+
   font: inherit;
-  font-size: 10px;
-  font-weight: 700;
+  font-size: 11px;
+  font-weight: 750;
+
   cursor: pointer;
+
+  transition:
+    background 120ms ease,
+    color 120ms ease;
+}
+
+.access-role-toggle button:hover {
+  color: var(--aptus-text);
+}
+
+.access-role-toggle button.active {
+  background: var(--aptus-accent);
+  color: var(--aptus-accent-contrast);
+}
+
+.access-role-toggle button:focus-visible {
+  outline: 3px solid var(--aptus-focus-ring);
+  outline-offset: 2px;
 }
 

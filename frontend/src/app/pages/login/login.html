@@ -66,12 +66,54 @@
         }}
       </h2>
 
-      <p>
-        {{
+      <div
+        class="access-role-toggle"
+        role="group"
+        [attr.aria-label]="
           language() === 'es'
-            ? 'Accede a tus rutinas, historial de entrenamiento y progreso.'
-            : 'Sign in to access your routines, training history and progress.'
-        }}
+            ? 'Tipo de acceso'
+            : 'Access type'
+        "
+      >
+        <button
+          type="button"
+          [class.active]="requestedAccessRole() === 'athlete'"
+          (click)="selectAccessRole('athlete')"
+        >
+          {{
+            language() === 'es'
+              ? 'Deportista'
+              : 'Athlete'
+          }}
+        </button>
+
+        <button
+          type="button"
+          [class.active]="requestedAccessRole() === 'trainer'"
+          (click)="selectAccessRole('trainer')"
+        >
+          {{
+            language() === 'es'
+              ? 'Entrenador'
+              : 'Trainer'
+          }}
+        </button>
+      </div>
+
+      <p>
+        @if (requestedAccessRole() === 'trainer') {
+          {{
+            language() === 'es'
+              ? 'Accede a tus deportistas, revisa su entrenamiento y gestiona sus rutinas.'
+              : 'Access your athletes, review their training and manage their routines.'
+          }}
+        } @else {
+          {{
+            language() === 'es'
+              ? 'Accede a tus rutinas, historial de entrenamiento y progreso.'
+              : 'Sign in to access your routines, training history and progress.'
+          }}
+        }
       </p>
     </div>
     }
@@ -332,97 +374,33 @@
       class="access-note"
       [hidden]="recoveryMode()"
     >
-      @if (!accessRequestOpen()) {
-        <span>
-          {{
-            language() === 'es'
-              ? '¿Eres nuevo en Aptus? Elige cómo quieres utilizar la plataforma.'
-              : 'New to Aptus? Choose how you want to use the platform.'
-          }}
-        </span>
+      <span>
+        {{
+          language() === 'es'
+            ? (
+                requestedAccessRole() === 'trainer'
+                  ? '¿Eres nuevo en Aptus como entrenador?'
+                  : '¿Eres nuevo en Aptus?'
+              )
+            : (
+                requestedAccessRole() === 'trainer'
+                  ? 'New to Aptus as a trainer?'
+                  : 'New to Aptus?'
+              )
+        }}
+      </span>
 
-        <button
-          type="button"
-          class="request-access-button"
-          (click)="requestAccess()"
-        >
-          {{
-            language() === 'es'
-              ? 'Solicitar acceso'
-              : 'Request access'
-          }}
-        </button>
-      } @else {
-        <div class="access-role-picker">
-          <strong>
-            {{
-              language() === 'es'
-                ? '¿Cómo vas a usar Aptus?'
-                : 'How will you use Aptus?'
-            }}
-          </strong>
-
-          <div class="access-role-options">
-            <button
-              type="button"
-              class="access-role-option"
-              [class.selected]="requestedAccessRole() === 'athlete'"
-              (click)="selectAccessRole('athlete')"
-            >
-              <span class="access-role-title">
-                {{
-                  language() === 'es'
-                    ? 'Soy deportista'
-                    : 'I am an athlete'
-                }}
-              </span>
-
-              <small>
-                {{
-                  language() === 'es'
-                    ? 'Quiero registrar mis entrenamientos y seguir mi progreso.'
-                    : 'I want to track my training and progress.'
-                }}
-              </small>
-            </button>
-
-            <button
-              type="button"
-              class="access-role-option"
-              [class.selected]="requestedAccessRole() === 'trainer'"
-              (click)="selectAccessRole('trainer')"
-            >
-              <span class="access-role-title">
-                {{
-                  language() === 'es'
-                    ? 'Soy entrenador'
-                    : 'I am a trainer'
-                }}
-              </span>
-
-              <small>
-                {{
-                  language() === 'es'
-                    ? 'Quiero gestionar deportistas, revisar su entrenamiento y asignar rutinas.'
-                    : 'I want to manage athletes, review training and assign routines.'
-                }}
-              </small>
-            </button>
-          </div>
-
-          <button
-            type="button"
-            class="request-access-back"
-            (click)="closeAccessRequest()"
-          >
-            {{
-              language() === 'es'
-                ? 'Volver'
-                : 'Back'
-            }}
-          </button>
-        </div>
-      }
+      <button
+        type="button"
+        class="request-access-button"
+        (click)="requestAccess()"
+      >
+        {{
+          language() === 'es'
+            ? 'Solicitar acceso'
+            : 'Request access'
+        }}
+      </button>
     </footer>
     }
   </section>

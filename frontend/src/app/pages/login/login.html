@@ -332,25 +332,97 @@
       class="access-note"
       [hidden]="recoveryMode()"
     >
-      <span>
-        {{
-          language() === 'es'
-            ? '¿Eres nuevo en Aptus? Tras identificarte, tu cuenta quedará pendiente de aprobación.'
-            : 'New to Aptus? After signing in, your account will be submitted for approval.'
-        }}
-      </span>
+      @if (!accessRequestOpen()) {
+        <span>
+          {{
+            language() === 'es'
+              ? '¿Eres nuevo en Aptus? Elige cómo quieres utilizar la plataforma.'
+              : 'New to Aptus? Choose how you want to use the platform.'
+          }}
+        </span>
 
-      <button
-        type="button"
-        class="request-access-button"
-        (click)="requestAccess()"
-      >
-        {{
-          language() === 'es'
-            ? 'Solicitar acceso'
-            : 'Request access'
-        }}
-      </button>
+        <button
+          type="button"
+          class="request-access-button"
+          (click)="requestAccess()"
+        >
+          {{
+            language() === 'es'
+              ? 'Solicitar acceso'
+              : 'Request access'
+          }}
+        </button>
+      } @else {
+        <div class="access-role-picker">
+          <strong>
+            {{
+              language() === 'es'
+                ? '¿Cómo vas a usar Aptus?'
+                : 'How will you use Aptus?'
+            }}
+          </strong>
+
+          <div class="access-role-options">
+            <button
+              type="button"
+              class="access-role-option"
+              [class.selected]="requestedAccessRole() === 'athlete'"
+              (click)="selectAccessRole('athlete')"
+            >
+              <span class="access-role-title">
+                {{
+                  language() === 'es'
+                    ? 'Soy deportista'
+                    : 'I am an athlete'
+                }}
+              </span>
+
+              <small>
+                {{
+                  language() === 'es'
+                    ? 'Quiero registrar mis entrenamientos y seguir mi progreso.'
+                    : 'I want to track my training and progress.'
+                }}
+              </small>
+            </button>
+
+            <button
+              type="button"
+              class="access-role-option"
+              [class.selected]="requestedAccessRole() === 'trainer'"
+              (click)="selectAccessRole('trainer')"
+            >
+              <span class="access-role-title">
+                {{
+                  language() === 'es'
+                    ? 'Soy entrenador'
+                    : 'I am a trainer'
+                }}
+              </span>
+
+              <small>
+                {{
+                  language() === 'es'
+                    ? 'Quiero gestionar deportistas, revisar su entrenamiento y asignar rutinas.'
+                    : 'I want to manage athletes, review training and assign routines.'
+                }}
+              </small>
+            </button>
+          </div>
+
+          <button
+            type="button"
+            class="request-access-back"
+            (click)="closeAccessRequest()"
+          >
+            {{
+              language() === 'es'
+                ? 'Volver'
+                : 'Back'
+            }}
+          </button>
+        </div>
+      }
     </footer>
     }
   </section>

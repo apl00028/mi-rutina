@@ -723,6 +723,68 @@ describe(
 
 
     it(
+      'lets a new user choose athlete or trainer access',
+      async () => {
+        const fixture =
+          TestBed.createComponent(
+            Login
+          );
+
+        fixture.detectChanges();
+        await fixture.whenStable();
+        fixture.detectChanges();
+
+        const component =
+          fixture.componentInstance;
+
+        component.requestAccess();
+
+        fixture.detectChanges();
+
+        expect(
+          component.accessRequestOpen()
+        ).toBe(true);
+
+        expect(
+          fixture.nativeElement
+            .querySelectorAll(
+              '.access-role-option'
+            ).length
+        ).toBe(2);
+
+        component.selectAccessRole(
+          'trainer'
+        );
+
+        fixture.detectChanges();
+
+        expect(
+          component.requestedAccessRole()
+        ).toBe('trainer');
+
+        expect(
+          component.message()
+        ).toContain(
+          'entrenador'
+        );
+
+        component.closeAccessRequest();
+
+        fixture.detectChanges();
+
+        expect(
+          component.accessRequestOpen()
+        ).toBe(false);
+
+        expect(
+          component.requestedAccessRole()
+        ).toBeNull();
+      }
+    );
+
+
+
+    it(
       'updates the password during recovery and returns to sign-in',
       async () => {
         const recoverySession = {

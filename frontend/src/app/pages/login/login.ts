@@ -82,6 +82,14 @@ export class Login {
   error =
     signal<string | null>(null);
 
+  readonly accessRequestOpen =
+    signal(false);
+
+  readonly requestedAccessRole =
+    signal<'athlete' | 'trainer' | null>(
+      null
+    );
+
 
   constructor(
     public auth: AuthService,
@@ -606,13 +614,55 @@ export class Login {
 
   requestAccess():
     void {
+    this.accessRequestOpen.set(
+      true
+    );
+
+    this.requestedAccessRole.set(
+      null
+    );
+
+    this.message.set(null);
+    this.error.set(null);
+  }
+
+
+  selectAccessRole(
+    role: 'athlete' | 'trainer'
+  ): void {
+    this.requestedAccessRole.set(
+      role
+    );
+
     this.message.set(
       this.language() === 'es'
-        ? 'El acceso a Aptus está actualmente disponible mediante invitación.'
-        : 'Aptus access is currently invitation-only.'
+        ? (
+            role === 'trainer'
+              ? 'Has seleccionado acceso como entrenador. Por ahora, las cuentas de entrenador se activan mediante invitación.'
+              : 'Has seleccionado acceso como deportista. Por ahora, las cuentas nuevas se activan mediante invitación.'
+          )
+        : (
+            role === 'trainer'
+              ? 'You selected trainer access. Trainer accounts are currently activated by invitation.'
+              : 'You selected athlete access. New accounts are currently activated by invitation.'
+          )
     );
 
     this.error.set(null);
+  }
+
+
+  closeAccessRequest():
+    void {
+    this.accessRequestOpen.set(
+      false
+    );
+
+    this.requestedAccessRole.set(
+      null
+    );
+
+    this.message.set(null);
   }
 
 

@@ -654,3 +654,66 @@
 .login-card [hidden] {
   display: none !important;
 }
+
+.access-role-picker {
+  display: grid;
+  gap: 12px;
+  text-align: left;
+}
+
+.access-role-picker > strong {
+  color: var(--aptus-text);
+  font-size: 12px;
+  font-weight: 750;
+  text-align: center;
+}
+
+.access-role-options {
+  display: grid;
+  gap: 8px;
+}
+
+.access-role-option {
+  width: 100%;
+  display: grid;
+  gap: 4px;
+  padding: 12px 13px;
+  border: 1px solid var(--aptus-border-strong);
+  border-radius: var(--aptus-radius-md);
+  background: var(--aptus-surface);
+  color: var(--aptus-text);
+  text-align: left;
+  cursor: pointer;
+}
+
+.access-role-option:hover {
+  background: var(--aptus-surface-muted);
+}
+
+.access-role-option.selected {
+  border-color: var(--aptus-accent);
+}
+
+.access-role-title {
+  font-size: 12px;
+  font-weight: 750;
+}
+
+.access-role-option small {
+  color: var(--aptus-text-muted);
+  font-size: 10px;
+  line-height: 1.45;
+}
+
+.request-access-back {
+  justify-self: center;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--aptus-text-muted);
+  font: inherit;
+  font-size: 10px;
+  font-weight: 700;
+  cursor: pointer;
+}
+

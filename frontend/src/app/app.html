@@ -50,6 +50,7 @@
       </div>
 
       <nav class="sidebar-nav">
+        @if (!isTrainer()) {
         <a
           routerLink="/"
           routerLinkActive="active"
@@ -149,6 +150,8 @@
           }
         </a>
 
+        }
+
         @if (isTrainer()) {
           <a
             routerLink="/trainer"
@@ -243,6 +246,7 @@
               class="mobile-nav-menu"
               aria-label="Navegación principal"
             >
+              @if (!isTrainer()) {
               <a
                 routerLink="/"
                 routerLinkActive="active"
@@ -358,6 +362,8 @@
                   </span>
                 }
               </a>
+
+              }
 
               @if (isTrainer()) {
                 <a
@@ -646,122 +652,167 @@
 
     <nav
       class="bottom-nav"
+      [class.trainer-bottom-nav]="isTrainer()"
       aria-label="Navegación principal"
     >
-      <a
-        routerLink="/"
-        routerLinkActive="active"
-        [routerLinkActiveOptions]="{
-          exact: true
-        }"
-        [attr.aria-current]="
-          isCurrentRoute('/')
-            ? 'page'
-            : null
-        "
-        aria-label="Ir a Inicio"
-      >
-        <svg
-          class="nav-icon"
-          lucideHouse
-          [size]="20"
-          [strokeWidth]="2"
-        ></svg>
+      @if (isTrainer()) {
+        <a
+          routerLink="/trainer"
+          routerLinkActive="active"
+          [attr.aria-current]="
+            isCurrentRoute('/trainer')
+              ? 'page'
+              : null
+          "
+          aria-label="Ir a Entrenador"
+        >
+          <svg
+            class="nav-icon"
+            lucideUserRound
+            [size]="20"
+            [strokeWidth]="2"
+          ></svg>
 
-        <span class="nav-label">
-          Inicio
-        </span>
-      </a>
+          <span class="nav-label">
+            Entrenador
+          </span>
+        </a>
 
-      <a
-        routerLink="/entrenar"
-        routerLinkActive="active"
-        [attr.aria-current]="
-          isCurrentRoute('/entrenar')
-            ? 'page'
-            : null
-        "
-        aria-label="Ir a Entrenar"
-      >
-        <svg
-          class="nav-icon"
-          lucideDumbbell
-          [size]="20"
-          [strokeWidth]="2"
-        ></svg>
+        <a
+          routerLink="/ajustes"
+          routerLinkActive="active"
+          [attr.aria-current]="
+            isCurrentRoute('/ajustes')
+              ? 'page'
+              : null
+          "
+          aria-label="Ir a Ajustes"
+        >
+          <svg
+            class="nav-icon"
+            lucideSettings
+            [size]="20"
+            [strokeWidth]="2"
+          ></svg>
 
-        <span class="nav-label">
-          Entrenar
-        </span>
-      </a>
+          <span class="nav-label">
+            Ajustes
+          </span>
+        </a>
+      } @else {
+        <a
+          routerLink="/"
+          routerLinkActive="active"
+          [routerLinkActiveOptions]="{
+            exact: true
+          }"
+          [attr.aria-current]="
+            isCurrentRoute('/')
+              ? 'page'
+              : null
+          "
+          aria-label="Ir a Inicio"
+        >
+          <svg
+            class="nav-icon"
+            lucideHouse
+            [size]="20"
+            [strokeWidth]="2"
+          ></svg>
 
-      <a
-        routerLink="/nutricion"
-        routerLinkActive="active"
-        [attr.aria-current]="
-          isCurrentRoute('/nutricion')
-            ? 'page'
-            : null
-        "
-        aria-label="Ir a Nutrición"
-      >
-        <svg
-          class="nav-icon"
-          lucideApple
-          [size]="20"
-          [strokeWidth]="2"
-        ></svg>
+          <span class="nav-label">
+            Inicio
+          </span>
+        </a>
 
-        <span class="nav-label">
-          Nutrición
-        </span>
-      </a>
+        <a
+          routerLink="/entrenar"
+          routerLinkActive="active"
+          [attr.aria-current]="
+            isCurrentRoute('/entrenar')
+              ? 'page'
+              : null
+          "
+          aria-label="Ir a Entrenar"
+        >
+          <svg
+            class="nav-icon"
+            lucideDumbbell
+            [size]="20"
+            [strokeWidth]="2"
+          ></svg>
 
-      <a
-        routerLink="/salud"
-        routerLinkActive="active"
-        [attr.aria-current]="
-          isCurrentRoute('/salud')
-            ? 'page'
-            : null
-        "
-        aria-label="Ir a Salud"
-      >
-        <svg
-          class="nav-icon"
-          lucideHeartPulse
-          [size]="20"
-          [strokeWidth]="2"
-        ></svg>
+          <span class="nav-label">
+            Entrenar
+          </span>
+        </a>
 
-        <span class="nav-label">
-          Salud
-        </span>
-      </a>
+        <a
+          routerLink="/nutricion"
+          routerLinkActive="active"
+          [attr.aria-current]="
+            isCurrentRoute('/nutricion')
+              ? 'page'
+              : null
+          "
+          aria-label="Ir a Nutrición"
+        >
+          <svg
+            class="nav-icon"
+            lucideApple
+            [size]="20"
+            [strokeWidth]="2"
+          ></svg>
 
+          <span class="nav-label">
+            Nutrición
+          </span>
+        </a>
 
-      <a
-        routerLink="/ajustes"
-        routerLinkActive="active"
-        [attr.aria-current]="
-          isCurrentRoute('/ajustes')
-            ? 'page'
-            : null
-        "
-        aria-label="Ir a Ajustes"
-      >
-        <svg
-          class="nav-icon"
-          lucideSettings
-          [size]="20"
-          [strokeWidth]="2"
-        ></svg>
+        <a
+          routerLink="/salud"
+          routerLinkActive="active"
+          [attr.aria-current]="
+            isCurrentRoute('/salud')
+              ? 'page'
+              : null
+          "
+          aria-label="Ir a Salud"
+        >
+          <svg
+            class="nav-icon"
+            lucideHeartPulse
+            [size]="20"
+            [strokeWidth]="2"
+          ></svg>
 
-        <span class="nav-label">
-          Ajustes
-        </span>
-      </a>
+          <span class="nav-label">
+            Salud
+          </span>
+        </a>
 
+        <a
+          routerLink="/ajustes"
+          routerLinkActive="active"
+          [attr.aria-current]="
+            isCurrentRoute('/ajustes')
+              ? 'page'
+              : null
+          "
+          aria-label="Ir a Ajustes"
+        >
+          <svg
+            class="nav-icon"
+            lucideSettings
+            [size]="20"
+            [strokeWidth]="2"
+          ></svg>
+
+          <span class="nav-label">
+            Ajustes
+          </span>
+        </a>
+      }
     </nav>
   </div>
 }

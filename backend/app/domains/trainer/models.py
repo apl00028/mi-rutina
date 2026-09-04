@@ -140,6 +140,38 @@ class TrainerPerformanceSession(BaseModel):
     source: str | None = None
 
 
+class TrainerSwimmingLength(BaseModel):
+    start_time: str | None = None
+    duration_seconds: float | None = None
+    distance_meters: float | None = None
+    total_strokes: int | None = None
+    average_stroke_rate_spm: float | None = None
+    stroke: str | None = None
+    length_type: str | None = None
+
+
+class TrainerSwimmingSessionDetail(BaseModel):
+    id: str
+    discipline: Literal["swimming"]
+    title: str
+    event_at: str
+    started_at: str
+    duration_seconds: float | None = None
+    total_distance_meters: float | None = None
+    pool_length_meters: float | None = None
+    total_elapsed_time_seconds: float | None = None
+    total_timer_time_seconds: float | None = None
+    total_moving_time_seconds: float | None = None
+    average_pace_seconds_per_100m: float | None = None
+    objective: str | None = None
+    technical_focus: list[str] = Field(
+        default_factory=list
+    )
+    lengths: list[TrainerSwimmingLength] = Field(
+        default_factory=list
+    )
+
+
 class RoutineTemplateCreate(BaseModel):
     model_config = ConfigDict(
         extra="forbid"

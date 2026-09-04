@@ -26,6 +26,8 @@ import {
   TrainerStrengthExercise,
   TrainerStrengthSession,
   TrainerStrengthSet,
+  TrainerSwimmingLength,
+  TrainerSwimmingSessionDetail,
   TrainerService
 } from '../../core/trainer.service';
 
@@ -94,6 +96,15 @@ export class TrainerClient implements OnInit {
 
   runningSessions =
     signal<TrainerPerformanceSession[]>([]);
+
+  swimmingDetailLoading =
+    signal(false);
+
+  swimmingDetailError =
+    signal<string | null>(null);
+
+  swimmingDetailCache =
+    signal<Record<string, TrainerSwimmingSessionDetail>>({});
 
   selectedPerformanceEventId =
     signal<string | null>(null);
@@ -200,6 +211,26 @@ export class TrainerClient implements OnInit {
           ? selected
           : null
       );
+    });
+
+  readonly currentSwimmingDetail =
+    computed(() => {
+      const selected =
+        this.currentPerformanceEvent();
+
+      if (
+        !selected ||
+        selected.discipline !== 'swimming'
+      ) {
+        return null;
+      }
+
+      const sessionId =
+        this.swimmingSessionIdFromEvent(selected);
+
+      return sessionId
+        ? this.swimmingDetailCache()[sessionId] ?? null
+        : null;
     });
 
   readonly selectedPerformanceDateKey =
@@ -378,6 +409,7 @@ export class TrainerClient implements OnInit {
           firstEvent?.event_at
         )
       );
+      void this.loadSelectedSwimmingDetail();
     } catch (error) {
       this.performanceError.set(
         this.errorMessage(
@@ -424,6 +456,7 @@ export class TrainerClient implements OnInit {
         event.event_at
       )
     );
+    void this.loadSelectedSwimmingDetail();
   }
 
 
@@ -687,6 +720,110 @@ export class TrainerClient implements OnInit {
   }
 
 
+  async loadSelectedSwimmingDetail():
+    Promise<void> {
+    const selected =
+      this.currentPerformanceEvent();
+
+    if (
+      !selected ||
+      selected.discipline !== 'swimming'
+    ) {
+      return;
+    }
+
+    const athleteId =
+      this.route.snapshot.paramMap.get(
+        'athleteId'
+      );
+    const sessionId =
+      this.swimmingSessionIdFromEvent(selected);
+
+    if (
+      !athleteId ||
+      !sessionId ||
+      this.swimmingDetailCache()[sessionId] ||
+      this.swimmingDetailLoading()
+    ) {
+      return;
+    }
+
+    this.swimmingDetailLoading.set(true);
+    this.swimmingDetailError.set(null);
+
+    try {
+      const detail =
+        await this.trainerService
+          .getSwimmingSession(
+            athleteId,
+            sessionId
+          );
+
+      this.swimmingDetailCache.set({
+        ...this.swimmingDetailCache(),
+        [sessionId]:
+          detail
+      });
+    } catch (error) {
+      this.swimmingDetailError.set(
+        this.errorMessage(
+          error,
+          'No se pudo cargar el detalle de natación.'
+        )
+      );
+    } finally {
+      this.swimmingDetailLoading.set(false);
+    }
+  }
+
+
+  swimmingLengthTitle(
+    length: TrainerSwimmingLength,
+    index: number
+  ): string {
+    const distance =
+      this.formatDistance(
+        length.distance_meters
+      );
+
+    return distance === '—'
+      ? `Largo ${index + 1}`
+      : `Largo ${index + 1} · ${distance}`;
+  }
+
+
+  swimmingLengthMeta(
+    length: TrainerSwimmingLength
+  ): string {
+    return [
+      length.stroke
+        ? this.swimmingStrokeLabel(length.stroke)
+        : null,
+      length.length_type,
+      this.formatDuration(
+        length.duration_seconds
+      )
+    ].filter(Boolean).join(' · ');
+  }
+
+
+  swimmingStrokeLabel(
+    stroke: string
+  ): string {
+    const labels:
+      Record<string, string> = {
+        freestyle: 'Crol',
+        backstroke: 'Espalda',
+        breaststroke: 'Braza',
+        butterfly: 'Mariposa',
+        mixed: 'Mixto',
+        drill: 'Técnica'
+      };
+
+    return labels[stroke] ?? stroke;
+  }
+
+
   strengthColumns(
     exercise: TrainerStrengthExercise
   ): StrengthMetricColumn[] {
@@ -811,6 +948,49 @@ export class TrainerClient implements OnInit {
   }
 
 
+  formatDistance(
+    value: number | null | undefined
+  ): string {
+    if (
+      value === null ||
+      value === undefined ||
+      !Number.isFinite(value)
+    ) {
+      return '—';
+    }
+
+    return value >= 1000
+      ? `${(value / 1000).toFixed(2)} km`
+      : `${Math.round(value)} m`;
+  }
+
+
+  formatDuration(
+    value: number | null | undefined
+  ): string {
+    if (
+      value === null ||
+      value === undefined ||
+      !Number.isFinite(value)
+    ) {
+      return '—';
+    }
+
+    const totalSeconds =
+      Math.round(value);
+    const minutes =
+      Math.floor(totalSeconds / 60);
+    const seconds =
+      totalSeconds % 60;
+
+    return minutes > 0
+      ? `${minutes}:${seconds
+        .toString()
+        .padStart(2, '0')}`
+      : `${seconds} s`;
+  }
+
+
   disciplineLabel(
     discipline: TrainerDiscipline
   ): string {
@@ -864,6 +1044,15 @@ export class TrainerClient implements OnInit {
       title:
         session.title?.trim() || '—'
     };
+  }
+
+
+  private swimmingSessionIdFromEvent(
+    event: PerformanceCalendarEvent
+  ): string | null {
+    return event.id.startsWith('swimming:')
+      ? event.id.slice('swimming:'.length)
+      : null;
   }
 
 

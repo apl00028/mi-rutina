@@ -145,6 +145,36 @@ export interface TrainerPerformanceSession {
 }
 
 
+export interface TrainerSwimmingLength {
+  start_time: string | null;
+  duration_seconds: number | null;
+  distance_meters: number | null;
+  total_strokes: number | null;
+  average_stroke_rate_spm: number | null;
+  stroke: string | null;
+  length_type: string | null;
+}
+
+
+export interface TrainerSwimmingSessionDetail {
+  id: string;
+  discipline: 'swimming';
+  title: string;
+  event_at: string;
+  started_at: string;
+  duration_seconds: number | null;
+  total_distance_meters: number | null;
+  pool_length_meters: number | null;
+  total_elapsed_time_seconds: number | null;
+  total_timer_time_seconds: number | null;
+  total_moving_time_seconds: number | null;
+  average_pace_seconds_per_100m: number | null;
+  objective: string | null;
+  technical_focus: string[];
+  lengths: TrainerSwimmingLength[];
+}
+
+
 export interface TrainerRoutineTemplate {
   id: string;
   name: string;
@@ -270,6 +300,31 @@ export class TrainerService {
     return await this.listPerformanceSessions(
       athleteId,
       'running-sessions'
+    );
+  }
+
+
+  async getSwimmingSession(
+    athleteId: string,
+    sessionId: string
+  ): Promise<TrainerSwimmingSessionDetail> {
+    const headers =
+      await this.headers();
+
+    return await firstValueFrom(
+      this.http.get<
+        TrainerSwimmingSessionDetail
+      >(
+        (
+          `${this.apiUrl}/trainer/athletes/` +
+          `${encodeURIComponent(athleteId)}/` +
+          'swimming-sessions/' +
+          encodeURIComponent(sessionId)
+        ),
+        {
+          headers
+        }
+      )
     );
   }
 

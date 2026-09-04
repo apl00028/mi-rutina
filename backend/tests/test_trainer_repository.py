@@ -111,6 +111,36 @@ def _strength_session_row():
     }
 
 
+def _swimming_detail_row():
+    return {
+        "id": "swim-1",
+        "discipline": "swimming",
+        "title": "Natación",
+        "event_at": "2026-09-01T07:00:00Z",
+        "started_at": "2026-09-01T07:00:00Z",
+        "duration_seconds": 2439,
+        "total_distance_meters": 1200,
+        "pool_length_meters": 25,
+        "total_elapsed_time_seconds": 2500,
+        "total_timer_time_seconds": 2439,
+        "total_moving_time_seconds": 2016,
+        "average_pace_seconds_per_100m": 168.07,
+        "objective": None,
+        "technical_focus": [],
+        "lengths": [
+            {
+                "start_time": "2026-09-01T07:00:00Z",
+                "duration_seconds": 30,
+                "distance_meters": 25,
+                "total_strokes": 16,
+                "average_stroke_rate_spm": 23,
+                "stroke": "freestyle",
+                "length_type": "active",
+            }
+        ],
+    }
+
+
 def test_list_active_trainer_athletes_filters_authenticated_trainer(
     monkeypatch,
 ):
@@ -722,6 +752,74 @@ def test_performance_session_contract_tolerates_optional_ids():
     assert session.id == "swim-1"
     assert session.routine_id is None
     assert session.event_at == "2026-09-01T07:00:00Z"
+
+
+def test_get_swimming_session_calls_trainer_rpc(monkeypatch):
+    monkeypatch.setenv(
+        "SUPABASE_URL",
+        "https://example.supabase.co/",
+    )
+    monkeypatch.setenv(
+        "SUPABASE_PUBLISHABLE_KEY",
+        "publishable-key",
+    )
+
+    captured = {}
+
+    class FakeResponse:
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return [
+                _swimming_detail_row()
+            ]
+
+    class FakeClient:
+        def __init__(self, timeout):
+            captured["timeout"] = timeout
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return None
+
+        async def post(self, url, headers, json):
+            captured["url"] = url
+            captured["headers"] = headers
+            captured["json"] = json
+            return FakeResponse()
+
+    monkeypatch.setattr(
+        repository.httpx,
+        "AsyncClient",
+        FakeClient,
+    )
+
+    result = asyncio.run(
+        repository.get_trainer_athlete_swimming_session(
+            _trainer(),
+            "athlete-1",
+            "swim-1",
+        )
+    )
+
+    assert result == _swimming_detail_row()
+    assert captured["timeout"] == 10.0
+    assert captured["url"] == (
+        "https://example.supabase.co/rest/v1/rpc/"
+        "trainer_get_athlete_swimming_session"
+    )
+    assert captured["headers"] == {
+        "Authorization": "Bearer access-token",
+        "apikey": "publishable-key",
+        "Content-Type": "application/json",
+    }
+    assert captured["json"] == {
+        "p_athlete_id": "athlete-1",
+        "p_session_id": "swim-1",
+    }
 
 
 def test_list_routine_templates_filters_trainer_and_discipline(

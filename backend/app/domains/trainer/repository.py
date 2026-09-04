@@ -29,6 +29,10 @@ SWIMMING_SESSIONS_RPC = (
     "trainer_list_athlete_swimming_sessions"
 )
 
+SWIMMING_SESSION_DETAIL_RPC = (
+    "trainer_get_athlete_swimming_session"
+)
+
 RUNNING_SESSIONS_RPC = (
     "trainer_list_athlete_running_sessions"
 )
@@ -315,6 +319,51 @@ async def list_trainer_athlete_running_sessions(
         athlete_id,
         RUNNING_SESSIONS_RPC,
     )
+
+
+async def get_trainer_athlete_swimming_session(
+    trainer: AuthenticatedUser,
+    athlete_id: str,
+    session_id: str,
+) -> dict[str, Any] | None:
+    url, key = _supabase_config()
+
+    headers = {
+        "Authorization":
+            f"Bearer {trainer.access_token}",
+        "apikey":
+            key,
+        "Content-Type":
+            "application/json",
+    }
+
+    async with httpx.AsyncClient(
+        timeout=10.0
+    ) as client:
+        response = await client.post(
+            (
+                f"{url}/rest/v1/rpc/"
+                f"{SWIMMING_SESSION_DETAIL_RPC}"
+            ),
+            headers=headers,
+            json={
+                "p_athlete_id":
+                    athlete_id,
+                "p_session_id":
+                    session_id,
+            },
+        )
+
+    response.raise_for_status()
+
+    data = response.json()
+
+    if not isinstance(data, list):
+        raise RuntimeError(
+            "Unexpected Supabase response."
+        )
+
+    return data[0] if data else None
 
 
 def _template_headers(

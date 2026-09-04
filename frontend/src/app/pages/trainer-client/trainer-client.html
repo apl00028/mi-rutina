@@ -465,23 +465,182 @@
 
             @if (currentEnduranceEvent(); as event) {
               <section class="endurance-detail">
-                <header class="session-header">
-                  <div>
-                    <h3>
-                      {{ event.title }}
-                    </h3>
+                @if (event.discipline === 'swimming') {
+                  @if (swimmingDetailLoading()) {
+                    <div class="state-card compact-state">
+                      Cargando detalle de natación...
+                    </div>
+                  } @else if (swimmingDetailError()) {
+                    <div class="error-message compact-state">
+                      {{ swimmingDetailError() }}
+                    </div>
+                  } @else if (currentSwimmingDetail(); as swimming) {
+                    <header class="session-header">
+                      <div>
+                        <h3>
+                          {{ swimming.title }}
+                        </h3>
 
-                    <p>
-                      {{ formatDate(event.event_at) }}
-                    </p>
+                        <p>
+                          {{ formatDate(swimming.event_at) }}
+                        </p>
+                      </div>
+                    </header>
+
+                    <dl class="metric-grid swimming-summary">
+                      @if (swimming.total_distance_meters !== null) {
+                        <div>
+                          <dt>
+                            Distancia total
+                          </dt>
+                          <dd>
+                            {{
+                              formatDistance(
+                                swimming.total_distance_meters
+                              )
+                            }}
+                          </dd>
+                        </div>
+                      }
+
+                      @if (swimming.duration_seconds !== null) {
+                        <div>
+                          <dt>
+                            Duración
+                          </dt>
+                          <dd>
+                            {{
+                              formatDuration(
+                                swimming.duration_seconds
+                              )
+                            }}
+                          </dd>
+                        </div>
+                      }
+
+                      @if (swimming.pool_length_meters !== null) {
+                        <div>
+                          <dt>
+                            Piscina
+                          </dt>
+                          <dd>
+                            {{
+                              formatDistance(
+                                swimming.pool_length_meters
+                              )
+                            }}
+                          </dd>
+                        </div>
+                      }
+
+                      @if (swimming.objective) {
+                        <div>
+                          <dt>
+                            Objetivo
+                          </dt>
+                          <dd>
+                            {{ swimming.objective }}
+                          </dd>
+                        </div>
+                      }
+                    </dl>
+
+                    @if (swimming.technical_focus.length) {
+                      <div class="swimming-focus">
+                        @for (
+                          focus of swimming.technical_focus;
+                          track focus
+                        ) {
+                          <span>
+                            {{ focus }}
+                          </span>
+                        }
+                      </div>
+                    }
+
+                    @if (swimming.lengths.length) {
+                      <div class="swimming-lengths">
+                        @for (
+                          length of swimming.lengths;
+                          track $index;
+                          let lengthIndex = $index
+                        ) {
+                          <article class="swimming-length">
+                            <h4>
+                              {{
+                                swimmingLengthTitle(
+                                  length,
+                                  lengthIndex
+                                )
+                              }}
+                            </h4>
+
+                            @if (
+                              swimmingLengthMeta(length)
+                            ) {
+                              <p class="card-note">
+                                {{
+                                  swimmingLengthMeta(
+                                    length
+                                  )
+                                }}
+                              </p>
+                            }
+
+                            <dl>
+                              @if (length.total_strokes !== null) {
+                                <div>
+                                  <dt>
+                                    Brazadas
+                                  </dt>
+                                  <dd>
+                                    {{ length.total_strokes }}
+                                  </dd>
+                                </div>
+                              }
+
+                              @if (
+                                length.average_stroke_rate_spm
+                                  !== null
+                              ) {
+                                <div>
+                                  <dt>
+                                    Frecuencia
+                                  </dt>
+                                  <dd>
+                                    {{
+                                      length
+                                        .average_stroke_rate_spm
+                                    }}
+                                    spm
+                                  </dd>
+                                </div>
+                              }
+                            </dl>
+                          </article>
+                        }
+                      </div>
+                    }
+                  }
+                } @else {
+                  <header class="session-header">
+                    <div>
+                      <h3>
+                        {{ event.title }}
+                      </h3>
+
+                      <p>
+                        {{ formatDate(event.event_at) }}
+                      </p>
+                    </div>
+                  </header>
+
+                  <div class="state-card compact-state">
+                    Detalle de
+                    {{ disciplineLabel(event.discipline).toLowerCase() }}
+                    próximamente.
                   </div>
-                </header>
-
-                <div class="state-card compact-state">
-                  Detalle de
-                  {{ disciplineLabel(event.discipline).toLowerCase() }}
-                  próximamente.
-                </div>
+                }
               </section>
             }
           </div>

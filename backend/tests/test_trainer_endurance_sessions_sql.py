@@ -131,3 +131,64 @@ def test_endurance_sessions_rpc_privileges():
             f"on function public.{function_name}(uuid)\n"
             "to authenticated"
         ) in sql
+
+
+def test_swimming_session_detail_rpc_contract_and_real_fields():
+    sql = _sql(
+        "trainer-athlete-swimming-session-detail.sql"
+    )
+
+    assert (
+        "create function public.trainer_get_athlete_swimming_session(\n"
+        "  p_athlete_id uuid,\n"
+        "  p_session_id text\n"
+        ")"
+    ) in sql
+    assert "p_trainer_id" not in sql
+    assert "returns table (\n  id text," in sql
+    assert "  discipline text," in sql
+    assert "  title text," in sql
+    assert "  event_at text," in sql
+    assert "  started_at text," in sql
+    assert "  duration_seconds double precision," in sql
+    assert "  total_distance_meters double precision," in sql
+    assert "  pool_length_meters double precision," in sql
+    assert "  average_pace_seconds_per_100m double precision," in sql
+    assert "  lengths jsonb" in sql
+    assert "swimming_sessions.data->'lengths'" in sql
+    assert "swimming_length.value->>'swim_stroke'" in sql
+    assert "swimming_length.value->>'length_type'" in sql
+    assert "swimming_sessions.data->'distance_meters'" in sql
+    assert "swimming_sessions.data->'pool_length_meters'" in sql
+    assert "swimming_sessions.id = p_session_id" in sql
+    assert "swimming_sessions.started_at::text as event_at" in sql
+    assert "as finished_at" not in sql
+
+
+def test_swimming_session_detail_rpc_security_and_privileges():
+    sql = _sql(
+        "trainer-athlete-swimming-session-detail.sql"
+    )
+
+    assert "security definer" in sql
+    assert "set search_path = ''" in sql
+    assert "current_trainer.user_id = (select auth.uid())" in sql
+    assert "current_trainer.role = 'trainer'" in sql
+    assert "current_trainer.status = 'active'" in sql
+    assert "trainer_athletes.trainer_id = (select auth.uid())" in sql
+    assert "trainer_athletes.athlete_id = p_athlete_id" in sql
+    assert "trainer_athletes.status = 'active'" in sql
+    assert (
+        "revoke all\n"
+        "on function public.trainer_get_athlete_swimming_session(uuid, text)\n"
+        "from public, anon"
+    ) in sql
+    assert (
+        "grant execute\n"
+        "on function public.trainer_get_athlete_swimming_session(uuid, text)\n"
+        "to authenticated"
+    ) in sql
+    assert "notify pgrst, 'reload schema';" in sql
+    assert "create policy" not in sql
+    assert "alter table" not in sql
+    assert re.search(r"\binsert\b|\bupdate\b|\bdelete\b", sql) is None

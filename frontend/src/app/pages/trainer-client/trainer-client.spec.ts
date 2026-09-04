@@ -313,7 +313,12 @@ describe(
       async () => {
         await createPage(
           athleteOverview(),
-          [],
+          [
+            strengthSession({
+              finished_at:
+                '2026-09-04T09:30:00Z'
+            })
+          ],
           [
             performanceSession(
               'swimming'
@@ -326,9 +331,6 @@ describe(
 
         expect(markedDay.textContent)
           .toContain('N');
-        expect(
-          fixture.nativeElement.textContent
-        ).toContain('Técnica de crol');
       }
     );
 
@@ -342,7 +344,13 @@ describe(
           [],
           [
             performanceSession(
-              'running'
+              'running',
+              {
+                event_at:
+                  '2026-09-04T08:00:00Z',
+                finished_at:
+                  '2026-09-04T08:00:00Z'
+              }
             )
           ]
         );
@@ -365,7 +373,10 @@ describe(
         await createPage(
           athleteOverview(),
           [
-            strengthSession()
+            strengthSession({
+              finished_at:
+                '2026-09-02T12:30:00Z'
+            })
           ],
           [
             performanceSession(
@@ -394,7 +405,12 @@ describe(
       async () => {
         await createPage(
           athleteOverview(),
-          [],
+          [
+            strengthSession({
+              finished_at:
+                '2026-09-04T09:30:00Z'
+            })
+          ],
           [
             performanceSession(
               'swimming',
@@ -616,12 +632,19 @@ describe(
         );
 
         clickButton('Técnica de crol');
+        await flushPromises();
+        http.expectOne(
+          swimmingDetailUrl('swimming-1')
+        ).flush(
+          swimmingDetail()
+        );
+        await flushPromises();
         fixture.detectChanges();
 
         expect(
           fixture.nativeElement.textContent
         ).toContain(
-          'Detalle de natación próximamente.'
+          'Distancia total'
         );
 
         clickButton('Control aeróbico');
@@ -637,11 +660,184 @@ describe(
 
 
     it(
-      'keeps late swimming sessions on the observed start day',
+      'does not load swimming detail before selecting swimming',
+      async () => {
+        await createPage(
+          athleteOverview(),
+          [
+            strengthSession()
+          ],
+          [
+            performanceSession(
+              'swimming',
+              {
+                event_at:
+                  '2026-09-01T07:00:00Z'
+              }
+            )
+          ]
+        );
+
+        expect(
+          fixture.nativeElement.textContent
+        ).toContain('Empuje');
+        http.expectNone(
+          swimmingDetailUrl('swimming-1')
+        );
+      }
+    );
+
+
+    it(
+      'loads and renders real swimming detail when selected',
+      async () => {
+        await createPage(
+          athleteOverview(),
+          [
+            strengthSession()
+          ],
+          [
+            performanceSession(
+              'swimming',
+              {
+                event_at:
+                  '2026-09-02T10:30:00Z'
+              }
+            )
+          ]
+        );
+
+        clickButton('Técnica de crol');
+        await flushPromises();
+
+        http.expectOne(
+          swimmingDetailUrl('swimming-1')
+        ).flush(
+          swimmingDetail()
+        );
+
+        await flushPromises();
+        fixture.detectChanges();
+
+        const text =
+          fixture.nativeElement.textContent;
+
+        expect(text).toContain('Natación');
+        expect(text).toContain('Distancia total');
+        expect(text).toContain('1.20 km');
+        expect(text).toContain('Duración');
+        expect(text).toContain('40:39');
+        expect(text).toContain('Piscina');
+        expect(text).toContain('25 m');
+        expect(text).toContain('Largo 1 · 25 m');
+        expect(text).toContain('Crol');
+        expect(text).toContain('Brazadas');
+        expect(text).toContain('16');
+      }
+    );
+
+
+    it(
+      'does not render empty swimming fields',
       async () => {
         await createPage(
           athleteOverview(),
           [],
+          [
+            performanceSession(
+              'swimming'
+            )
+          ]
+        );
+
+        await flushPromises();
+        http.expectOne(
+          swimmingDetailUrl('swimming-1')
+        ).flush(
+          swimmingDetail({
+            total_distance_meters:
+              null,
+            duration_seconds:
+              null,
+            pool_length_meters:
+              null,
+            objective:
+              null,
+            technical_focus: [],
+            lengths: []
+          })
+        );
+
+        await flushPromises();
+        fixture.detectChanges();
+
+        const text =
+          (
+            fixture.nativeElement
+              .querySelector('.endurance-detail')
+              ?.textContent ?? ''
+          );
+
+        expect(text).not.toContain('Distancia total');
+        expect(text).not.toContain('Duración');
+        expect(text).not.toContain('Piscina');
+        expect(text).not.toContain('Objetivo');
+      }
+    );
+
+
+    it(
+      'caches swimming detail for the same selected session',
+      async () => {
+        await createPage(
+          athleteOverview(),
+          [
+            strengthSession()
+          ],
+          [
+            performanceSession(
+              'swimming',
+              {
+                event_at:
+                  '2026-09-02T10:30:00Z'
+              }
+            )
+          ]
+        );
+
+        clickButton('Técnica de crol');
+        await flushPromises();
+        http.expectOne(
+          swimmingDetailUrl('swimming-1')
+        ).flush(
+          swimmingDetail()
+        );
+        await flushPromises();
+        fixture.detectChanges();
+
+        clickButton('Empuje');
+        fixture.detectChanges();
+        clickButton('Técnica de crol');
+        await flushPromises();
+
+        http.expectNone(
+          swimmingDetailUrl('swimming-1')
+        );
+      }
+    );
+
+
+    it(
+      'keeps late swimming sessions on the observed start day',
+      async () => {
+        await createPage(
+          athleteOverview(),
+          [
+            strengthSession({
+              finished_at:
+                '2026-09-04T09:30:00Z'
+            })
+          ],
           [
             performanceSession(
               'swimming',
@@ -1006,6 +1202,17 @@ describe(
         'athlete-1/running-sessions'
       );
     }
+
+
+    function swimmingDetailUrl(
+      sessionId: string
+    ): string {
+      return (
+        `${environment.apiUrl}/trainer/athletes/` +
+        'athlete-1/swimming-sessions/' +
+        encodeURIComponent(sessionId)
+      );
+    }
   }
 );
 
@@ -1107,6 +1314,62 @@ function performanceSession(
       discipline === 'swimming'
         ? 'garmin_fit'
         : null,
+    ...patch
+  };
+}
+
+
+function swimmingDetail(
+  patch: Record<string, unknown> = {}
+) {
+  return {
+    id:
+      'swimming-1',
+    discipline:
+      'swimming',
+    title:
+      'Natación',
+    event_at:
+      '2026-09-02T10:30:00Z',
+    started_at:
+      '2026-09-02T10:30:00Z',
+    duration_seconds:
+      2439,
+    total_distance_meters:
+      1200,
+    pool_length_meters:
+      25,
+    total_elapsed_time_seconds:
+      2500,
+    total_timer_time_seconds:
+      2439,
+    total_moving_time_seconds:
+      2016,
+    average_pace_seconds_per_100m:
+      168.07,
+    objective:
+      null,
+    technical_focus: [
+      'Crol cómodo'
+    ],
+    lengths: [
+      {
+        start_time:
+          '2026-09-02T10:30:00Z',
+        duration_seconds:
+          30,
+        distance_meters:
+          25,
+        total_strokes:
+          16,
+        average_stroke_rate_spm:
+          23,
+        stroke:
+          'freestyle',
+        length_type:
+          'active'
+      }
+    ],
     ...patch
   };
 }

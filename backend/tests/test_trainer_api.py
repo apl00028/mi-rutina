@@ -536,6 +536,78 @@ def test_trainer_can_list_running_sessions(monkeypatch):
     assert sessions[0].title == "Control aeróbico"
 
 
+def test_trainer_can_get_swimming_session_detail(monkeypatch):
+    from app.domains.trainer import router as trainer_api
+    from app.domains.trainer.models import TrainerSwimmingSessionDetail
+
+    async def fake_get(trainer, athlete_id, session_id):
+        assert trainer.id == "trainer-123"
+        assert athlete_id == "athlete-1"
+        assert session_id == "swim-1"
+        return TrainerSwimmingSessionDetail(
+            id="swim-1",
+            discipline="swimming",
+            title="Natación",
+            event_at="2026-09-01T07:00:00Z",
+            started_at="2026-09-01T07:00:00Z",
+            duration_seconds=2439,
+            total_distance_meters=1200,
+            pool_length_meters=25,
+            total_elapsed_time_seconds=2500,
+            total_timer_time_seconds=2439,
+            total_moving_time_seconds=2016,
+            average_pace_seconds_per_100m=168.07,
+            objective=None,
+            technical_focus=[],
+            lengths=[],
+        )
+
+    monkeypatch.setattr(
+        trainer_api,
+        "get_authenticated_trainer_swimming_session",
+        fake_get,
+    )
+
+    session = asyncio.run(
+        trainer_api.get_trainer_athlete_swimming_session_endpoint(
+            "athlete-1",
+            "swim-1",
+            trainer=asyncio.run(trainer_user()),
+        )
+    )
+
+    assert session.id == "swim-1"
+    assert session.total_distance_meters == 1200
+
+
+def test_missing_swimming_session_detail_returns_404(monkeypatch):
+    from app.domains.trainer import router as trainer_api
+
+    async def fake_get(_trainer, _athlete_id, _session_id):
+        return None
+
+    monkeypatch.setattr(
+        trainer_api,
+        "get_authenticated_trainer_swimming_session",
+        fake_get,
+    )
+
+    try:
+        asyncio.run(
+            trainer_api.get_trainer_athlete_swimming_session_endpoint(
+                "athlete-1",
+                "missing",
+                trainer=asyncio.run(trainer_user()),
+            )
+        )
+    except HTTPException as exc:
+        assert exc.status_code == 404
+    else:
+        raise AssertionError(
+            "Expected HTTPException"
+        )
+
+
 def test_normal_user_cannot_list_swimming_sessions():
     app.dependency_overrides[
         require_user

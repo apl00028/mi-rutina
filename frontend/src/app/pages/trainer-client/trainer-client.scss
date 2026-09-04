@@ -398,6 +398,44 @@ h3 {
   gap: 16px;
 }
 
+.swimming-summary {
+  margin-bottom: 0;
+}
+
+.swimming-focus {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.swimming-focus span {
+  padding: 5px 8px;
+  border: 1px solid var(--aptus-border);
+  border-radius: var(--aptus-radius-sm);
+
+  background: var(--aptus-surface-muted);
+  color: var(--aptus-text-muted);
+
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.swimming-lengths {
+  display: grid;
+  gap: 10px;
+}
+
+.swimming-length {
+  display: grid;
+  gap: 8px;
+  padding-top: 12px;
+  border-top: 1px solid var(--aptus-border);
+}
+
+.swimming-length dl {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
 .exercise-block {
   display: grid;
   gap: 9px;

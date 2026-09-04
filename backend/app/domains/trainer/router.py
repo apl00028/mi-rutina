@@ -22,6 +22,7 @@ from app.domains.trainer.models import (
     TrainerAthleteOverview,
     TrainerPerformanceSession,
     TrainerStrengthSession,
+    TrainerSwimmingSessionDetail,
 )
 from app.domains.trainer.repository import (
     SupabaseConfigError,
@@ -32,6 +33,7 @@ from app.domains.trainer.service import (
     assign_authenticated_trainer_template,
     create_authenticated_trainer_template,
     delete_authenticated_trainer_template,
+    get_authenticated_trainer_swimming_session,
     get_authenticated_trainer_athlete_overview,
     get_authenticated_trainer_template,
     list_authenticated_trainer_running_sessions,
@@ -205,6 +207,51 @@ async def list_trainer_athlete_swimming_sessions_endpoint(
                 "Could not load trainer swimming sessions"
             ),
         ) from exc
+
+
+@router.get(
+    "/athletes/{athlete_id}/swimming-sessions/{session_id}",
+    response_model=TrainerSwimmingSessionDetail,
+)
+async def get_trainer_athlete_swimming_session_endpoint(
+    athlete_id: str,
+    session_id: str,
+    trainer: AuthenticatedUser = Depends(
+        require_trainer
+    ),
+) -> TrainerSwimmingSessionDetail:
+    try:
+        session = await get_authenticated_trainer_swimming_session(
+            trainer,
+            athlete_id,
+            session_id,
+        )
+    except SupabaseConfigError as exc:
+        raise HTTPException(
+            status_code=(
+                status.HTTP_503_SERVICE_UNAVAILABLE
+            ),
+            detail="Supabase is not configured.",
+        ) from exc
+    except httpx.HTTPStatusError as exc:
+        raise HTTPException(
+            status_code=(
+                status.HTTP_502_BAD_GATEWAY
+            ),
+            detail=(
+                "Could not load trainer swimming session"
+            ),
+        ) from exc
+
+    if session is None:
+        raise HTTPException(
+            status_code=(
+                status.HTTP_404_NOT_FOUND
+            ),
+            detail="Trainer swimming session not found",
+        )
+
+    return session
 
 
 @router.get(

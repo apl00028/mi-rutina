@@ -330,6 +330,49 @@ describe(
 
 
     it(
+      'loads trainer swimming session detail with the authenticated token',
+      async () => {
+        const promise =
+          service.getSwimmingSession(
+            'athlete 1',
+            'swim 1'
+          );
+
+        await flushPromises();
+
+        const request =
+          http.expectOne(
+            (
+              `${environment.apiUrl}/trainer/athletes/` +
+              'athlete%201/swimming-sessions/swim%201'
+            )
+          );
+
+        expect(request.request.method)
+          .toBe('GET');
+        expect(
+          request.request.headers.get(
+            'Authorization'
+          )
+        ).toBe('Bearer access-token');
+
+        request.flush(
+          swimmingDetailResponse()
+        );
+
+        await expect(promise)
+          .resolves
+          .toMatchObject({
+            id:
+              'swim-1',
+            total_distance_meters:
+              1200
+          });
+      }
+    );
+
+
+    it(
       'loads trainer templates with the authenticated token',
       async () => {
         const promise =
@@ -524,6 +567,40 @@ function performanceSessionResponse(
       discipline === 'swimming'
         ? 'garmin_fit'
         : null
+  };
+}
+
+
+function swimmingDetailResponse() {
+  return {
+    id:
+      'swim-1',
+    discipline:
+      'swimming',
+    title:
+      'Natación',
+    event_at:
+      '2026-09-01T07:00:00Z',
+    started_at:
+      '2026-09-01T07:00:00Z',
+    duration_seconds:
+      2439,
+    total_distance_meters:
+      1200,
+    pool_length_meters:
+      25,
+    total_elapsed_time_seconds:
+      2500,
+    total_timer_time_seconds:
+      2439,
+    total_moving_time_seconds:
+      2016,
+    average_pace_seconds_per_100m:
+      168.07,
+    objective:
+      null,
+    technical_focus: [],
+    lengths: []
   };
 }
 

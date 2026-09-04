@@ -70,6 +70,18 @@ describe('Endurance swimming integration', () => {
       .mockReset();
     activatedRoute.snapshot.data.discipline =
       'swimming';
+    vi.spyOn(
+      console,
+      'info'
+    ).mockImplementation(
+      () => undefined
+    );
+    vi.spyOn(
+      console,
+      'error'
+    ).mockImplementation(
+      () => undefined
+    );
 
     await TestBed.configureTestingModule({
       imports: [
@@ -334,16 +346,61 @@ describe('Endurance swimming integration', () => {
         Endurance
       );
 
-    mockAndroidHealthConnectSwimming();
+    mockAndroidHealthConnectSwimming([
+      healthConnectSwimmingSession({
+        startTime:
+          '2026-09-02T15:50:45Z',
+        endTime:
+          '2026-09-02T16:29:08.868Z',
+        durationSeconds:
+          2303.868,
+        distanceMeters:
+          1225,
+        rawDistanceTotalMeters:
+          1225
+      }),
+      healthConnectSwimmingSession({
+        startTime:
+          '2026-08-27T08:00:00Z',
+        endTime:
+          '2026-08-27T08:40:00Z',
+        durationSeconds:
+          2400,
+        distanceMeters:
+          1200,
+        rawDistanceTotalMeters:
+          1200
+      }),
+      healthConnectSwimmingSession({
+        startTime:
+          '2026-08-25T08:00:00Z',
+        endTime:
+          '2026-08-25T08:42:00Z',
+        durationSeconds:
+          2520,
+        distanceMeters:
+          950,
+        rawDistanceTotalMeters:
+          950
+      })
+    ]);
     http.post.mockReturnValue(
       of({
-        synced: 1
+        synced: 3
       })
     );
 
     await fixture.componentInstance
       .loadSwimming();
     await flushPromises();
+
+    expect(console.info)
+      .toHaveBeenCalledWith(
+        '[Aptus swimming sync] start',
+        {
+          count: 3
+        }
+      );
 
     expect(http.post)
       .toHaveBeenCalledWith(
@@ -356,9 +413,23 @@ describe('Endurance swimming integration', () => {
               sourcePackage:
                 'com.garmin.android.apps.connectmobile',
               startTime:
-                '2026-09-02T07:00:00Z',
+                '2026-09-02T15:50:45Z',
               endTime:
-                '2026-09-02T07:42:00Z',
+                '2026-09-02T16:29:08.868Z',
+              durationSeconds:
+                2303.868,
+              distanceMeters:
+                1225
+            }),
+            expect.objectContaining({
+              startTime:
+                '2026-08-27T08:00:00Z',
+              distanceMeters:
+                1200
+            }),
+            expect.objectContaining({
+              startTime:
+                '2026-08-25T08:00:00Z',
               durationSeconds:
                 2520,
               segmentCount:
@@ -410,7 +481,17 @@ describe('Endurance swimming integration', () => {
     await fixture.componentInstance
       .loadSwimming();
     await flushPromises();
+    await fixture.componentInstance
+      .loadSwimming();
+    await flushPromises();
 
+    expect(http.post)
+      .toHaveBeenCalledTimes(2);
+    expect(console.error)
+      .toHaveBeenCalledWith(
+        '[Aptus swimming sync] failed',
+        expect.any(Error)
+      );
     expect(
       fixture.componentInstance
         .swimmingError()

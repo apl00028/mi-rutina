@@ -2736,6 +2736,10 @@ export class Endurance
       let sessions =
         fitViews;
 
+      let healthConnectResult:
+        HealthConnectSwimmingMetrics | null =
+        null;
+
       const isAndroid =
         Capacitor.isNativePlatform()
         && Capacitor.getPlatform() ===
@@ -2746,6 +2750,9 @@ export class Endurance
           const result =
             await this.healthConnect
               .readGarminSwimmingMetrics();
+
+          healthConnectResult =
+            result;
 
           const healthConnectViews =
             result.sessions.map(
@@ -2760,10 +2767,6 @@ export class Endurance
               healthConnectViews,
               fitViews
             );
-
-          void this.syncHealthConnectSwimming(
-            result
-          );
 
         } catch (error: unknown) {
           if (fitViews.length === 0) {
@@ -2805,6 +2808,12 @@ export class Endurance
           ? 1
           : 0
       );
+
+      if (healthConnectResult) {
+        void this.syncHealthConnectSwimming(
+          healthConnectResult
+        );
+      }
 
     } catch (error: any) {
 
@@ -2852,14 +2861,17 @@ export class Endurance
   private async syncHealthConnectSwimming(
     result: HealthConnectSwimmingMetrics
   ): Promise<void> {
-    const sessions =
+    const syncableSessions =
       result.sessions
         .filter(session =>
           this.shouldSyncHealthConnectSwimmingSession(
             result.sourcePackage,
             session
           )
-        )
+        );
+
+    const sessions =
+      syncableSessions
         .map(session =>
           this.toHealthConnectSyncSession(
             result.sourcePackage,
@@ -2870,6 +2882,14 @@ export class Endurance
     if (sessions.length === 0) {
       return;
     }
+
+    console.info(
+      '[Aptus swimming sync] start',
+      {
+        count:
+          sessions.length
+      }
+    );
 
     try {
       const token =
@@ -2887,19 +2907,25 @@ export class Endurance
             'application/json'
         });
 
-      await firstValueFrom(
-        this.http.post(
-          `${this.apiUrl}/swimming/sync-health-connect`,
-          {
-            sessions
-          },
-          {
-            headers
-          }
-        )
+      const syncResult =
+        await firstValueFrom(
+          this.http.post(
+            `${this.apiUrl}/swimming/sync-health-connect`,
+            {
+              sessions
+            },
+            {
+              headers
+            }
+          )
+        );
+
+      console.info(
+        '[Aptus swimming sync] success',
+        syncResult
       );
 
-      for (const session of result.sessions) {
+      for (const session of syncableSessions) {
         this.syncedHealthConnectSwimmingKeys.add(
           this.healthConnectSwimmingSyncKey(
             result.sourcePackage,
@@ -2908,7 +2934,11 @@ export class Endurance
         );
       }
 
-    } catch {
+    } catch (error: unknown) {
+      console.error(
+        '[Aptus swimming sync] failed',
+        error
+      );
       // Health Connect remains a local read path; sync failures must not
       // hide the sessions that were already read from the device.
     }
@@ -2955,25 +2985,33 @@ export class Endurance
       durationSeconds:
         session.durationSeconds,
       segmentCount:
-        session.segmentCount,
+        session.segmentCount
+        ?? 0,
       segmentRepetitions:
-        session.segmentRepetitions,
+        session.segmentRepetitions
+        ?? 0,
       distanceMeters:
         session.distanceMeters,
       distanceRecordCount:
-        session.distanceRecordCount,
+        session.distanceRecordCount
+        ?? 0,
       rawDistanceTotalMeters:
-        session.rawDistanceTotalMeters,
+        session.rawDistanceTotalMeters
+        ?? session.distanceMeters
+        ?? 0,
       distanceRecords:
-        session.distanceRecords,
+        session.distanceRecords
+        ?? [],
       heartRateAverageBpm:
         session.heartRateAverageBpm,
       heartRateMaxBpm:
         session.heartRateMaxBpm,
       heartRateSampleCount:
-        session.heartRateSampleCount,
+        session.heartRateSampleCount
+        ?? 0,
       speedSampleCount:
-        session.speedSampleCount,
+        session.speedSampleCount
+        ?? 0,
       speedAverageMetersPerSecond:
         session.speedAverageMetersPerSecond,
       speedMaxMetersPerSecond:

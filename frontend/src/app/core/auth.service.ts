@@ -175,6 +175,16 @@ export class AuthService {
         }
 
         if (
+          session &&
+          event === 'SIGNED_IN' &&
+          this.isWebPasswordRecoveryCallback()
+        ) {
+          this.markPasswordRecoverySession(
+            session
+          );
+        }
+
+        if (
           event === 'INITIAL_SESSION' ||
           (
             event === 'SIGNED_IN' &&
@@ -391,6 +401,49 @@ export class AuthService {
   private isNativeApp():
     boolean {
     return Capacitor.isNativePlatform();
+  }
+
+
+  private isWebPasswordRecoveryCallback():
+    boolean {
+    if (
+      this.isNativeApp() ||
+      typeof window === 'undefined'
+    ) {
+      return false;
+    }
+
+    const search =
+      new URLSearchParams(
+        window.location.search
+      );
+
+    const hash =
+      new URLSearchParams(
+        window.location.hash.replace(
+          /^#/,
+          ''
+        )
+      );
+
+    const recoveryMarker =
+      search.get('recovery') === '1' ||
+      search.get('type') === 'recovery' ||
+      hash.get('type') === 'recovery';
+
+    const callbackCredential =
+      Boolean(
+        search.get('code') ||
+        search.get('token_hash') ||
+        hash.get('code') ||
+        hash.get('access_token') ||
+        hash.get('refresh_token')
+      );
+
+    return (
+      recoveryMarker &&
+      callbackCredential
+    );
   }
 
 

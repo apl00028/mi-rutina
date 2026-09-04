@@ -118,22 +118,36 @@ export class Login {
         window.location.search
       );
 
+    const hash =
+      new URLSearchParams(
+        window.location.hash.replace(
+          /^#/,
+          ''
+        )
+      );
+
     const oauthReturn =
       params.get('oauth') ===
       'google';
 
-    const recoveryReturn =
-      params.get('recovery') ===
-      '1';
+    const recoveryCallbackReturn =
+      params.get('recovery') === '1' ||
+      params.get('type') === 'recovery' ||
+      hash.get('type') === 'recovery';
 
     const recoveryCode =
-      params.get('code');
+      params.get('code') ??
+      hash.get('code');
 
     const authReturnError =
       params.get(
         'error_description'
       ) ??
-      params.get('error');
+      params.get('error') ??
+      hash.get(
+        'error_description'
+      ) ??
+      hash.get('error');
 
     const nativeError =
       this.auth.consumeNativeAuthError();
@@ -147,9 +161,15 @@ export class Login {
     const session =
       await this.auth.waitForSession();
 
-    if (recoveryReturn) {
+    const observedRecoverySession =
+      this.auth.passwordRecoverySession();
+
+    if (
+      recoveryCallbackReturn ||
+      observedRecoverySession
+    ) {
       let recoverySession =
-        this.auth.passwordRecoverySession();
+        observedRecoverySession;
 
       if (
         !recoverySession &&
@@ -164,7 +184,7 @@ export class Login {
               );
         } catch {
           recoverySession =
-            null;
+            this.auth.passwordRecoverySession();
         }
       }
 

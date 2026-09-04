@@ -149,7 +149,20 @@ describe(
     }
 
 
+    function setAuthUrl(
+      suffix: string
+    ): void {
+      window.history.pushState(
+        {},
+        '',
+        `/login${suffix}`
+      );
+    }
+
+
     beforeEach(() => {
+      setAuthUrl('');
+
       supabaseMock.auth.getSession
         .mockResolvedValue({
           data: {
@@ -333,6 +346,114 @@ describe(
         ).toBe(
           'code-recovery-token'
         );
+      }
+    );
+
+
+    it(
+      'marks signed-in sessions from a web recovery callback as recovery',
+      async () => {
+        const recoverySession = {
+          access_token:
+            'auto-recovery-token',
+
+          user: {
+            id:
+              'recovery-user',
+            email:
+              'recovery@example.com'
+          }
+        };
+
+        setAuthUrl(
+          '?recovery=1&code=abc'
+        );
+
+        supabaseMock.authStateCallback?.(
+          'SIGNED_IN',
+          recoverySession
+        );
+
+        expect(
+          service.passwordRecoverySession()
+            ?.access_token
+        ).toBe(
+          'auto-recovery-token'
+        );
+      }
+    );
+
+
+    it(
+      'does not mark a normal session as recovery without callback credentials',
+      async () => {
+        setAuthUrl(
+          '?recovery=1'
+        );
+
+        supabaseMock.authStateCallback?.(
+          'SIGNED_IN',
+          supabaseMock.session
+        );
+
+        expect(
+          service.passwordRecoverySession()
+        ).toBeNull();
+      }
+    );
+
+
+    it(
+      'does not mark initial sessions from a web recovery callback as recovery',
+      async () => {
+        setAuthUrl(
+          '?recovery=1&code=abc'
+        );
+
+        supabaseMock.authStateCallback?.(
+          'INITIAL_SESSION',
+          supabaseMock.session
+        );
+
+        expect(
+          service.passwordRecoverySession()
+        ).toBeNull();
+      }
+    );
+
+
+    it(
+      'does not mark getSession fast-path sessions from a web recovery callback as recovery',
+      async () => {
+        TestBed.resetTestingModule();
+
+        setAuthUrl(
+          '?recovery=1&code=abc'
+        );
+
+        TestBed.configureTestingModule({
+          providers: [
+            provideHttpClient(),
+            provideHttpClientTesting(),
+            AuthService
+          ]
+        });
+
+        service =
+          TestBed.inject(
+            AuthService
+          );
+
+        http =
+          TestBed.inject(
+            HttpTestingController
+          );
+
+        await service.waitForSession();
+
+        expect(
+          service.passwordRecoverySession()
+        ).toBeNull();
       }
     );
 

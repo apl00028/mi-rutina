@@ -363,6 +363,174 @@ describe(
 
 
     it(
+      'shows recovery form when Supabase already consumed the web callback code',
+      async () => {
+        const recoverySession = {
+          access_token:
+            'observed-recovery-token'
+        };
+
+        authMock.passwordRecoverySession.set(
+          recoverySession
+        );
+        authMock.waitForSession
+          .mockResolvedValue(
+            recoverySession
+          );
+
+        setLoginSearch(
+          '?recovery=1&code=abc'
+        );
+
+        const fixture =
+          TestBed.createComponent(
+            Login
+          );
+
+        fixture.detectChanges();
+        await fixture.whenStable();
+        await flushPromises();
+        fixture.detectChanges();
+
+        expect(
+          authMock.exchangePasswordRecoveryCode
+        ).not.toHaveBeenCalled();
+        expect(
+          fixture.componentInstance
+            .recoveryMode()
+        ).toBe(true);
+        expect(
+          fixture.nativeElement
+            .querySelector(
+              '.recovery-form'
+            )
+        ).not.toBeNull();
+        expect(
+          authMock.resolveAccess
+        ).not.toHaveBeenCalled();
+        expect(
+          routerMock.navigateByUrl
+        ).not.toHaveBeenCalled();
+      }
+    );
+
+
+    it(
+      'shows recovery form when the recovery session exists after Supabase cleaned the URL',
+      async () => {
+        const recoverySession = {
+          access_token:
+            'cleaned-url-recovery-token'
+        };
+
+        authMock.passwordRecoverySession.set(
+          recoverySession
+        );
+        authMock.waitForSession
+          .mockResolvedValue(
+            recoverySession
+          );
+
+        setLoginSearch('');
+
+        const fixture =
+          TestBed.createComponent(
+            Login
+          );
+
+        fixture.detectChanges();
+        await fixture.whenStable();
+        await flushPromises();
+        fixture.detectChanges();
+
+        expect(
+          fixture.componentInstance
+            .recoveryMode()
+        ).toBe(true);
+        expect(
+          fixture.nativeElement
+            .querySelector(
+              '.recovery-form'
+            )
+        ).not.toBeNull();
+        expect(
+          authMock.resolveAccess
+        ).not.toHaveBeenCalled();
+        expect(
+          routerMock.navigateByUrl
+        ).not.toHaveBeenCalled();
+      }
+    );
+
+
+    it(
+      'accepts type recovery callbacks with an auth code',
+      async () => {
+        setLoginSearch(
+          '?type=recovery&code=abc'
+        );
+
+        const fixture =
+          TestBed.createComponent(
+            Login
+          );
+
+        fixture.detectChanges();
+        await fixture.whenStable();
+        await flushPromises();
+        fixture.detectChanges();
+
+        expect(
+          authMock.exchangePasswordRecoveryCode
+        ).toHaveBeenCalledWith(
+          'abc'
+        );
+        expect(
+          fixture.componentInstance
+            .recoveryMode()
+        ).toBe(true);
+      }
+    );
+
+
+    it(
+      'accepts hash recovery callbacks when Supabase exposes the recovery session',
+      async () => {
+        const recoverySession = {
+          access_token:
+            'hash-recovery-token'
+        };
+
+        authMock.passwordRecoverySession.set(
+          recoverySession
+        );
+
+        setLoginSearch(
+          '#access_token=token&refresh_token=refresh&type=recovery'
+        );
+
+        const fixture =
+          TestBed.createComponent(
+            Login
+          );
+
+        fixture.detectChanges();
+        await fixture.whenStable();
+        await flushPromises();
+        fixture.detectChanges();
+
+        expect(
+          fixture.componentInstance
+            .recoveryMode()
+        ).toBe(true);
+        expect(
+          authMock.resolveAccess
+        ).not.toHaveBeenCalled();
+      }
+    );
+
+
+    it(
       'returns to normal login when web recovery code exchange fails',
       async () => {
         authMock.exchangePasswordRecoveryCode

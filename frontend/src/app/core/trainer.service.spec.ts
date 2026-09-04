@@ -597,6 +597,24 @@ function swimmingDetailResponse() {
       2016,
     average_pace_seconds_per_100m:
       168.07,
+    total_strokes:
+      758,
+    heart_rate_average_bpm:
+      138,
+    heart_rate_max_bpm:
+      162,
+    total_calories:
+      389,
+    aerobic_training_effect:
+      3.3,
+    anaerobic_training_effect:
+      2.3,
+    average_stroke_rate_spm:
+      23,
+    average_speed_meters_per_second:
+      0.595,
+    max_speed_meters_per_second:
+      1.724,
     objective:
       null,
     technical_focus: [],

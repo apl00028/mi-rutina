@@ -729,7 +729,36 @@ describe(
         expect(text).toContain('40:39');
         expect(text).toContain('Piscina');
         expect(text).toContain('25 m');
-        expect(text).toContain('Largo 1 · 25 m');
+        expect(text).toContain('Ritmo medio');
+        expect(text).toContain('2:48/100 m');
+        expect(text).toContain('Cardiovascular');
+        expect(text).toContain('FC media');
+        expect(text).toContain('138');
+        expect(text).toContain('FC máxima');
+        expect(text).toContain('162');
+        expect(text).toContain('Técnica');
+        expect(text).toContain('Brazadas totales');
+        expect(text).toContain('758');
+        expect(text).toContain('Cadencia media');
+        expect(text).toContain('23');
+        expect(text).toContain('Largos activos');
+        expect(text).toContain('2');
+        expect(text).toContain('Brazadas/largo');
+        expect(text).toContain('379');
+        expect(text).toContain('Carga');
+        expect(text).toContain('389');
+        expect(text).toContain('Aerobic TE');
+        expect(text).toContain('3.3');
+        expect(text).toContain('Anaerobic TE');
+        expect(text).toContain('2.3');
+        expect(text).toContain('Tiempos');
+        expect(text).toContain('Elapsed');
+        expect(text).toContain('40:52');
+        expect(text).toContain('Moving');
+        expect(text).toContain('33:36');
+        expect(text).toContain('Descanso derivado');
+        expect(text).toContain('7:03');
+        expect(text).toContain('Detalle por largos');
         expect(text).toContain('Crol');
         expect(text).toContain('Brazadas');
         expect(text).toContain('16');
@@ -761,6 +790,32 @@ describe(
               null,
             pool_length_meters:
               null,
+            total_elapsed_time_seconds:
+              null,
+            total_timer_time_seconds:
+              null,
+            total_moving_time_seconds:
+              null,
+            average_pace_seconds_per_100m:
+              null,
+            total_strokes:
+              null,
+            heart_rate_average_bpm:
+              null,
+            heart_rate_max_bpm:
+              null,
+            total_calories:
+              null,
+            aerobic_training_effect:
+              null,
+            anaerobic_training_effect:
+              null,
+            average_stroke_rate_spm:
+              null,
+            average_speed_meters_per_second:
+              null,
+            max_speed_meters_per_second:
+              null,
             objective:
               null,
             technical_focus: [],
@@ -782,6 +837,81 @@ describe(
         expect(text).not.toContain('Duración');
         expect(text).not.toContain('Piscina');
         expect(text).not.toContain('Objetivo');
+        expect(text).not.toContain('Cardiovascular');
+        expect(text).not.toContain('Técnica');
+        expect(text).not.toContain('Carga');
+        expect(text).not.toContain('Tiempos');
+        expect(text).not.toContain('Detalle por largos');
+      }
+    );
+
+
+    it(
+      'renders Health Connect swimming metrics without an empty lengths table',
+      async () => {
+        await createPage(
+          athleteOverview(),
+          [],
+          [
+            performanceSession(
+              'swimming'
+            )
+          ]
+        );
+
+        await flushPromises();
+        http.expectOne(
+          swimmingDetailUrl('swimming-1')
+        ).flush(
+          swimmingDetail({
+            total_distance_meters:
+              1225,
+            duration_seconds:
+              2303.868,
+            pool_length_meters:
+              null,
+            total_elapsed_time_seconds:
+              2303.868,
+            total_timer_time_seconds:
+              2303.868,
+            total_moving_time_seconds:
+              null,
+            average_pace_seconds_per_100m:
+              null,
+            total_strokes:
+              751,
+            heart_rate_average_bpm:
+              135,
+            heart_rate_max_bpm:
+              167,
+            total_calories:
+              null,
+            aerobic_training_effect:
+              null,
+            anaerobic_training_effect:
+              null,
+            average_stroke_rate_spm:
+              null,
+            lengths: []
+          })
+        );
+
+        await flushPromises();
+        fixture.detectChanges();
+
+        const text =
+          fixture.nativeElement.textContent;
+
+        expect(text).toContain('1.23 km');
+        expect(text).toContain('38:24');
+        expect(text).toContain('FC media');
+        expect(text).toContain('135');
+        expect(text).toContain('FC máxima');
+        expect(text).toContain('167');
+        expect(text).toContain('Brazadas totales');
+        expect(text).toContain('751');
+        expect(text).not.toContain('Detalle por largos');
+        expect(text).not.toContain('Piscina');
       }
     );
 
@@ -1340,13 +1470,31 @@ function swimmingDetail(
     pool_length_meters:
       25,
     total_elapsed_time_seconds:
-      2500,
+      2451.623,
     total_timer_time_seconds:
-      2439,
+      2439.193,
     total_moving_time_seconds:
-      2016,
+      2016.384,
     average_pace_seconds_per_100m:
       168.07,
+    total_strokes:
+      758,
+    heart_rate_average_bpm:
+      138,
+    heart_rate_max_bpm:
+      162,
+    total_calories:
+      389,
+    aerobic_training_effect:
+      3.3,
+    anaerobic_training_effect:
+      2.3,
+    average_stroke_rate_spm:
+      23,
+    average_speed_meters_per_second:
+      0.595,
+    max_speed_meters_per_second:
+      1.724,
     objective:
       null,
     technical_focus: [
@@ -1368,6 +1516,38 @@ function swimmingDetail(
           'freestyle',
         length_type:
           'active'
+      },
+      {
+        start_time:
+          '2026-09-02T10:31:00Z',
+        duration_seconds:
+          28,
+        distance_meters:
+          25,
+        total_strokes:
+          15,
+        average_stroke_rate_spm:
+          24,
+        stroke:
+          'freestyle',
+        length_type:
+          'active'
+      },
+      {
+        start_time:
+          '2026-09-02T10:32:00Z',
+        duration_seconds:
+          20,
+        distance_meters:
+          null,
+        total_strokes:
+          null,
+        average_stroke_rate_spm:
+          null,
+        stroke:
+          null,
+        length_type:
+          'idle'
       }
     ],
     ...patch

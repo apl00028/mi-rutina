@@ -154,12 +154,30 @@ def test_swimming_session_detail_rpc_contract_and_real_fields():
     assert "  total_distance_meters double precision," in sql
     assert "  pool_length_meters double precision," in sql
     assert "  average_pace_seconds_per_100m double precision," in sql
+    assert "  total_strokes integer," in sql
+    assert "  heart_rate_average_bpm integer," in sql
+    assert "  heart_rate_max_bpm integer," in sql
+    assert "  total_calories integer," in sql
+    assert "  aerobic_training_effect double precision," in sql
+    assert "  anaerobic_training_effect double precision," in sql
+    assert "  average_stroke_rate_spm double precision," in sql
+    assert "  average_speed_meters_per_second double precision," in sql
+    assert "  max_speed_meters_per_second double precision," in sql
     assert "  lengths jsonb" in sql
     assert "swimming_sessions.data->'lengths'" in sql
     assert "swimming_length.value->>'swim_stroke'" in sql
     assert "swimming_length.value->>'length_type'" in sql
     assert "swimming_sessions.data->'distance_meters'" in sql
     assert "swimming_sessions.data->'pool_length_meters'" in sql
+    assert "swimming_sessions.data->'total_strokes'" in sql
+    assert "swimming_sessions.data->'heart_rate_average_bpm'" in sql
+    assert "swimming_sessions.data->'heart_rate_max_bpm'" in sql
+    assert "swimming_sessions.data->'total_calories'" in sql
+    assert "swimming_sessions.data->'aerobic_training_effect'" in sql
+    assert "swimming_sessions.data->'anaerobic_training_effect'" in sql
+    assert "swimming_sessions.data->'average_stroke_rate_spm'" in sql
+    assert "swimming_sessions.data->'average_speed_meters_per_second'" in sql
+    assert "swimming_sessions.data->'max_speed_meters_per_second'" in sql
     assert "swimming_sessions.id = p_session_id" in sql
     assert "swimming_sessions.started_at::text as event_at" in sql
     assert "as finished_at" not in sql

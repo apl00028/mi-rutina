@@ -799,11 +799,175 @@ export class TrainerClient implements OnInit {
       length.stroke
         ? this.swimmingStrokeLabel(length.stroke)
         : null,
-      length.length_type,
-      this.formatDuration(
-        length.duration_seconds
-      )
+      length.length_type
     ].filter(Boolean).join(' · ');
+  }
+
+
+  swimmingActiveLengths(
+    swimming: TrainerSwimmingSessionDetail
+  ): TrainerSwimmingLength[] {
+    return swimming.lengths.filter(
+      length =>
+        length.length_type === 'active'
+    );
+  }
+
+
+  swimmingActiveLengthCount(
+    swimming: TrainerSwimmingSessionDetail
+  ): number | null {
+    return swimming.lengths.length
+      ? this.swimmingActiveLengths(
+          swimming
+        ).length
+      : null;
+  }
+
+
+  swimmingStrokesPerActiveLength(
+    swimming: TrainerSwimmingSessionDetail
+  ): number | null {
+    const activeCount =
+      this.swimmingActiveLengthCount(
+        swimming
+      );
+
+    if (
+      !activeCount ||
+      swimming.total_strokes === null
+    ) {
+      return null;
+    }
+
+    return swimming.total_strokes /
+      activeCount;
+  }
+
+
+  swimmingObservedStrokes(
+    swimming: TrainerSwimmingSessionDetail
+  ): string {
+    return this.swimmingStrokeNames(
+      swimming
+    ).join(', ');
+  }
+
+
+  swimmingStrokeNames(
+    swimming: TrainerSwimmingSessionDetail
+  ): string[] {
+    const labels =
+      new Set<string>();
+
+    for (const length of swimming.lengths) {
+      if (length.stroke) {
+        labels.add(
+          this.swimmingStrokeLabel(
+            length.stroke
+          )
+        );
+      }
+    }
+
+    return Array.from(labels);
+  }
+
+
+  swimmingRestSeconds(
+    swimming: TrainerSwimmingSessionDetail
+  ): number | null {
+    if (
+      swimming.total_timer_time_seconds === null ||
+      swimming.total_moving_time_seconds === null
+    ) {
+      return null;
+    }
+
+    return Math.max(
+      0,
+      swimming.total_timer_time_seconds -
+        swimming.total_moving_time_seconds
+    );
+  }
+
+
+  hasSwimmingCardio(
+    swimming: TrainerSwimmingSessionDetail
+  ): boolean {
+    return (
+      swimming.heart_rate_average_bpm !== null ||
+      swimming.heart_rate_max_bpm !== null
+    );
+  }
+
+
+  hasSwimmingTechnique(
+    swimming: TrainerSwimmingSessionDetail
+  ): boolean {
+    return (
+      swimming.total_strokes !== null ||
+      swimming.average_stroke_rate_spm !== null ||
+      this.swimmingActiveLengthCount(swimming) !==
+        null ||
+      this.swimmingStrokeNames(swimming).length > 0
+    );
+  }
+
+
+  hasSwimmingLoad(
+    swimming: TrainerSwimmingSessionDetail
+  ): boolean {
+    return (
+      swimming.total_calories !== null ||
+      swimming.aerobic_training_effect !== null ||
+      swimming.anaerobic_training_effect !== null
+    );
+  }
+
+
+  hasSwimmingTimes(
+    swimming: TrainerSwimmingSessionDetail
+  ): boolean {
+    return (
+      swimming.total_elapsed_time_seconds !== null ||
+      swimming.total_timer_time_seconds !== null ||
+      swimming.total_moving_time_seconds !== null ||
+      this.swimmingRestSeconds(swimming) !== null
+    );
+  }
+
+
+  formatDecimal(
+    value: number | null | undefined,
+    maximumFractionDigits = 1
+  ): string {
+    if (
+      value === null ||
+      value === undefined ||
+      !Number.isFinite(value)
+    ) {
+      return '—';
+    }
+
+    return new Intl.NumberFormat(
+      'es-ES',
+      {
+        maximumFractionDigits
+      }
+    ).format(value);
+  }
+
+
+  formatPacePer100m(
+    value: number | null | undefined
+  ): string {
+    const pace =
+      this.formatDuration(value);
+
+    return pace === '—'
+      ? pace
+      : `${pace}/100 m`;
   }
 
 

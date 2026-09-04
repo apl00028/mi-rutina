@@ -169,6 +169,15 @@ export interface TrainerSwimmingSessionDetail {
   total_timer_time_seconds: number | null;
   total_moving_time_seconds: number | null;
   average_pace_seconds_per_100m: number | null;
+  total_strokes: number | null;
+  heart_rate_average_bpm: number | null;
+  heart_rate_max_bpm: number | null;
+  total_calories: number | null;
+  aerobic_training_effect: number | null;
+  anaerobic_training_effect: number | null;
+  average_stroke_rate_spm: number | null;
+  average_speed_meters_per_second: number | null;
+  max_speed_meters_per_second: number | null;
   objective: string | null;
   technical_focus: string[];
   lengths: TrainerSwimmingLength[];

@@ -557,6 +557,15 @@ def test_trainer_can_get_swimming_session_detail(monkeypatch):
             total_timer_time_seconds=2439,
             total_moving_time_seconds=2016,
             average_pace_seconds_per_100m=168.07,
+            total_strokes=758,
+            heart_rate_average_bpm=138,
+            heart_rate_max_bpm=162,
+            total_calories=389,
+            aerobic_training_effect=3.3,
+            anaerobic_training_effect=2.3,
+            average_stroke_rate_spm=23,
+            average_speed_meters_per_second=0.595,
+            max_speed_meters_per_second=1.724,
             objective=None,
             technical_focus=[],
             lengths=[],
@@ -578,6 +587,8 @@ def test_trainer_can_get_swimming_session_detail(monkeypatch):
 
     assert session.id == "swim-1"
     assert session.total_distance_meters == 1200
+    assert session.heart_rate_average_bpm == 138
+    assert session.total_strokes == 758
 
 
 def test_missing_swimming_session_detail_returns_404(monkeypatch):

@@ -518,6 +518,25 @@
                         </div>
                       }
 
+                      @if (
+                        swimming.average_pace_seconds_per_100m
+                          !== null
+                      ) {
+                        <div>
+                          <dt>
+                            Ritmo medio
+                          </dt>
+                          <dd>
+                            {{
+                              formatPacePer100m(
+                                swimming
+                                  .average_pace_seconds_per_100m
+                              )
+                            }}
+                          </dd>
+                        </div>
+                      }
+
                       @if (swimming.pool_length_meters !== null) {
                         <div>
                           <dt>
@@ -545,6 +564,286 @@
                       }
                     </dl>
 
+                    @if (hasSwimmingCardio(swimming)) {
+                      <section class="swimming-detail-block">
+                        <h4>
+                          Cardiovascular
+                        </h4>
+
+                        <dl class="metric-grid swimming-summary">
+                          @if (
+                            swimming.heart_rate_average_bpm
+                              !== null
+                          ) {
+                            <div>
+                              <dt>
+                                FC media
+                              </dt>
+                              <dd>
+                                {{
+                                  swimming
+                                    .heart_rate_average_bpm
+                                }}
+                                ppm
+                              </dd>
+                            </div>
+                          }
+
+                          @if (
+                            swimming.heart_rate_max_bpm !== null
+                          ) {
+                            <div>
+                              <dt>
+                                FC máxima
+                              </dt>
+                              <dd>
+                                {{
+                                  swimming
+                                    .heart_rate_max_bpm
+                                }}
+                                ppm
+                              </dd>
+                            </div>
+                          }
+                        </dl>
+                      </section>
+                    }
+
+                    @if (hasSwimmingTechnique(swimming)) {
+                      <section class="swimming-detail-block">
+                        <h4>
+                          Técnica
+                        </h4>
+
+                        <dl class="metric-grid swimming-summary">
+                          @if (swimming.total_strokes !== null) {
+                            <div>
+                              <dt>
+                                Brazadas totales
+                              </dt>
+                              <dd>
+                                {{ swimming.total_strokes }}
+                              </dd>
+                            </div>
+                          }
+
+                          @if (
+                            swimming.average_stroke_rate_spm
+                              !== null
+                          ) {
+                            <div>
+                              <dt>
+                                Cadencia media
+                              </dt>
+                              <dd>
+                                {{
+                                  swimming
+                                    .average_stroke_rate_spm
+                                }}
+                                spm
+                              </dd>
+                            </div>
+                          }
+
+                          @if (
+                            swimmingActiveLengthCount(swimming)
+                              !== null
+                          ) {
+                            <div>
+                              <dt>
+                                Largos activos
+                              </dt>
+                              <dd>
+                                {{
+                                  swimmingActiveLengthCount(
+                                    swimming
+                                  )
+                                }}
+                              </dd>
+                            </div>
+                          }
+
+                          @if (
+                            swimmingStrokesPerActiveLength(
+                              swimming
+                            ) !== null
+                          ) {
+                            <div>
+                              <dt>
+                                Brazadas/largo
+                              </dt>
+                              <dd>
+                                {{
+                                  formatDecimal(
+                                    swimmingStrokesPerActiveLength(
+                                      swimming
+                                    )
+                                  )
+                                }}
+                              </dd>
+                            </div>
+                          }
+
+                          @if (swimmingObservedStrokes(swimming)) {
+                            <div>
+                              <dt>
+                                Estilos observados
+                              </dt>
+                              <dd>
+                                {{
+                                  swimmingObservedStrokes(
+                                    swimming
+                                  )
+                                }}
+                              </dd>
+                            </div>
+                          }
+                        </dl>
+                      </section>
+                    }
+
+                    @if (hasSwimmingLoad(swimming)) {
+                      <section class="swimming-detail-block">
+                        <h4>
+                          Carga
+                        </h4>
+
+                        <dl class="metric-grid swimming-summary">
+                          @if (swimming.total_calories !== null) {
+                            <div>
+                              <dt>
+                                Calorías
+                              </dt>
+                              <dd>
+                                {{ swimming.total_calories }}
+                                kcal
+                              </dd>
+                            </div>
+                          }
+
+                          @if (
+                            swimming.aerobic_training_effect
+                              !== null
+                          ) {
+                            <div>
+                              <dt>
+                                Aerobic TE
+                              </dt>
+                              <dd>
+                                {{
+                                  swimming
+                                    .aerobic_training_effect
+                                }}
+                              </dd>
+                            </div>
+                          }
+
+                          @if (
+                            swimming.anaerobic_training_effect
+                              !== null
+                          ) {
+                            <div>
+                              <dt>
+                                Anaerobic TE
+                              </dt>
+                              <dd>
+                                {{
+                                  swimming
+                                    .anaerobic_training_effect
+                                }}
+                              </dd>
+                            </div>
+                          }
+                        </dl>
+                      </section>
+                    }
+
+                    @if (hasSwimmingTimes(swimming)) {
+                      <section class="swimming-detail-block">
+                        <h4>
+                          Tiempos
+                        </h4>
+
+                        <dl class="metric-grid swimming-summary">
+                          @if (
+                            swimming.total_elapsed_time_seconds
+                              !== null
+                          ) {
+                            <div>
+                              <dt>
+                                Elapsed
+                              </dt>
+                              <dd>
+                                {{
+                                  formatDuration(
+                                    swimming
+                                      .total_elapsed_time_seconds
+                                  )
+                                }}
+                              </dd>
+                            </div>
+                          }
+
+                          @if (
+                            swimming.total_timer_time_seconds
+                              !== null
+                          ) {
+                            <div>
+                              <dt>
+                                Timer
+                              </dt>
+                              <dd>
+                                {{
+                                  formatDuration(
+                                    swimming
+                                      .total_timer_time_seconds
+                                  )
+                                }}
+                              </dd>
+                            </div>
+                          }
+
+                          @if (
+                            swimming.total_moving_time_seconds
+                              !== null
+                          ) {
+                            <div>
+                              <dt>
+                                Moving
+                              </dt>
+                              <dd>
+                                {{
+                                  formatDuration(
+                                    swimming
+                                      .total_moving_time_seconds
+                                  )
+                                }}
+                              </dd>
+                            </div>
+                          }
+
+                          @if (
+                            swimmingRestSeconds(swimming) !== null
+                          ) {
+                            <div>
+                              <dt>
+                                Descanso derivado
+                              </dt>
+                              <dd>
+                                {{
+                                  formatDuration(
+                                    swimmingRestSeconds(
+                                      swimming
+                                    )
+                                  )
+                                }}
+                              </dd>
+                            </div>
+                          }
+                        </dl>
+                      </section>
+                    }
+
                     @if (swimming.technical_focus.length) {
                       <div class="swimming-focus">
                         @for (
@@ -560,65 +859,63 @@
 
                     @if (swimming.lengths.length) {
                       <div class="swimming-lengths">
+                        <h4>
+                          Detalle por largos
+                        </h4>
+
+                        <div class="swimming-length-table">
+                          <div class="swimming-length-row header">
+                            <span>Número</span>
+                            <span>Tipo/estilo</span>
+                            <span>Duración</span>
+                            <span>Brazadas</span>
+                            <span>Cadencia</span>
+                          </div>
+
                         @for (
                           length of swimming.lengths;
                           track $index;
                           let lengthIndex = $index
                         ) {
-                          <article class="swimming-length">
-                            <h4>
+                          <div class="swimming-length-row">
+                            <span>
+                              {{ lengthIndex + 1 }}
+                            </span>
+                            <span>
                               {{
-                                swimmingLengthTitle(
-                                  length,
-                                  lengthIndex
+                                swimmingLengthMeta(length)
+                                  || '—'
+                              }}
+                            </span>
+                            <span>
+                              {{
+                                formatDuration(
+                                  length.duration_seconds
                                 )
                               }}
-                            </h4>
-
-                            @if (
-                              swimmingLengthMeta(length)
-                            ) {
-                              <p class="card-note">
-                                {{
-                                  swimmingLengthMeta(
-                                    length
-                                  )
-                                }}
-                              </p>
-                            }
-
-                            <dl>
-                              @if (length.total_strokes !== null) {
-                                <div>
-                                  <dt>
-                                    Brazadas
-                                  </dt>
-                                  <dd>
-                                    {{ length.total_strokes }}
-                                  </dd>
-                                </div>
-                              }
-
+                            </span>
+                            <span>
+                              {{
+                                length.total_strokes ?? '—'
+                              }}
+                            </span>
+                            <span>
                               @if (
                                 length.average_stroke_rate_spm
                                   !== null
                               ) {
-                                <div>
-                                  <dt>
-                                    Frecuencia
-                                  </dt>
-                                  <dd>
-                                    {{
-                                      length
-                                        .average_stroke_rate_spm
-                                    }}
-                                    spm
-                                  </dd>
-                                </div>
+                                {{
+                                  length
+                                    .average_stroke_rate_spm
+                                }}
+                                spm
+                              } @else {
+                                —
                               }
-                            </dl>
-                          </article>
+                            </span>
+                          </div>
                         }
+                        </div>
                       </div>
                     }
                   }

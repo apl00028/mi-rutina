@@ -163,6 +163,15 @@ class TrainerSwimmingSessionDetail(BaseModel):
     total_timer_time_seconds: float | None = None
     total_moving_time_seconds: float | None = None
     average_pace_seconds_per_100m: float | None = None
+    total_strokes: int | None = None
+    heart_rate_average_bpm: int | None = None
+    heart_rate_max_bpm: int | None = None
+    total_calories: int | None = None
+    aerobic_training_effect: float | None = None
+    anaerobic_training_effect: float | None = None
+    average_stroke_rate_spm: float | None = None
+    average_speed_meters_per_second: float | None = None
+    max_speed_meters_per_second: float | None = None
     objective: str | None = None
     technical_focus: list[str] = Field(
         default_factory=list

@@ -237,6 +237,10 @@ export class App implements OnDestroy {
 
       this.aptusMe.set(me);
 
+      await this.redirectTrainerRoot(
+        me
+      );
+
       this.logStartup(
         '/api/v1/me',
         meStartedAt
@@ -283,6 +287,29 @@ export class App implements OnDestroy {
       `${Math.round(now - startedAt)} ms ` +
       `(${Math.round(now)} ms total)`
     );
+  }
+
+
+  private async redirectTrainerRoot(
+    me: AptusMe
+  ): Promise<void> {
+    const path =
+      this.router.url
+        .split('?')[0]
+        .split('#')[0];
+
+    if (
+      me.access_status === 'active' &&
+      me.role === 'trainer' &&
+      (
+        path === '/' ||
+        path === ''
+      )
+    ) {
+      await this.router.navigateByUrl(
+        '/trainer'
+      );
+    }
   }
 
 

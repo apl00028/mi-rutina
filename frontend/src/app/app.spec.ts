@@ -161,6 +161,12 @@ describe('App', () => {
           },
           {
             path:
+              'trainer/clients/:athleteId',
+            component:
+              TrainerStub
+          },
+          {
+            path:
               '',
             component:
               HomeStub
@@ -228,6 +234,29 @@ describe('App', () => {
   }
 
 
+  async function waitForShellReady(
+    fixture: ReturnType<typeof TestBed.createComponent<App>>
+  ) {
+    for (
+      let attempt = 0;
+      attempt < 10;
+      attempt += 1
+    ) {
+      await fixture.whenStable();
+      await flushPromises();
+      fixture.detectChanges();
+
+      if (
+        fixture.componentInstance
+          .initializationState() !==
+        'initializing'
+      ) {
+        return;
+      }
+    }
+  }
+
+
   async function createReadyApp(
     path = '/'
   ) {
@@ -240,9 +269,9 @@ describe('App', () => {
       TestBed.createComponent(App);
 
     fixture.detectChanges();
-    await fixture.whenStable();
-    await flushPromises();
-    fixture.detectChanges();
+    await waitForShellReady(
+      fixture
+    );
 
     return fixture;
   }
@@ -668,6 +697,109 @@ describe('App', () => {
 
       fixture.destroy();
     }
+  });
+
+  it('redirects active trainers from root to trainer', async () => {
+    waitForSession.mockResolvedValue({
+      access_token:
+        'access-token'
+    });
+    getMe.mockResolvedValue({
+      access_status:
+        'active',
+      role:
+        'trainer'
+    });
+
+    await createReadyApp('/');
+
+    const router =
+      TestBed.inject(Router);
+
+    expect(router.url)
+      .toBe('/trainer');
+  });
+
+  it('does not redirect trainers already on trainer routes', async () => {
+    waitForSession.mockResolvedValue({
+      access_token:
+        'access-token'
+    });
+    getMe.mockResolvedValue({
+      access_status:
+        'active',
+      role:
+        'trainer'
+    });
+
+    await createReadyApp(
+      '/trainer'
+    );
+
+    const router =
+      TestBed.inject(Router);
+
+    expect(router.url)
+      .toBe('/trainer');
+
+    await router.navigateByUrl(
+      '/trainer/clients/athlete-1'
+    );
+
+    const fixture =
+      TestBed.createComponent(App);
+
+    fixture.detectChanges();
+    await fixture.whenStable();
+    await flushPromises();
+    fixture.detectChanges();
+
+    expect(router.url)
+      .toBe(
+        '/trainer/clients/athlete-1'
+      );
+  });
+
+  it('keeps athletes on root', async () => {
+    waitForSession.mockResolvedValue({
+      access_token:
+        'access-token'
+    });
+    getMe.mockResolvedValue({
+      access_status:
+        'active',
+      role:
+        'user'
+    });
+
+    await createReadyApp('/');
+
+    const router =
+      TestBed.inject(Router);
+
+    expect(router.url)
+      .toBe('/');
+  });
+
+  it('keeps admins on root', async () => {
+    waitForSession.mockResolvedValue({
+      access_token:
+        'access-token'
+    });
+    getMe.mockResolvedValue({
+      access_status:
+        'active',
+      role:
+        'admin'
+    });
+
+    await createReadyApp('/');
+
+    const router =
+      TestBed.inject(Router);
+
+    expect(router.url)
+      .toBe('/');
   });
 
   it('keeps bottom navigation visible on training when there is no active workout', async () => {

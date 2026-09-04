@@ -13,7 +13,8 @@ import {
   Router
 } from '@angular/router';
 import {
-  of
+  of,
+  throwError
 } from 'rxjs';
 import {
   afterEach,
@@ -108,6 +109,95 @@ describe('Endurance swimming integration', () => {
   afterEach(() => {
     vi.restoreAllMocks();
   });
+
+
+  async function flushPromises():
+    Promise<void> {
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+  }
+
+
+  function healthConnectSwimmingSession(
+    overrides: Record<string, unknown> = {}
+  ) {
+    return {
+      startTime:
+        '2026-09-02T07:00:00Z',
+      endTime:
+        '2026-09-02T07:42:00Z',
+      durationSeconds:
+        2520,
+      segmentCount:
+        2,
+      segmentRepetitions:
+        612,
+      distanceMeters:
+        950,
+      distanceRecordCount:
+        1,
+      rawDistanceTotalMeters:
+        950,
+      distanceRecords: [
+        {
+          startTime:
+            '2026-09-02T07:00:00Z',
+          endTime:
+            '2026-09-02T07:42:00Z',
+          durationSeconds:
+            2520,
+          distanceMeters:
+            950
+        }
+      ],
+      heartRateAverageBpm:
+        132,
+      heartRateMaxBpm:
+        156,
+      heartRateSampleCount:
+        120,
+      speedSampleCount:
+        60,
+      speedAverageMetersPerSecond:
+        0.47,
+      speedMaxMetersPerSecond:
+        1.1,
+      paceSecondsPer100mFromSpeed:
+        212.7,
+      ...overrides
+    };
+  }
+
+
+  function mockAndroidHealthConnectSwimming(
+    sessions = [
+      healthConnectSwimmingSession()
+    ]
+  ) {
+    vi.spyOn(
+      Capacitor,
+      'isNativePlatform'
+    ).mockReturnValue(true);
+    vi.spyOn(
+      Capacitor,
+      'getPlatform'
+    ).mockReturnValue('android');
+
+    healthConnect
+      .readGarminSwimmingMetrics
+      .mockResolvedValue({
+        sourcePackage:
+          'com.garmin.android.apps.connectmobile',
+        lookbackDays: 30,
+        count: sessions.length,
+        sessions
+      });
+
+    http.get.mockReturnValue(
+      of([])
+    );
+  }
 
 
   it('preserves unedited sessions when saving the active routine', async () => {
@@ -233,8 +323,132 @@ describe('Endurance swimming integration', () => {
     expect(
       fixture.componentInstance
         .swimmingSessions()[0]
-        .fitEnriched
+      .fitEnriched
     ).toBe(true);
+  });
+
+
+  it('syncs Health Connect swimming after reading sessions', async () => {
+    const fixture =
+      TestBed.createComponent(
+        Endurance
+      );
+
+    mockAndroidHealthConnectSwimming();
+    http.post.mockReturnValue(
+      of({
+        synced: 1
+      })
+    );
+
+    await fixture.componentInstance
+      .loadSwimming();
+    await flushPromises();
+
+    expect(http.post)
+      .toHaveBeenCalledWith(
+        expect.stringContaining(
+          '/swimming/sync-health-connect'
+        ),
+        {
+          sessions: [
+            expect.objectContaining({
+              sourcePackage:
+                'com.garmin.android.apps.connectmobile',
+              startTime:
+                '2026-09-02T07:00:00Z',
+              endTime:
+                '2026-09-02T07:42:00Z',
+              durationSeconds:
+                2520,
+              segmentCount:
+                2,
+              segmentRepetitions:
+                612,
+              distanceMeters:
+                950,
+              distanceRecordCount:
+                1,
+              rawDistanceTotalMeters:
+                950,
+              heartRateAverageBpm:
+                132,
+              heartRateMaxBpm:
+                156,
+              speedAverageMetersPerSecond:
+                0.47,
+              speedMaxMetersPerSecond:
+                1.1,
+              paceSecondsPer100mFromSpeed:
+                212.7
+            })
+          ]
+        },
+        expect.objectContaining({
+          headers:
+            expect.anything()
+        })
+      );
+  });
+
+
+  it('keeps rendering Health Connect swimming when sync fails', async () => {
+    const fixture =
+      TestBed.createComponent(
+        Endurance
+      );
+
+    mockAndroidHealthConnectSwimming();
+    http.post.mockReturnValue(
+      throwError(
+        () => new Error(
+          'sync failed'
+        )
+      )
+    );
+
+    await fixture.componentInstance
+      .loadSwimming();
+    await flushPromises();
+
+    expect(
+      fixture.componentInstance
+        .swimmingError()
+    ).toBeNull();
+    expect(
+      fixture.componentInstance
+        .swimmingSessions()
+    ).toHaveLength(1);
+    expect(
+      fixture.componentInstance
+        .swimmingSessions()[0]
+        .distanceMeters
+    ).toBe(950);
+  });
+
+
+  it('does not resend the same Health Connect swimming session', async () => {
+    const fixture =
+      TestBed.createComponent(
+        Endurance
+      );
+
+    mockAndroidHealthConnectSwimming();
+    http.post.mockReturnValue(
+      of({
+        synced: 1
+      })
+    );
+
+    await fixture.componentInstance
+      .loadSwimming();
+    await flushPromises();
+    await fixture.componentInstance
+      .loadSwimming();
+    await flushPromises();
+
+    expect(http.post)
+      .toHaveBeenCalledTimes(1);
   });
 });
 

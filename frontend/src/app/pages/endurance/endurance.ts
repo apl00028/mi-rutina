@@ -225,6 +225,32 @@ interface EnduranceHealthConnect {
 }
 
 
+interface SwimmingHealthConnectSyncSession {
+  sourcePackage: string;
+  startTime: string;
+  endTime: string;
+  durationSeconds: number;
+  segmentCount: number;
+  segmentRepetitions: number;
+  distanceMeters?: number;
+  distanceRecordCount: number;
+  rawDistanceTotalMeters: number;
+  distanceRecords: Array<{
+    startTime: string;
+    endTime: string;
+    durationSeconds: number;
+    distanceMeters: number;
+  }>;
+  heartRateAverageBpm?: number;
+  heartRateMaxBpm?: number;
+  heartRateSampleCount: number;
+  speedSampleCount: number;
+  speedAverageMetersPerSecond?: number;
+  speedMaxMetersPerSecond?: number;
+  paceSecondsPer100mFromSpeed?: number;
+}
+
+
 export const ENDURANCE_HEALTH_CONNECT =
   new InjectionToken<EnduranceHealthConnect>(
     'ENDURANCE_HEALTH_CONNECT',
@@ -472,6 +498,9 @@ export class Endurance
     signal<string | null>(
       null
     );
+
+  private readonly syncedHealthConnectSwimmingKeys =
+    new Set<string>();
 
   constructor(
     private route: ActivatedRoute,
@@ -2732,6 +2761,10 @@ export class Endurance
               fitViews
             );
 
+          void this.syncHealthConnectSwimming(
+            result
+          );
+
         } catch (error: unknown) {
           if (fitViews.length === 0) {
             throw error;
@@ -2813,6 +2846,141 @@ export class Endurance
         { headers }
       )
     );
+  }
+
+
+  private async syncHealthConnectSwimming(
+    result: HealthConnectSwimmingMetrics
+  ): Promise<void> {
+    const sessions =
+      result.sessions
+        .filter(session =>
+          this.shouldSyncHealthConnectSwimmingSession(
+            result.sourcePackage,
+            session
+          )
+        )
+        .map(session =>
+          this.toHealthConnectSyncSession(
+            result.sourcePackage,
+            session
+          )
+        );
+
+    if (sessions.length === 0) {
+      return;
+    }
+
+    try {
+      const token =
+        await this.auth.getAccessToken();
+
+      if (!token) {
+        return;
+      }
+
+      const headers =
+        new HttpHeaders({
+          Authorization:
+            `Bearer ${token}`,
+          'Content-Type':
+            'application/json'
+        });
+
+      await firstValueFrom(
+        this.http.post(
+          `${this.apiUrl}/swimming/sync-health-connect`,
+          {
+            sessions
+          },
+          {
+            headers
+          }
+        )
+      );
+
+      for (const session of result.sessions) {
+        this.syncedHealthConnectSwimmingKeys.add(
+          this.healthConnectSwimmingSyncKey(
+            result.sourcePackage,
+            session
+          )
+        );
+      }
+
+    } catch {
+      // Health Connect remains a local read path; sync failures must not
+      // hide the sessions that were already read from the device.
+    }
+  }
+
+
+  private shouldSyncHealthConnectSwimmingSession(
+    sourcePackage: string,
+    session: HealthConnectSwimmingMetricSession
+  ): boolean {
+    return !this.syncedHealthConnectSwimmingKeys.has(
+      this.healthConnectSwimmingSyncKey(
+        sourcePackage,
+        session
+      )
+    );
+  }
+
+
+  private healthConnectSwimmingSyncKey(
+    sourcePackage: string,
+    session: HealthConnectSwimmingMetricSession
+  ): string {
+    return [
+      sourcePackage,
+      session.startTime,
+      session.endTime,
+      session.distanceMeters ?? '',
+      session.durationSeconds
+    ].join('\u001f');
+  }
+
+
+  private toHealthConnectSyncSession(
+    sourcePackage: string,
+    session: HealthConnectSwimmingMetricSession
+  ): SwimmingHealthConnectSyncSession {
+    return {
+      sourcePackage,
+      startTime:
+        session.startTime,
+      endTime:
+        session.endTime,
+      durationSeconds:
+        session.durationSeconds,
+      segmentCount:
+        session.segmentCount,
+      segmentRepetitions:
+        session.segmentRepetitions,
+      distanceMeters:
+        session.distanceMeters,
+      distanceRecordCount:
+        session.distanceRecordCount,
+      rawDistanceTotalMeters:
+        session.rawDistanceTotalMeters,
+      distanceRecords:
+        session.distanceRecords,
+      heartRateAverageBpm:
+        session.heartRateAverageBpm,
+      heartRateMaxBpm:
+        session.heartRateMaxBpm,
+      heartRateSampleCount:
+        session.heartRateSampleCount,
+      speedSampleCount:
+        session.speedSampleCount,
+      speedAverageMetersPerSecond:
+        session.speedAverageMetersPerSecond,
+      speedMaxMetersPerSecond:
+        session.speedMaxMetersPerSecond,
+      paceSecondsPer100mFromSpeed:
+        session.paceSecondsPer100mFromSpeed
+    };
   }
 
 

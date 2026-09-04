@@ -127,3 +127,63 @@ async def create_swimming_session(
         )
 
     return data[0]
+
+
+async def upsert_swimming_sessions(
+    user: AuthenticatedUser,
+    payloads: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    if not payloads:
+        return []
+
+    url, key = _supabase_config()
+
+    headers = {
+        "Authorization":
+            f"Bearer {user.access_token}",
+        "apikey": key,
+        "Content-Type": "application/json",
+        "Prefer": (
+            "resolution=merge-duplicates,"
+            "return=representation"
+        ),
+    }
+
+    rows = [
+        {
+            "id": payload["id"],
+            "user_id": user.id,
+            "source": payload["source"],
+            "source_file_hash":
+                payload["source_file_hash"],
+            "started_at": payload["started_at"],
+            "parser_version":
+                payload["parser_version"],
+            "data": payload["data"],
+            "updated_at": payload["updated_at"],
+        }
+        for payload in payloads
+    ]
+
+    client = get_supabase_http_client()
+
+    response = await client.post(
+        f"{url}/rest/v1/swimming_sessions",
+        headers=headers,
+        params={
+            "on_conflict":
+                "user_id,id",
+        },
+        json=rows,
+    )
+
+    response.raise_for_status()
+
+    data = response.json()
+
+    if not isinstance(data, list):
+        raise RuntimeError(
+            "Unexpected Supabase response."
+        )
+
+    return data

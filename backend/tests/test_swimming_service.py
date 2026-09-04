@@ -4,13 +4,18 @@ import asyncio
 import httpx
 
 from app.core.auth import AuthenticatedUser
-from app.domains.swimming.models import SwimmingFitSession
+from app.domains.swimming.models import (
+    SwimmingFitSession,
+    SwimmingHealthConnectSession,
+    SwimmingHealthConnectSyncRequest,
+)
 from app.domains.swimming.service import (
+    health_connect_swimming_session_id,
+    health_connect_swimming_to_storage_payload,
     import_user_swimming_fit,
     swimming_to_storage_payload,
+    sync_user_swimming_health_connect,
 )
-
-
 USER = AuthenticatedUser(
     id="user-123",
     email="test@example.com",
@@ -260,3 +265,235 @@ def test_list_user_swimming_sessions(
 
     assert len(result) == 1
     assert result[0].distance_meters == 1200
+
+
+def health_connect_session(**overrides):
+    payload = {
+        "sourcePackage":
+            "com.garmin.android.apps.connectmobile",
+        "startTime":
+            datetime(
+                2026,
+                9,
+                2,
+                7,
+                0,
+                tzinfo=timezone.utc,
+            ),
+        "endTime":
+            datetime(
+                2026,
+                9,
+                2,
+                7,
+                42,
+                tzinfo=timezone.utc,
+            ),
+        "durationSeconds":
+            2520,
+        "segmentCount":
+            2,
+        "segmentRepetitions":
+            612,
+        "distanceMeters":
+            950,
+        "distanceRecordCount":
+            1,
+        "rawDistanceTotalMeters":
+            950,
+        "distanceRecords": [
+            {
+                "startTime":
+                    datetime(
+                        2026,
+                        9,
+                        2,
+                        7,
+                        0,
+                        tzinfo=timezone.utc,
+                    ),
+                "endTime":
+                    datetime(
+                        2026,
+                        9,
+                        2,
+                        7,
+                        42,
+                        tzinfo=timezone.utc,
+                    ),
+                "durationSeconds":
+                    2520,
+                "distanceMeters":
+                    950,
+            }
+        ],
+        "heartRateAverageBpm":
+            132,
+        "heartRateMaxBpm":
+            156,
+        "heartRateSampleCount":
+            120,
+        "speedSampleCount":
+            60,
+        "speedAverageMetersPerSecond":
+            0.47,
+        "speedMaxMetersPerSecond":
+            1.1,
+        "paceSecondsPer100mFromSpeed":
+            212.7,
+    }
+    payload.update(overrides)
+    return SwimmingHealthConnectSession(
+        **payload
+    )
+
+
+def test_health_connect_swimming_payload_uses_stable_id_and_source():
+    session = health_connect_session()
+
+    payload = health_connect_swimming_to_storage_payload(
+        session
+    )
+
+    assert payload["id"].startswith(
+        "health-connect:"
+    )
+    assert payload["id"] == (
+        health_connect_swimming_session_id(
+            session
+        )
+    )
+    assert payload["source"] == "health_connect"
+    assert payload["source_file_hash"] is None
+    assert payload["started_at"] == (
+        "2026-09-02T07:00:00Z"
+    )
+    assert payload["data"]["distance_meters"] == 950
+    assert payload["data"][
+        "total_elapsed_time_seconds"
+    ] == 2520
+    assert payload["data"][
+        "heart_rate_average_bpm"
+    ] == 132
+    assert payload["data"][
+        "average_speed_meters_per_second"
+    ] == 0.47
+    assert (
+        "average_pace_seconds_per_100m"
+        not in payload["data"]
+    )
+    assert payload["data"]["health_connect"][
+        "source_package"
+    ] == (
+        "com.garmin.android.apps.connectmobile"
+    )
+    assert payload["data"]["health_connect"][
+        "pace_seconds_per_100m_from_speed"
+    ] == 212.7
+
+
+def test_health_connect_swimming_retry_keeps_same_id():
+    session = health_connect_session()
+
+    assert health_connect_swimming_session_id(
+        session
+    ) == health_connect_swimming_session_id(
+        health_connect_session()
+    )
+
+
+def test_sync_health_connect_swimming_saves_own_sessions(
+    monkeypatch,
+):
+    from app.domains.swimming import service
+
+    captured = {}
+
+    async def fake_list(user):
+        assert user.id == "user-123"
+        return []
+
+    async def fake_upsert(user, payloads):
+        assert user.id == "user-123"
+        captured["payloads"] = payloads
+        return payloads
+
+    monkeypatch.setattr(
+        service,
+        "list_swimming_sessions",
+        fake_list,
+    )
+    monkeypatch.setattr(
+        service,
+        "upsert_swimming_sessions",
+        fake_upsert,
+    )
+
+    result = asyncio.run(
+        sync_user_swimming_health_connect(
+            USER,
+            SwimmingHealthConnectSyncRequest(
+                sessions=[
+                    health_connect_session()
+                ]
+            ),
+        )
+    )
+
+    assert result.synced == 1
+    assert captured["payloads"][0][
+        "source"
+    ] == "health_connect"
+    assert "user_id" not in captured["payloads"][0]
+
+
+def test_sync_health_connect_swimming_does_not_overwrite_fit(
+    monkeypatch,
+):
+    from app.domains.swimming import service
+
+    async def fake_list(user):
+        return [
+            {
+                "id":
+                    "garmin-fit-abc",
+                "source":
+                    "garmin_fit",
+                "started_at":
+                    "2026-09-02T07:01:00Z",
+                "data": {
+                    "distance_meters":
+                        952,
+                    "total_timer_time_seconds":
+                        2500,
+                },
+            }
+        ]
+
+    async def fake_upsert(user, payloads):
+        assert payloads == []
+        return []
+
+    monkeypatch.setattr(
+        service,
+        "list_swimming_sessions",
+        fake_list,
+    )
+    monkeypatch.setattr(
+        service,
+        "upsert_swimming_sessions",
+        fake_upsert,
+    )
+
+    result = asyncio.run(
+        sync_user_swimming_health_connect(
+            USER,
+            SwimmingHealthConnectSyncRequest(
+                sessions=[
+                    health_connect_session()
+                ]
+            ),
+        )
+    )
+
+    assert result.synced == 0

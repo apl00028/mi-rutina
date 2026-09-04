@@ -15,12 +15,15 @@ from app.core.auth import (
     require_user,
 )
 from app.domains.swimming.models import (
+    SwimmingHealthConnectSyncRequest,
+    SwimmingHealthConnectSyncResult,
     SwimmingFitSession,
 )
 from app.domains.swimming.fit_parser import NonSwimmingFitError
 from app.domains.swimming.service import (
     import_user_swimming_fit,
     list_user_swimming_sessions,
+    sync_user_swimming_health_connect,
 )
 
 
@@ -113,3 +116,25 @@ async def import_swimming_fit(
             temp_path.unlink(
                 missing_ok=True
             )
+
+
+@router.post(
+    "/swimming/sync-health-connect",
+    response_model=SwimmingHealthConnectSyncResult,
+)
+async def sync_swimming_health_connect(
+    request: SwimmingHealthConnectSyncRequest,
+    user: AuthenticatedUser = Depends(require_user),
+) -> SwimmingHealthConnectSyncResult:
+    try:
+        return await sync_user_swimming_health_connect(
+            user,
+            request,
+        )
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=(
+                "Could not sync Health Connect swimming sessions"
+            ),
+        ) from exc

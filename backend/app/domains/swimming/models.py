@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class SwimmingLength(BaseModel):
@@ -37,3 +37,58 @@ class SwimmingFitSession(BaseModel):
     anaerobic_training_effect: float | None = None
 
     lengths: list[SwimmingLength]
+
+
+class SwimmingHealthConnectDistanceRecord(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    startTime: datetime
+    endTime: datetime
+    durationSeconds: float = Field(ge=0)
+    distanceMeters: float = Field(ge=0)
+
+
+class SwimmingHealthConnectSession(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    sourcePackage: str = Field(min_length=1)
+    startTime: datetime
+    endTime: datetime
+    durationSeconds: float = Field(ge=0)
+    segmentCount: int = Field(default=0, ge=0)
+    segmentRepetitions: int = Field(default=0, ge=0)
+
+    distanceMeters: float | None = Field(default=None, ge=0)
+    distanceRecordCount: int = Field(default=0, ge=0)
+    rawDistanceTotalMeters: float = Field(default=0, ge=0)
+    distanceRecords: list[
+        SwimmingHealthConnectDistanceRecord
+    ] = Field(default_factory=list)
+
+    heartRateAverageBpm: int | None = Field(default=None, ge=0)
+    heartRateMaxBpm: int | None = Field(default=None, ge=0)
+    heartRateSampleCount: int = Field(default=0, ge=0)
+
+    speedSampleCount: int = Field(default=0, ge=0)
+    speedAverageMetersPerSecond: float | None = Field(
+        default=None,
+        ge=0,
+    )
+    speedMaxMetersPerSecond: float | None = Field(
+        default=None,
+        ge=0,
+    )
+    paceSecondsPer100mFromSpeed: float | None = Field(
+        default=None,
+        ge=0,
+    )
+
+
+class SwimmingHealthConnectSyncRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    sessions: list[SwimmingHealthConnectSession]
+
+
+class SwimmingHealthConnectSyncResult(BaseModel):
+    synced: int

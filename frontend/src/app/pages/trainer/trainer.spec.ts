@@ -228,6 +228,44 @@ describe(
     }
 
 
+    function clickButton(
+      label: string
+    ): void {
+      const button =
+        (
+          Array.from(
+            fixture.nativeElement
+              .querySelectorAll('button')
+          ) as HTMLButtonElement[]
+        ).find(
+          candidate =>
+            candidate.textContent
+              ?.includes(label)
+        );
+
+      expect(button).toBeTruthy();
+
+      button!.click();
+      fixture.detectChanges();
+    }
+
+
+    function showAthletesView(): void {
+      fixture.componentInstance.setView(
+        'athletes'
+      );
+      fixture.detectChanges();
+    }
+
+
+    function showTemplatesView(): void {
+      fixture.componentInstance.setView(
+        'templates'
+      );
+      fixture.detectChanges();
+    }
+
+
     it(
       'loads and renders active athletes',
       async () => {
@@ -235,6 +273,7 @@ describe(
         await flushInitial();
 
         await settle();
+        showAthletesView();
 
         expect(
           fixture.nativeElement.textContent
@@ -294,6 +333,7 @@ describe(
           }
         ]);
         await settle();
+        showAthletesView();
 
         const athlete =
           fixture.componentInstance
@@ -336,6 +376,7 @@ describe(
           }
         ]);
         await settle();
+        showAthletesView();
 
         const athlete =
           fixture.componentInstance
@@ -356,7 +397,7 @@ describe(
 
 
     it(
-      'renders the trainer dashboard heading and summary counters',
+      'starts on the dashboard without rendering secondary lists',
       async () => {
         createPage();
         await flushInitial(
@@ -420,6 +461,10 @@ describe(
         const text =
           fixture.nativeElement.textContent;
 
+        expect(
+          fixture.componentInstance
+            .activeView()
+        ).toBe('dashboard');
         expect(text).toContain(
           'Panel de entrenador'
         );
@@ -441,6 +486,118 @@ describe(
         expect(text).toContain(
           '3'
         );
+        expect(text).toContain(
+          'Acciones rápidas'
+        );
+        expect(
+          fixture.nativeElement
+            .querySelector('.athlete-card')
+        ).toBeNull();
+        expect(
+          fixture.nativeElement
+            .querySelector('.template-card')
+        ).toBeNull();
+        expect(text).not.toContain(
+          'Athlete One'
+        );
+        expect(text).not.toContain(
+          'Base fuerza'
+        );
+      }
+    );
+
+
+    it(
+      'shows clients from the dashboard quick action',
+      async () => {
+        createPage();
+        await flushInitial();
+        await settle();
+
+        clickButton('Ver clientes');
+
+        expect(
+          fixture.componentInstance
+            .activeView()
+        ).toBe('athletes');
+        expect(
+          fixture.nativeElement.textContent
+        ).toContain('Clientes');
+        expect(
+          fixture.nativeElement.textContent
+        ).toContain('Athlete One');
+        expect(
+          fixture.nativeElement
+            .querySelector('.athlete-card')
+        ).not.toBeNull();
+      }
+    );
+
+
+    it(
+      'shows templates from the dashboard quick action',
+      async () => {
+        createPage();
+        await flushInitial();
+        await settle();
+
+        clickButton('Plantillas');
+
+        expect(
+          fixture.componentInstance
+            .activeView()
+        ).toBe('templates');
+        expect(
+          fixture.nativeElement.textContent
+        ).toContain('Base fuerza');
+        expect(
+          fixture.nativeElement
+            .querySelector('.template-card')
+        ).not.toBeNull();
+      }
+    );
+
+
+    it(
+      'returns from clients to the dashboard',
+      async () => {
+        createPage();
+        await flushInitial();
+        await settle();
+
+        showAthletesView();
+        clickButton('← Panel');
+
+        expect(
+          fixture.componentInstance
+            .activeView()
+        ).toBe('dashboard');
+        expect(
+          fixture.nativeElement
+            .querySelector('.athlete-card')
+        ).toBeNull();
+      }
+    );
+
+
+    it(
+      'returns from templates to the dashboard',
+      async () => {
+        createPage();
+        await flushInitial();
+        await settle();
+
+        showTemplatesView();
+        clickButton('← Panel');
+
+        expect(
+          fixture.componentInstance
+            .activeView()
+        ).toBe('dashboard');
+        expect(
+          fixture.nativeElement
+            .querySelector('.template-card')
+        ).toBeNull();
       }
     );
 
@@ -486,6 +643,7 @@ describe(
             .loadingOverviews()
         ).toBe(true);
 
+        showAthletesView();
         fixture.detectChanges();
 
         expect(
@@ -548,10 +706,7 @@ describe(
 
         await settle();
 
-        fixture.componentInstance.setView(
-          'templates'
-        );
-        fixture.detectChanges();
+        showTemplatesView();
 
         expect(
           fixture.nativeElement.textContent
@@ -570,24 +725,7 @@ describe(
         await flushInitial();
         await settle();
 
-        const button =
-          (
-            Array.from(
-              fixture.nativeElement
-                .querySelectorAll(
-                  '.action-button'
-                )
-            ) as HTMLButtonElement[]
-          ).find(
-            candidate =>
-              candidate.textContent
-                ?.includes(
-                  'Asignar plantilla'
-                )
-          )!;
-
-        button.click();
-        fixture.detectChanges();
+        clickButton('Plantillas');
 
         expect(
           fixture.componentInstance
@@ -688,6 +826,23 @@ describe(
 
         await settle();
 
+        expect(
+          fixture.nativeElement.textContent
+        ).toContain(
+          '3 · parcial'
+        );
+        expect(
+          fixture.nativeElement.textContent
+        ).toContain(
+          'Datos disponibles de 1 de 2 clientes activos.'
+        );
+        expect(
+          fixture.componentInstance
+            .summarySessionsLabel()
+        ).toBe('3 · parcial');
+
+        showAthletesView();
+
         const text =
           fixture.nativeElement.textContent;
 
@@ -703,16 +858,6 @@ describe(
         expect(text).toContain(
           '3 sesiones últimos 7 días'
         );
-        expect(text).toContain(
-          '3 · parcial'
-        );
-        expect(text).toContain(
-          'Datos disponibles de 1 de 2 clientes activos.'
-        );
-        expect(
-          fixture.componentInstance
-            .summarySessionsLabel()
-        ).toBe('3 · parcial');
       }
     );
 
@@ -769,6 +914,7 @@ describe(
           }
         );
         await settle();
+        showAthletesView();
 
         const text =
           fixture.nativeElement.textContent;
@@ -833,9 +979,7 @@ describe(
         );
         await settle();
 
-        fixture.componentInstance.setView(
-          'templates'
-        );
+        showTemplatesView();
         fixture.componentInstance.updateRoutineId(
           'manual-editable'
         );
@@ -896,9 +1040,7 @@ describe(
         );
         await settle();
 
-        fixture.componentInstance.setView(
-          'templates'
-        );
+        showTemplatesView();
         fixture.componentInstance.updateRoutineId(
           'manual-editable'
         );
@@ -931,9 +1073,7 @@ describe(
         await flushInitial();
         await settle();
 
-        fixture.componentInstance.setView(
-          'templates'
-        );
+        showTemplatesView();
         fixture.componentInstance.updateRoutineId(
           'routine-custom'
         );
@@ -1039,6 +1179,7 @@ describe(
         ).flush([]);
 
         await settle();
+        showAthletesView();
 
         expect(
           fixture.nativeElement.textContent
@@ -1054,9 +1195,7 @@ describe(
         await flushInitial();
         await settle();
 
-        fixture.componentInstance.setView(
-          'templates'
-        );
+        showTemplatesView();
         fixture.componentInstance.updateRoutineId(
           'routine-custom'
         );

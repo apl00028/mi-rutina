@@ -14,34 +14,46 @@
       </p>
     </div>
 
-    <div
-      class="view-switch"
-      role="tablist"
-      aria-label="Vistas de entrenador"
-    >
-      <button
-        type="button"
-        role="tab"
-        [class.active]="activeView() === 'athletes'"
-        [attr.aria-selected]="activeView() === 'athletes'"
-        (click)="setView('athletes')"
+    @if (activeView() !== 'dashboard') {
+      <div
+        class="view-switch"
+        role="tablist"
+        aria-label="Vistas de entrenador"
       >
-        Clientes
-      </button>
+        <button
+          type="button"
+          role="tab"
+          [class.active]="activeView() === 'dashboard'"
+          [attr.aria-selected]="activeView() === 'dashboard'"
+          (click)="setView('dashboard')"
+        >
+          Panel
+        </button>
 
-      <button
-        type="button"
-        role="tab"
-        [class.active]="activeView() === 'templates'"
-        [attr.aria-selected]="activeView() === 'templates'"
-        (click)="setView('templates')"
-      >
-        Plantillas
-      </button>
-    </div>
+        <button
+          type="button"
+          role="tab"
+          [class.active]="activeView() === 'athletes'"
+          [attr.aria-selected]="activeView() === 'athletes'"
+          (click)="setView('athletes')"
+        >
+          Clientes
+        </button>
+
+        <button
+          type="button"
+          role="tab"
+          [class.active]="activeView() === 'templates'"
+          [attr.aria-selected]="activeView() === 'templates'"
+          (click)="setView('templates')"
+        >
+          Plantillas
+        </button>
+      </div>
+    }
   </header>
 
-  @if (activeView() === 'athletes') {
+  @if (activeView() === 'dashboard') {
     <section class="dashboard-grid">
       <div class="summary-grid">
         <article class="summary-card">
@@ -99,22 +111,24 @@
           class="action-button"
           (click)="setView('templates')"
         >
-          Asignar plantilla
-        </button>
-
-        <button
-          type="button"
-          class="action-button"
-          (click)="setView('templates')"
-        >
-          Ver plantillas
+          Plantillas
         </button>
       </aside>
     </section>
+  }
 
+  @if (activeView() === 'athletes') {
     <section class="trainer-section">
       <div class="section-heading">
         <div>
+          <button
+            type="button"
+            class="back-button"
+            (click)="setView('dashboard')"
+          >
+            ← Panel
+          </button>
+
           <h2>
             Clientes
           </h2>
@@ -263,10 +277,20 @@
         </div>
       }
     </section>
-  } @else {
+  }
+
+  @if (activeView() === 'templates') {
     <section class="trainer-section templates-section">
       <div class="section-heading">
         <div>
+          <button
+            type="button"
+            class="back-button"
+            (click)="setView('dashboard')"
+          >
+            ← Panel
+          </button>
+
           <h2>
             Plantillas
           </h2>

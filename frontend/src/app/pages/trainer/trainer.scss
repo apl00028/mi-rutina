@@ -83,7 +83,8 @@ h1 {
 .view-switch button,
 .secondary-button,
 .primary-button,
-.action-button {
+.action-button,
+.back-button {
   min-height: 38px;
 
   border-radius: var(--aptus-radius-md);
@@ -188,6 +189,20 @@ h1 {
   color: var(--aptus-text);
 
   text-align: left;
+}
+
+.back-button {
+  min-height: 0;
+  margin-bottom: 8px;
+  padding: 0;
+
+  border: 0;
+
+  background: transparent;
+  color: var(--aptus-text-muted);
+
+  font-size: 12px;
+  font-weight: 760;
 }
 
 .trainer-section {
@@ -517,6 +532,10 @@ input:disabled {
 
   .summary-grid {
     grid-template-columns: 1fr;
+  }
+
+  .quick-actions {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .view-switch {

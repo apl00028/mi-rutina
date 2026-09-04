@@ -31,6 +31,7 @@ import {
 
 
 type TrainerView =
+  | 'dashboard'
   | 'athletes'
   | 'templates';
 
@@ -48,7 +49,7 @@ type TrainerView =
 })
 export class Trainer implements OnInit {
   activeView =
-    signal<TrainerView>('athletes');
+    signal<TrainerView>('dashboard');
 
   athletes =
     signal<TrainerAthlete[]>([]);

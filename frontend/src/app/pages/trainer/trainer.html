@@ -1,16 +1,16 @@
 <section class="trainer-page">
   <header class="page-header">
-    <div>
+    <div class="header-copy">
       <span class="eyebrow">
         Entrenador
       </span>
 
       <h1>
-        Clientes y plantillas
+        Panel de entrenador
       </h1>
 
       <p>
-        Clientes activos y plantillas reutilizables.
+        Supervisa a tus deportistas y gestiona su planificación.
       </p>
     </div>
 
@@ -41,24 +41,103 @@
     </div>
   </header>
 
-
   @if (activeView() === 'athletes') {
+    <section class="dashboard-grid">
+      <div class="summary-grid">
+        <article class="summary-card">
+          <span>
+            Clientes activos
+          </span>
+
+          <strong>
+            {{ activeAthleteCount() }}
+          </strong>
+        </article>
+
+        <article class="summary-card">
+          <span>
+            Plantillas
+          </span>
+
+          <strong>
+            {{ templateCount() }}
+          </strong>
+        </article>
+
+        <article class="summary-card">
+          <span>
+            Sesiones · 7 días
+          </span>
+
+          <strong>
+            {{ summarySessionsLabel() }}
+          </strong>
+
+          @if (summarySessionsDescription(); as description) {
+            <small>
+              {{ description }}
+            </small>
+          }
+        </article>
+      </div>
+
+      <aside class="quick-actions">
+        <span class="eyebrow">
+          Acciones rápidas
+        </span>
+
+        <button
+          type="button"
+          class="action-button"
+          (click)="setView('athletes')"
+        >
+          Ver clientes
+        </button>
+
+        <button
+          type="button"
+          class="action-button"
+          (click)="setView('templates')"
+        >
+          Asignar plantilla
+        </button>
+
+        <button
+          type="button"
+          class="action-button"
+          (click)="setView('templates')"
+        >
+          Ver plantillas
+        </button>
+      </aside>
+    </section>
+
     <section class="trainer-section">
       <div class="section-heading">
-        <h2>
-          Clientes
-        </h2>
+        <div>
+          <h2>
+            Clientes
+          </h2>
+
+          <p>
+            Seguimiento básico de tus deportistas activos.
+          </p>
+        </div>
 
         <button
           type="button"
           class="secondary-button"
-          [disabled]="loadingAthletes()"
+          [disabled]="loadingAthletes() || loadingOverviews()"
           (click)="loadAthletes()"
         >
           {{
             loadingAthletes()
               ? 'Cargando'
-              : 'Actualizar'
+              : (
+                  loadingOverviews()
+                    ? 'Actualizando'
+                    : 'Actualizar'
+                )
           }}
         </button>
       </div>
@@ -96,30 +175,88 @@
                 athlete.athlete_id
               ]"
             >
-              <div class="athlete-identity">
-                <strong>
-                  {{ athleteTitle(athlete) }}
-                </strong>
-
-                @if (athleteSubtitle(athlete); as subtitle) {
-                  <span>
-                    {{ subtitle }}
-                  </span>
-                }
-
-                <small>
-                  Cliente desde {{ formatClientSince(athlete.client_since) }}
-                </small>
-
-                <small>
-                  ID {{ athlete.athlete_id }}
-                </small>
+              <div class="athlete-avatar">
+                {{ athleteInitials(athlete) }}
               </div>
 
-              <div class="athlete-status">
-                <span>
-                  {{ athlete.status }}
-                </span>
+              <div class="athlete-main">
+                <div class="athlete-heading">
+                  <div class="athlete-identity">
+                    <strong>
+                      {{ athleteTitle(athlete) }}
+                    </strong>
+
+                    @if (athleteSubtitle(athlete); as subtitle) {
+                      <span>
+                        {{ subtitle }}
+                      </span>
+                    }
+                  </div>
+
+                  <span class="athlete-status">
+                    {{ statusLabel(athlete.status) }}
+                  </span>
+                </div>
+
+                <div class="athlete-insights">
+                  <span>
+                    {{
+                      sessionsLast7DaysLabel(
+                        athleteOverview(athlete)
+                      )
+                    }}
+                  </span>
+
+                  <span>
+                    {{
+                      athleteActivityLabel(
+                        athleteOverview(athlete)
+                      )
+                    }}
+                  </span>
+
+                  @if (athleteOverview(athlete); as overview) {
+                    <span>
+                      {{
+                        activeRoutineCount(
+                          overview.active_routines
+                        )
+                      }}
+                      rutinas activas
+                    </span>
+                  }
+                </div>
+
+                <div class="athlete-recent">
+                  <span>
+                    {{
+                      recentSessionLabel(
+                        athleteOverview(athlete)
+                      )
+                    }}
+                  </span>
+
+                  @if (
+                    recentSessionDate(
+                      athleteOverview(athlete)
+                    );
+                    as recentDate
+                  ) {
+                    <small>
+                      {{ recentDate }}
+                    </small>
+                  }
+                </div>
+
+                <div class="athlete-card-footer">
+                  <small>
+                    Cliente desde {{ formatClientSince(athlete.client_since) }}
+                  </small>
+
+                  <span>
+                    Ver deportista →
+                  </span>
+                </div>
               </div>
             </a>
           }
@@ -127,11 +264,17 @@
       }
     </section>
   } @else {
-    <section class="trainer-section">
+    <section class="trainer-section templates-section">
       <div class="section-heading">
-        <h2>
-          Plantillas
-        </h2>
+        <div>
+          <h2>
+            Plantillas
+          </h2>
+
+          <p>
+            {{ templateCount() }} plantillas disponibles.
+          </p>
+        </div>
 
         <button
           type="button"
@@ -192,18 +335,22 @@
                 [class.active]="selectedTemplateId() === template.id"
                 (click)="selectTemplate(template)"
               >
-                <strong>
-                  {{ template.name }}
-                </strong>
-
                 <span>
                   {{ disciplineLabel(template.discipline) }}
                 </span>
+
+                <strong>
+                  {{ template.name }}
+                </strong>
               </button>
             }
           </div>
 
           <aside class="assignment-panel">
+            <span class="eyebrow">
+              Planificación
+            </span>
+
             <h2>
               Asignar plantilla
             </h2>

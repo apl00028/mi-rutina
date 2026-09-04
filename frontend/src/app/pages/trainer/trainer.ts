@@ -23,6 +23,8 @@ import {
 
 import {
   TrainerAthlete,
+  TrainerAthleteActiveRoutines,
+  TrainerAthleteOverview,
   TrainerRoutineTemplate,
   TrainerService
 } from '../../core/trainer.service';
@@ -60,6 +62,18 @@ export class Trainer implements OnInit {
   loadingTemplates =
     signal(true);
 
+  loadingOverviews =
+    signal(false);
+
+  expectedOverviewCount =
+    signal(0);
+
+  loadedOverviewCount =
+    signal(0);
+
+  failedOverviewCount =
+    signal(0);
+
   athletesError =
     signal<string | null>(null);
 
@@ -84,6 +98,13 @@ export class Trainer implements OnInit {
   assigningTemplateId =
     signal<string | null>(null);
 
+  athleteOverviews =
+    signal<Record<string, TrainerAthleteOverview>>(
+      {}
+    );
+
+  private overviewLoadId = 0;
+
   selectedTemplate =
     computed(() =>
       this.templates().find(
@@ -91,6 +112,32 @@ export class Trainer implements OnInit {
           template.id ===
           this.selectedTemplateId()
       ) ?? null
+    );
+
+  activeAthleteCount =
+    computed(() =>
+      this.athletes().filter(
+        athlete =>
+          athlete.status === 'active'
+      ).length
+    );
+
+  templateCount =
+    computed(() =>
+      this.templates().length
+    );
+
+  totalSessionsLast7Days =
+    computed(() =>
+      Object.values(
+        this.athleteOverviews()
+      ).reduce(
+        (total, overview) =>
+          total +
+          overview.recent_training
+            .completed_last_7_days,
+        0
+      )
     );
 
 
@@ -127,6 +174,11 @@ export class Trainer implements OnInit {
         athletes
       );
 
+      this.athleteOverviews.set({});
+      this.expectedOverviewCount.set(0);
+      this.loadedOverviewCount.set(0);
+      this.failedOverviewCount.set(0);
+
       if (
         !this.selectedAthleteId() &&
         athletes.length > 0
@@ -136,6 +188,10 @@ export class Trainer implements OnInit {
         );
         this.ensureRoutineId();
       }
+
+      void this.loadAthleteOverviews(
+        athletes
+      );
 
     } catch (error) {
       this.athletesError.set(
@@ -147,6 +203,80 @@ export class Trainer implements OnInit {
     } finally {
       this.loadingAthletes.set(false);
     }
+  }
+
+
+  private async loadAthleteOverviews(
+    athletes: TrainerAthlete[]
+  ): Promise<void> {
+    const loadId =
+      ++this.overviewLoadId;
+
+    const activeAthletes =
+      athletes.filter(
+        athlete =>
+          athlete.status === 'active'
+      );
+
+    if (activeAthletes.length === 0) {
+      this.expectedOverviewCount.set(0);
+      this.loadedOverviewCount.set(0);
+      this.failedOverviewCount.set(0);
+      this.loadingOverviews.set(false);
+      return;
+    }
+
+    this.expectedOverviewCount.set(
+      activeAthletes.length
+    );
+    this.loadedOverviewCount.set(0);
+    this.failedOverviewCount.set(0);
+    this.loadingOverviews.set(true);
+
+    const results =
+      await Promise.allSettled(
+        activeAthletes.map(
+          athlete =>
+            this.trainerService
+              .getAthleteOverview(
+                athlete.athlete_id
+              )
+        )
+      );
+
+    if (loadId !== this.overviewLoadId) {
+      return;
+    }
+
+    const overviews:
+      Record<string, TrainerAthleteOverview> =
+      {};
+
+    results.forEach(
+      (result, index) => {
+        if (result.status === 'fulfilled') {
+          overviews[
+            activeAthletes[index].athlete_id
+          ] = result.value;
+        }
+      }
+    );
+
+    this.loadedOverviewCount.set(
+      Object.keys(overviews).length
+    );
+    this.failedOverviewCount.set(
+      results.filter(
+        result =>
+          result.status === 'rejected'
+      ).length
+    );
+
+    this.athleteOverviews.set(
+      overviews
+    );
+
+    this.loadingOverviews.set(false);
   }
 
 
@@ -321,7 +451,7 @@ export class Trainer implements OnInit {
     return (
       athlete.display_name?.trim() ||
       athlete.email?.trim() ||
-      athlete.athlete_id
+      'Deportista'
     );
   }
 
@@ -337,6 +467,183 @@ export class Trainer implements OnInit {
     }
 
     return null;
+  }
+
+
+  athleteOverview(
+    athlete: TrainerAthlete
+  ): TrainerAthleteOverview | null {
+    return (
+      this.athleteOverviews()[
+        athlete.athlete_id
+      ] ?? null
+    );
+  }
+
+
+  athleteInitials(
+    athlete: TrainerAthlete
+  ): string {
+    const source =
+      this.athleteTitle(athlete)
+        .trim();
+
+    const parts =
+      source
+        .split(/\s+/)
+        .filter(Boolean);
+
+    if (parts.length >= 2) {
+      return (
+        parts[0][0] +
+        parts[1][0]
+      ).toUpperCase();
+    }
+
+    return source
+      .slice(0, 2)
+      .toUpperCase();
+  }
+
+
+  statusLabel(
+    status: TrainerAthlete['status']
+  ): string {
+    return status === 'active'
+      ? 'Activo'
+      : 'Inactivo';
+  }
+
+
+  activeRoutineCount(
+    routines:
+      TrainerAthleteActiveRoutines
+  ): number {
+    return Object.values(
+      routines
+    ).filter(Boolean).length;
+  }
+
+
+  athleteActivityLabel(
+    overview:
+      TrainerAthleteOverview | null
+  ): string {
+    if (!overview) {
+      return this.loadingOverviews()
+        ? 'Cargando actividad...'
+        : 'Actividad no disponible';
+    }
+
+    return overview.recent_training
+      .completed_last_7_days > 0
+      ? 'Actividad reciente'
+      : 'Sin actividad esta semana';
+  }
+
+
+  recentSessionLabel(
+    overview:
+      TrainerAthleteOverview | null
+  ): string {
+    const completed =
+      overview?.recent_training
+        .last_completed;
+
+    if (!overview) {
+      return this.loadingOverviews()
+        ? 'Cargando última sesión...'
+        : 'Última sesión no disponible';
+    }
+
+    if (!completed) {
+      return 'Sin sesiones completadas';
+    }
+
+    return (
+      completed.session_name?.trim() ||
+      completed.session_id?.trim() ||
+      'Sesión completada'
+    );
+  }
+
+
+  recentSessionDate(
+    overview:
+      TrainerAthleteOverview | null
+  ): string | null {
+    const finishedAt =
+      overview?.recent_training
+        .last_completed
+        ?.finished_at;
+
+    return finishedAt
+      ? this.formatTrainingDate(finishedAt)
+      : null;
+  }
+
+
+  sessionsLast7DaysLabel(
+    overview:
+      TrainerAthleteOverview | null
+  ): string {
+    if (!overview) {
+      return this.loadingOverviews()
+        ? 'Cargando sesiones...'
+        : 'Sesiones no disponibles';
+    }
+
+    const count =
+      overview.recent_training
+        .completed_last_7_days;
+
+    return count === 1
+      ? '1 sesión últimos 7 días'
+      : `${count} sesiones últimos 7 días`;
+  }
+
+
+  summarySessionsLabel(): string {
+    if (this.loadingOverviews()) {
+      return 'Cargando';
+    }
+
+    if (this.failedOverviewCount() > 0) {
+      return (
+        `${this.totalSessionsLast7Days()} · parcial`
+      );
+    }
+
+    return String(
+      this.totalSessionsLast7Days()
+    );
+  }
+
+
+  summarySessionsDescription():
+    string | null {
+    if (this.loadingOverviews()) {
+      return 'Cargando actividad de clientes activos.';
+    }
+
+    if (this.failedOverviewCount() > 0) {
+      return (
+        'Datos disponibles de ' +
+        `${this.loadedOverviewCount()} de ` +
+        `${this.expectedOverviewCount()} clientes activos.`
+      );
+    }
+
+    return null;
+  }
+
+
+  formatTrainingDate(
+    value: string
+  ): string {
+    return this.formatClientSince(
+      value
+    );
   }
 
 

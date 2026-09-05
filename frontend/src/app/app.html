@@ -6,7 +6,7 @@
     [class.sidebar-expanded]="sidebarExpanded()"
     [class.sidebar-collapsed]="!sidebarExpanded()"
     [class.workout-session-active]="
-      workoutSessionState.shouldHideBottomNav()
+      !isTrainer() && workoutSessionState.shouldHideBottomNav()
     "
   >
     <aside class="sidebar">
@@ -153,28 +153,20 @@
         }
 
         @if (isTrainer()) {
-          <a
-            routerLink="/trainer"
-            routerLinkActive="active"
-            [attr.aria-current]="
-              isCurrentRoute('/trainer')
-                ? 'page'
-                : null
-            "
-            title="Entrenador"
-          >
-            <svg
-              class="nav-icon"
-              lucideUserRound
-              [size]="20"
-              [strokeWidth]="2"
-            ></svg>
-
-            @if (sidebarExpanded()) {
-              <span class="nav-label">
-                Entrenador
-              </span>
-            }
+          @for (item of ['dashboard', 'clients', 'templates']; track item) {
+            <a routerLink="/trainer" [queryParams]="item === 'dashboard' ? {} : { view: item }"
+              [class.active]="isCurrentTrainerView($any(item))"
+              [attr.aria-current]="isCurrentTrainerView($any(item)) ? 'page' : null"
+              [title]="item === 'dashboard' ? 'Panel' : item === 'clients' ? 'Clientes' : 'Plantillas'">
+              @if (item === 'dashboard') { <svg class="nav-icon" lucideHouse [size]="20" [strokeWidth]="2"></svg> }
+              @else if (item === 'clients') { <svg class="nav-icon" lucideUserRound [size]="20" [strokeWidth]="2"></svg> }
+              @else { <svg class="nav-icon" lucideDumbbell [size]="20" [strokeWidth]="2"></svg> }
+              @if (sidebarExpanded()) { <span class="nav-label">{{ item === 'dashboard' ? 'Panel' : item === 'clients' ? 'Clientes' : 'Plantillas' }}</span> }
+            </a>
+          }
+          <a routerLink="/ajustes" routerLinkActive="active" [attr.aria-current]="isCurrentRoute('/ajustes') ? 'page' : null" title="Ajustes">
+            <svg class="nav-icon" lucideSettings [size]="20" [strokeWidth]="2"></svg>
+            @if (sidebarExpanded()) { <span class="nav-label">Ajustes</span> }
           </a>
         }
 
@@ -215,6 +207,9 @@
     <section class="app-main">
       <header class="topbar">
         <div class="mobile-nav-wrapper">
+          @if (isTrainer()) {
+            <span class="mobile-brand"><span class="brand-icon" aria-hidden="true">A</span><span class="brand-text">Aptus</span></span>
+          } @else {
           <button
             type="button"
             class="mobile-brand"
@@ -240,7 +235,8 @@
             </span>
           </button>
 
-          @if (mobileNavOpen()) {
+          }
+          @if (mobileNavOpen() && !isTrainer()) {
             <nav
               id="mobile-primary-navigation"
               class="mobile-nav-menu"
@@ -658,13 +654,38 @@
       @if (isTrainer()) {
         <a
           routerLink="/trainer"
-          routerLinkActive="active"
+          [class.active]="isCurrentTrainerView('dashboard')"
           [attr.aria-current]="
-            isCurrentRoute('/trainer')
+            isCurrentTrainerView('dashboard')
               ? 'page'
               : null
           "
-          aria-label="Ir a Entrenador"
+          aria-label="Ir al panel de entrenador"
+        >
+          <svg
+            class="nav-icon"
+            lucideHouse
+            [size]="20"
+            [strokeWidth]="2"
+          ></svg>
+
+          <span class="nav-label">
+            Panel
+          </span>
+        </a>
+
+        <a
+          routerLink="/trainer"
+          [queryParams]="{
+            view: 'clients'
+          }"
+          [class.active]="isCurrentTrainerView('clients')"
+          [attr.aria-current]="
+            isCurrentTrainerView('clients')
+              ? 'page'
+              : null
+          "
+          aria-label="Ir a clientes"
         >
           <svg
             class="nav-icon"
@@ -674,7 +695,32 @@
           ></svg>
 
           <span class="nav-label">
-            Entrenador
+            Clientes
+          </span>
+        </a>
+
+        <a
+          routerLink="/trainer"
+          [queryParams]="{
+            view: 'templates'
+          }"
+          [class.active]="isCurrentTrainerView('templates')"
+          [attr.aria-current]="
+            isCurrentTrainerView('templates')
+              ? 'page'
+              : null
+          "
+          aria-label="Ir a plantillas"
+        >
+          <svg
+            class="nav-icon"
+            lucideDumbbell
+            [size]="20"
+            [strokeWidth]="2"
+          ></svg>
+
+          <span class="nav-label">
+            Plantillas
           </span>
         </a>
 

@@ -1,22 +1,19 @@
-import {
-  CommonModule
-} from '@angular/common';
+import { CommonModule } from '@angular/common';
 
-import {
-  HttpErrorResponse
-} from '@angular/common/http';
+import { HttpErrorResponse } from '@angular/common/http';
 
 import {
   Component,
+  ElementRef,
+  Injector,
+  afterNextRender,
+  inject,
   OnInit,
   computed,
-  signal
+  signal,
 } from '@angular/core';
 
-import {
-  ActivatedRoute,
-  RouterLink
-} from '@angular/router';
+import { ActivatedRoute, RouterLink } from '@angular/router';
 
 import {
   TrainerAthleteActiveRoutines,
@@ -28,24 +25,20 @@ import {
   TrainerStrengthSet,
   TrainerSwimmingLength,
   TrainerSwimmingSessionDetail,
-  TrainerService
+  TrainerService,
 } from '../../core/trainer.service';
 
-
-type StrengthMetricColumn =
-  | 'reps'
-  | 'weight'
-  | 'duration'
-  | 'effort';
-
+type StrengthMetricColumn = 'reps' | 'weight' | 'duration' | 'effort';
 
 interface PerformanceCalendarEvent {
   id: string;
   discipline: TrainerDiscipline;
   event_at: string | null;
   title: string;
+  started_at?: string | null;
+  finished_at?: string | null;
+  duration_seconds?: number | null;
 }
-
 
 interface PerformanceCalendarDay {
   dateKey: string;
@@ -55,286 +48,186 @@ interface PerformanceCalendarDay {
   selected: boolean;
 }
 
-
 interface PerformanceCalendarMark {
   discipline: TrainerDiscipline;
   label: string;
 }
 
-
 @Component({
   selector: 'app-trainer-client',
   standalone: true,
-  imports: [
-    CommonModule,
-    RouterLink
-  ],
+  imports: [CommonModule, RouterLink],
   templateUrl: './trainer-client.html',
-  styleUrl: './trainer-client.scss'
+  styleUrl: './trainer-client.scss',
 })
 export class TrainerClient implements OnInit {
-  overview =
-    signal<TrainerAthleteOverview | null>(null);
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
+  private readonly injector = inject(Injector);
 
-  loading =
-    signal(true);
+  private focusAfterRender(selector: string): void {
+    afterNextRender(
+      () => {
+        const target = this.host.nativeElement.querySelector<HTMLElement>(selector);
+        target?.focus({ preventScroll: true });
+        target?.scrollIntoView?.({ block: 'nearest' });
+      },
+      { injector: this.injector },
+    );
+  }
 
-  error =
-    signal<string | null>(null);
+  overview = signal<TrainerAthleteOverview | null>(null);
 
-  performanceLoading =
-    signal(false);
+  loading = signal(true);
 
-  performanceError =
-    signal<string | null>(null);
+  error = signal<string | null>(null);
 
-  strengthSessions =
-    signal<TrainerStrengthSession[]>([]);
+  performanceLoading = signal(false);
 
-  swimmingSessions =
-    signal<TrainerPerformanceSession[]>([]);
+  performanceError = signal<string | null>(null);
 
-  runningSessions =
-    signal<TrainerPerformanceSession[]>([]);
+  strengthSessions = signal<TrainerStrengthSession[]>([]);
 
-  swimmingDetailLoading =
-    signal(false);
+  swimmingSessions = signal<TrainerPerformanceSession[]>([]);
 
-  swimmingDetailError =
-    signal<string | null>(null);
+  runningSessions = signal<TrainerPerformanceSession[]>([]);
 
-  swimmingDetailCache =
-    signal<Record<string, TrainerSwimmingSessionDetail>>({});
+  swimmingDetailLoading = signal(false);
 
-  selectedPerformanceEventId =
-    signal<string | null>(null);
+  swimmingDetailError = signal<string | null>(null);
 
-  performanceCalendarMonth =
-    signal<string | null>(null);
+  swimmingDetailCache = signal<Record<string, TrainerSwimmingSessionDetail>>({});
 
-  readonly disciplines: TrainerDiscipline[] = [
-    'strength',
-    'swimming',
-    'running',
-    'cycling'
-  ];
+  selectedPerformanceEventId = signal<string | null>(null);
 
-  readonly title =
-    computed(() => {
-      const athlete =
-        this.overview();
+  private swimmingDetailRequest = 0;
 
-      if (!athlete) {
-        return 'Cliente';
-      }
+  selectedPerformanceDateKey = signal<string | null>(null);
 
-      return (
-        athlete.display_name?.trim() ||
-        athlete.email?.trim() ||
-        athlete.athlete_id
-      );
-    });
+  performanceCalendarMonth = signal<string | null>(null);
 
-  readonly performanceEvents =
-    computed(() => {
-      const events =
-        [
-          ...this.strengthSessions()
-            .map(session =>
-              this.strengthSessionToEvent(
-                session
-              )
-            ),
-          ...this.swimmingSessions()
-            .map(session =>
-              this.performanceSessionToEvent(
-                session
-              )
-            ),
-          ...this.runningSessions()
-            .map(session =>
-              this.performanceSessionToEvent(
-                session
-              )
-            )
-        ];
+  readonly disciplines: TrainerDiscipline[] = ['strength', 'swimming', 'running', 'cycling'];
 
-      return events.sort((left, right) =>
-        this.eventTime(right) -
-        this.eventTime(left)
-      );
-    });
+  readonly title = computed(() => {
+    const athlete = this.overview();
 
-  readonly currentPerformanceEvent =
-    computed(() => {
-      const events =
-        this.performanceEvents();
-      const selectedId =
-        this.selectedPerformanceEventId();
+    if (!athlete) {
+      return 'Cliente';
+    }
 
-      return (
-        events.find(event =>
-          event.id === selectedId
-        ) ?? events[0] ?? null
-      );
-    });
+    return athlete.display_name?.trim() || athlete.email?.trim() || 'Deportista';
+  });
 
-  readonly currentStrengthSession =
-    computed(() => {
-      const selected =
-        this.currentPerformanceEvent();
+  readonly performanceEvents = computed(() => {
+    const events = [
+      ...this.strengthSessions().map((session) => this.strengthSessionToEvent(session)),
+      ...this.swimmingSessions().map((session) => this.performanceSessionToEvent(session)),
+      ...this.runningSessions().map((session) => this.performanceSessionToEvent(session)),
+    ];
 
-      if (
-        !selected ||
-        selected.discipline !== 'strength'
-      ) {
-        return null;
-      }
+    return events.sort((left, right) => this.eventTime(right) - this.eventTime(left));
+  });
 
-      return (
-        this.strengthSessions()
-          .find(session =>
-            this.strengthEventId(session) ===
-              selected.id
-          ) ?? null
-      );
-    });
+  readonly currentPerformanceEvent = computed(() => {
+    const events = this.performanceEvents();
+    const selectedId = this.selectedPerformanceEventId();
 
-  readonly currentEnduranceEvent =
-    computed(() => {
-      const selected =
-        this.currentPerformanceEvent();
+    return events.find((event) => event.id === selectedId) ?? null;
+  });
 
-      return (
-        selected &&
-        selected.discipline !== 'strength'
-          ? selected
-          : null
-      );
-    });
+  readonly currentStrengthSession = computed(() => {
+    const selected = this.currentPerformanceEvent();
 
-  readonly currentSwimmingDetail =
-    computed(() => {
-      const selected =
-        this.currentPerformanceEvent();
+    if (!selected || selected.discipline !== 'strength') {
+      return null;
+    }
 
-      if (
-        !selected ||
-        selected.discipline !== 'swimming'
-      ) {
-        return null;
-      }
+    return (
+      this.strengthSessions().find((session) => this.strengthEventId(session) === selected.id) ??
+      null
+    );
+  });
 
-      const sessionId =
-        this.swimmingSessionIdFromEvent(selected);
+  readonly currentEnduranceEvent = computed(() => {
+    const selected = this.currentPerformanceEvent();
 
-      return sessionId
-        ? this.swimmingDetailCache()[sessionId] ?? null
-        : null;
-    });
+    return selected && selected.discipline !== 'strength' ? selected : null;
+  });
 
-  readonly selectedPerformanceDateKey =
-    computed(() => {
-      const selected =
-        this.currentPerformanceEvent();
+  readonly currentSwimmingDetail = computed(() => {
+    const selected = this.currentPerformanceEvent();
 
-      return selected
-        ? this.dateKeyFromValue(
-          selected.event_at
-        )
-        : null;
-    });
+    if (!selected || selected.discipline !== 'swimming') {
+      return null;
+    }
 
-  readonly selectedDayEvents =
-    computed(() => {
-      const dateKey =
-        this.selectedPerformanceDateKey();
+    const sessionId = this.swimmingSessionIdFromEvent(selected);
 
-      return dateKey
-        ? this.performanceEventsForDate(dateKey)
-        : [];
-    });
+    return sessionId ? (this.swimmingDetailCache()[sessionId] ?? null) : null;
+  });
 
-  readonly performanceCalendarDays =
-    computed(() => {
-      const monthKey =
-        this.performanceCalendarMonth();
+  readonly selectedDayEvents = computed(() => {
+    const dateKey = this.selectedPerformanceDateKey();
 
-      if (!monthKey) {
-        return [];
-      }
+    return dateKey ? this.performanceEventsForDate(dateKey) : [];
+  });
 
-      const monthStart =
-        new Date(`${monthKey}-01T00:00:00Z`);
-      const firstWeekday =
-        monthStart.getUTCDay() || 7;
-      const gridStart =
-        new Date(monthStart);
+  readonly performanceCalendarDays = computed(() => {
+    const monthKey = this.performanceCalendarMonth();
 
-      gridStart.setUTCDate(
-        monthStart.getUTCDate() -
-          firstWeekday +
-          1
-      );
+    if (!monthKey) {
+      return [];
+    }
 
-      return Array.from(
-        {
-          length: 42
-        },
-        (_, index): PerformanceCalendarDay => {
-          const date =
-            new Date(gridStart);
+    const monthStart = new Date(`${monthKey}-01T00:00:00Z`);
+    const firstWeekday = monthStart.getUTCDay() || 7;
+    const gridStart = new Date(monthStart);
 
-          date.setUTCDate(
-            gridStart.getUTCDate() + index
-          );
+    gridStart.setUTCDate(monthStart.getUTCDate() - firstWeekday + 1);
 
-          const dateKey =
-            this.dateKeyFromDate(date);
-          const events =
-            this.performanceEventsForDate(dateKey);
+    return Array.from(
+      {
+        length:
+          Math.ceil(
+            (firstWeekday -
+              1 +
+              new Date(monthStart.getUTCFullYear(), monthStart.getUTCMonth() + 1, 0).getDate()) /
+              7,
+          ) * 7,
+      },
+      (_, index): PerformanceCalendarDay => {
+        const date = new Date(gridStart);
 
-          return {
-            dateKey,
-            dayNumber:
-              date.getUTCDate(),
-            inMonth:
-              this.monthKeyFromDate(date) ===
-              monthKey,
-            events,
-            selected:
-              events.some(event =>
-                event.id ===
-                  this.selectedPerformanceEventId()
-              )
-          };
-        }
-      );
-    });
+        date.setUTCDate(gridStart.getUTCDate() + index);
 
+        const dateKey = date.toISOString().slice(0, 10);
+        const events = this.performanceEventsForDate(dateKey);
+
+        return {
+          dateKey,
+          dayNumber: date.getUTCDate(),
+          inMonth: date.toISOString().slice(0, 7) === monthKey,
+          events,
+          selected: dateKey === this.selectedPerformanceDateKey(),
+        };
+      },
+    );
+  });
 
   constructor(
     private route: ActivatedRoute,
-    private trainerService: TrainerService
+    private trainerService: TrainerService,
   ) {}
-
 
   ngOnInit(): void {
     void this.load();
   }
 
-
   async load(): Promise<void> {
-    const athleteId =
-      this.route.snapshot.paramMap.get(
-        'athleteId'
-      );
+    const athleteId = this.route.snapshot.paramMap.get('athleteId');
 
     if (!athleteId) {
       this.loading.set(false);
-      this.error.set(
-        'No se pudo identificar el cliente.'
-      );
+      this.error.set('No se pudo identificar el cliente.');
       return;
     }
 
@@ -342,31 +235,19 @@ export class TrainerClient implements OnInit {
     this.error.set(null);
 
     try {
-      const overview =
-        await this.trainerService
-          .getAthleteOverview(athleteId);
+      const overview = await this.trainerService.getAthleteOverview(athleteId);
 
       this.overview.set(overview);
       void this.loadPerformanceSessions();
     } catch (error) {
-      this.error.set(
-        this.errorMessage(
-          error,
-          'No se pudo cargar la ficha del cliente.'
-        )
-      );
+      this.error.set(this.errorMessage(error, 'No se pudo cargar la ficha del cliente.'));
     } finally {
       this.loading.set(false);
     }
   }
 
-
-  async loadPerformanceSessions():
-    Promise<void> {
-    const athleteId =
-      this.route.snapshot.paramMap.get(
-        'athleteId'
-      );
+  async loadPerformanceSessions(): Promise<void> {
+    const athleteId = this.route.snapshot.paramMap.get('athleteId');
 
     if (!athleteId) {
       return;
@@ -376,282 +257,226 @@ export class TrainerClient implements OnInit {
     this.performanceError.set(null);
 
     try {
-      const [
-        strengthSessions,
-        swimmingSessions,
-        runningSessions
-      ] = await Promise.all([
-        this.trainerService
-          .listStrengthSessions(athleteId),
-        this.trainerService
-          .listSwimmingSessions(athleteId),
-        this.trainerService
-          .listRunningSessions(athleteId)
+      const results = await Promise.allSettled([
+        this.trainerService.listStrengthSessions(athleteId),
+        this.trainerService.listSwimmingSessions(athleteId),
+        this.trainerService.listRunningSessions(athleteId),
       ]);
-
-      this.strengthSessions.set(
-        strengthSessions
+      const [strength, swimming, running] = results;
+      this.strengthSessions.set(strength.status === 'fulfilled' ? strength.value : []);
+      this.swimmingSessions.set(swimming.status === 'fulfilled' ? swimming.value : []);
+      this.runningSessions.set(running.status === 'fulfilled' ? running.value : []);
+      const missing = ['fuerza', 'natación', 'carrera'].filter(
+        (_, i) => results[i].status === 'rejected',
       );
-      this.swimmingSessions.set(
-        swimmingSessions
-      );
-      this.runningSessions.set(
-        runningSessions
-      );
-      const firstEvent =
-        this.performanceEvents()[0] ?? null;
-
-      this.selectedPerformanceEventId.set(
-        firstEvent?.id ?? null
-      );
+      if (missing.length)
+        this.performanceError.set(`No se pudieron cargar las sesiones de ${missing.join(', ')}.`);
+      this.selectedPerformanceEventId.set(null);
+      this.selectedPerformanceDateKey.set(null);
       this.performanceCalendarMonth.set(
-        this.monthKeyFromValue(
-          firstEvent?.event_at
-        )
+        this.monthKeyFromValue(this.performanceEvents()[0]?.event_at ?? new Date().toISOString()),
       );
-      void this.loadSelectedSwimmingDetail();
     } catch (error) {
-      this.performanceError.set(
-        this.errorMessage(
-          error,
-          'No se pudo cargar el rendimiento.'
-        )
-      );
+      this.performanceError.set(this.errorMessage(error, 'No se pudo cargar el rendimiento.'));
     } finally {
       this.performanceLoading.set(false);
     }
   }
 
-
   previousPerformanceMonth(): void {
     this.shiftPerformanceMonth(-1);
   }
-
 
   nextPerformanceMonth(): void {
     this.shiftPerformanceMonth(1);
   }
 
-
-  selectPerformanceDay(
-    day: PerformanceCalendarDay
-  ): void {
-    const event =
-      day.events[0];
-
-    if (event) {
-      this.selectPerformanceEvent(event);
-    }
+  selectPerformanceDay(day: PerformanceCalendarDay): void {
+    this.selectedPerformanceDateKey.set(day.dateKey);
+    this.closePerformanceDetail();
   }
 
+  closePerformanceDetail(): void {
+    this.selectedPerformanceEventId.set(null);
+    ++this.swimmingDetailRequest;
+    this.swimmingDetailLoading.set(false);
+    this.swimmingDetailError.set(null);
+    this.focusAfterRender('.day-sessions');
+  }
 
-  selectPerformanceEvent(
-    event: PerformanceCalendarEvent
-  ): void {
-    this.selectedPerformanceEventId.set(
-      event.id
-    );
-    this.performanceCalendarMonth.set(
-      this.monthKeyFromValue(
-        event.event_at
-      )
-    );
+  healthMetrics(athlete: TrainerAthleteOverview) {
+    const health = athlete.health;
+    return [
+      { label: 'Peso', value: health.weight_kg, unit: ' kg', date: health.weight_measurement_date },
+      {
+        label: 'Cintura',
+        value: health.waist_cm,
+        unit: ' cm',
+        date: health.waist_measurement_date,
+      },
+      {
+        label: '% grasa',
+        value: health.body_fat_percent,
+        unit: '%',
+        date: health.weight_measurement_date,
+      },
+      {
+        label: 'Masa muscular',
+        value: health.muscle_mass_kg,
+        unit: ' kg',
+        date: health.weight_measurement_date,
+      },
+      {
+        label: 'Agua corporal',
+        value: health.body_water_percent,
+        unit: '%',
+        date: health.weight_measurement_date,
+      },
+      {
+        label: 'Grasa visceral',
+        value: health.visceral_fat_index,
+        unit: '',
+        date: health.weight_measurement_date,
+      },
+    ].filter((row) => row.value !== null && row.value !== undefined && Number.isFinite(row.value));
+  }
+
+  activeRoutineCount(athlete: TrainerAthleteOverview): number {
+    return Object.values(athlete.active_routines).filter(Boolean).length;
+  }
+
+  selectedDayLabel(): string {
+    const key = this.selectedPerformanceDateKey();
+    return key
+      ? new Intl.DateTimeFormat('es-ES', {
+          day: 'numeric',
+          month: 'long',
+          year: 'numeric',
+          timeZone: 'UTC',
+        }).format(new Date(`${key}T12:00:00Z`))
+      : '';
+  }
+
+  calendarDayLabel(day: PerformanceCalendarDay): string {
+    return `${new Intl.DateTimeFormat('es-ES', {
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric',
+      timeZone: 'UTC',
+    }).format(
+      new Date(`${day.dateKey}T12:00:00Z`),
+    )}, ${this.completedSessionsLabel(day.events.length)}`;
+  }
+
+  elapsedSessionSeconds(event: PerformanceCalendarEvent): number | null {
+    if (!event.started_at || !event.finished_at) return null;
+    const seconds = (Date.parse(event.finished_at) - Date.parse(event.started_at)) / 1000;
+    return Number.isFinite(seconds) && seconds >= 0 ? seconds : null;
+  }
+
+  selectPerformanceEvent(event: PerformanceCalendarEvent): void {
+    this.selectedPerformanceDateKey.set(this.dateKeyFromValue(event.event_at));
+    this.selectedPerformanceEventId.set(event.id);
+    this.performanceCalendarMonth.set(this.monthKeyFromValue(event.event_at));
+    this.focusAfterRender('.detail-back');
     void this.loadSelectedSwimmingDetail();
   }
 
-
-  athleteSubtitle(
-    athlete: TrainerAthleteOverview
-  ): string | null {
-    if (
-      athlete.display_name?.trim() &&
-      athlete.email?.trim()
-    ) {
+  athleteSubtitle(athlete: TrainerAthleteOverview): string | null {
+    if (athlete.display_name?.trim() && athlete.email?.trim()) {
       return athlete.email;
     }
 
     return null;
   }
 
-
-  metric(
-    value: number | string | null | undefined,
-    suffix = ''
-  ): string {
-    if (
-      value === null ||
-      value === undefined ||
-      value === ''
-    ) {
+  metric(value: number | string | null | undefined, suffix = ''): string {
+    if (value === null || value === undefined || value === '') {
       return '—';
     }
 
     return `${value}${suffix}`;
   }
 
-
-  statusLabel(
-    statusValue: string
-  ): string {
-    return statusValue === 'active'
-      ? 'Activo'
-      : statusValue;
+  statusLabel(statusValue: string): string {
+    return statusValue === 'active' ? 'Activo' : statusValue;
   }
 
-
-  completedSessionsLabel(
-    count: number
-  ): string {
-    return count === 1
-      ? '1 sesión'
-      : `${count} sesiones`;
+  completedSessionsLabel(count: number): string {
+    return count === 1 ? '1 sesión' : `${count} sesiones`;
   }
 
+  lastWorkoutTitle(athlete: TrainerAthleteOverview): string {
+    const workout = athlete.recent_training.last_completed;
 
-  lastWorkoutTitle(
-    athlete: TrainerAthleteOverview
-  ): string {
-    const workout =
-      athlete.recent_training.last_completed;
-
-    return (
-      workout?.session_name?.trim() ||
-      workout?.session_id?.trim() ||
-      '—'
-    );
+    return workout?.session_name?.trim() || 'Sesión registrada';
   }
 
+  routineTitle(routines: TrainerAthleteActiveRoutines, discipline: TrainerDiscipline): string {
+    const routine = this.activeRoutine(routines, discipline);
 
-  routineTitle(
-    routines: TrainerAthleteActiveRoutines,
-    discipline: TrainerDiscipline
-  ): string {
-    const routine =
-      this.activeRoutine(
-        routines,
-        discipline
-      );
-
+    const assignment = this.overview()?.trainer.last_assignment;
     return (
       routine?.name?.trim() ||
-      routine?.routine_id?.trim() ||
-      '—'
+      (routine && assignment?.routine_id === routine.routine_id ? assignment.name?.trim() : null) ||
+      (routine ? 'Rutina sin nombre' : 'Sin rutina')
     );
   }
 
+  assignmentTitle(athlete: TrainerAthleteOverview): string {
+    const assignment = athlete.trainer.last_assignment;
 
-  assignmentTitle(
-    athlete: TrainerAthleteOverview
-  ): string {
-    const assignment =
-      athlete.trainer.last_assignment;
-
-    return (
-      assignment?.name?.trim() ||
-      assignment?.routine_id?.trim() ||
-      '—'
-    );
+    return assignment?.name?.trim() || 'Rutina asignada';
   }
 
-
-  sessionTitle(
-    session: TrainerStrengthSession
-  ): string {
-    return (
-      session.session_name?.trim() ||
-      session.session_id?.trim() ||
-      '—'
-    );
+  sessionTitle(session: TrainerStrengthSession): string {
+    return session.session_name?.trim() || 'Sesión de fuerza';
   }
 
-
-  exerciseTitle(
-    exercise: TrainerStrengthExercise
-  ): string {
-    return (
-      exercise.exercise_name?.trim() ||
-      exercise.exercise_id
-    );
+  exerciseTitle(exercise: TrainerStrengthExercise): string {
+    return exercise.exercise_name?.trim() || 'Ejercicio sin nombre';
   }
 
-
-  setValue(
-    value: number | null | undefined,
-    suffix = ''
-  ): string {
-    if (
-      value === null ||
-      value === undefined
-    ) {
+  setValue(value: number | null | undefined, suffix = ''): string {
+    if (value === null || value === undefined) {
       return '—';
     }
 
     return `${value}${suffix}`;
   }
 
-
-  setRirOrRpe(
-    set: TrainerStrengthSet
-  ): string {
-    if (
-      set.rir !== null &&
-      set.rir !== undefined
-    ) {
-      return `RIR ${set.rir}`;
-    }
-
-    if (
-      set.rpe !== null &&
-      set.rpe !== undefined
-    ) {
-      return `RPE ${set.rpe}`;
-    }
-
-    return '—';
+  setRirOrRpe(set: TrainerStrengthSet): string {
+    return (
+      [set.rir != null ? `RIR ${set.rir}` : null, set.rpe != null ? `RPE ${set.rpe}` : null]
+        .filter(Boolean)
+        .join(' · ') || '—'
+    );
   }
 
-
   performanceMonthLabel(): string {
-    const monthKey =
-      this.performanceCalendarMonth();
+    const monthKey = this.performanceCalendarMonth();
 
     if (!monthKey) {
       return '—';
     }
 
-    return new Intl.DateTimeFormat(
-      'es-ES',
-      {
-        month: 'long',
-        year: 'numeric'
-      }
-    ).format(
-      new Date(`${monthKey}-01T00:00:00Z`)
+    return new Intl.DateTimeFormat('es-ES', {
+      month: 'long',
+      year: 'numeric',
+      timeZone: 'UTC',
+    }).format(new Date(`${monthKey}-01T00:00:00Z`));
+  }
+
+  performanceEventsForDate(dateKey: string): PerformanceCalendarEvent[] {
+    return this.performanceEvents().filter(
+      (event) => this.dateKeyFromValue(event.event_at) === dateKey,
     );
   }
 
-
-  performanceEventsForDate(
-    dateKey: string
-  ): PerformanceCalendarEvent[] {
-    return this.performanceEvents()
-      .filter(event =>
-        this.dateKeyFromValue(
-          event.event_at
-        ) === dateKey
-      );
-  }
-
-
-  calendarDayMarks(
-    day: PerformanceCalendarDay
-  ): PerformanceCalendarMark[] {
+  calendarDayMarks(day: PerformanceCalendarDay): PerformanceCalendarMark[] {
     return this.disciplines
-      .map(discipline => {
-        const count =
-          day.events.filter(event =>
-            event.discipline === discipline
-          ).length;
+      .map((discipline) => {
+        const count = day.events.filter((event) => event.discipline === discipline).length;
 
         if (count === 0) {
           return null;
@@ -661,52 +486,31 @@ export class TrainerClient implements OnInit {
           discipline,
           label:
             count > 1
-              ? `${
-                this.performanceDisciplineInitial(
-                  discipline
-                )
-              }×${count}`
-              : this.performanceDisciplineInitial(
-                discipline
-              )
+              ? `${this.performanceDisciplineInitial(discipline)}×${count}`
+              : this.performanceDisciplineInitial(discipline),
         };
       })
-      .filter(
-        (
-          mark
-        ): mark is PerformanceCalendarMark =>
-          mark !== null
-      );
+      .filter((mark): mark is PerformanceCalendarMark => mark !== null);
   }
 
-
-  performanceEventTime(
-    event: PerformanceCalendarEvent
-  ): string {
+  performanceEventTime(event: PerformanceCalendarEvent): string {
     if (!event.event_at) {
       return event.title;
     }
 
-    const date =
-      new Date(event.event_at);
+    const date = new Date(event.event_at);
 
     if (Number.isNaN(date.getTime())) {
       return event.title;
     }
 
-    return new Intl.DateTimeFormat(
-      'es-ES',
-      {
-        hour: '2-digit',
-        minute: '2-digit'
-      }
-    ).format(date);
+    return new Intl.DateTimeFormat('es-ES', {
+      hour: '2-digit',
+      minute: '2-digit',
+    }).format(date);
   }
 
-
-  performanceDisciplineInitial(
-    discipline: TrainerDiscipline
-  ): string {
+  performanceDisciplineInitial(discipline: TrainerDiscipline): string {
     switch (discipline) {
       case 'swimming':
         return 'N';
@@ -719,32 +523,17 @@ export class TrainerClient implements OnInit {
     }
   }
 
+  async loadSelectedSwimmingDetail(): Promise<void> {
+    const requestId = ++this.swimmingDetailRequest;
+    this.swimmingDetailError.set(null);
+    this.swimmingDetailLoading.set(false);
+    const selected = this.currentPerformanceEvent();
+    if (!selected || selected.discipline !== 'swimming') return;
 
-  async loadSelectedSwimmingDetail():
-    Promise<void> {
-    const selected =
-      this.currentPerformanceEvent();
+    const athleteId = this.route.snapshot.paramMap.get('athleteId');
+    const sessionId = this.swimmingSessionIdFromEvent(selected);
 
-    if (
-      !selected ||
-      selected.discipline !== 'swimming'
-    ) {
-      return;
-    }
-
-    const athleteId =
-      this.route.snapshot.paramMap.get(
-        'athleteId'
-      );
-    const sessionId =
-      this.swimmingSessionIdFromEvent(selected);
-
-    if (
-      !athleteId ||
-      !sessionId ||
-      this.swimmingDetailCache()[sessionId] ||
-      this.swimmingDetailLoading()
-    ) {
+    if (!athleteId || !sessionId || this.swimmingDetailCache()[sessionId]) {
       return;
     }
 
@@ -752,172 +541,97 @@ export class TrainerClient implements OnInit {
     this.swimmingDetailError.set(null);
 
     try {
-      const detail =
-        await this.trainerService
-          .getSwimmingSession(
-            athleteId,
-            sessionId
-          );
+      const detail = await this.trainerService.getSwimmingSession(athleteId, sessionId);
 
       this.swimmingDetailCache.set({
         ...this.swimmingDetailCache(),
-        [sessionId]:
-          detail
+        [sessionId]: detail,
       });
     } catch (error) {
+      if (requestId !== this.swimmingDetailRequest) return;
       this.swimmingDetailError.set(
-        this.errorMessage(
-          error,
-          'No se pudo cargar el detalle de natación.'
-        )
+        this.errorMessage(error, 'No se pudo cargar el detalle de natación.'),
       );
     } finally {
-      this.swimmingDetailLoading.set(false);
+      if (requestId === this.swimmingDetailRequest) this.swimmingDetailLoading.set(false);
     }
   }
 
+  swimmingLengthTitle(length: TrainerSwimmingLength, index: number): string {
+    const distance = this.formatDistance(length.distance_meters);
 
-  swimmingLengthTitle(
-    length: TrainerSwimmingLength,
-    index: number
-  ): string {
-    const distance =
-      this.formatDistance(
-        length.distance_meters
-      );
-
-    return distance === '—'
-      ? `Largo ${index + 1}`
-      : `Largo ${index + 1} · ${distance}`;
+    return distance === '—' ? `Largo ${index + 1}` : `Largo ${index + 1} · ${distance}`;
   }
 
-
-  swimmingLengthMeta(
-    length: TrainerSwimmingLength
-  ): string {
+  swimmingLengthMeta(length: TrainerSwimmingLength): string {
     return [
-      length.stroke
-        ? this.swimmingStrokeLabel(length.stroke)
-        : null,
-      length.length_type
-    ].filter(Boolean).join(' · ');
+      length.stroke ? this.swimmingStrokeLabel(length.stroke) : null,
+      length.length_type === 'active'
+        ? 'Activo'
+        : length.length_type === 'idle'
+          ? 'Descanso'
+          : null,
+    ]
+      .filter(Boolean)
+      .join(' · ');
   }
 
-
-  swimmingActiveLengths(
-    swimming: TrainerSwimmingSessionDetail
-  ): TrainerSwimmingLength[] {
-    return swimming.lengths.filter(
-      length =>
-        length.length_type === 'active'
-    );
+  swimmingActiveLengths(swimming: TrainerSwimmingSessionDetail): TrainerSwimmingLength[] {
+    return swimming.lengths.filter((length) => length.length_type === 'active');
   }
 
-
-  swimmingActiveLengthCount(
-    swimming: TrainerSwimmingSessionDetail
-  ): number | null {
-    return swimming.lengths.length
-      ? this.swimmingActiveLengths(
-          swimming
-        ).length
-      : null;
+  swimmingActiveLengthCount(swimming: TrainerSwimmingSessionDetail): number | null {
+    return swimming.lengths.length ? this.swimmingActiveLengths(swimming).length : null;
   }
 
+  swimmingStrokesPerActiveLength(swimming: TrainerSwimmingSessionDetail): number | null {
+    const activeCount = this.swimmingActiveLengthCount(swimming);
 
-  swimmingStrokesPerActiveLength(
-    swimming: TrainerSwimmingSessionDetail
-  ): number | null {
-    const activeCount =
-      this.swimmingActiveLengthCount(
-        swimming
-      );
-
-    if (
-      !activeCount ||
-      swimming.total_strokes === null
-    ) {
+    if (!activeCount || swimming.total_strokes === null) {
       return null;
     }
 
-    return swimming.total_strokes /
-      activeCount;
+    return swimming.total_strokes / activeCount;
   }
 
-
-  swimmingObservedStrokes(
-    swimming: TrainerSwimmingSessionDetail
-  ): string {
-    return this.swimmingStrokeNames(
-      swimming
-    ).join(', ');
+  swimmingObservedStrokes(swimming: TrainerSwimmingSessionDetail): string {
+    return this.swimmingStrokeNames(swimming).join(', ');
   }
 
-
-  swimmingStrokeNames(
-    swimming: TrainerSwimmingSessionDetail
-  ): string[] {
-    const labels =
-      new Set<string>();
+  swimmingStrokeNames(swimming: TrainerSwimmingSessionDetail): string[] {
+    const labels = new Set<string>();
 
     for (const length of swimming.lengths) {
       if (length.stroke) {
-        labels.add(
-          this.swimmingStrokeLabel(
-            length.stroke
-          )
-        );
+        labels.add(this.swimmingStrokeLabel(length.stroke));
       }
     }
 
     return Array.from(labels);
   }
 
-
-  swimmingRestSeconds(
-    swimming: TrainerSwimmingSessionDetail
-  ): number | null {
-    if (
-      swimming.total_timer_time_seconds === null ||
-      swimming.total_moving_time_seconds === null
-    ) {
+  swimmingRestSeconds(swimming: TrainerSwimmingSessionDetail): number | null {
+    if (swimming.total_timer_time_seconds === null || swimming.total_moving_time_seconds === null) {
       return null;
     }
 
-    return Math.max(
-      0,
-      swimming.total_timer_time_seconds -
-        swimming.total_moving_time_seconds
-    );
+    return Math.max(0, swimming.total_timer_time_seconds - swimming.total_moving_time_seconds);
   }
 
-
-  hasSwimmingCardio(
-    swimming: TrainerSwimmingSessionDetail
-  ): boolean {
-    return (
-      swimming.heart_rate_average_bpm !== null ||
-      swimming.heart_rate_max_bpm !== null
-    );
+  hasSwimmingCardio(swimming: TrainerSwimmingSessionDetail): boolean {
+    return swimming.heart_rate_average_bpm !== null || swimming.heart_rate_max_bpm !== null;
   }
 
-
-  hasSwimmingTechnique(
-    swimming: TrainerSwimmingSessionDetail
-  ): boolean {
+  hasSwimmingTechnique(swimming: TrainerSwimmingSessionDetail): boolean {
     return (
       swimming.total_strokes !== null ||
       swimming.average_stroke_rate_spm !== null ||
-      this.swimmingActiveLengthCount(swimming) !==
-        null ||
+      this.swimmingActiveLengthCount(swimming) !== null ||
       this.swimmingStrokeNames(swimming).length > 0
     );
   }
 
-
-  hasSwimmingLoad(
-    swimming: TrainerSwimmingSessionDetail
-  ): boolean {
+  hasSwimmingLoad(swimming: TrainerSwimmingSessionDetail): boolean {
     return (
       swimming.total_calories !== null ||
       swimming.aerobic_training_effect !== null ||
@@ -925,10 +639,7 @@ export class TrainerClient implements OnInit {
     );
   }
 
-
-  hasSwimmingTimes(
-    swimming: TrainerSwimmingSessionDetail
-  ): boolean {
+  hasSwimmingTimes(swimming: TrainerSwimmingSessionDetail): boolean {
     return (
       swimming.total_elapsed_time_seconds !== null ||
       swimming.total_timer_time_seconds !== null ||
@@ -937,87 +648,48 @@ export class TrainerClient implements OnInit {
     );
   }
 
-
-  formatDecimal(
-    value: number | null | undefined,
-    maximumFractionDigits = 1
-  ): string {
-    if (
-      value === null ||
-      value === undefined ||
-      !Number.isFinite(value)
-    ) {
+  formatDecimal(value: number | null | undefined, maximumFractionDigits = 1): string {
+    if (value === null || value === undefined || !Number.isFinite(value)) {
       return '—';
     }
 
-    return new Intl.NumberFormat(
-      'es-ES',
-      {
-        maximumFractionDigits
-      }
-    ).format(value);
+    return new Intl.NumberFormat('es-ES', {
+      maximumFractionDigits,
+    }).format(value);
   }
 
+  formatPacePer100m(value: number | null | undefined): string {
+    const pace = this.formatDuration(value);
 
-  formatPacePer100m(
-    value: number | null | undefined
-  ): string {
-    const pace =
-      this.formatDuration(value);
-
-    return pace === '—'
-      ? pace
-      : `${pace}/100 m`;
+    return pace === '—' ? pace : `${pace}/100 m`;
   }
 
-
-  swimmingStrokeLabel(
-    stroke: string
-  ): string {
-    const labels:
-      Record<string, string> = {
-        freestyle: 'Crol',
-        backstroke: 'Espalda',
-        breaststroke: 'Braza',
-        butterfly: 'Mariposa',
-        mixed: 'Mixto',
-        drill: 'Técnica'
-      };
+  swimmingStrokeLabel(stroke: string): string {
+    const labels: Record<string, string> = {
+      freestyle: 'Crol',
+      backstroke: 'Espalda',
+      breaststroke: 'Braza',
+      butterfly: 'Mariposa',
+      mixed: 'Mixto',
+      drill: 'Técnica',
+    };
 
     return labels[stroke] ?? stroke;
   }
 
-
-  strengthColumns(
-    exercise: TrainerStrengthExercise
-  ): StrengthMetricColumn[] {
+  strengthColumns(exercise: TrainerStrengthExercise): StrengthMetricColumn[] {
     const columns: StrengthMetricColumn[] = [];
-    const hasReps =
-      exercise.sets.some(set =>
-        set.reps !== null &&
-        set.reps !== undefined
-      );
-    const hasWeight =
-      exercise.sets.some(set =>
-        set.weight_kg !== null &&
-        set.weight_kg !== undefined
-      );
-    const hasDuration =
-      exercise.sets.some(set =>
-        set.duration_seconds !== null &&
-        set.duration_seconds !== undefined
-      );
-    const hasEffort =
-      exercise.sets.some(set =>
-        (
-          set.rir !== null &&
-          set.rir !== undefined
-        ) ||
-        (
-          set.rpe !== null &&
-          set.rpe !== undefined
-        )
-      );
+    const hasReps = exercise.sets.some((set) => set.reps !== null && set.reps !== undefined);
+    const hasWeight = exercise.sets.some(
+      (set) => set.weight_kg !== null && set.weight_kg !== undefined,
+    );
+    const hasDuration = exercise.sets.some(
+      (set) => set.duration_seconds !== null && set.duration_seconds !== undefined,
+    );
+    const hasEffort = exercise.sets.some(
+      (set) =>
+        (set.rir !== null && set.rir !== undefined) || (set.rpe !== null && set.rpe !== undefined),
+    );
 
     if (hasReps) {
       columns.push('reps');
@@ -1038,10 +710,7 @@ export class TrainerClient implements OnInit {
     return columns;
   }
 
-
-  strengthColumnLabel(
-    column: StrengthMetricColumn
-  ): string {
+  strengthColumnLabel(column: StrengthMetricColumn): string {
     switch (column) {
       case 'reps':
         return 'Reps';
@@ -1054,110 +723,62 @@ export class TrainerClient implements OnInit {
     }
   }
 
-
-  strengthSetMetric(
-    set: TrainerStrengthSet,
-    column: StrengthMetricColumn
-  ): string {
+  strengthSetMetric(set: TrainerStrengthSet, column: StrengthMetricColumn): string {
     switch (column) {
       case 'reps':
         return this.setValue(set.reps);
       case 'weight':
-        return this.setValue(
-          set.weight_kg,
-          ' kg'
-        );
+        return this.setValue(set.weight_kg, ' kg');
       case 'duration':
-        return this.setValue(
-          set.duration_seconds,
-          ' s'
-        );
+        return this.setValue(set.duration_seconds, ' s');
       default:
         return this.setRirOrRpe(set);
     }
   }
 
-
-  strengthSetGridColumns(
-    exercise: TrainerStrengthExercise
-  ): string {
-    return `1fr repeat(${
-      this.strengthColumns(exercise).length
-    }, minmax(0, 1fr))`;
+  strengthSetGridColumns(exercise: TrainerStrengthExercise): string {
+    return `1fr repeat(${this.strengthColumns(exercise).length}, minmax(0, 1fr))`;
   }
 
-
-  formatDate(
-    value: string | null | undefined
-  ): string {
+  formatDate(value: string | null | undefined): string {
     if (!value) {
       return '—';
     }
 
-    const date =
-      new Date(value);
+    const date = new Date(value);
 
     if (Number.isNaN(date.getTime())) {
       return value;
     }
 
-    return new Intl.DateTimeFormat(
-      'es-ES',
-      {
-        day: '2-digit',
-        month: '2-digit',
-        year: 'numeric'
-      }
-    ).format(date);
+    return new Intl.DateTimeFormat('es-ES', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+    }).format(date);
   }
 
-
-  formatDistance(
-    value: number | null | undefined
-  ): string {
-    if (
-      value === null ||
-      value === undefined ||
-      !Number.isFinite(value)
-    ) {
+  formatDistance(value: number | null | undefined): string {
+    if (value === null || value === undefined || !Number.isFinite(value)) {
       return '—';
     }
 
-    return value >= 1000
-      ? `${(value / 1000).toFixed(2)} km`
-      : `${Math.round(value)} m`;
+    return value >= 1000 ? `${(value / 1000).toFixed(2)} km` : `${Math.round(value)} m`;
   }
 
-
-  formatDuration(
-    value: number | null | undefined
-  ): string {
-    if (
-      value === null ||
-      value === undefined ||
-      !Number.isFinite(value)
-    ) {
+  formatDuration(value: number | null | undefined): string {
+    if (value === null || value === undefined || !Number.isFinite(value)) {
       return '—';
     }
 
-    const totalSeconds =
-      Math.round(value);
-    const minutes =
-      Math.floor(totalSeconds / 60);
-    const seconds =
-      totalSeconds % 60;
+    const totalSeconds = Math.round(value);
+    const minutes = Math.floor(totalSeconds / 60);
+    const seconds = totalSeconds % 60;
 
-    return minutes > 0
-      ? `${minutes}:${seconds
-        .toString()
-        .padStart(2, '0')}`
-      : `${seconds} s`;
+    return minutes > 0 ? `${minutes}:${seconds.toString().padStart(2, '0')}` : `${seconds} s`;
   }
 
-
-  disciplineLabel(
-    discipline: TrainerDiscipline
-  ): string {
+  disciplineLabel(discipline: TrainerDiscipline): string {
     switch (discipline) {
       case 'swimming':
         return 'Natación';
@@ -1170,111 +791,76 @@ export class TrainerClient implements OnInit {
     }
   }
 
-
-  activeRoutine(
-    routines: TrainerAthleteActiveRoutines,
-    discipline: TrainerDiscipline
-  ) {
+  activeRoutine(routines: TrainerAthleteActiveRoutines, discipline: TrainerDiscipline) {
     return routines[discipline];
   }
 
-
-  private strengthSessionToEvent(
-    session: TrainerStrengthSession
-  ): PerformanceCalendarEvent {
+  private strengthSessionToEvent(session: TrainerStrengthSession): PerformanceCalendarEvent {
     return {
-      id:
-        this.strengthEventId(session),
-      discipline:
-        'strength',
-      event_at:
-        session.finished_at,
-      title:
-        this.sessionTitle(session)
+      id: this.strengthEventId(session),
+      discipline: 'strength',
+      event_at: session.finished_at,
+      title: this.sessionTitle(session),
     };
   }
 
-
-  private performanceSessionToEvent(
-    session: TrainerPerformanceSession
-  ): PerformanceCalendarEvent {
+  private performanceSessionToEvent(session: TrainerPerformanceSession): PerformanceCalendarEvent {
     return {
-      id:
-        `${session.discipline}:${session.id}`,
-      discipline:
-        session.discipline,
-      event_at:
-        session.event_at,
+      id: `${session.discipline}:${session.id}`,
+      discipline: session.discipline,
+      event_at: session.event_at,
+      started_at: session.started_at,
+      finished_at: session.finished_at,
+      duration_seconds: session.duration_seconds,
       title:
-        session.title?.trim() || '—'
+        session.title?.trim() &&
+        session.title !== session.session_id &&
+        session.title !== session.id
+          ? session.title
+          : this.disciplineLabel(session.discipline),
     };
   }
 
-
-  private swimmingSessionIdFromEvent(
-    event: PerformanceCalendarEvent
-  ): string | null {
-    return event.id.startsWith('swimming:')
-      ? event.id.slice('swimming:'.length)
-      : null;
+  private swimmingSessionIdFromEvent(event: PerformanceCalendarEvent): string | null {
+    return event.id.startsWith('swimming:') ? event.id.slice('swimming:'.length) : null;
   }
 
-
-  private strengthEventId(
-    session: TrainerStrengthSession
-  ): string {
+  private strengthEventId(session: TrainerStrengthSession): string {
     return `strength:${session.workout_id}`;
   }
 
-
-  private eventTime(
-    event: PerformanceCalendarEvent
-  ): number {
+  private eventTime(event: PerformanceCalendarEvent): number {
     if (!event.event_at) {
       return 0;
     }
 
-    const date =
-      new Date(event.event_at);
+    const date = new Date(event.event_at);
 
-    return Number.isNaN(date.getTime())
-      ? 0
-      : date.getTime();
+    return Number.isNaN(date.getTime()) ? 0 : date.getTime();
   }
 
-
-  private shiftPerformanceMonth(
-    delta: number
-  ): void {
-    const monthKey =
-      this.performanceCalendarMonth();
+  private shiftPerformanceMonth(delta: number): void {
+    const monthKey = this.performanceCalendarMonth();
 
     if (!monthKey) {
       return;
     }
 
-    const date =
-      new Date(`${monthKey}-01T00:00:00Z`);
+    const date = new Date(`${monthKey}-01T00:00:00Z`);
 
-    date.setUTCMonth(
-      date.getUTCMonth() + delta
-    );
+    date.setUTCMonth(date.getUTCMonth() + delta);
 
-    this.performanceCalendarMonth.set(
-      this.monthKeyFromDate(date)
-    );
+    this.selectedPerformanceDateKey.set(null);
+    this.closePerformanceDetail();
+    this.performanceCalendarMonth.set(date.toISOString().slice(0, 7));
   }
 
-
-  private monthKeyFromValue(
-    value: string | null | undefined
-  ): string | null {
+  private monthKeyFromValue(value: string | null | undefined): string | null {
     if (!value) {
       return null;
     }
 
-    const date =
-      new Date(value);
+    const date = new Date(value);
 
     if (Number.isNaN(date.getTime())) {
       return null;
@@ -1283,23 +869,16 @@ export class TrainerClient implements OnInit {
     return this.monthKeyFromDate(date);
   }
 
-
-  private monthKeyFromDate(
-    date: Date
-  ): string {
-    return date.toISOString().slice(0, 7);
+  private monthKeyFromDate(date: Date): string {
+    return this.dateKeyFromDate(date).slice(0, 7);
   }
 
-
-  private dateKeyFromValue(
-    value: string | null | undefined
-  ): string | null {
+  private dateKeyFromValue(value: string | null | undefined): string | null {
     if (!value) {
       return null;
     }
 
-    const date =
-      new Date(value);
+    const date = new Date(value);
 
     if (Number.isNaN(date.getTime())) {
       return null;
@@ -1308,33 +887,20 @@ export class TrainerClient implements OnInit {
     return this.dateKeyFromDate(date);
   }
 
-
-  private dateKeyFromDate(
-    date: Date
-  ): string {
-    return date.toISOString().slice(0, 10);
+  private dateKeyFromDate(date: Date): string {
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
   }
 
-
-  private errorMessage(
-    error: unknown,
-    fallback: string
-  ): string {
-    if (
-      error instanceof HttpErrorResponse
-    ) {
-      const detail =
-        error.error?.detail;
+  private errorMessage(error: unknown, fallback: string): string {
+    if (error instanceof HttpErrorResponse) {
+      const detail = error.error?.detail;
 
       if (typeof detail === 'string') {
         return detail;
       }
     }
 
-    if (
-      error instanceof Error &&
-      error.message
-    ) {
+    if (error instanceof Error && error.message) {
       return error.message;
     }
 

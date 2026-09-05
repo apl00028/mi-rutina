@@ -1,1335 +1,432 @@
-import {
-  ComponentFixture,
-  TestBed
-} from '@angular/core/testing';
-
-import {
-  provideHttpClient
-} from '@angular/common/http';
-
-import {
-  HttpTestingController,
-  provideHttpClientTesting,
-  TestRequest
-} from '@angular/common/http/testing';
-
-import {
-  provideRouter
-} from '@angular/router';
-
-import {
-  afterEach,
-  beforeEach,
-  describe,
-  expect,
-  it,
-  vi
-} from 'vitest';
-
-import {
-  environment
-} from '../../../environments/environment';
-
-import {
-  AuthService
-} from '../../core/auth.service';
-
+import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { provideHttpClient } from '@angular/common/http';
+import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
+import { provideRouter, Router } from '@angular/router';
+import { Location } from '@angular/common';
+import { provideLocationMocks } from '@angular/common/testing';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { environment } from '../../../environments/environment';
+import { AuthService } from '../../core/auth.service';
 import {
   TrainerAthlete,
   TrainerAthleteOverview,
-  TrainerRoutineTemplate
+  TrainerRoutineTemplate,
 } from '../../core/trainer.service';
+import { Trainer } from './trainer';
 
-import {
-  Trainer
-} from './trainer';
+const athlete: TrainerAthlete = {
+  athlete_id: 'athlete-1',
+  status: 'active',
+  display_name: 'Athlete One',
+  email: 'athlete@example.com',
+  client_since: '2026-08-15T10:00:00Z',
+};
+const api = `${environment.apiUrl}/trainer`;
 
-
-describe(
-  'Trainer page',
-  () => {
-    let fixture:
-      ComponentFixture<Trainer>;
-    let http:
-      HttpTestingController;
-
-
-    beforeEach(async () => {
-      await TestBed.configureTestingModule({
-        imports: [
-          Trainer
-        ],
-        providers: [
-          provideHttpClient(),
-          provideHttpClientTesting(),
-          provideRouter([]),
-          {
-            provide: AuthService,
-            useValue: {
-              getAccessToken:
-                vi.fn()
-                  .mockResolvedValue(
-                    'access-token'
-                  )
-            }
-          }
-        ]
-      }).compileComponents();
-
-      http =
-        TestBed.inject(
-          HttpTestingController
-        );
-    });
-
-
-    afterEach(() => {
-      http.verify();
-    });
-
-
-    async function flushPromises() {
-      await Promise.resolve();
-      await Promise.resolve();
-      await Promise.resolve();
-      await Promise.resolve();
-    }
-
-
-    async function expectRequest(
-      url: string
-    ): Promise<TestRequest> {
-      let lastError:
-        unknown;
-
-      for (
-        let attempt = 0;
-        attempt < 10;
-        attempt += 1
-      ) {
-        await flushPromises();
-
-        try {
-          return http.expectOne(url);
-        } catch (error) {
-          lastError =
-            error;
-        }
-      }
-
-      throw lastError;
-    }
-
-
-    function refreshButton():
-      HTMLButtonElement {
-      return (
-        Array.from(
-          fixture.nativeElement
-            .querySelectorAll(
-              'button.secondary-button'
-            )
-        ) as HTMLButtonElement[]
-      ).find(
-        button =>
-          button.textContent
-            ?.includes('Actualizar') ||
-          button.textContent
-            ?.includes('Actualizando') ||
-          button.textContent
-            ?.includes('Cargando')
-      )!;
-    }
-
-
-    function createPage():
-      ComponentFixture<Trainer> {
-      fixture =
-        TestBed.createComponent(
-          Trainer
-        );
-
-      fixture.detectChanges();
-
-      return fixture;
-    }
-
-
-    async function flushInitial(
-      athletes: TrainerAthlete[] = [
+describe('Trainer experience', () => {
+  let fixture: ComponentFixture<Trainer>;
+  let http: HttpTestingController;
+  let router: Router;
+  beforeEach(async () => {
+    await TestBed.configureTestingModule({
+      imports: [Trainer],
+      providers: [
+        provideHttpClient(),
+        provideHttpClientTesting(),
+        provideLocationMocks(),
+        provideRouter([{ path: 'trainer', component: Trainer }]),
         {
-          athlete_id:
-            'athlete-1',
-          status:
-            'active',
-          email:
-            'athlete@example.com',
-          display_name:
-            'Athlete One',
-          client_since:
-            '2026-08-15T10:00:00Z'
-        }
+          provide: AuthService,
+          useValue: { getAccessToken: vi.fn().mockResolvedValue('access-token') },
+        },
       ],
-      templates: TrainerRoutineTemplate[] = [
-        {
-          id:
-            'strength-base',
-          name:
-            'Base fuerza',
-          discipline:
-            'strength',
-          data: {},
-          created_at:
-            '2026-09-01T10:00:00Z',
-          updated_at:
-            '2026-09-01T10:00:00Z'
-        }
-      ],
-      overviews:
-        Record<string, TrainerAthleteOverview> = {}
-    ): Promise<void> {
-      await flushPromises();
-
-      http.expectOne(
-        `${environment.apiUrl}/trainer/athletes`
-      ).flush(athletes);
-
-      http.expectOne(
-        `${environment.apiUrl}/trainer/templates`
-      ).flush(templates);
-
-      await flushPromises();
-
-      for (const athlete of athletes) {
-        if (athlete.status !== 'active') {
-          continue;
-        }
-
-        (
-          await expectRequest(
-            (
-              `${environment.apiUrl}/trainer/athletes/` +
-              encodeURIComponent(
-                athlete.athlete_id
-              )
-            )
-          )
-        ).flush(
-          overviews[athlete.athlete_id] ??
-          overviewResponse(athlete)
-        );
-      }
-    }
-
-
-    async function settle(): Promise<void> {
-      await flushPromises();
-      fixture.detectChanges();
-    }
-
-
-    function clickButton(
-      label: string
-    ): void {
-      const button =
-        (
-          Array.from(
-            fixture.nativeElement
-              .querySelectorAll('button')
-          ) as HTMLButtonElement[]
-        ).find(
-          candidate =>
-            candidate.textContent
-              ?.includes(label)
-        );
-
-      expect(button).toBeTruthy();
-
-      button!.click();
-      fixture.detectChanges();
-    }
-
-
-    function showAthletesView(): void {
-      fixture.componentInstance.setView(
-        'athletes'
-      );
-      fixture.detectChanges();
-    }
-
-
-    function showTemplatesView(): void {
-      fixture.componentInstance.setView(
-        'templates'
-      );
-      fixture.detectChanges();
-    }
-
-
-    it(
-      'loads and renders active athletes',
-      async () => {
-        createPage();
-        await flushInitial();
-
-        await settle();
-        showAthletesView();
-
-        expect(
-          fixture.nativeElement.textContent
-        ).toContain('Athlete One');
-        expect(
-          fixture.nativeElement.textContent
-        ).toContain('athlete@example.com');
-        expect(
-          fixture.nativeElement.textContent
-        ).toContain('Cliente desde 15/08/2026');
-        expect(
-          fixture.nativeElement.textContent
-        ).not.toContain('ID athlete-1');
-        expect(
-          fixture.nativeElement.textContent
-        ).toContain('Activo');
-        expect(
-          fixture.nativeElement.textContent
-        ).toContain('3 sesiones últimos 7 días');
-        expect(
-          fixture.nativeElement.textContent
-        ).toContain('Actividad reciente');
-        expect(
-          fixture.nativeElement.textContent
-        ).toContain('Fuerza base');
-        expect(
-          fixture.nativeElement.textContent
-        ).toContain('2 rutinas activas');
-        expect(
-          fixture.nativeElement.textContent
-        ).toContain('Ver deportista');
-        expect(
-          fixture.nativeElement
-            .querySelector('.athlete-card')
-            .getAttribute('href')
-        ).toBe('/trainer/clients/athlete-1');
-      }
-    );
-
-
-    it(
-      'uses email as athlete title when display name is missing',
-      async () => {
-        createPage();
-        await flushInitial([
-          {
-            athlete_id:
-              'athlete-1',
-            status:
-              'active',
-            email:
-              'athlete@example.com',
-            display_name:
-              null,
-            client_since:
-              '2026-08-15T10:00:00Z'
-          }
-        ]);
-        await settle();
-        showAthletesView();
-
-        const athlete =
-          fixture.componentInstance
-            .athletes()[0]!;
-
-        expect(
-          fixture.componentInstance
-            .athleteTitle(athlete)
-        ).toBe('athlete@example.com');
-        expect(
-          fixture.componentInstance
-            .athleteSubtitle(athlete)
-        ).toBeNull();
-        expect(
-          fixture.nativeElement.textContent
-        ).toContain('athlete@example.com');
-        expect(
-          fixture.nativeElement.textContent
-        ).not.toContain('ID athlete-1');
-      }
-    );
-
-
-    it(
-      'uses a human fallback when name and email are missing',
-      async () => {
-        createPage();
-        await flushInitial([
-          {
-            athlete_id:
-              'athlete-1',
-            status:
-              'active',
-            email:
-              null,
-            display_name:
-              null,
-            client_since:
-              '2026-08-15T10:00:00Z'
-          }
-        ]);
-        await settle();
-        showAthletesView();
-
-        const athlete =
-          fixture.componentInstance
-            .athletes()[0]!;
-
-        expect(
-          fixture.componentInstance
-            .athleteTitle(athlete)
-        ).toBe('Deportista');
-        expect(
-          fixture.nativeElement.textContent
-        ).toContain('Deportista');
-        expect(
-          fixture.nativeElement.textContent
-        ).not.toContain('athlete-1');
-      }
-    );
-
-
-    it(
-      'starts on the dashboard without rendering secondary lists',
-      async () => {
-        createPage();
-        await flushInitial(
-          [
-            {
-              athlete_id:
-                'athlete-1',
-              status:
-                'active',
-              email:
-                'athlete@example.com',
-              display_name:
-                'Athlete One',
-              client_since:
-                '2026-08-15T10:00:00Z'
-            },
-            {
-              athlete_id:
-                'athlete-2',
-              status:
-                'inactive',
-              email:
-                'inactive@example.com',
-              display_name:
-                'Inactive One',
-              client_since:
-                '2026-08-16T10:00:00Z'
-            }
-          ],
-          [
-            {
-              id:
-                'strength-base',
-              name:
-                'Base fuerza',
-              discipline:
-                'strength',
-              data: {},
-              created_at:
-                '2026-09-01T10:00:00Z',
-              updated_at:
-                '2026-09-01T10:00:00Z'
-            },
-            {
-              id:
-                'swim-base',
-              name:
-                'Base natación',
-              discipline:
-                'swimming',
-              data: {},
-              created_at:
-                '2026-09-01T10:00:00Z',
-              updated_at:
-                '2026-09-01T10:00:00Z'
-            }
-          ]
-        );
-        await settle();
-
-        const text =
-          fixture.nativeElement.textContent;
-
-        expect(
-          fixture.componentInstance
-            .activeView()
-        ).toBe('dashboard');
-        expect(text).toContain(
-          'Panel de entrenador'
-        );
-        expect(text).toContain(
-          'Supervisa a tus deportistas y gestiona su planificación.'
-        );
-        expect(text).toContain(
-          'Clientes activos'
-        );
-        expect(text).toContain(
-          'Plantillas'
-        );
-        expect(text).toContain(
-          'Sesiones · 7 días'
-        );
-        expect(text).toContain(
-          '2'
-        );
-        expect(text).toContain(
-          '3'
-        );
-        expect(text).toContain(
-          'Acciones rápidas'
-        );
-        expect(
-          fixture.nativeElement
-            .querySelector('.athlete-card')
-        ).toBeNull();
-        expect(
-          fixture.nativeElement
-            .querySelector('.template-card')
-        ).toBeNull();
-        expect(text).not.toContain(
-          'Athlete One'
-        );
-        expect(text).not.toContain(
-          'Base fuerza'
-        );
-      }
-    );
-
-
-    it(
-      'shows clients from the dashboard quick action',
-      async () => {
-        createPage();
-        await flushInitial();
-        await settle();
-
-        clickButton('Ver clientes');
-
-        expect(
-          fixture.componentInstance
-            .activeView()
-        ).toBe('athletes');
-        expect(
-          fixture.nativeElement.textContent
-        ).toContain('Clientes');
-        expect(
-          fixture.nativeElement.textContent
-        ).toContain('Athlete One');
-        expect(
-          fixture.nativeElement
-            .querySelector('.athlete-card')
-        ).not.toBeNull();
-      }
-    );
-
-
-    it(
-      'shows templates from the dashboard quick action',
-      async () => {
-        createPage();
-        await flushInitial();
-        await settle();
-
-        clickButton('Plantillas');
-
-        expect(
-          fixture.componentInstance
-            .activeView()
-        ).toBe('templates');
-        expect(
-          fixture.nativeElement.textContent
-        ).toContain('Base fuerza');
-        expect(
-          fixture.nativeElement
-            .querySelector('.template-card')
-        ).not.toBeNull();
-      }
-    );
-
-
-    it(
-      'returns from clients to the dashboard',
-      async () => {
-        createPage();
-        await flushInitial();
-        await settle();
-
-        showAthletesView();
-        clickButton('← Panel');
-
-        expect(
-          fixture.componentInstance
-            .activeView()
-        ).toBe('dashboard');
-        expect(
-          fixture.nativeElement
-            .querySelector('.athlete-card')
-        ).toBeNull();
-      }
-    );
-
-
-    it(
-      'returns from templates to the dashboard',
-      async () => {
-        createPage();
-        await flushInitial();
-        await settle();
-
-        showTemplatesView();
-        clickButton('← Panel');
-
-        expect(
-          fixture.componentInstance
-            .activeView()
-        ).toBe('dashboard');
-        expect(
-          fixture.nativeElement
-            .querySelector('.template-card')
-        ).toBeNull();
-      }
-    );
-
-
-    it(
-      'disables refresh while overviews are loading',
-      async () => {
-        createPage();
-
-        await flushPromises();
-
-        http.expectOne(
-          `${environment.apiUrl}/trainer/athletes`
-        ).flush([
-          {
-            athlete_id:
-              'athlete-1',
-            status:
-              'active',
-            email:
-              'athlete@example.com',
-            display_name:
-              'Athlete One',
-            client_since:
-              '2026-08-15T10:00:00Z'
-          }
-        ]);
-
-        http.expectOne(
-          `${environment.apiUrl}/trainer/templates`
-        ).flush([]);
-
-        const overviewRequest =
-          await expectRequest(
-            (
-              `${environment.apiUrl}/trainer/athletes/` +
-              'athlete-1'
-            )
-          );
-
-        expect(
-          fixture.componentInstance
-            .loadingOverviews()
-        ).toBe(true);
-
-        showAthletesView();
-        fixture.detectChanges();
-
-        expect(
-          refreshButton().disabled
-        ).toBe(true);
-        expect(
-          refreshButton().textContent
-        ).toContain('Actualizando');
-
-        overviewRequest.flush(
-          overviewResponse({
-            athlete_id:
-              'athlete-1',
-            status:
-              'active',
-            email:
-              'athlete@example.com',
-            display_name:
-              'Athlete One',
-            client_since:
-              '2026-08-15T10:00:00Z'
-          })
-        );
-
-        await settle();
-
-        expect(
-          refreshButton().disabled
-        ).toBe(false);
-        expect(
-          refreshButton().textContent
-        ).toContain('Actualizar');
-      }
-    );
-
-
-    it(
-      'shows a complete sessions summary when every overview loads',
-      async () => {
-        createPage();
-        await flushInitial();
-        await settle();
-
-        expect(
-          fixture.componentInstance
-            .summarySessionsLabel()
-        ).toBe('3');
-        expect(
-          fixture.nativeElement.textContent
-        ).not.toContain('parcial');
-      }
-    );
-
-
-    it(
-      'loads and renders templates',
-      async () => {
-        createPage();
-        await flushInitial();
-
-        await settle();
-
-        showTemplatesView();
-
-        expect(
-          fixture.nativeElement.textContent
-        ).toContain('Base fuerza');
-        expect(
-          fixture.nativeElement.textContent
-        ).toContain('Fuerza');
-      }
-    );
-
-
-    it(
-      'switches to templates from the quick assignment action',
-      async () => {
-        createPage();
-        await flushInitial();
-        await settle();
-
-        clickButton('Plantillas');
-
-        expect(
-          fixture.componentInstance
-            .activeView()
-        ).toBe('templates');
-        expect(
-          fixture.nativeElement.textContent
-        ).toContain(
-          'Asignar plantilla'
-        );
-      }
-    );
-
-
-    it(
-      'keeps athletes visible when one overview fails',
-      async () => {
-        createPage();
-
-        await flushPromises();
-
-        http.expectOne(
-          `${environment.apiUrl}/trainer/athletes`
-        ).flush([
-          {
-            athlete_id:
-              'athlete-1',
-            status:
-              'active',
-            email:
-              'athlete@example.com',
-            display_name:
-              'Athlete One',
-            client_since:
-              '2026-08-15T10:00:00Z'
-          },
-          {
-            athlete_id:
-              'athlete-2',
-            status:
-              'active',
-            email:
-              'second@example.com',
-            display_name:
-              'Second Athlete',
-            client_since:
-              '2026-08-16T10:00:00Z'
-          }
-        ]);
-
-        http.expectOne(
-          `${environment.apiUrl}/trainer/templates`
-        ).flush([]);
-
-        await flushPromises();
-
-        (
-          await expectRequest(
-            (
-              `${environment.apiUrl}/trainer/athletes/` +
-              'athlete-1'
-            )
-          )
-        ).flush(
-          overviewResponse({
-            athlete_id:
-              'athlete-1',
-            status:
-              'active',
-            email:
-              'athlete@example.com',
-            display_name:
-              'Athlete One',
-            client_since:
-              '2026-08-15T10:00:00Z'
-          })
-        );
-
-        (
-          await expectRequest(
-            (
-              `${environment.apiUrl}/trainer/athletes/` +
-              'athlete-2'
-            )
-          )
-        ).flush(
-          {
-            detail:
-              'No disponible'
-          },
-          {
-            status:
-              502,
-            statusText:
-              'Bad Gateway'
-          }
-        );
-
-        await settle();
-
-        expect(
-          fixture.nativeElement.textContent
-        ).toContain(
-          '3 · parcial'
-        );
-        expect(
-          fixture.nativeElement.textContent
-        ).toContain(
-          'Datos disponibles de 1 de 2 clientes activos.'
-        );
-        expect(
-          fixture.componentInstance
-            .summarySessionsLabel()
-        ).toBe('3 · parcial');
-
-        showAthletesView();
-
-        const text =
-          fixture.nativeElement.textContent;
-
-        expect(text).toContain(
-          'Athlete One'
-        );
-        expect(text).toContain(
-          'Second Athlete'
-        );
-        expect(text).toContain(
-          'Actividad no disponible'
-        );
-        expect(text).toContain(
-          '3 sesiones últimos 7 días'
-        );
-      }
-    );
-
-
-    it(
-      'shows no completed sessions when overview has no last workout',
-      async () => {
-        const athlete = {
-          athlete_id:
-            'athlete-1',
-          status:
-            'active' as const,
-          email:
-            'athlete@example.com',
-          display_name:
-            'Athlete One',
-          client_since:
-            '2026-08-15T10:00:00Z'
-        };
-
-        createPage();
-        await flushInitial(
-          [
-            athlete
-          ],
-          [
-            {
-              id:
-                'strength-base',
-              name:
-                'Base fuerza',
-              discipline:
-                'strength',
-              data: {},
-              created_at:
-                '2026-09-01T10:00:00Z',
-              updated_at:
-                '2026-09-01T10:00:00Z'
-            }
-          ],
-          {
-            'athlete-1':
-              overviewResponse(
-                athlete,
-                {
-                  recent_training: {
-                    last_completed:
-                      null,
-                    completed_last_7_days:
-                      0
-                  }
-                }
-              )
-          }
-        );
-        await settle();
-        showAthletesView();
-
-        const text =
-          fixture.nativeElement.textContent;
-
-        expect(text).toContain(
-          'Sin sesiones completadas'
-        );
-        expect(text).toContain(
-          'Sin actividad esta semana'
-        );
-      }
-    );
-
-
-    it(
-      'regenerates routine id when the selected template changes',
-      async () => {
-        createPage();
-        await flushInitial(
-          [
-            {
-              athlete_id:
-                'athlete-1',
-              status:
-                'active',
-              email:
-                'athlete@example.com',
-              display_name:
-                'Athlete One',
-              client_since:
-                '2026-08-15T10:00:00Z'
-            }
-          ],
-          [
-            {
-              id:
-                'strength-base',
-              name:
-                'Base fuerza',
-              discipline:
-                'strength',
-              data: {},
-              created_at:
-                '2026-09-01T10:00:00Z',
-              updated_at:
-                '2026-09-01T10:00:00Z'
-            },
-            {
-              id:
-                'run-base',
-              name:
-                'Base carrera',
-              discipline:
-                'running',
-              data: {},
-              created_at:
-                '2026-09-01T10:00:00Z',
-              updated_at:
-                '2026-09-01T10:00:00Z'
-            }
-          ]
-        );
-        await settle();
-
-        showTemplatesView();
-        fixture.componentInstance.updateRoutineId(
-          'manual-editable'
-        );
-        fixture.detectChanges();
-
-        fixture.componentInstance.selectTemplate(
-          fixture.componentInstance
-            .templates()[1]
-        );
-        fixture.detectChanges();
-
-        expect(
-          fixture.componentInstance
-            .routineId()
-        )
-          .toContain('run-base-athlete');
-        expect(
-          fixture.componentInstance
-            .routineId()
-        )
-          .not
-          .toBe('manual-editable');
-      }
-    );
-
-
-    it(
-      'regenerates routine id when the selected athlete changes',
-      async () => {
-        createPage();
-        await flushInitial(
-          [
-            {
-              athlete_id:
-                'athlete-1',
-              status:
-                'active',
-              email:
-                'athlete@example.com',
-              display_name:
-                'Athlete One',
-              client_since:
-                '2026-08-15T10:00:00Z'
-            },
-            {
-              athlete_id:
-                'client-2',
-              status:
-                'active',
-              email:
-                'client-2@example.com',
-              display_name:
-                'Client Two',
-              client_since:
-                '2026-08-16T10:00:00Z'
-            }
-          ]
-        );
-        await settle();
-
-        showTemplatesView();
-        fixture.componentInstance.updateRoutineId(
-          'manual-editable'
-        );
-        fixture.detectChanges();
-
-        fixture.componentInstance.updateAthlete(
-          'client-2'
-        );
-        fixture.detectChanges();
-
-        expect(
-          fixture.componentInstance
-            .routineId()
-        )
-          .toContain('strength-base-client-2');
-        expect(
-          fixture.componentInstance
-            .routineId()
-        )
-          .not
-          .toBe('manual-editable');
-      }
-    );
-
-
-    it(
-      'assigns a template with exactly athlete_id and routine_id',
-      async () => {
-        createPage();
-        await flushInitial();
-        await settle();
-
-        showTemplatesView();
-        fixture.componentInstance.updateRoutineId(
-          'routine-custom'
-        );
-        fixture.detectChanges();
-
-        const assignButton =
-          (
-            Array.from(
-              fixture.nativeElement.querySelectorAll(
-                'button.primary-button'
-              )
-            ) as HTMLButtonElement[]
-          ).find(
-            button =>
-              button.textContent
-                ?.includes('Asignar')
-          ) as HTMLButtonElement;
-
-        assignButton.click();
-        fixture.detectChanges();
-
-        await flushPromises();
-
-        const request =
-          http.expectOne(
-            (
-              `${environment.apiUrl}/trainer/templates/` +
-              'strength-base/assign'
-            )
-          );
-
-        expect(request.request.method)
-          .toBe('POST');
-        expect(
-          Object.keys(
-            request.request.body as Record<
-              string,
-              string
-            >
-          ).sort()
-        ).toEqual([
-          'athlete_id',
-          'routine_id'
-        ]);
-        expect(request.request.body)
-          .toEqual({
-            athlete_id:
-              'athlete-1',
-            routine_id:
-              'routine-custom'
-          });
-
-        request.flush({
-          assignment_id:
-            'assignment-1',
-          athlete_id:
-            'athlete-1',
-          template_id:
-            'strength-base',
-          routine_id:
-            'routine-custom',
-          discipline:
-            'strength',
-          assigned_at:
-            '2026-09-02T10:00:00Z'
-        });
-
-        await settle();
-
-        expect(
-          fixture.nativeElement.textContent
-        ).toContain(
-          'Rutina routine-custom asignada.'
-        );
-      }
-    );
-
-
-    it(
-      'shows an error state when athletes fail to load',
-      async () => {
-        createPage();
-
-        await flushPromises();
-
-        http.expectOne(
-          `${environment.apiUrl}/trainer/athletes`
-        ).flush(
-          {
-            detail:
-              'No autorizado'
-          },
-          {
-            status:
-              403,
-            statusText:
-              'Forbidden'
-          }
-        );
-
-        http.expectOne(
-          `${environment.apiUrl}/trainer/templates`
-        ).flush([]);
-
-        await settle();
-        showAthletesView();
-
-        expect(
-          fixture.nativeElement.textContent
-        ).toContain('No autorizado');
-      }
-    );
-
-
-    it(
-      'blocks duplicate assignment submits while sending',
-      async () => {
-        createPage();
-        await flushInitial();
-        await settle();
-
-        showTemplatesView();
-        fixture.componentInstance.updateRoutineId(
-          'routine-custom'
-        );
-        fixture.detectChanges();
-
-        const assignButton =
-          (
-            Array.from(
-              fixture.nativeElement.querySelectorAll(
-                'button.primary-button'
-              )
-            ) as HTMLButtonElement[]
-          ).find(
-            button =>
-              button.textContent
-                ?.includes('Asignar')
-          ) as HTMLButtonElement;
-
-        assignButton.click();
-        assignButton.click();
-        fixture.detectChanges();
-
-        await flushPromises();
-
-        const requests:
-          TestRequest[] =
-          http.match(
-            request =>
-              request.method === 'POST' &&
-              request.url ===
-                (
-                  `${environment.apiUrl}/trainer/templates/` +
-                  'strength-base/assign'
-                )
-          );
-
-        expect(requests)
-          .toHaveLength(1);
-
-        requests[0].flush({
-          assignment_id:
-            'assignment-1',
-          athlete_id:
-            'athlete-1',
-          template_id:
-            'strength-base',
-          routine_id:
-            'routine-custom',
-          discipline:
-            'strength',
-          assigned_at:
-            '2026-09-02T10:00:00Z'
-        });
-      }
-    );
-
-
-    function overviewResponse(
-      athlete: TrainerAthlete,
-      patch: Partial<TrainerAthleteOverview> = {}
-    ): TrainerAthleteOverview {
-      return {
-        athlete_id:
-          athlete.athlete_id,
-        status:
-          athlete.status,
-        email:
-          athlete.email,
-        display_name:
-          athlete.display_name,
-        client_since:
-          athlete.client_since,
-        health: {
-          weight_measurement_date:
-            null,
-          waist_measurement_date:
-            null,
-          weight_kg:
-            null,
-          body_fat_percent:
-            null,
-          muscle_mass_kg:
-            null,
-          body_water_percent:
-            null,
-          visceral_fat_index:
-            null,
-          waist_cm:
-            null
-        },
-        recent_training: {
-          last_completed: {
-            workout_id:
-              'workout-1',
-            routine_id:
-              'routine-1',
-            session_id:
-              'session-1',
-            session_name:
-              'Fuerza base',
-            finished_at:
-              '2026-09-02T10:00:00Z'
-          },
-          completed_last_7_days:
-            3
-        },
-        active_routines: {
-          strength: {
-            routine_id:
-              'strength-routine',
-            name:
-              'Fuerza',
-            activated_at:
-              '2026-09-01T10:00:00Z'
-          },
-          swimming: {
-            routine_id:
-              'swimming-routine',
-            name:
-              'Natación',
-            activated_at:
-              '2026-09-01T10:00:00Z'
-          },
-          running:
-            null,
-          cycling:
-            null
-        },
-        trainer: {
-          last_assignment:
-            null
-        },
-        ...patch
-      };
-    }
+    }).compileComponents();
+    http = TestBed.inject(HttpTestingController);
+    router = TestBed.inject(Router);
+    router.setUpLocationChangeListener();
+  });
+  afterEach(() => http.verify());
+  async function settle() {
+    for (let i = 0; i < 12; i++) await Promise.resolve();
+    fixture?.detectChanges();
   }
-);
+  function text(): string {
+    return fixture.nativeElement.textContent.replace(/\s+/g, ' ');
+  }
+  async function start(
+    view = '',
+    templates = [templateWithRoutineData()],
+    clients = [athlete],
+    failOverview = false,
+  ) {
+    await router.navigateByUrl(`/trainer${view}`);
+    fixture = TestBed.createComponent(Trainer);
+    fixture.detectChanges();
+    await settle();
+    http.expectOne(`${api}/athletes`).flush(clients);
+    http.expectOne(`${api}/templates`).flush(templates);
+    await settle();
+    for (const client of clients) {
+      const req = http.expectOne(`${api}/athletes/${client.athlete_id}`);
+      if (failOverview) req.flush({}, { status: 503, statusText: 'Unavailable' });
+      else req.flush(overviewResponse(client));
+    }
+    await settle();
+  }
+  async function click(label: string) {
+    const button = (
+      Array.from(fixture.nativeElement.querySelectorAll('button')) as HTMLButtonElement[]
+    ).find((b) => b.textContent?.includes(label));
+    expect(button, label).toBeTruthy();
+    button!.click();
+    await settle();
+  }
+  async function assignment() {
+    await start('?view=templates');
+    await click('Base fuerza');
+    await click('Asignar a deportista');
+    const select = fixture.nativeElement.querySelector('select') as HTMLSelectElement;
+    select.value = athlete.athlete_id;
+    select.dispatchEvent(new Event('change'));
+    await settle();
+  }
+  function completeAssignment(routineId: string) {
+    http
+      .expectOne(`${api}/templates/strength-base/assign`)
+      .flush({
+        assignment_id: 'assignment-1',
+        athlete_id: athlete.athlete_id,
+        template_id: 'strength-base',
+        routine_id: routineId,
+        discipline: 'strength',
+        assigned_at: '2026-09-05T10:00:00Z',
+      });
+  }
+
+  it('shows a compact dashboard with scoped totals and recent activity, without full lists or duplicate navigation', async () => {
+    await start();
+    expect(text()).toContain('Panel de entrenador');
+    expect(fixture.nativeElement.querySelectorAll('.summary-card')).toHaveLength(3);
+    expect(text()).toContain('no incluye natación importada');
+    expect(fixture.nativeElement.querySelectorAll('.activity-row')).toHaveLength(1);
+    expect(
+      fixture.nativeElement.querySelector(
+        '.athlete-card, .template-card, .quick-actions, .view-switch',
+      ),
+    ).toBeNull();
+    expect(text()).not.toContain('Acciones rápidas');
+  });
+  it('reacts to query navigation and browser back/forward on the same component', async () => {
+    await start();
+    await router.navigateByUrl('/trainer?view=clients');
+    await settle();
+    expect(fixture.nativeElement.querySelector('.athlete-card')).toBeTruthy();
+    await router.navigateByUrl('/trainer?view=templates');
+    await settle();
+    expect(fixture.nativeElement.querySelector('.template-card')).toBeTruthy();
+    TestBed.inject(Location).back();
+    await vi.waitFor(() => expect(router.url).toBe('/trainer?view=clients'));
+    await settle();
+    expect(fixture.componentInstance.activeView()).toBe('athletes');
+    TestBed.inject(Location).forward();
+    await vi.waitFor(() => expect(router.url).toBe('/trainer?view=templates'));
+    await settle();
+    expect(fixture.componentInstance.activeView()).toBe('templates');
+  });
+  it('renders compact client links with actual counts and no technical identity', async () => {
+    await start('?view=clients');
+    const row = fixture.nativeElement.querySelector('.athlete-card');
+    expect(row.getAttribute('href')).toBe('/trainer/clients/athlete-1');
+    expect(row.textContent).toContain('3 sesiones últimos 7 días');
+    expect(row.textContent).toContain('2 rutinas activas');
+    expect(row.querySelector('details')).toBeNull();
+    expect(text()).not.toContain('athlete-1');
+    expect(text()).not.toContain('Fuerza base');
+  });
+  it('uses a human identity fallback', async () => {
+    await start('?view=clients', [], [{ ...athlete, display_name: null, email: null }]);
+    expect(text()).toContain('Deportista');
+    expect(text()).not.toContain('athlete-1');
+  });
+  it('does not present missing overviews as zero activity', async () => {
+    await start('', [], [athlete], true);
+    expect(fixture.componentInstance.summarySessionsLabel()).toBe('—');
+    await router.navigateByUrl('/trainer?view=clients');
+    await settle();
+    expect(text()).toContain('Sesiones no disponibles');
+    expect(text()).not.toContain('0 rutinas activas');
+  });
+  it('shows empty clients and disables assignment without clients', async () => {
+    await start('?view=templates', [templateWithRoutineData()], []);
+    await click('Base fuerza');
+    await click('Asignar a deportista');
+    expect(text()).toContain('No hay clientes activos');
+    expect(fixture.nativeElement.querySelector('.primary-button').disabled).toBe(true);
+  });
+  it('filters templates by each modality with chips', async () => {
+    const base = templateWithRoutineData();
+    await start('?view=templates', [
+      base,
+      ...(['swimming', 'running', 'cycling'] as const).map((d) => ({
+        ...base,
+        id: d,
+        name: `Plan ${d}`,
+        discipline: d,
+      })),
+    ]);
+    expect(fixture.nativeElement.querySelectorAll('.discipline-filters button')).toHaveLength(5);
+    await click('Natación');
+    expect(fixture.nativeElement.querySelectorAll('.template-card')).toHaveLength(1);
+    expect(text()).toContain('Plan swimming');
+    await click('Bici');
+    expect(text()).toContain('Plan cycling');
+    expect(text()).not.toContain('Base fuerza');
+    await click('Todas');
+    expect(fixture.nativeElement.querySelectorAll('.template-card')).toHaveLength(4);
+    expect(fixture.nativeElement.querySelector('select')).toBeNull();
+    expect(text()).not.toContain('Asignada a');
+  });
+  it('opens a readable detail and returns to the filtered library', async () => {
+    await start('?view=templates');
+    await click('Fuerza');
+    await click('Base fuerza');
+    expect(text()).toContain('Press de banca');
+    expect(text()).toContain('Descanso 120 s');
+    expect(fixture.nativeElement.querySelector('.template-list')).toBeNull();
+    expect(text()).not.toContain('session-a');
+    expect(text()).not.toContain('bench-press');
+    expect(router.url).toContain('template=strength-base');
+    await click('← Plantillas');
+    expect(fixture.nativeElement.querySelectorAll('.template-card')).toHaveLength(1);
+  });
+  it('opens template detail from its URL', async () => {
+    await start('?view=templates&template=strength-base');
+    expect(text()).toContain('Press de banca');
+  });
+  it('renders canonical strength prescription including zero values', async () => {
+    const template = templateWithRoutineData();
+    template.data['sessions'] = [
+      {
+        sessionId: 'technical-session',
+        exercises: [
+          {
+            exerciseId: 'technical-exercise',
+            name: 'Sentadilla',
+            prescription: {
+              sets: 3,
+              target: { type: 'repetitions', min: 8, max: 12 },
+              targetRir: { min: 0, max: 2 },
+              weight: 0,
+              restSeconds: 90,
+            },
+          },
+        ],
+      },
+    ];
+    await start('?view=templates&template=strength-base', [template]);
+    expect(text()).toContain('3 series · 8–12 reps · RIR 0–2 · 0 kg · Descanso 90 s');
+    expect(text()).toContain('Sesión 1');
+    expect(text()).not.toContain('technical-');
+  });
+  it('renders swimming sets with translated labels and running targets using their actual shapes', async () => {
+    const template = templateWithRoutineData();
+    template.discipline = 'swimming';
+    template.data['sessions'] = [
+      {
+        sessionId: 'swim',
+        title: 'Técnica',
+        poolLengthMeters: 25,
+        blocks: [
+          {
+            type: 'warmup',
+            sets: [
+              {
+                repetitions: 4,
+                distanceMeters: 50,
+                stroke: 'freestyle',
+                workType: 'swim',
+                intensity: 'easy',
+                restSeconds: 0,
+              },
+            ],
+          },
+        ],
+      },
+    ];
+    await start('?view=templates&template=strength-base', [template]);
+    expect(text()).toContain('4 x 50 m');
+    expect(text()).toContain('Crol · Nado · Suave · Descanso 0 s');
+    expect(text()).toContain('Calentamiento');
+    template.discipline = 'running';
+    template.data['sessions'] = [
+      {
+        sessionId: 'run',
+        blocks: [
+          {
+            title: 'Series',
+            sets: [
+              {
+                repetitions: 3,
+                targetType: 'duration',
+                durationSeconds: 120,
+                intensityMode: 'rpeRange',
+                rpeMin: 6,
+                rpeMax: 8,
+                recoverySeconds: 60,
+              },
+            ],
+          },
+        ],
+      },
+    ];
+    fixture.componentInstance.templates.set([{ ...template }]);
+    await settle();
+    expect(text()).toContain('3 × 120 s');
+    expect(text()).toContain('RPE 6–8');
+    expect(text()).toContain('Recuperación 60 s');
+  });
+  it('requires selecting a client and exposes no manual ID controls', async () => {
+    await start('?view=templates');
+    await click('Base fuerza');
+    await click('Asignar a deportista');
+    expect(fixture.nativeElement.querySelector('.primary-button').disabled).toBe(true);
+    expect(fixture.nativeElement.querySelector('input')).toBeNull();
+    expect(text()).not.toContain('ID de rutina');
+    expect(text()).not.toContain('Generar ID');
+    expect(text()).toContain('Podrá activarla');
+  });
+  it('posts only athlete_id and an internal UUID, blocks double submit and refreshes the overview', async () => {
+    await assignment();
+    const button = fixture.nativeElement.querySelector('.primary-button') as HTMLButtonElement;
+    button.click();
+    button.click();
+    await settle();
+    const requests = http.match(`${api}/templates/strength-base/assign`);
+    expect(requests).toHaveLength(1);
+    const body = requests[0].request.body;
+    expect(Object.keys(body).sort()).toEqual(['athlete_id', 'routine_id']);
+    expect(body.athlete_id).toBe('athlete-1');
+    expect(body.routine_id).toMatch(/^routine-[0-9a-f-]{36}$/);
+    requests[0].flush({
+      assignment_id: 'assigned',
+      athlete_id: 'athlete-1',
+      template_id: 'strength-base',
+      routine_id: body.routine_id,
+      discipline: 'strength',
+      assigned_at: '2026-09-05T10:00:00Z',
+    });
+    await settle();
+    http.expectOne(`${api}/athletes/athlete-1`).flush(overviewResponse(athlete));
+    await settle();
+    expect(text()).toContain('Base fuerza asignada a Athlete One.');
+    expect(text()).not.toContain(body.routine_id);
+    expect(fixture.nativeElement.querySelector('select')).toBeNull();
+  });
+  it('keeps the assignment ID for a retry and generates a new one for an explicit reassignment', async () => {
+    await assignment();
+    const firstId = fixture.componentInstance.routineId();
+    await click('Confirmar asignación');
+    http
+      .expectOne(`${api}/templates/strength-base/assign`)
+      .flush({}, { status: 503, statusText: 'Unavailable' });
+    await settle();
+    await click('Confirmar asignación');
+    expect(fixture.componentInstance.routineId()).toBe(firstId);
+    completeAssignment(firstId);
+    await settle();
+    http.expectOne(`${api}/athletes/athlete-1`).flush(overviewResponse(athlete));
+    await settle();
+    await click('Asignar a deportista');
+    expect(fixture.componentInstance.routineId()).not.toBe(firstId);
+  });
+  it('reports an ID conflict without automatically creating another copy', async () => {
+    await assignment();
+    const id = fixture.componentInstance.routineId();
+    await click('Confirmar asignación');
+    http
+      .expectOne(`${api}/templates/strength-base/assign`)
+      .flush({}, { status: 409, statusText: 'Conflict' });
+    await settle();
+    expect(text()).toContain('Esta asignación ya existe');
+    expect(fixture.componentInstance.routineId()).toBe(id);
+  });
+  function templateWithRoutineData(): TrainerRoutineTemplate {
+    return {
+      id: 'strength-base',
+      name: 'Base fuerza',
+      discipline: 'strength',
+      data: {
+        routineId: 'strength-base',
+        schemaVersion: '1',
+        revision: 0,
+        discipline: 'strength',
+        sessions: [
+          {
+            sessionId: 'session-a',
+            name: 'Sesión A',
+            exercises: [
+              {
+                exerciseId: 'bench-press',
+                name: 'Press de banca',
+                restSeconds: 120,
+              },
+            ],
+          },
+        ],
+      },
+      created_at: '2026-09-01T10:00:00Z',
+      updated_at: '2026-09-02T10:00:00Z',
+    };
+  }
+
+  function overviewResponse(
+    athlete: TrainerAthlete,
+    patch: Partial<TrainerAthleteOverview> = {},
+  ): TrainerAthleteOverview {
+    return {
+      athlete_id: athlete.athlete_id,
+      status: athlete.status,
+      email: athlete.email,
+      display_name: athlete.display_name,
+      client_since: athlete.client_since,
+      health: {
+        weight_measurement_date: null,
+        waist_measurement_date: null,
+        weight_kg: null,
+        body_fat_percent: null,
+        muscle_mass_kg: null,
+        body_water_percent: null,
+        visceral_fat_index: null,
+        waist_cm: null,
+      },
+      recent_training: {
+        last_completed: {
+          workout_id: 'workout-1',
+          routine_id: 'routine-1',
+          session_id: 'session-1',
+          session_name: 'Fuerza base',
+          finished_at: '2026-09-02T10:00:00Z',
+        },
+        completed_last_7_days: 3,
+      },
+      active_routines: {
+        strength: {
+          routine_id: 'strength-routine',
+          name: 'Fuerza',
+          activated_at: '2026-09-01T10:00:00Z',
+        },
+        swimming: {
+          routine_id: 'swimming-routine',
+          name: 'Natación',
+          activated_at: '2026-09-01T10:00:00Z',
+        },
+        running: null,
+        cycling: null,
+      },
+      trainer: {
+        last_assignment: null,
+      },
+      ...patch,
+    };
+  }
+});

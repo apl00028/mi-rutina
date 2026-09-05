@@ -1,379 +1,162 @@
 <section class="client-page">
   <header class="page-header">
-    <div>
-      <a
-        class="back-link"
-        routerLink="/trainer"
-      >
-        Clientes
-      </a>
-
-      <h1>
-        {{ title() }}
-      </h1>
-    </div>
+    <a class="back-link" routerLink="/trainer" [queryParams]="{ view: 'clients' }">← Clientes</a>
+    <h1>{{ title() }}</h1>
+    @if (overview(); as athlete) {
+      @if (athleteSubtitle(athlete); as subtitle) {
+        <p class="card-note">{{ subtitle }}</p>
+      }
+      <p class="card-note">
+        {{ statusLabel(athlete.status) }} · Cliente desde {{ formatDate(athlete.client_since) }}
+      </p>
+    }
   </header>
-
   @if (loading()) {
-    <div class="state-card">
-      Cargando ficha...
-    </div>
+    <div class="state-card">Cargando ficha...</div>
   } @else if (error()) {
-    <div class="error-message">
-      {{ error() }}
+    <div class="error-message" role="alert">
+      {{ error() }} <button type="button" class="back-link" (click)="load()">Reintentar</button>
     </div>
   } @else if (overview(); as athlete) {
-    <div class="overview-grid">
-      <article class="overview-card header-card">
-        <div>
-          <span class="eyebrow">
-            Cliente
-          </span>
-
-          <h2>
-            {{ title() }}
-          </h2>
-
-          @if (athleteSubtitle(athlete); as subtitle) {
-            <p>
-              {{ subtitle }}
-            </p>
-          }
-        </div>
-
-        <dl>
-          <div>
-            <dt>
-              Cliente desde
-            </dt>
-            <dd>
-              {{ formatDate(athlete.client_since) }}
-            </dd>
-          </div>
-
-          <div>
-            <dt>
-              Estado
-            </dt>
-            <dd>
-              {{ statusLabel(athlete.status) }}
-            </dd>
-          </div>
-        </dl>
-      </article>
-
-      <article class="overview-card">
-        <h2>
-          Salud actual
-        </h2>
-
-        <p class="card-note">
-          Peso {{ formatDate(athlete.health.weight_measurement_date) }}
-          · Cintura {{ formatDate(athlete.health.waist_measurement_date) }}
+    @if (!currentPerformanceEvent()) {
+      <div class="training-summary">
+        <p>
+          <strong>{{
+            completedSessionsLabel(athlete.recent_training.completed_last_7_days)
+          }}</strong>
+          registradas en Aptus en los últimos 7 días
         </p>
-
-        <dl class="metric-grid">
-          <div>
-            <dt>
-              Peso
-            </dt>
-            <dd>
-              {{ metric(athlete.health.weight_kg, ' kg') }}
-            </dd>
-          </div>
-
-          <div>
-            <dt>
-              % grasa
-            </dt>
-            <dd>
-              {{ metric(athlete.health.body_fat_percent, '%') }}
-            </dd>
-          </div>
-
-          <div>
-            <dt>
-              Masa muscular
-            </dt>
-            <dd>
-              {{ metric(athlete.health.muscle_mass_kg, ' kg') }}
-            </dd>
-          </div>
-
-          <div>
-            <dt>
-              Agua corporal
-            </dt>
-            <dd>
-              {{ metric(athlete.health.body_water_percent, '%') }}
-            </dd>
-          </div>
-
-          <div>
-            <dt>
-              Grasa visceral
-            </dt>
-            <dd>
-              {{ metric(athlete.health.visceral_fat_index) }}
-            </dd>
-          </div>
-
-          <div>
-            <dt>
-              Cintura
-            </dt>
-            <dd>
-              {{ metric(athlete.health.waist_cm, ' cm') }}
-            </dd>
-          </div>
-        </dl>
-      </article>
-
-      <article class="overview-card">
-        <h2>
-          Entrenamiento reciente
-        </h2>
-
-        <dl>
-          <div>
-            <dt>
-              Último entrenamiento completado
-            </dt>
-            <dd>
-              {{ lastWorkoutTitle(athlete) }}
-            </dd>
-          </div>
-
-          <div>
-            <dt>
-              Fecha
-            </dt>
-            <dd>
-              {{
-                formatDate(
-                  athlete.recent_training.last_completed
-                    ?.finished_at
-                )
-              }}
-            </dd>
-          </div>
-
-          <div>
-            <dt>
-              Últimos 7 días
-            </dt>
-            <dd>
-              {{
-                completedSessionsLabel(
-                  athlete.recent_training
-                    .completed_last_7_days
-                )
-              }}
-            </dd>
-          </div>
-        </dl>
-      </article>
-
-      <article class="overview-card">
-        <h2>
-          Rutinas activas
-        </h2>
-
-        <dl>
-          @for (
-            discipline of disciplines;
-            track discipline
-          ) {
-            <div>
-              <dt>
-                {{ disciplineLabel(discipline) }}
-              </dt>
-              <dd>
-                {{
-                  routineTitle(
-                    athlete.active_routines,
-                    discipline
-                  )
-                }}
-              </dd>
-            </div>
-          }
-        </dl>
-      </article>
-
-      <article class="overview-card">
-        <h2>
-          Trainer
-        </h2>
-
-        <dl>
-          <div>
-            <dt>
-              Última rutina asignada
-            </dt>
-            <dd>
-              {{ assignmentTitle(athlete) }}
-            </dd>
-          </div>
-
-          <div>
-            <dt>
-              Fecha de asignación
-            </dt>
-            <dd>
-              {{
-                formatDate(
-                  athlete.trainer.last_assignment
-                    ?.assigned_at
-                )
-              }}
-            </dd>
-          </div>
-        </dl>
-      </article>
-    </div>
-
+        @if (athlete.recent_training.last_completed; as last) {
+          <p>
+            Última registrada: {{ lastWorkoutTitle(athlete) }}
+            @if (last.finished_at) {
+              · {{ formatDate(last.finished_at) }}
+            }
+          </p>
+        }
+        <small>No incluye natación importada.</small>
+      </div>
+    }
     <section class="performance-section">
-      <h2>
-        Rendimiento
-      </h2>
+      <h2>{{ currentPerformanceEvent() ? 'Detalle de sesión' : 'Rendimiento' }}</h2>
+      @if (!currentPerformanceEvent()) {
+        <p class="card-note">
+          Últimas sesiones disponibles de fuerza, natación y carrera (hasta 25 por modalidad).
+        </p>
+      }
 
       <article class="overview-card performance-card">
         @if (performanceLoading()) {
-          <div class="state-card compact-state">
-            Cargando rendimiento...
-          </div>
-        } @else if (performanceError()) {
-          <div class="error-message compact-state">
-            {{ performanceError() }}
-          </div>
-        } @else if (performanceEvents().length === 0) {
-          <div class="state-card compact-state">
-            No hay sesiones completadas.
-          </div>
+          <div class="state-card compact-state">Cargando rendimiento...</div>
         } @else {
+          @if (performanceError()) {
+            <div class="error-message compact-state" role="alert">
+              {{ performanceError() }}
+              <button type="button" class="back-link" (click)="loadPerformanceSessions()">
+                Reintentar
+              </button>
+            </div>
+          }
           <div class="performance-body">
-            <div class="calendar-panel">
-              <div class="calendar-header">
-                <button
-                  type="button"
-                  (click)="previousPerformanceMonth()"
-                >
-                  ←
-                </button>
-
-                <h3>
-                  {{ performanceMonthLabel() }}
-                </h3>
-
-                <button
-                  type="button"
-                  (click)="nextPerformanceMonth()"
-                >
-                  →
-                </button>
-              </div>
-
-              <div class="calendar-weekdays">
-                <span>L</span>
-                <span>M</span>
-                <span>X</span>
-                <span>J</span>
-                <span>V</span>
-                <span>S</span>
-                <span>D</span>
-              </div>
-
-              <div class="calendar-grid">
-                @for (
-                  day of performanceCalendarDays();
-                  track day.dateKey
-                ) {
+            @if (!currentPerformanceEvent()) {
+              <div class="calendar-panel">
+                <div class="calendar-header">
                   <button
                     type="button"
-                    class="calendar-day"
-                    [class.outside-month]="!day.inMonth"
-                    [class.has-session]="day.events.length > 0"
-                    [class.selected]="day.selected"
-                    [disabled]="day.events.length === 0"
-                    (click)="selectPerformanceDay(day)"
+                    aria-label="Mes anterior"
+                    (click)="previousPerformanceMonth()"
                   >
-                    <span>
-                      {{ day.dayNumber }}
-                    </span>
-                    @if (day.events.length > 0) {
-                      <small class="calendar-marks">
-                        @for (
-                          mark of calendarDayMarks(day);
-                          track mark.discipline
-                        ) {
-                          <span
-                            [class]="
-                              'performance-' +
-                              mark.discipline
-                            "
-                          >
-                            {{ mark.label }}
-                          </span>
-                        }
-                      </small>
-                    }
+                    ←
                   </button>
-                }
-              </div>
 
-              <div class="performance-legend">
-                <span class="performance-strength">F</span>
-                Fuerza
-                <span class="performance-swimming">N</span>
-                Natación
-                <span class="performance-running">C</span>
-                Carrera
-                <span class="performance-cycling">B</span>
-                Bicicleta
-              </div>
-            </div>
+                  <h3>
+                    {{ performanceMonthLabel() }}
+                  </h3>
 
-            @if (currentPerformanceEvent(); as event) {
-              <section class="day-sessions">
-                <h3>
-                  Sesiones · {{ formatDate(event.event_at) }}
-                </h3>
+                  <button type="button" aria-label="Mes siguiente" (click)="nextPerformanceMonth()">
+                    →
+                  </button>
+                </div>
 
-                <div class="same-day-list">
-                  @for (
-                    dayEvent of selectedDayEvents();
-                    track dayEvent.id
-                  ) {
+                <div class="calendar-weekdays">
+                  <span>L</span>
+                  <span>M</span>
+                  <span>X</span>
+                  <span>J</span>
+                  <span>V</span>
+                  <span>S</span>
+                  <span>D</span>
+                </div>
+
+                <div class="calendar-grid">
+                  @for (day of performanceCalendarDays(); track day.dateKey) {
                     <button
                       type="button"
-                      [class.selected]="
-                        dayEvent.id === event.id
-                      "
-                      (click)="selectPerformanceEvent(dayEvent)"
+                      class="calendar-day"
+                      [class.outside-month]="!day.inMonth"
+                      [class.has-session]="day.events.length > 0"
+                      [class.selected]="day.selected"
+                      [attr.aria-label]="calendarDayLabel(day)"
+                      [attr.aria-pressed]="day.selected"
+                      (click)="selectPerformanceDay(day)"
                     >
                       <span>
-                        <small
-                          [class]="
-                            'performance-' +
-                            dayEvent.discipline
-                          "
-                        >
-                          {{
-                            performanceDisciplineInitial(
-                              dayEvent.discipline
-                            )
-                          }}
-                        </small>
-                        {{ dayEvent.title }}
+                        {{ day.dayNumber }}
                       </span>
-                      <small>
-                        {{ performanceEventTime(dayEvent) }}
-                      </small>
+                      @if (day.events.length > 0) {
+                        <small class="calendar-marks">
+                          @for (mark of calendarDayMarks(day); track mark.discipline) {
+                            <span [class]="'performance-' + mark.discipline">
+                              {{ mark.label }}
+                            </span>
+                          }
+                        </small>
+                      }
                     </button>
                   }
                 </div>
-              </section>
+
+                <div class="performance-legend">
+                  <span class="performance-strength">F</span>
+                  Fuerza
+                  <span class="performance-swimming">N</span>
+                  Natación
+                  <span class="performance-running">C</span>
+                  Carrera
+                </div>
+              </div>
+
+              @if (selectedPerformanceDateKey()) {
+                <section class="day-sessions" tabindex="-1" aria-live="polite">
+                  <h3>{{ selectedDayLabel() }}</h3>
+                  <div class="same-day-list">
+                    @for (dayEvent of selectedDayEvents(); track dayEvent.id) {
+                      <button type="button" (click)="selectPerformanceEvent(dayEvent)">
+                        <span
+                          ><small [class]="'performance-' + dayEvent.discipline">{{
+                            performanceDisciplineInitial(dayEvent.discipline)
+                          }}</small
+                          >{{ dayEvent.title }}</span
+                        >
+                        <small
+                          >{{ performanceEventTime(dayEvent) }}
+                          <span aria-hidden="true">›</span></small
+                        >
+                      </button>
+                    } @empty {
+                      <p class="card-note">No hay sesiones disponibles para este día.</p>
+                    }
+                  </div>
+                </section>
+              }
+            } @else {
+              <button
+                type="button"
+                class="back-link detail-back"
+                (click)="closePerformanceDetail()"
+              >
+                ← Volver al calendario · {{ selectedDayLabel() }}
+              </button>
             }
 
             @if (currentStrengthSession(); as session) {
@@ -396,10 +179,7 @@
                   </div>
                 } @else {
                   <div class="exercise-list">
-                    @for (
-                      exercise of session.exercises;
-                      track exercise.exercise_id
-                    ) {
+                    @for (exercise of session.exercises; track exercise.exercise_id) {
                       <section class="exercise-block">
                         <h4>
                           {{ exerciseTitle(exercise) }}
@@ -409,17 +189,10 @@
                           <div class="set-list">
                             <div
                               class="set-row set-row-header"
-                              [style.grid-template-columns]="
-                                strengthSetGridColumns(exercise)
-                              "
+                              [style.grid-template-columns]="strengthSetGridColumns(exercise)"
                             >
-                              <span>
-                                Serie
-                              </span>
-                              @for (
-                                column of strengthColumns(exercise);
-                                track column
-                              ) {
+                              <span> Serie </span>
+                              @for (column of strengthColumns(exercise); track column) {
                                 <span>
                                   {{ strengthColumnLabel(column) }}
                                 </span>
@@ -433,17 +206,10 @@
                             ) {
                               <div
                                 class="set-row"
-                                [style.grid-template-columns]="
-                                  strengthSetGridColumns(exercise)
-                                "
+                                [style.grid-template-columns]="strengthSetGridColumns(exercise)"
                               >
-                                <span>
-                                  Serie {{ setIndex + 1 }}
-                                </span>
-                                @for (
-                                  column of strengthColumns(exercise);
-                                  track column
-                                ) {
+                                <span> Serie {{ setIndex + 1 }} </span>
+                                @for (column of strengthColumns(exercise); track column) {
                                   <span>
                                     {{ strengthSetMetric(set, column) }}
                                   </span>
@@ -452,9 +218,7 @@
                             }
                           </div>
                         } @else {
-                          <p class="card-note">
-                            —
-                          </p>
+                          <p class="card-note">—</p>
                         }
                       </section>
                     }
@@ -467,12 +231,17 @@
               <section class="endurance-detail">
                 @if (event.discipline === 'swimming') {
                   @if (swimmingDetailLoading()) {
-                    <div class="state-card compact-state">
-                      Cargando detalle de natación...
-                    </div>
+                    <div class="state-card compact-state">Cargando detalle de natación...</div>
                   } @else if (swimmingDetailError()) {
                     <div class="error-message compact-state">
                       {{ swimmingDetailError() }}
+                      <button
+                        type="button"
+                        class="back-link"
+                        (click)="loadSelectedSwimmingDetail()"
+                      >
+                        Reintentar
+                      </button>
                     </div>
                   } @else if (currentSwimmingDetail(); as swimming) {
                     <header class="session-header">
@@ -490,73 +259,57 @@
                     <dl class="metric-grid swimming-summary">
                       @if (swimming.total_distance_meters !== null) {
                         <div>
-                          <dt>
-                            Distancia total
-                          </dt>
+                          <dt>Distancia total</dt>
                           <dd>
-                            {{
-                              formatDistance(
-                                swimming.total_distance_meters
-                              )
-                            }}
+                            {{ formatDistance(swimming.total_distance_meters) }}
                           </dd>
                         </div>
                       }
 
                       @if (swimming.duration_seconds !== null) {
                         <div>
-                          <dt>
-                            Duración
-                          </dt>
+                          <dt>Duración</dt>
                           <dd>
-                            {{
-                              formatDuration(
-                                swimming.duration_seconds
-                              )
-                            }}
+                            {{ formatDuration(swimming.duration_seconds) }}
                           </dd>
                         </div>
                       }
 
-                      @if (
-                        swimming.average_pace_seconds_per_100m
-                          !== null
-                      ) {
+                      @if (swimming.average_pace_seconds_per_100m !== null) {
                         <div>
-                          <dt>
-                            Ritmo medio
-                          </dt>
+                          <dt>Ritmo medio</dt>
                           <dd>
-                            {{
-                              formatPacePer100m(
-                                swimming
-                                  .average_pace_seconds_per_100m
-                              )
-                            }}
+                            {{ formatPacePer100m(swimming.average_pace_seconds_per_100m) }}
                           </dd>
                         </div>
                       }
 
                       @if (swimming.pool_length_meters !== null) {
                         <div>
-                          <dt>
-                            Piscina
-                          </dt>
+                          <dt>Piscina</dt>
                           <dd>
-                            {{
-                              formatDistance(
-                                swimming.pool_length_meters
-                              )
-                            }}
+                            {{ formatDistance(swimming.pool_length_meters) }}
                           </dd>
                         </div>
                       }
 
+                      @if (swimming.average_speed_meters_per_second !== null) {
+                        <div>
+                          <dt>Velocidad media</dt>
+                          <dd>
+                            {{ formatDecimal(swimming.average_speed_meters_per_second, 2) }} m/s
+                          </dd>
+                        </div>
+                      }
+                      @if (swimming.max_speed_meters_per_second !== null) {
+                        <div>
+                          <dt>Velocidad máxima</dt>
+                          <dd>{{ formatDecimal(swimming.max_speed_meters_per_second, 2) }} m/s</dd>
+                        </div>
+                      }
                       @if (swimming.objective) {
                         <div>
-                          <dt>
-                            Objetivo
-                          </dt>
+                          <dt>Objetivo</dt>
                           <dd>
                             {{ swimming.objective }}
                           </dd>
@@ -566,41 +319,24 @@
 
                     @if (hasSwimmingCardio(swimming)) {
                       <section class="swimming-detail-block">
-                        <h4>
-                          Cardiovascular
-                        </h4>
+                        <h4>Cardiovascular</h4>
 
                         <dl class="metric-grid swimming-summary">
-                          @if (
-                            swimming.heart_rate_average_bpm
-                              !== null
-                          ) {
+                          @if (swimming.heart_rate_average_bpm !== null) {
                             <div>
-                              <dt>
-                                FC media
-                              </dt>
+                              <dt>FC media</dt>
                               <dd>
-                                {{
-                                  swimming
-                                    .heart_rate_average_bpm
-                                }}
+                                {{ swimming.heart_rate_average_bpm }}
                                 ppm
                               </dd>
                             </div>
                           }
 
-                          @if (
-                            swimming.heart_rate_max_bpm !== null
-                          ) {
+                          @if (swimming.heart_rate_max_bpm !== null) {
                             <div>
-                              <dt>
-                                FC máxima
-                              </dt>
+                              <dt>FC máxima</dt>
                               <dd>
-                                {{
-                                  swimming
-                                    .heart_rate_max_bpm
-                                }}
+                                {{ swimming.heart_rate_max_bpm }}
                                 ppm
                               </dd>
                             </div>
@@ -611,90 +347,51 @@
 
                     @if (hasSwimmingTechnique(swimming)) {
                       <section class="swimming-detail-block">
-                        <h4>
-                          Técnica
-                        </h4>
+                        <h4>Técnica</h4>
 
                         <dl class="metric-grid swimming-summary">
                           @if (swimming.total_strokes !== null) {
                             <div>
-                              <dt>
-                                Brazadas totales
-                              </dt>
+                              <dt>Brazadas totales</dt>
                               <dd>
                                 {{ swimming.total_strokes }}
                               </dd>
                             </div>
                           }
 
-                          @if (
-                            swimming.average_stroke_rate_spm
-                              !== null
-                          ) {
+                          @if (swimming.average_stroke_rate_spm !== null) {
                             <div>
-                              <dt>
-                                Cadencia media
-                              </dt>
+                              <dt>Cadencia media</dt>
                               <dd>
-                                {{
-                                  swimming
-                                    .average_stroke_rate_spm
-                                }}
+                                {{ swimming.average_stroke_rate_spm }}
                                 spm
                               </dd>
                             </div>
                           }
 
-                          @if (
-                            swimmingActiveLengthCount(swimming)
-                              !== null
-                          ) {
+                          @if (swimmingActiveLengthCount(swimming) !== null) {
                             <div>
-                              <dt>
-                                Largos activos
-                              </dt>
+                              <dt>Largos activos</dt>
                               <dd>
-                                {{
-                                  swimmingActiveLengthCount(
-                                    swimming
-                                  )
-                                }}
+                                {{ swimmingActiveLengthCount(swimming) }}
                               </dd>
                             </div>
                           }
 
-                          @if (
-                            swimmingStrokesPerActiveLength(
-                              swimming
-                            ) !== null
-                          ) {
+                          @if (swimmingStrokesPerActiveLength(swimming) !== null) {
                             <div>
-                              <dt>
-                                Brazadas/largo
-                              </dt>
+                              <dt>Brazadas/largo</dt>
                               <dd>
-                                {{
-                                  formatDecimal(
-                                    swimmingStrokesPerActiveLength(
-                                      swimming
-                                    )
-                                  )
-                                }}
+                                {{ formatDecimal(swimmingStrokesPerActiveLength(swimming)) }}
                               </dd>
                             </div>
                           }
 
                           @if (swimmingObservedStrokes(swimming)) {
                             <div>
-                              <dt>
-                                Estilos observados
-                              </dt>
+                              <dt>Estilos observados</dt>
                               <dd>
-                                {{
-                                  swimmingObservedStrokes(
-                                    swimming
-                                  )
-                                }}
+                                {{ swimmingObservedStrokes(swimming) }}
                               </dd>
                             </div>
                           }
@@ -704,16 +401,12 @@
 
                     @if (hasSwimmingLoad(swimming)) {
                       <section class="swimming-detail-block">
-                        <h4>
-                          Carga
-                        </h4>
+                        <h4>Carga</h4>
 
                         <dl class="metric-grid swimming-summary">
                           @if (swimming.total_calories !== null) {
                             <div>
-                              <dt>
-                                Calorías
-                              </dt>
+                              <dt>Calorías</dt>
                               <dd>
                                 {{ swimming.total_calories }}
                                 kcal
@@ -721,36 +414,20 @@
                             </div>
                           }
 
-                          @if (
-                            swimming.aerobic_training_effect
-                              !== null
-                          ) {
+                          @if (swimming.aerobic_training_effect !== null) {
                             <div>
-                              <dt>
-                                Aerobic TE
-                              </dt>
+                              <dt>Efecto aeróbico</dt>
                               <dd>
-                                {{
-                                  swimming
-                                    .aerobic_training_effect
-                                }}
+                                {{ swimming.aerobic_training_effect }}
                               </dd>
                             </div>
                           }
 
-                          @if (
-                            swimming.anaerobic_training_effect
-                              !== null
-                          ) {
+                          @if (swimming.anaerobic_training_effect !== null) {
                             <div>
-                              <dt>
-                                Anaerobic TE
-                              </dt>
+                              <dt>Efecto anaeróbico</dt>
                               <dd>
-                                {{
-                                  swimming
-                                    .anaerobic_training_effect
-                                }}
+                                {{ swimming.anaerobic_training_effect }}
                               </dd>
                             </div>
                           }
@@ -760,83 +437,41 @@
 
                     @if (hasSwimmingTimes(swimming)) {
                       <section class="swimming-detail-block">
-                        <h4>
-                          Tiempos
-                        </h4>
+                        <h4>Tiempos</h4>
 
                         <dl class="metric-grid swimming-summary">
-                          @if (
-                            swimming.total_elapsed_time_seconds
-                              !== null
-                          ) {
+                          @if (swimming.total_elapsed_time_seconds !== null) {
                             <div>
-                              <dt>
-                                Elapsed
-                              </dt>
+                              <dt>Tiempo transcurrido</dt>
                               <dd>
-                                {{
-                                  formatDuration(
-                                    swimming
-                                      .total_elapsed_time_seconds
-                                  )
-                                }}
+                                {{ formatDuration(swimming.total_elapsed_time_seconds) }}
                               </dd>
                             </div>
                           }
 
-                          @if (
-                            swimming.total_timer_time_seconds
-                              !== null
-                          ) {
+                          @if (swimming.total_timer_time_seconds !== null) {
                             <div>
-                              <dt>
-                                Timer
-                              </dt>
+                              <dt>Cronómetro</dt>
                               <dd>
-                                {{
-                                  formatDuration(
-                                    swimming
-                                      .total_timer_time_seconds
-                                  )
-                                }}
+                                {{ formatDuration(swimming.total_timer_time_seconds) }}
                               </dd>
                             </div>
                           }
 
-                          @if (
-                            swimming.total_moving_time_seconds
-                              !== null
-                          ) {
+                          @if (swimming.total_moving_time_seconds !== null) {
                             <div>
-                              <dt>
-                                Moving
-                              </dt>
+                              <dt>En movimiento</dt>
                               <dd>
-                                {{
-                                  formatDuration(
-                                    swimming
-                                      .total_moving_time_seconds
-                                  )
-                                }}
+                                {{ formatDuration(swimming.total_moving_time_seconds) }}
                               </dd>
                             </div>
                           }
 
-                          @if (
-                            swimmingRestSeconds(swimming) !== null
-                          ) {
+                          @if (swimmingRestSeconds(swimming) !== null) {
                             <div>
-                              <dt>
-                                Descanso derivado
-                              </dt>
+                              <dt>Descanso estimado</dt>
                               <dd>
-                                {{
-                                  formatDuration(
-                                    swimmingRestSeconds(
-                                      swimming
-                                    )
-                                  )
-                                }}
+                                {{ formatDuration(swimmingRestSeconds(swimming)) }}
                               </dd>
                             </div>
                           }
@@ -846,10 +481,7 @@
 
                     @if (swimming.technical_focus.length) {
                       <div class="swimming-focus">
-                        @for (
-                          focus of swimming.technical_focus;
-                          track focus
-                        ) {
+                        @for (focus of swimming.technical_focus; track focus) {
                           <span>
                             {{ focus }}
                           </span>
@@ -858,10 +490,8 @@
                     }
 
                     @if (swimming.lengths.length) {
-                      <div class="swimming-lengths">
-                        <h4>
-                          Detalle por largos
-                        </h4>
+                      <details class="swimming-lengths">
+                        <summary>Detalle por largos · {{ swimming.lengths.length }}</summary>
 
                         <div class="swimming-length-table">
                           <div class="swimming-length-row header">
@@ -872,51 +502,36 @@
                             <span>Cadencia</span>
                           </div>
 
-                        @for (
-                          length of swimming.lengths;
-                          track $index;
-                          let lengthIndex = $index
-                        ) {
-                          <div class="swimming-length-row">
-                            <span>
-                              {{ lengthIndex + 1 }}
-                            </span>
-                            <span>
-                              {{
-                                swimmingLengthMeta(length)
-                                  || '—'
-                              }}
-                            </span>
-                            <span>
-                              {{
-                                formatDuration(
-                                  length.duration_seconds
-                                )
-                              }}
-                            </span>
-                            <span>
-                              {{
-                                length.total_strokes ?? '—'
-                              }}
-                            </span>
-                            <span>
-                              @if (
-                                length.average_stroke_rate_spm
-                                  !== null
-                              ) {
-                                {{
-                                  length
-                                    .average_stroke_rate_spm
-                                }}
-                                spm
-                              } @else {
-                                —
-                              }
-                            </span>
-                          </div>
-                        }
+                          @for (
+                            length of swimming.lengths;
+                            track $index;
+                            let lengthIndex = $index
+                          ) {
+                            <div class="swimming-length-row">
+                              <span>
+                                {{ lengthIndex + 1 }}
+                              </span>
+                              <span>
+                                {{ swimmingLengthMeta(length) || '—' }}
+                              </span>
+                              <span>
+                                {{ formatDuration(length.duration_seconds) }}
+                              </span>
+                              <span>
+                                {{ length.total_strokes ?? '—' }}
+                              </span>
+                              <span>
+                                @if (length.average_stroke_rate_spm !== null) {
+                                  {{ length.average_stroke_rate_spm }}
+                                  spm
+                                } @else {
+                                  —
+                                }
+                              </span>
+                            </div>
+                          }
                         </div>
-                      </div>
+                      </details>
                     }
                   }
                 } @else {
@@ -932,11 +547,32 @@
                     </div>
                   </header>
 
-                  <div class="state-card compact-state">
-                    Detalle de
-                    {{ disciplineLabel(event.discipline).toLowerCase() }}
-                    próximamente.
-                  </div>
+                  <dl class="metric-grid">
+                    @if (event.started_at) {
+                      <div>
+                        <dt>Inicio</dt>
+                        <dd>{{ event.started_at | date: 'dd/MM/yyyy HH:mm' }}</dd>
+                      </div>
+                    }
+                    @if (event.finished_at) {
+                      <div>
+                        <dt>Fin</dt>
+                        <dd>{{ event.finished_at | date: 'dd/MM/yyyy HH:mm' }}</dd>
+                      </div>
+                    }
+                    @if (event.duration_seconds != null) {
+                      <div>
+                        <dt>Duración registrada</dt>
+                        <dd>{{ formatDuration(event.duration_seconds) }}</dd>
+                      </div>
+                    } @else if (elapsedSessionSeconds(event) !== null) {
+                      <div>
+                        <dt>Tiempo entre inicio y fin</dt>
+                        <dd>{{ formatDuration(elapsedSessionSeconds(event)) }}</dd>
+                      </div>
+                    }
+                  </dl>
+                  <p class="card-note">No hay más métricas disponibles para esta sesión.</p>
                 }
               </section>
             }
@@ -944,9 +580,50 @@
         }
       </article>
     </section>
+    @if (!currentPerformanceEvent()) {
+      <details class="secondary-section">
+        <summary>
+          Rutinas activas <span>{{ activeRoutineCount(athlete) }}</span>
+        </summary>
+        <dl class="routine-list">
+          @for (discipline of disciplines; track discipline) {
+            <div>
+              <dt>{{ disciplineLabel(discipline) }}</dt>
+              <dd>{{ routineTitle(athlete.active_routines, discipline) }}</dd>
+            </div>
+          }
+        </dl>
+        @if (athlete.trainer.last_assignment; as assignment) {
+          <p class="assignment-note">
+            Última asignación: <strong>{{ assignmentTitle(athlete) }}</strong>
+            @if (assignment.assigned_at) {
+              · {{ formatDate(assignment.assigned_at) }}
+            }
+          </p>
+        }
+      </details>
+      <details class="secondary-section health-section">
+        <summary>
+          Salud <span>{{ healthMetrics(athlete).length ? 'Mediciones' : 'Sin mediciones' }}</span>
+        </summary>
+        <dl class="health-list">
+          @for (row of healthMetrics(athlete); track row.label) {
+            <div>
+              <dt>
+                {{ row.label }}
+                @if (row.date) {
+                  <small>{{ formatDate(row.date) }}</small>
+                }
+              </dt>
+              <dd>{{ metric(row.value, row.unit) }}</dd>
+            </div>
+          } @empty {
+            <p class="card-note">No hay mediciones disponibles.</p>
+          }
+        </dl>
+      </details>
+    }
   } @else {
-    <div class="state-card">
-      No hay datos disponibles.
-    </div>
+    <div class="state-card">No hay datos disponibles.</div>
   }
 </section>

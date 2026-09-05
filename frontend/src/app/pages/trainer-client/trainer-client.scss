@@ -156,11 +156,7 @@ dd {
 }
 
 .error-message {
-  border-color: color-mix(
-    in srgb,
-    var(--aptus-danger, #b42318) 42%,
-    var(--aptus-border)
-  );
+  border-color: color-mix(in srgb, var(--aptus-danger, #b42318) 42%, var(--aptus-border));
 
   color: var(--aptus-danger, #b42318);
 }
@@ -229,7 +225,7 @@ h3 {
 .calendar-header h3 {
   margin-bottom: 0;
   text-align: center;
-  text-transform: capitalize;
+  text-transform: none;
 }
 
 .calendar-header button,
@@ -306,7 +302,7 @@ h3 {
 
 .calendar-marks span,
 .performance-legend span,
-.same-day-list small[class^="performance-"] {
+.same-day-list small[class^='performance-'] {
   display: inline-grid;
   place-items: center;
   min-width: 17px;
@@ -517,4 +513,153 @@ h4 {
   .metric-grid {
     grid-template-columns: 1fr;
   }
+}
+
+.training-summary {
+  margin-bottom: 16px;
+  color: var(--aptus-text-muted);
+  font-size: 12px;
+  line-height: 1.6;
+}
+.training-summary p {
+  margin: 0 0 3px;
+}
+.training-summary strong {
+  color: var(--aptus-text);
+}
+.training-summary small {
+  font-size: 11px;
+}
+.secondary-section {
+  margin-top: 14px;
+  border: 1px solid var(--aptus-border);
+  border-radius: var(--aptus-radius-md);
+  background: var(--aptus-surface);
+  padding: 0 16px;
+}
+.secondary-section summary {
+  min-height: 56px;
+  align-content: center;
+  cursor: pointer;
+  font-size: 15px;
+  font-weight: 750;
+}
+.secondary-section summary span {
+  margin-left: 8px;
+  color: var(--aptus-text-muted);
+  font-size: 12px;
+  font-weight: 500;
+}
+.secondary-section dl {
+  padding: 0 0 16px;
+}
+.routine-list > div,
+.health-list > div {
+  display: grid;
+  grid-template-columns: minmax(80px, 1fr) minmax(0, 2fr);
+  align-items: baseline;
+  gap: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--aptus-border);
+}
+.health-list dd {
+  text-align: right;
+}
+.health-list small {
+  display: block;
+  margin-top: 4px;
+  font-weight: 500;
+}
+.assignment-note {
+  border-top: 1px solid var(--aptus-border);
+  padding-top: 12px;
+  color: var(--aptus-text-muted);
+  font-size: 12px;
+  line-height: 1.6;
+}
+.performance-section {
+  margin-top: 16px;
+}
+.performance-section > .card-note {
+  margin: 0 0 12px;
+}
+button.back-link {
+  border: 0;
+  padding: 0;
+  min-height: 44px;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+}
+a:focus-visible,
+button:focus-visible,
+summary:focus-visible {
+  outline: 2px solid var(--aptus-accent);
+  outline-offset: 3px;
+}
+.calendar-header {
+  grid-template-columns: 44px 1fr 44px;
+}
+.calendar-day {
+  min-height: 44px;
+  cursor: pointer;
+}
+.same-day-list button {
+  min-height: 48px;
+  text-align: left;
+}
+.same-day-list button > small {
+  flex-shrink: 0;
+}
+.same-day-list button > span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.swimming-lengths summary {
+  cursor: pointer;
+  min-height: 44px;
+  align-content: center;
+  font-weight: 700;
+}
+@media (max-width: 760px) {
+  .metric-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .performance-body {
+    padding: 12px;
+  }
+  .calendar-weekdays,
+  .calendar-grid {
+    gap: 4px;
+  }
+  .calendar-day {
+    padding: 3px 0;
+  }
+}
+
+.calendar-header h3::first-letter {
+  text-transform: uppercase;
+}
+.calendar-marks {
+  flex-wrap: nowrap;
+  gap: 2px;
+}
+.calendar-marks span {
+  min-width: 11px;
+  min-height: 11px;
+  font-size: 8px;
+}
+.calendar-day {
+  grid-template-rows: 16px 12px;
+  align-content: center;
+}
+.page-header {
+  margin-bottom: 16px;
+}
+
+.day-sessions,
+.detail-back {
+  scroll-margin-block: 80px;
 }

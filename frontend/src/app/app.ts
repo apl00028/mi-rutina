@@ -115,6 +115,8 @@ export class App implements OnDestroy {
   isStandalonePage =
     signal(false);
 
+  currentUrl = signal('');
+
   aptusMe =
     signal<AptusMe | null>(null);
 
@@ -189,6 +191,7 @@ export class App implements OnDestroy {
 
 
   private syncRouteState(): void {
+    this.currentUrl.set(this.router.url);
     const path =
       this.router.url
         .split('?')[0]
@@ -453,6 +456,37 @@ export class App implements OnDestroy {
       path === route ||
       path.startsWith(`${route}/`)
     );
+  }
+
+
+  isCurrentTrainerView(
+    view: 'dashboard' | 'clients' | 'templates'
+  ): boolean {
+    const [path, query = ''] =
+      this.currentUrl()
+        .split('#')[0]
+        .split('?');
+
+    if (path.startsWith('/trainer/clients/')) return view === 'clients';
+
+    if (path !== '/trainer') {
+      return false;
+    }
+
+    const params =
+      new URLSearchParams(query);
+
+    const currentView =
+      params.get('view');
+
+    if (view === 'dashboard') {
+      return (
+        currentView !== 'clients' &&
+        currentView !== 'templates'
+      );
+    }
+
+    return currentView === view;
   }
 
 

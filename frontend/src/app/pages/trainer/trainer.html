@@ -1,462 +1,299 @@
 <section class="trainer-page">
   <header class="page-header">
     <div class="header-copy">
-      <span class="eyebrow">
-        Entrenador
-      </span>
-
+      <span class="eyebrow">Entrenador</span>
       <h1>
-        Panel de entrenador
+        {{
+          activeView() === 'dashboard'
+            ? 'Panel de entrenador'
+            : activeView() === 'athletes'
+              ? 'Clientes'
+              : 'Plantillas'
+        }}
       </h1>
-
       <p>
-        Supervisa a tus deportistas y gestiona su planificación.
+        {{
+          activeView() === 'dashboard'
+            ? 'Supervisa a tus deportistas y gestiona su planificación.'
+            : activeView() === 'athletes'
+              ? 'El rendimiento y la planificación de tus deportistas.'
+              : 'Tu biblioteca de planificación deportiva.'
+        }}
       </p>
     </div>
-
-    @if (activeView() !== 'dashboard') {
-      <div
-        class="view-switch"
-        role="tablist"
-        aria-label="Vistas de entrenador"
-      >
-        <button
-          type="button"
-          role="tab"
-          [class.active]="activeView() === 'dashboard'"
-          [attr.aria-selected]="activeView() === 'dashboard'"
-          (click)="setView('dashboard')"
-        >
-          Panel
-        </button>
-
-        <button
-          type="button"
-          role="tab"
-          [class.active]="activeView() === 'athletes'"
-          [attr.aria-selected]="activeView() === 'athletes'"
-          (click)="setView('athletes')"
-        >
-          Clientes
-        </button>
-
-        <button
-          type="button"
-          role="tab"
-          [class.active]="activeView() === 'templates'"
-          [attr.aria-selected]="activeView() === 'templates'"
-          (click)="setView('templates')"
-        >
-          Plantillas
-        </button>
-      </div>
-    }
   </header>
 
   @if (activeView() === 'dashboard') {
-    <section class="dashboard-grid">
+    <section class="dashboard-grid" aria-label="Resumen del entrenador">
       <div class="summary-grid">
         <article class="summary-card">
-          <span>
-            Clientes activos
-          </span>
-
-          <strong>
-            {{ activeAthleteCount() }}
-          </strong>
+          <strong>{{
+            loadingAthletes() ? '…' : athletesError() ? '—' : activeAthleteCount()
+          }}</strong
+          ><span>Clientes activos</span>
         </article>
-
         <article class="summary-card">
-          <span>
-            Plantillas
-          </span>
-
-          <strong>
-            {{ templateCount() }}
-          </strong>
+          <strong>{{ summarySessionsLabel() }}</strong
+          ><span>Sesiones · 7 días</span>
         </article>
-
         <article class="summary-card">
-          <span>
-            Sesiones · 7 días
-          </span>
-
-          <strong>
-            {{ summarySessionsLabel() }}
-          </strong>
-
-          @if (summarySessionsDescription(); as description) {
-            <small>
-              {{ description }}
-            </small>
-          }
+          <strong>{{ loadingTemplates() ? '…' : templatesError() ? '—' : templateCount() }}</strong
+          ><span>Plantillas</span>
         </article>
       </div>
-
-      <aside class="quick-actions">
-        <span class="eyebrow">
-          Acciones rápidas
-        </span>
-
-        <button
-          type="button"
-          class="action-button"
-          (click)="setView('athletes')"
-        >
-          Ver clientes
-        </button>
-
-        <button
-          type="button"
-          class="action-button"
-          (click)="setView('templates')"
-        >
-          Plantillas
-        </button>
-      </aside>
+      <p class="muted summary-note">
+        Sesiones registradas en Aptus; no incluye natación importada.
+      </p>
+      @if (summarySessionsDescription(); as description) {
+        <p class="muted">{{ description }}</p>
+      }
+      @if (athletesError()) {
+        <div class="error-message" role="alert">
+          {{ athletesError() }}
+          <button class="back-button" (click)="loadAthletes()">Reintentar</button>
+        </div>
+      }
+      @if (templatesError()) {
+        <div class="error-message" role="alert">
+          {{ templatesError() }}
+          <button class="back-button" (click)="loadTemplates()">Reintentar</button>
+        </div>
+      }
+      @if (recentActivity().length) {
+        <section class="recent-activity">
+          <h2>Actividad reciente</h2>
+          <p class="muted">Última sesión registrada por cliente</p>
+          @for (athlete of recentActivity(); track athlete.athlete_id) {
+            <a class="activity-row" [routerLink]="['/trainer/clients', athlete.athlete_id]">
+              <span
+                ><strong>{{ athleteTitle(athlete) }}</strong
+                ><small>{{ recentSessionLabel(athlete) }}</small></span
+              >
+              <time>{{ recentSessionDate(athlete) }}</time
+              ><span aria-hidden="true">›</span>
+            </a>
+          }
+        </section>
+      }
     </section>
   }
 
   @if (activeView() === 'athletes') {
     <section class="trainer-section">
       <div class="section-heading">
-        <div>
-          <button
-            type="button"
-            class="back-button"
-            (click)="setView('dashboard')"
-          >
-            ← Panel
-          </button>
-
-          <h2>
-            Clientes
-          </h2>
-
-          <p>
-            Seguimiento básico de tus deportistas activos.
-          </p>
-        </div>
-
+        <p>
+          {{ activeAthleteCount() }}
+          {{ activeAthleteCount() === 1 ? 'cliente activo' : 'clientes activos' }}
+        </p>
         <button
           type="button"
           class="secondary-button"
           [disabled]="loadingAthletes() || loadingOverviews()"
           (click)="loadAthletes()"
         >
-          {{
-            loadingAthletes()
-              ? 'Cargando'
-              : (
-                  loadingOverviews()
-                    ? 'Actualizando'
-                    : 'Actualizar'
-                )
-          }}
+          {{ loadingAthletes() ? 'Cargando' : loadingOverviews() ? 'Actualizando' : 'Actualizar' }}
         </button>
       </div>
-
       @if (athletesError()) {
-        <div class="error-message">
-          {{ athletesError() }}
-        </div>
+        <div class="error-message" role="alert">{{ athletesError() }}</div>
       }
-
       @if (loadingAthletes()) {
-        <div class="state-card">
-          Cargando clientes...
-        </div>
-      } @else if (athletes().length === 0) {
-        <div class="empty-state">
-          <h2>
-            Sin clientes activos
-          </h2>
-
-          <p>
-            No hay relaciones activas.
-          </p>
-        </div>
+        <div class="state-card">Cargando clientes...</div>
+      } @else if (!athletesError() && athletes().length === 0) {
+        <div class="empty-state">Sin clientes activos</div>
       } @else {
         <div class="athlete-list">
-          @for (
-            athlete of athletes();
-            track athlete.athlete_id
-          ) {
-            <a
-              class="athlete-card"
-              [routerLink]="[
-                '/trainer/clients',
-                athlete.athlete_id
-              ]"
-            >
-              <div class="athlete-avatar">
-                {{ athleteInitials(athlete) }}
-              </div>
-
-              <div class="athlete-main">
-                <div class="athlete-heading">
-                  <div class="athlete-identity">
-                    <strong>
-                      {{ athleteTitle(athlete) }}
-                    </strong>
-
-                    @if (athleteSubtitle(athlete); as subtitle) {
-                      <span>
-                        {{ subtitle }}
-                      </span>
-                    }
-                  </div>
-
-                  <span class="athlete-status">
-                    {{ statusLabel(athlete.status) }}
-                  </span>
-                </div>
-
-                <div class="athlete-insights">
-                  <span>
+          @for (athlete of athletes(); track athlete.athlete_id) {
+            <a class="athlete-card" [routerLink]="['/trainer/clients', athlete.athlete_id]">
+              <span class="athlete-avatar" aria-hidden="true">{{ athleteInitials(athlete) }}</span>
+              <span class="athlete-main">
+                <strong>{{ athleteTitle(athlete) }}</strong>
+                <span>{{ sessionsLast7DaysLabel(athleteOverview(athlete)) }}</span>
+                @if (athleteOverview(athlete); as overview) {
+                  <small
+                    >{{ activeRoutineCount(overview.active_routines) }}
                     {{
-                      sessionsLast7DaysLabel(
-                        athleteOverview(athlete)
-                      )
-                    }}
-                  </span>
-
-                  <span>
-                    {{
-                      athleteActivityLabel(
-                        athleteOverview(athlete)
-                      )
-                    }}
-                  </span>
-
-                  @if (athleteOverview(athlete); as overview) {
-                    <span>
-                      {{
-                        activeRoutineCount(
-                          overview.active_routines
-                        )
-                      }}
-                      rutinas activas
-                    </span>
-                  }
-                </div>
-
-                <div class="athlete-recent">
-                  <span>
-                    {{
-                      recentSessionLabel(
-                        athleteOverview(athlete)
-                      )
-                    }}
-                  </span>
-
-                  @if (
-                    recentSessionDate(
-                      athleteOverview(athlete)
-                    );
-                    as recentDate
-                  ) {
-                    <small>
-                      {{ recentDate }}
-                    </small>
-                  }
-                </div>
-
-                <div class="athlete-card-footer">
-                  <small>
-                    Cliente desde {{ formatClientSince(athlete.client_since) }}
-                  </small>
-
-                  <span>
-                    Ver deportista →
-                  </span>
-                </div>
-              </div>
+                      activeRoutineCount(overview.active_routines) === 1
+                        ? 'rutina activa'
+                        : 'rutinas activas'
+                    }}</small
+                  >
+                }
+              </span>
+              <span class="chevron" aria-hidden="true">›</span>
             </a>
           }
         </div>
+        <p class="muted">El resumen de sesiones no incluye natación importada.</p>
       }
     </section>
   }
 
   @if (activeView() === 'templates') {
     <section class="trainer-section templates-section">
-      <div class="section-heading">
-        <div>
+      @if (assignmentSuccess()) {
+        <div class="feedback-message" role="status">{{ assignmentSuccess() }}</div>
+      }
+      @if (assignmentError()) {
+        <div class="error-message" role="alert">{{ assignmentError() }}</div>
+      }
+      @if (templatesError()) {
+        <div class="error-message" role="alert">
+          {{ templatesError() }}
+          <button class="back-button" (click)="loadTemplates()">Reintentar</button>
+        </div>
+      }
+      @if (loadingTemplates()) {
+        <div class="state-card">Cargando plantillas...</div>
+      } @else if (selectedTemplate(); as template) {
+        <article class="assignment-panel">
           <button
             type="button"
             class="back-button"
-            (click)="setView('dashboard')"
+            [disabled]="!!assigningTemplateId()"
+            (click)="assigningFromDetail() ? showTemplateDetail() : backToTemplateList()"
           >
-            ← Panel
+            ← {{ assigningFromDetail() ? 'Detalle de plantilla' : 'Plantillas' }}
           </button>
-
-          <h2>
-            Plantillas
-          </h2>
-
-          <p>
-            {{ templateCount() }} plantillas disponibles.
-          </p>
-        </div>
-
-        <button
-          type="button"
-          class="secondary-button"
-          [disabled]="loadingTemplates()"
-          (click)="loadTemplates()"
-        >
-          {{
-            loadingTemplates()
-              ? 'Cargando'
-              : 'Actualizar'
-          }}
-        </button>
-      </div>
-
-      @if (templatesError()) {
-        <div class="error-message">
-          {{ templatesError() }}
-        </div>
-      }
-
-      @if (assignmentSuccess()) {
-        <div class="feedback-message">
-          {{ assignmentSuccess() }}
-        </div>
-      }
-
-      @if (assignmentError()) {
-        <div class="error-message">
-          {{ assignmentError() }}
-        </div>
-      }
-
-      @if (loadingTemplates()) {
-        <div class="state-card">
-          Cargando plantillas...
-        </div>
-      } @else if (templates().length === 0) {
-        <div class="empty-state">
-          <h2>
-            Sin plantillas
-          </h2>
-
-          <p>
-            No hay plantillas disponibles.
-          </p>
-        </div>
-      } @else {
-        <div class="template-layout">
-          <div class="template-list">
-            @for (
-              template of templates();
-              track template.id
-            ) {
-              <button
-                type="button"
-                class="template-card"
-                [class.active]="selectedTemplateId() === template.id"
-                (click)="selectTemplate(template)"
-              >
-                <span>
-                  {{ disciplineLabel(template.discipline) }}
-                </span>
-
-                <strong>
-                  {{ template.name }}
-                </strong>
-              </button>
-            }
-          </div>
-
-          <aside class="assignment-panel">
-            <span class="eyebrow">
-              Planificación
-            </span>
-
-            <h2>
-              Asignar plantilla
-            </h2>
-
-            @if (selectedTemplate(); as template) {
-              <div class="selected-template">
-                <span>
-                  Plantilla
-                </span>
-
-                <strong>
-                  {{ template.name }}
-                </strong>
-
-                <small>
-                  {{ disciplineLabel(template.discipline) }}
-                </small>
-              </div>
-
-              <label>
-                Cliente
-
-                <select
-                  [ngModel]="selectedAthleteId()"
-                  (ngModelChange)="updateAthlete($event)"
-                  [disabled]="
-                    athletes().length === 0 ||
-                    !!assigningTemplateId()
-                  "
-                >
-                  @for (
-                    athlete of athletes();
-                    track athlete.athlete_id
+          <span class="eyebrow">{{ disciplineLabel(template.discipline) }}</span>
+          <h2>{{ template.name }}</h2>
+          @if (!assigningFromDetail()) {
+            <p class="muted">Actualizada {{ formatClientSince(template.updated_at) }}</p>
+            <div class="template-detail-content">
+              @for (session of templateSessions(template); track $index) {
+                <details class="template-session" open>
+                  <summary>{{ templateSessionTitle(session, $index) }}</summary>
+                  @if (templateSessionMeta(session); as meta) {
+                    <p class="muted">{{ meta }}</p>
+                  }
+                  @for (note of sessionNotes(session); track $index) {
+                    <p class="muted">{{ note }}</p>
+                  }
+                  @for (exercise of templateExercises(session); track $index) {
+                    <div class="template-item">
+                      <strong>{{ templateExerciseTitle(exercise, $index) }}</strong>
+                      @if (templateExerciseMeta(exercise); as meta) {
+                        <span>{{ meta }}</span>
+                      }
+                    </div>
+                  }
+                  @if (template.discipline === 'swimming' || template.discipline === 'running') {
+                    @for (block of templateBlocks(session); track $index) {
+                      <div class="template-item">
+                        <strong>{{ templateBlockTitle(block, $index) }}</strong>
+                        @for (set of templateBlockSets(block); track $index) {
+                          <div class="template-set">
+                            <span>{{
+                              template.discipline === 'swimming'
+                                ? templateSwimSetLabel(set)
+                                : runningSetLabel(set)
+                            }}</span>
+                            <small>{{
+                              (template.discipline === 'swimming'
+                                ? templateSwimSetDetails(set)
+                                : runningSetDetails(set)
+                              ).join(' · ')
+                            }}</small>
+                          </div>
+                        }
+                      </div>
+                    }
+                  }
+                  @if (
+                    !templateExercises(session).length &&
+                    (!templateBlocks(session).length || template.discipline === 'cycling')
                   ) {
-                    <option [value]="athlete.athlete_id">
-                      {{ athleteTitle(athlete) }}
-                    </option>
+                    <p class="muted">No hay un desglose disponible para esta sesión.</p>
                   }
-                </select>
-              </label>
-
-              <label>
-                ID de rutina
-
-                <input
-                  type="text"
-                  autocomplete="off"
-                  [ngModel]="routineId()"
-                  (ngModelChange)="updateRoutineId($event)"
-                  [disabled]="!!assigningTemplateId()"
-                />
-              </label>
-
-              <div class="assignment-actions">
-                <button
-                  type="button"
-                  class="secondary-button"
-                  [disabled]="!!assigningTemplateId()"
-                  (click)="generateRoutineId()"
-                >
-                  Generar ID
-                </button>
-
-                <button
-                  type="button"
-                  class="primary-button"
-                  [disabled]="!canAssign()"
-                  (click)="assignSelectedTemplate()"
-                >
-                  @if (isAssigning(template)) {
-                    Asignando...
-                  } @else {
-                    Asignar
-                  }
-                </button>
+                </details>
+              } @empty {
+                <p class="muted">Esta plantilla no tiene sesiones disponibles.</p>
+              }
+            </div>
+            <button type="button" class="primary-button" (click)="assignTemplateFromDetail()">
+              Asignar a deportista
+            </button>
+          } @else {
+            <h3>Asignar plantilla</h3>
+            <p class="muted">
+              El deportista recibirá una nueva copia en sus rutinas. Podrá activarla desde su
+              planificación.
+            </p>
+            @if (athletesError()) {
+              <div class="error-message" role="alert">
+                {{ athletesError() }}
+                <button class="back-button" (click)="loadAthletes()">Reintentar</button>
               </div>
-            } @else {
-              <p class="muted">
-                Selecciona una plantilla.
-              </p>
             }
-          </aside>
+            <label
+              >Cliente
+              <select
+                [ngModel]="selectedAthleteId()"
+                (ngModelChange)="updateAthlete($event)"
+                [disabled]="loadingAthletes() || athletes().length === 0 || !!assigningTemplateId()"
+              >
+                <option value="">
+                  {{ loadingAthletes() ? 'Cargando clientes...' : 'Elegir cliente' }}
+                </option>
+                @for (athlete of athletes(); track athlete.athlete_id) {
+                  <option [value]="athlete.athlete_id">{{ athleteTitle(athlete) }}</option>
+                }
+              </select>
+            </label>
+            @if (!loadingAthletes() && !athletesError() && !athletes().length) {
+              <p class="muted">No hay clientes activos a los que asignar esta plantilla.</p>
+            }
+            <button
+              type="button"
+              class="primary-button"
+              [disabled]="!canAssign()"
+              (click)="assignSelectedTemplate()"
+            >
+              {{ assigningTemplateId() ? 'Asignando...' : 'Confirmar asignación' }}
+            </button>
+          }
+        </article>
+      } @else if (!templatesError()) {
+        <div class="section-heading">
+          <p>{{ templateCount() }} {{ templateCount() === 1 ? 'plantilla' : 'plantillas' }}</p>
+          <button type="button" class="secondary-button" (click)="loadTemplates()">
+            Actualizar
+          </button>
+        </div>
+        <div class="discipline-filters" role="group" aria-label="Filtrar plantillas por modalidad">
+          @for (discipline of disciplineFilters; track discipline) {
+            <button
+              type="button"
+              [class.active]="disciplineFilter() === discipline"
+              [attr.aria-pressed]="disciplineFilter() === discipline"
+              (click)="disciplineFilter.set(discipline)"
+            >
+              {{
+                discipline === 'all'
+                  ? 'Todas'
+                  : discipline === 'cycling'
+                    ? 'Bici'
+                    : disciplineLabel(discipline)
+              }}
+            </button>
+          }
+        </div>
+        <div class="template-list">
+          @for (template of filteredTemplates(); track template.id) {
+            <button type="button" class="template-card" (click)="selectTemplate(template)">
+              <span class="template-card-copy"
+                ><strong>{{ template.name }}</strong
+                ><small
+                  >{{ disciplineLabel(template.discipline) }} ·
+                  {{ templateSessions(template).length }}
+                  {{ templateSessions(template).length === 1 ? 'sesión' : 'sesiones' }}</small
+                ></span
+              >
+              <span class="chevron" aria-hidden="true">›</span>
+            </button>
+          } @empty {
+            <div class="empty-state">No hay plantillas en esta modalidad.</div>
+          }
         </div>
       }
     </section>

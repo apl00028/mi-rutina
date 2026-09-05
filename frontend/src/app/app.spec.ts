@@ -400,6 +400,122 @@ describe('App', () => {
     ).toBe('Navegación principal');
   });
 
+  it('renders trainer bottom navigation with trainer sections', async () => {
+    waitForSession.mockResolvedValue({
+      access_token:
+        'access-token'
+    });
+    getMe.mockResolvedValue({
+      access_status:
+        'active',
+      role:
+        'trainer'
+    });
+
+    const fixture =
+      await createReadyApp('/trainer');
+
+    const links =
+      Array.from(
+        fixture.nativeElement.querySelectorAll(
+          '.bottom-nav a'
+        )
+      ) as HTMLAnchorElement[];
+
+    expect(links).toHaveLength(4);
+    expect(
+      links.map(link =>
+        link.textContent
+          ?.replace(/\s+/g, ' ')
+          .trim()
+      )
+    ).toEqual([
+      'Panel',
+      'Clientes',
+      'Plantillas',
+      'Ajustes'
+    ]);
+    expect(
+      links.map(link =>
+        link.textContent
+      ).join(' ')
+    ).not.toContain('Entrenar');
+    expect(
+      links.map(link =>
+        link.textContent
+      ).join(' ')
+    ).not.toContain('Nutrición');
+    expect(
+      links.map(link =>
+        link.textContent
+      ).join(' ')
+    ).not.toContain('Salud');
+    expect(
+      links.map(link =>
+        link.getAttribute('href')
+      )
+    ).toEqual([
+      '/trainer',
+      '/trainer?view=clients',
+      '/trainer?view=templates',
+      '/ajustes'
+    ]);
+  });
+
+  it('keeps trainer navigation visible even if a previous workout state remains active', async () => {
+    waitForSession.mockResolvedValue({ access_token: 'access-token' });
+    getMe.mockResolvedValue({ access_status: 'active', role: 'trainer' });
+    const fixture = await createReadyApp('/trainer');
+    TestBed.inject(WorkoutSessionStateService).setActive();
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('.app-shell').classList.contains('workout-session-active')).toBe(false);
+    expect(fixture.nativeElement.querySelectorAll('.bottom-nav a')).toHaveLength(4);
+  });
+
+  it('keeps Clientes active inside a client and updates the active section while mounted', async () => {
+    waitForSession.mockResolvedValue({ access_token: 'access-token' });
+    getMe.mockResolvedValue({ access_status: 'active', role: 'trainer' });
+    const fixture = await createReadyApp('/trainer/clients/athlete-1');
+    const active = () => fixture.nativeElement.querySelector('.bottom-nav a.active') as HTMLAnchorElement;
+    expect(active().textContent).toContain('Clientes');
+    await TestBed.inject(Router).navigateByUrl('/trainer?view=templates'); fixture.detectChanges();
+    expect(active().textContent).toContain('Plantillas');
+    await TestBed.inject(Router).navigateByUrl('/trainer'); fixture.detectChanges();
+    expect(active().textContent).toContain('Panel');
+    expect(fixture.nativeElement.querySelectorAll('.bottom-nav a.active')).toHaveLength(1);
+  });
+
+  it('marks trainer bottom navigation active from the query view', async () => {
+    waitForSession.mockResolvedValue({
+      access_token:
+        'access-token'
+    });
+    getMe.mockResolvedValue({
+      access_status:
+        'active',
+      role:
+        'trainer'
+    });
+
+    const fixture =
+      await createReadyApp(
+        '/trainer?view=templates'
+      );
+
+    const activeLink =
+      fixture.nativeElement.querySelector(
+        '.bottom-nav a[aria-current="page"]'
+      ) as HTMLAnchorElement;
+
+    expect(
+      activeLink.textContent
+        ?.replace(/\s+/g, ' ')
+        .trim()
+    ).toBe('Plantillas');
+    expect(activeLink.getAttribute('href'))
+      .toBe('/trainer?view=templates');
+  });
+
   it('opens the mobile brand navigation from the header button', async () => {
     const fixture =
       await createReadyApp();
@@ -631,7 +747,8 @@ describe('App', () => {
       fixture.nativeElement.querySelector(
         '.mobile-nav-menu a[href="/trainer"]'
       )
-    ).toBeTruthy();
+    ).toBeNull();
+    expect(fixture.nativeElement.querySelector('button.mobile-brand')).toBeNull();
 
     authUser.set({
       email:

@@ -1000,11 +1000,60 @@
 }
 
   @if (editorContext?.mode === 'import' && !creating()) {
-    <label class="routine-import-input">Archivo Excel (.xlsx, .xls)
-      <input type="file" accept=".xlsx,.xls" [disabled]="loadingExercises()" (change)="importRoutineFile($event)" />
-    </label>
-    <p>Se validará con el catálogo de ejercicios de Aptus. Podrás revisar el contenido antes de guardar.</p>
-    @if (error()) { <p class="error-message" role="alert">{{ error() }}</p> }
+    <section class="routine-import-guide">
+      <div>
+        <h2>Importar rutina de fuerza</h2>
+        <p>
+          Usa la plantilla oficial de Aptus. Incluye las instrucciones
+          y el catálogo actual de ejercicios para poder prepararla con ChatGPT
+          sin inventar IDs.
+        </p>
+      </div>
+
+      <div class="routine-import-help-actions">
+        <button
+          type="button"
+          class="routine-import-template-button"
+          [disabled]="loadingExercises()"
+          (click)="downloadChatGPTRoutineTemplate()"
+        >
+          Descargar plantilla para ChatGPT
+        </button>
+
+        <button
+          type="button"
+          class="routine-import-template-button"
+          (click)="copyChatGPTRoutineInstructions()"
+        >
+          Copiar instrucciones para ChatGPT
+        </button>
+      </div>
+
+      @if (chatGPTCopyMessage()) {
+        <p class="success-message" role="status">
+          {{ chatGPTCopyMessage() }}
+        </p>
+      }
+
+      <label class="routine-import-input">
+        Archivo Excel (.xlsx, .xls)
+        <input
+          type="file"
+          accept=".xlsx,.xls"
+          [disabled]="loadingExercises()"
+          (change)="importRoutineFile($event)"
+        />
+      </label>
+
+      <p>
+        Aptus validará sesiones, ejercicios e IDs con el catálogo actual.
+        Podrás revisar el contenido antes de guardar la plantilla.
+      </p>
+
+      @if (error()) {
+        <p class="error-message" role="alert">{{ error() }}</p>
+      }
+    </section>
   }
   @if (creating()) {
     <section class="builder">

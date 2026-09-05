@@ -3,7 +3,50 @@ import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { provideRouter } from '@angular/router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+const capacitorPluginMocks =
+  vi.hoisted(() => ({
+    filesystemWriteFile:
+      vi.fn(),
+    share:
+      vi.fn()
+  }));
+
+vi.mock(
+  '@capacitor/filesystem',
+  () => ({
+    Directory: {
+      Cache:
+        'CACHE'
+    },
+    Encoding: {
+      UTF8:
+        'utf8'
+    },
+    Filesystem: {
+      writeFile:
+        capacitorPluginMocks
+          .filesystemWriteFile
+    }
+  })
+);
+
+vi.mock(
+  '@capacitor/share',
+  () => ({
+    Share: {
+      share:
+        capacitorPluginMocks.share
+    }
+  })
+);
+
 import * as XLSX from 'xlsx';
+import { Capacitor } from '@capacitor/core';
+import {
+  Directory,
+  Encoding
+} from '@capacitor/filesystem';
 import { AuthService } from '../../../../core/auth.service';
 import { environment } from '../../../../../environments/environment';
 import { Routines } from '../../../../pages/routines/routines';
@@ -21,7 +64,28 @@ async function settle() { for (let i = 0; i < 8; ++i) await Promise.resolve(); }
 
 describe('Shared routine editors with an external save destination', () => {
   let http: HttpTestingController;
+
   beforeEach(async () => {
+    vi.clearAllMocks();
+
+    capacitorPluginMocks
+      .filesystemWriteFile
+      .mockResolvedValue({
+        uri:
+          'file:///cache/aptus_ejemplo_rutina_carrera.json'
+      });
+
+    capacitorPluginMocks
+      .share
+      .mockResolvedValue(
+        undefined
+      );
+
+    vi.spyOn(
+      Capacitor,
+      'isNativePlatform'
+    ).mockReturnValue(false);
+
     await TestBed.configureTestingModule({
       imports: [Routines, Endurance, RoutineEditor],
       providers: [provideHttpClient(), provideHttpClientTesting(), provideRouter([]),
@@ -30,7 +94,10 @@ describe('Shared routine editors with an external save destination', () => {
     }).compileComponents();
     http = TestBed.inject(HttpTestingController);
   });
-  afterEach(() => http.verify());
+  afterEach(() => {
+    http.verify();
+    vi.restoreAllMocks();
+  });
 
   async function strength(port: RoutineEditorContext) {
     const fixture = TestBed.createComponent(Routines);
@@ -180,6 +247,10 @@ describe('Shared routine editors with an external save destination', () => {
 });
 
 describe('Routine copy and shared JSON validation', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   it('regenerates session and block IDs without mutating the source', () => {
     const original = newRoutine('swimming');
     const copy = copyRoutine(original);
@@ -189,6 +260,285 @@ describe('Routine copy and shared JSON validation', () => {
     copy.sessions[0].blocks[0].sets[0].repetitions = 10;
     expect(original.sessions[0].blocks[0].sets[0].repetitions).toBe(1);
   });
+  it('builds a running example that passes the real parser', () => {
+    const fixture = TestBed.createComponent(RoutineEditor);
+    fixture.componentRef.setInput(
+      'context',
+      context({
+        routineId: 'destination',
+        schemaVersion: '4.2',
+        revision: 1,
+        discipline: 'running',
+        name: '',
+        sessions: [],
+      }, 'import')
+    );
+
+    const component = fixture.componentInstance as any;
+
+    const example =
+      component.runningRoutineExample();
+
+    expect(
+      parseRunningRoutine(
+        JSON.stringify(example)
+      )
+    ).toEqual(example);
+
+    expect(example).toMatchObject({
+      schemaVersion: '4.2',
+      revision: 1,
+      discipline: 'running',
+    });
+
+    expect(example.sessions.length)
+      .toBeGreaterThan(0);
+
+    expect(
+      example.sessions[0].blocks.length
+    ).toBeGreaterThan(0);
+  });
+
+  it('keeps the running ChatGPT prompt aligned with the real JSON contract', () => {
+    const fixture = TestBed.createComponent(RoutineEditor);
+    fixture.componentRef.setInput(
+      'context',
+      context({
+        routineId: 'destination',
+        schemaVersion: '4.2',
+        revision: 1,
+        discipline: 'running',
+        name: '',
+        sessions: [],
+      }, 'import')
+    );
+
+    const component = fixture.componentInstance as any;
+    const prompt =
+      component.runningChatGPTPrompt();
+
+    expect(prompt).toContain(
+      'Devuélveme ÚNICAMENTE JSON válido'
+    );
+
+    expect(prompt).toContain(
+      'discipline: "running"'
+    );
+
+    expect(prompt).toContain(
+      '"duration" o "distance"'
+    );
+
+    expect(prompt).toContain(
+      '"warmup" | "main" | "intervals" | "sprints" | "cooldown"'
+    );
+
+    expect(prompt).toContain(
+      '"heartRateMax" | "heartRateRange" | "rpeRange" | "paceRange" | "sprint" | "free"'
+    );
+
+    expect(prompt).toContain(
+      'durationSeconds'
+    );
+
+    expect(prompt).toContain(
+      'distanceMeters'
+    );
+
+    expect(prompt).toContain(
+      'No uses Markdown'
+    );
+  });
+
+  it('renders the running import-kit actions in import mode', async () => {
+    const fixture = TestBed.createComponent(RoutineEditor);
+
+    fixture.componentRef.setInput(
+      'context',
+      context({
+        routineId: 'destination',
+        schemaVersion: '4.2',
+        revision: 1,
+        discipline: 'running',
+        name: '',
+        sessions: [],
+      }, 'import')
+    );
+
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    const text =
+      fixture.nativeElement.textContent;
+
+    expect(text).toContain(
+      'Importar rutina de carrera'
+    );
+
+    expect(text).toContain(
+      'Descargar ejemplo JSON'
+    );
+
+    expect(text).toContain(
+      'Copiar instrucciones para ChatGPT'
+    );
+
+    expect(text).toContain(
+      'Previsualizar rutina'
+    );
+  });
+
+  it('shares a valid running JSON through Filesystem on Android', async () => {
+    vi.spyOn(
+      Capacitor,
+      'isNativePlatform'
+    ).mockReturnValue(true);
+
+    capacitorPluginMocks
+      .filesystemWriteFile
+      .mockResolvedValueOnce({
+        uri:
+          'file:///cache/aptus_ejemplo_rutina_carrera.json'
+      });
+
+    const fixture =
+      TestBed.createComponent(
+        RoutineEditor
+      );
+
+    fixture.componentRef.setInput(
+      'context',
+      context({
+        routineId: 'destination',
+        schemaVersion: '4.2',
+        revision: 1,
+        discipline: 'running',
+        name: '',
+        sessions: [],
+      }, 'import')
+    );
+
+    await fixture.componentInstance
+      .downloadRunningRoutineExample();
+
+    expect(
+      capacitorPluginMocks
+        .filesystemWriteFile
+    ).toHaveBeenCalledTimes(1);
+
+    const writeCall =
+      capacitorPluginMocks
+        .filesystemWriteFile
+        .mock.calls[0][0];
+
+    expect(writeCall).toMatchObject({
+      path:
+        'aptus_ejemplo_rutina_carrera.json',
+      directory:
+        Directory.Cache,
+      encoding:
+        Encoding.UTF8,
+      recursive:
+        true
+    });
+
+    expect(
+      typeof writeCall.data
+    ).toBe('string');
+
+    const parsed =
+      parseRunningRoutine(
+        writeCall.data
+      );
+
+    expect(parsed.discipline)
+      .toBe('running');
+
+    expect(parsed.sessions.length)
+      .toBeGreaterThan(0);
+
+    expect(
+      capacitorPluginMocks.share
+    ).toHaveBeenCalledWith({
+      title:
+        'Aptus · Ejemplo de rutina de carrera',
+      text:
+        'Ejemplo JSON compatible con el importador de rutinas de carrera de Aptus',
+      url:
+        'file:///cache/aptus_ejemplo_rutina_carrera.json',
+      dialogTitle:
+        'Compartir ejemplo'
+    });
+  });
+
+
+  it('downloads the same valid running example exposed by the import kit', async () => {
+    vi.spyOn(
+      Capacitor,
+      'isNativePlatform'
+    ).mockReturnValue(false);
+
+    const fixture = TestBed.createComponent(RoutineEditor);
+
+    fixture.componentRef.setInput(
+      'context',
+      context({
+        routineId: 'destination',
+        schemaVersion: '4.2',
+        revision: 1,
+        discipline: 'running',
+        name: '',
+        sessions: [],
+      }, 'import')
+    );
+
+    const component = fixture.componentInstance as any;
+
+    const createObjectURL =
+      vi.spyOn(
+        URL,
+        'createObjectURL'
+      ).mockReturnValue(
+        'blob:aptus-running'
+      );
+
+    const revokeObjectURL =
+      vi.spyOn(
+        URL,
+        'revokeObjectURL'
+      ).mockImplementation(
+        () => undefined
+      );
+
+    const click =
+      vi.spyOn(
+        HTMLAnchorElement.prototype,
+        'click'
+      ).mockImplementation(
+        () => undefined
+      );
+
+    await component
+      .downloadRunningRoutineExample();
+
+    expect(createObjectURL)
+      .toHaveBeenCalledTimes(1);
+
+    expect(click)
+      .toHaveBeenCalledTimes(1);
+
+    expect(revokeObjectURL)
+      .toHaveBeenCalledWith(
+        'blob:aptus-running'
+      );
+
+    createObjectURL.mockRestore();
+    revokeObjectURL.mockRestore();
+    click.mockRestore();
+  });
+
+
   it('rejects invalid later sessions in a multi-session JSON file', () => {
     const routine = newRoutine('running');
     routine.sessions.push({ sessionId: 'bad', title: 'Inválida', blocks: [] });

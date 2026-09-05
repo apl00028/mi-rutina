@@ -1266,3 +1266,36 @@ select:focus-visible {
 .analysis-delete-heading {
   padding: 0 !important;
 }
+
+.routine-import-guide {
+  display: grid;
+  gap: 16px;
+}
+
+.routine-import-guide h2,
+.routine-import-guide p {
+  margin: 0;
+}
+
+.routine-import-template-button {
+  justify-self: start;
+  min-height: 44px;
+  padding: 10px 16px;
+  border: 1px solid var(--aptus-border);
+  border-radius: 12px;
+  background: var(--aptus-surface);
+  color: var(--aptus-text);
+  font: inherit;
+  cursor: pointer;
+}
+
+.routine-import-template-button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.routine-import-help-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}

@@ -8,3 +8,13 @@ article { padding: 16px 0; border-bottom: 1px solid var(--aptus-border); overflo
 .error-message { color: var(--aptus-danger); }
 
 .primary-action { background: var(--aptus-accent); color: var(--aptus-accent-contrast); border-color: var(--aptus-accent); }
+
+.running-import-guide {
+  display: grid;
+  gap: 16px;
+}
+
+.running-import-guide h2,
+.running-import-guide p {
+  margin: 0;
+}

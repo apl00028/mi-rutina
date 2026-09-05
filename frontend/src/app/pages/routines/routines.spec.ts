@@ -1955,4 +1955,265 @@ describe('Routines training analytics', () => {
       'Espalda 4 series'
     );
   });
+
+
+  it('generates the official ChatGPT workbook with the expected sheets and canonical exercise catalog', async () => {
+    const fixture = TestBed.createComponent(Routines);
+    const component = fixture.componentInstance;
+
+    component.exercises.set([
+      {
+        id: 'bench-press',
+        name: 'Press de banca',
+        muscle: 'Pecho',
+        equipment: 'Barra',
+        type: 'strength',
+        category: 'compound',
+      },
+      {
+        id: 'plank',
+        name: 'Plancha',
+        muscle: 'Core',
+        equipment: 'Peso corporal',
+        type: 'strength',
+        category: 'core',
+      },
+    ]);
+
+    const workbook =
+      (component as any).buildChatGPTRoutineWorkbook();
+
+    expect(workbook.SheetNames).toEqual([
+      'Instrucciones',
+      'Sesiones',
+      'Rutina',
+      'Biblioteca',
+      '_Catálogos',
+      '_GymOS',
+    ]);
+
+    const sessions = XLSX.utils.sheet_to_json<Record<string, unknown>>(
+      workbook.Sheets['Sesiones'],
+      { defval: '' }
+    );
+
+    expect(sessions).toHaveLength(2);
+    expect(sessions[0]).toMatchObject({
+      'Sesión': 'A',
+      'Orden': 1,
+      'Nombre': 'Sesión A',
+    });
+    expect(sessions[1]).toMatchObject({
+      'Sesión': 'B',
+      'Orden': 2,
+      'Nombre': 'Sesión B',
+    });
+
+    const library = XLSX.utils.sheet_to_json<Record<string, unknown>>(
+      workbook.Sheets['Biblioteca'],
+      { defval: '' }
+    );
+
+    expect(library).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          '_GymOS exercise': 'bench-press',
+          'Ejercicio': 'Press de banca',
+        }),
+        expect.objectContaining({
+          '_GymOS exercise': 'plank',
+          'Ejercicio': 'Plancha',
+        }),
+      ])
+    );
+
+    const metadataRows = XLSX.utils.sheet_to_json<unknown[]>(
+      workbook.Sheets['_GymOS'],
+      { header: 1, defval: '' }
+    );
+
+    expect(metadataRows).toEqual(
+      expect.arrayContaining([
+        ['templateVersion', 2],
+        ['schemaVersion', '4.2'],
+        ['kind', 'template'],
+      ])
+    );
+
+  });
+
+  it('shares the official ChatGPT workbook through Filesystem on Android', async () => {
+    vi.mocked(
+      Capacitor.isNativePlatform
+    ).mockReturnValue(true);
+
+    capacitorPluginMocks
+      .filesystemWriteFile
+      .mockResolvedValueOnce({
+        uri:
+          'file:///cache/Aptus_plantilla_rutina_v2.xlsx'
+      });
+
+    const fixture =
+      TestBed.createComponent(
+        Routines
+      );
+
+    const component =
+      fixture.componentInstance;
+
+    component.exercises.set([
+      {
+        id: 'bench-press',
+        name: 'Press de banca',
+        muscle: 'Pecho',
+        equipment: 'Barra',
+        type: 'strength',
+        category: 'compound',
+      },
+    ]);
+
+    await component
+      .downloadChatGPTRoutineTemplate();
+
+    expect(
+      capacitorPluginMocks
+        .filesystemWriteFile
+    ).toHaveBeenCalledTimes(1);
+
+    const writeCall =
+      capacitorPluginMocks
+        .filesystemWriteFile
+        .mock.calls[0][0];
+
+    expect(writeCall).toMatchObject({
+      path:
+        'Aptus_plantilla_rutina_v2.xlsx',
+      directory:
+        Directory.Cache,
+      recursive:
+        true
+    });
+
+    expect(
+      typeof writeCall.data
+    ).toBe('string');
+
+    expect(
+      writeCall.data.length
+    ).toBeGreaterThan(100);
+
+    expect(
+      capacitorPluginMocks.share
+    ).toHaveBeenCalledWith({
+      title:
+        'Aptus · Plantilla de rutina',
+      text:
+        'Plantilla oficial de Aptus para preparar una rutina de fuerza',
+      url:
+        'file:///cache/Aptus_plantilla_rutina_v2.xlsx',
+      dialogTitle:
+        'Compartir plantilla'
+    });
+  });
+
+
+  it('keeps the ChatGPT instructions aligned with the importer limits', async () => {
+    const fixture = TestBed.createComponent(Routines);
+    const component = fixture.componentInstance as any;
+
+    const prompt = component.chatGPTRoutinePrompt();
+
+    expect(prompt).toContain('entre 2 y 6 sesiones');
+    expect(prompt).toContain('como máximo 20 ejercicios');
+    expect(prompt).toContain('como máximo 100 ejercicios');
+    expect(prompt).toContain('entre 1 y 10 series');
+    expect(prompt).toContain('RIR mínimo y máximo deben estar entre 0 y 10');
+    expect(prompt).toContain('Descanso (s) debe estar entre 0 y 600');
+    expect(prompt).toContain('_GymOS exercise');
+    expect(prompt).toContain('hoja "Biblioteca"');
+    expect(prompt).toContain('No rellenes "_GymOS session" con IDs inventados');
+
+    const workbook =
+      (component as any)
+        .buildChatGPTRoutineWorkbook();
+
+    const instructionRows =
+      XLSX.utils.sheet_to_json<unknown[]>(
+        workbook.Sheets['Instrucciones'],
+        {
+          header: 1,
+          defval: ''
+        }
+      );
+
+    const workbookRules =
+      instructionRows
+        .slice(1)
+        .map(row =>
+          String(row[1] ?? '')
+        )
+        .filter(Boolean);
+
+    expect(workbookRules.length)
+      .toBeGreaterThan(0);
+
+    for (const rule of workbookRules) {
+      expect(prompt).toContain(rule);
+    }
+  });
+
+  it('shows the import-kit actions only for embedded strength import mode', async () => {
+    const fixture = TestBed.createComponent(Routines);
+
+    fixture.componentRef.setInput('editorContext', {
+      routine: {
+        routineId: 'template-test',
+        schemaVersion: '4.2',
+        revision: 1,
+        discipline: 'strength',
+        sessions: [],
+      },
+      mode: 'import',
+      saveLabel: 'Guardar plantilla',
+      save: vi.fn(),
+      cancel: vi.fn(),
+    });
+
+    fixture.componentInstance.exercises.set([
+      {
+        id: 'bench-press',
+        name: 'Press de banca',
+        muscle: 'Pecho',
+        equipment: 'Barra',
+        type: 'strength',
+        category: 'compound',
+      },
+    ]);
+
+    fixture.detectChanges();
+    await flushPromises();
+
+    http.expectOne(
+      `${environment.apiUrl}/exercises`
+    ).flush([
+      {
+        id: 'bench-press',
+        name: 'Press de banca',
+        muscle: 'Pecho',
+        equipment: 'Barra',
+        type: 'strength',
+        category: 'compound',
+      },
+    ]);
+
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    const text = fixture.nativeElement.textContent;
+
+    expect(text).toContain('Importar rutina de fuerza');
+    expect(text).toContain('Descargar plantilla para ChatGPT');
+    expect(text).toContain('Copiar instrucciones para ChatGPT');
+  });
 });

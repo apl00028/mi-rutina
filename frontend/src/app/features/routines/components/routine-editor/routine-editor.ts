@@ -1,5 +1,12 @@
 import { Component, Input, OnInit, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { Capacitor } from '@capacitor/core';
+import {
+  Directory,
+  Encoding,
+  Filesystem
+} from '@capacitor/filesystem';
+import { Share } from '@capacitor/share';
 import { Routines } from '../../../../pages/routines/routines';
 import { Endurance } from '../../../../pages/endurance/endurance';
 import { copyRoutine, newRoutineSession, RoutineDocument, RoutineEditorContext } from '../../domain/routine-editor';
@@ -42,6 +49,258 @@ export class RoutineEditor implements OnInit {
   }
 
   importReady = signal(false);
+  runningCopyMessage = signal<string | null>(null);
+
+  private runningRoutineExample(): RoutineDocument {
+    return {
+      routineId: 'routine-example',
+      schemaVersion: '4.2',
+      revision: 1,
+      discipline: 'running',
+      name: 'Rutina de carrera',
+      sessions: [
+        {
+          sessionId: 'session-example',
+          name: 'Sesión 1',
+          title: 'Sesión 1',
+          date: '',
+          objective: '',
+          estimatedDurationMinutes: 30,
+          blocks: [
+            {
+              id: 'block-warmup',
+              type: 'warmup',
+              title: 'Calentamiento',
+              sets: [
+                {
+                  repetitions: 1,
+                  targetType: 'duration',
+                  durationSeconds: 600,
+                  intensityMode: 'free',
+                  recoverySeconds: 0,
+                },
+              ],
+            },
+            {
+              id: 'block-main',
+              type: 'main',
+              title: 'Principal',
+              sets: [
+                {
+                  repetitions: 3,
+                  targetType: 'distance',
+                  distanceMeters: 800,
+                  intensityMode: 'free',
+                  recoverySeconds: 120,
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    };
+  }
+
+  async downloadRunningRoutineExample(): Promise<void> {
+    this.error.set(null);
+
+    const json =
+      JSON.stringify(
+        this.runningRoutineExample(),
+        null,
+        2
+      );
+
+    const filename =
+      'aptus_ejemplo_rutina_carrera.json';
+
+    try {
+      if (!Capacitor.isNativePlatform()) {
+        const blob =
+          new Blob(
+            [json],
+            {
+              type: 'application/json'
+            }
+          );
+
+        const url =
+          URL.createObjectURL(blob);
+
+        const anchor =
+          document.createElement('a');
+
+        anchor.href = url;
+        anchor.download = filename;
+
+        document.body.appendChild(
+          anchor
+        );
+
+        anchor.click();
+
+        document.body.removeChild(
+          anchor
+        );
+
+        URL.revokeObjectURL(url);
+
+        return;
+      }
+
+      const result =
+        await Filesystem.writeFile({
+          path: filename,
+          data: json,
+          directory: Directory.Cache,
+          encoding: Encoding.UTF8,
+          recursive: true
+        });
+
+      await Share.share({
+        title:
+          'Aptus · Ejemplo de rutina de carrera',
+        text:
+          'Ejemplo JSON compatible con el importador de rutinas de carrera de Aptus',
+        url:
+          result.uri,
+        dialogTitle:
+          'Compartir ejemplo'
+      });
+    } catch {
+      this.error.set(
+        'No se pudo generar o compartir el ejemplo JSON.'
+      );
+    }
+  }
+
+  private runningChatGPTPrompt(): string {
+    return `Quiero que generes una rutina de carrera compatible con Aptus.
+
+Devuélveme ÚNICAMENTE JSON válido.
+No uses Markdown.
+No añadas explicaciones fuera del JSON.
+
+Usa exactamente este contrato:
+
+- routineId: string
+- schemaVersion: "4.2"
+- revision: número finito
+- discipline: "running"
+- name: string opcional
+- sessions: array con al menos una sesión
+
+Cada sesión debe incluir:
+- sessionId: string
+- title: string
+- blocks: array con al menos un bloque
+
+También puede incluir:
+- name
+- date
+- objective
+- estimatedDurationMinutes
+
+Cada bloque debe incluir:
+- id: string
+- type: "warmup" | "main" | "intervals" | "sprints" | "cooldown"
+- title: string
+- sets: array con al menos una prescripción
+
+Cada set debe incluir:
+- repetitions: número mayor que 0
+- targetType: "duration" o "distance"
+- intensityMode: "heartRateMax" | "heartRateRange" | "rpeRange" | "paceRange" | "sprint" | "free"
+
+Si targetType es "duration":
+- durationSeconds debe ser un número mayor que 0
+
+Si targetType es "distance":
+- distanceMeters debe ser un número mayor que 0
+
+Campos opcionales del set:
+- heartRateMaxBpm
+- heartRateMinBpm
+- heartRateMaxRangeBpm
+- rpeMin
+- rpeMax
+- paceMinSecondsPerKm
+- paceMaxSecondsPerKm
+- recoverySeconds
+- instruction
+
+No inventes otros valores para targetType, intensityMode o type.
+
+El JSON debe poder pasar directamente por el importador de Aptus sin transformaciones.
+
+OBJETIVO Y CONTEXTO DEL DEPORTISTA
+
+[Escribe aquí el objetivo, nivel, disponibilidad, limitaciones y contexto necesario.]
+`;
+  }
+
+  async copyRunningChatGPTInstructions(): Promise<void> {
+    this.runningCopyMessage.set(null);
+    this.error.set(null);
+
+    const text =
+      this.runningChatGPTPrompt();
+
+    try {
+      if (
+        navigator.clipboard?.writeText
+      ) {
+        await navigator.clipboard.writeText(
+          text
+        );
+      } else {
+        const textarea =
+          document.createElement(
+            'textarea'
+          );
+
+        textarea.value = text;
+        textarea.setAttribute(
+          'readonly',
+          ''
+        );
+        textarea.style.position =
+          'fixed';
+        textarea.style.opacity =
+          '0';
+
+        document.body.appendChild(
+          textarea
+        );
+
+        textarea.select();
+
+        const copied =
+          document.execCommand(
+            'copy'
+          );
+
+        document.body.removeChild(
+          textarea
+        );
+
+        if (!copied) {
+          throw new Error(
+            'No se pudo copiar.'
+          );
+        }
+      }
+
+      this.runningCopyMessage.set(
+        'Instrucciones copiadas.'
+      );
+    } catch {
+      this.error.set(
+        'No se pudieron copiar las instrucciones.'
+      );
+    }
+  }
+
 
   async readJson(event: Event): Promise<void> {
     const input = event.target as HTMLInputElement;

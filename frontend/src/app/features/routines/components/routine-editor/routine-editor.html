@@ -4,13 +4,60 @@
 } @else {
   @if (error()) { <p class="error-message" role="alert">{{ error() }}</p> }
   @if (context.mode === 'import' && !importReady()) {
-    <label>Archivo JSON de carrera
-      <input type="file" accept=".json,application/json" (change)="readJson($event)" />
-    </label>
-    <label>O pega la rutina de Health OS
-      <textarea [ngModel]="importText()" (ngModelChange)="importText.set($event)" rows="5"></textarea>
-    </label>
-    <button type="button" (click)="importJson()">Previsualizar rutina</button>
+    <section class="running-import-guide">
+      <div>
+        <h2>Importar rutina de carrera</h2>
+        <p>
+          Puedes usar el ejemplo oficial de Aptus o pedir a ChatGPT
+          que genere un JSON compatible.
+        </p>
+      </div>
+
+      <div class="actions">
+        <button
+          type="button"
+          (click)="downloadRunningRoutineExample()"
+        >
+          Descargar ejemplo JSON
+        </button>
+
+        <button
+          type="button"
+          (click)="copyRunningChatGPTInstructions()"
+        >
+          Copiar instrucciones para ChatGPT
+        </button>
+      </div>
+
+      @if (runningCopyMessage()) {
+        <p role="status">
+          {{ runningCopyMessage() }}
+        </p>
+      }
+
+      <label>Archivo JSON de carrera
+        <input
+          type="file"
+          accept=".json,application/json"
+          (change)="readJson($event)"
+        />
+      </label>
+
+      <label>O pega la rutina de Health OS
+        <textarea
+          [ngModel]="importText()"
+          (ngModelChange)="importText.set($event)"
+          rows="5"
+        ></textarea>
+      </label>
+
+      <button
+        type="button"
+        (click)="importJson()"
+      >
+        Previsualizar rutina
+      </button>
+    </section>
   } @else {
     <label>Nombre de la plantilla
       <input type="text" required [disabled]="saving()" [ngModel]="name()" (ngModelChange)="name.set($event)" />

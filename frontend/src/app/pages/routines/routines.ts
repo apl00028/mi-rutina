@@ -245,6 +245,7 @@ export class Routines implements OnInit {
   importMessage = signal<string | null>(null);
   importError = signal<string | null>(null);
   importIssues = signal<ImportIssue[]>([]);
+  chatGPTCopyMessage = signal<string | null>(null);
 
   exportRecordsOpen = signal(false);
 
@@ -2621,18 +2622,157 @@ export class Routines implements OnInit {
     }
   }
 
-  downloadChatGPTRoutineTemplate(): void {
+  private strengthImportContractRules(): Array<[string, string]> {
+    return [
+      [
+        'Estructura',
+        'Conserva la estructura del libro y completa únicamente las hojas "Sesiones" y "Rutina".'
+      ],
+      [
+        'Hojas técnicas',
+        'No elimines ni alteres las hojas "_GymOS" y "_Catálogos".'
+      ],
+      [
+        'Biblioteca',
+        'Usa exclusivamente ejercicios presentes en la hoja "Biblioteca".'
+      ],
+      [
+        'Identidad',
+        'Copia literalmente "Ejercicio" y "_GymOS exercise" desde la hoja "Biblioteca"; no inventes, traduzcas, abrevies ni modifiques IDs.'
+      ],
+      [
+        'Sesiones',
+        'La rutina debe contener entre 2 y 6 sesiones.'
+      ],
+      [
+        'Orden de sesiones',
+        'En la hoja "Sesiones", "Orden" debe ser un entero único entre 1 y 6.'
+      ],
+      [
+        'Ejercicios por sesión',
+        'Cada sesión puede contener como máximo 20 ejercicios.'
+      ],
+      [
+        'Ejercicios por rutina',
+        'La rutina completa puede contener como máximo 100 ejercicios.'
+      ],
+      [
+        'Orden de ejercicios',
+        'En la hoja "Rutina", "Orden" debe ser un entero positivo y único dentro de cada sesión.'
+      ],
+      [
+        'Series',
+        'Cada ejercicio debe tener entre 1 y 10 series.'
+      ],
+      [
+        'Tipo de objetivo',
+        '"Tipo de objetivo" debe ser "repeticiones" o "duración".'
+      ],
+      [
+        'Repeticiones',
+        'Para "repeticiones", Objetivo mínimo y máximo deben estar entre 1 y 100 y el máximo no puede ser menor que el mínimo.'
+      ],
+      [
+        'Duración',
+        'Para "duración", Objetivo mínimo y máximo se expresan en segundos, deben estar entre 1 y 3600 y el máximo no puede ser menor que el mínimo.'
+      ],
+      [
+        'RIR',
+        'RIR mínimo y máximo deben estar entre 0 y 10 y el máximo no puede ser menor que el mínimo.'
+      ],
+      [
+        'Descanso',
+        'Descanso (s) debe estar entre 0 y 600.'
+      ],
+      [
+        'Sesión técnica',
+        'No rellenes "_GymOS session" con IDs inventados; déjalo vacío si no existe un ID proporcionado.'
+      ],
+      [
+        'Columnas',
+        'No inventes columnas nuevas necesarias para interpretar la rutina.'
+      ],
+      [
+        'Duplicados',
+        'Evita repetir el mismo "_GymOS exercise" dentro de una sesión; Aptus lo señalará como advertencia.'
+      ],
+      [
+        'Validación',
+        'Aptus volverá a validar todos los "_GymOS exercise" contra su catálogo actual.'
+      ],
+      [
+        'Activación',
+        'Importar no activa automáticamente la rutina; primero debe revisarse.'
+      ]
+    ];
+  }
+
+
+  private chatGPTRoutinePrompt(): string {
+    const rules =
+      this.strengthImportContractRules()
+        .map(
+          ([, rule], index) =>
+            `${index + 1}. ${rule}`
+        )
+        .join('\n');
+
+    return `Quiero que generes una rutina de fuerza compatible con Aptus.
+
+He adjuntado el archivo "Aptus_plantilla_rutina_v2.xlsx".
+
+Usa ESE archivo como contrato de datos y genera como resultado un archivo .xlsx compatible con Aptus.
+
+REGLAS OBLIGATORIAS
+
+${rules}
+
+No me devuelvas la rutina como Markdown ni como una tabla en el chat.
+Quiero que generes y entregues el archivo .xlsx final.
+
+OBJETIVO Y CONTEXTO DEL DEPORTISTA
+
+[Escribe aquí el objetivo, nivel, disponibilidad, limitaciones y cualquier otra información necesaria para diseñar la rutina.]
+`;
+  }
+
+
+  async copyChatGPTRoutineInstructions(): Promise<void> {
+    this.chatGPTCopyMessage.set(null);
     this.importError.set(null);
-    this.importMessage.set(null);
 
-    if (!this.exercises().length) {
+    const text = this.chatGPTRoutinePrompt();
+
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(text);
+      } else {
+        const textarea = document.createElement('textarea');
+        textarea.value = text;
+        textarea.setAttribute('readonly', '');
+        textarea.style.position = 'fixed';
+        textarea.style.opacity = '0';
+        document.body.appendChild(textarea);
+        textarea.select();
+
+        const copied = document.execCommand('copy');
+        document.body.removeChild(textarea);
+
+        if (!copied) {
+          throw new Error('No se pudo copiar al portapapeles.');
+        }
+      }
+
+      this.chatGPTCopyMessage.set('Instrucciones copiadas.');
+    } catch {
       this.importError.set(
-        'No se puede generar la plantilla porque la biblioteca de ejercicios no está disponible.'
+        'No se pudieron copiar las instrucciones. Puedes usar las instrucciones incluidas dentro del Excel.'
       );
-
-      return;
     }
+  }
 
+
+  private buildChatGPTRoutineWorkbook(): XLSX.WorkBook {
     const workbook =
       XLSX.utils.book_new();
 
@@ -2641,58 +2781,7 @@ export class Routines implements OnInit {
         'Plantilla de Rutina Aptus',
         'Versión 2'
       ],
-      [
-        'IMPORTANTE',
-        '_GymOS exercise es la identidad autoritativa de cada ejercicio.'
-      ],
-      [
-        'ChatGPT',
-        'Usa exclusivamente ejercicios presentes en la hoja Biblioteca.'
-      ],
-      [
-        'ChatGPT',
-        'Copia literalmente Ejercicio y _GymOS exercise desde Biblioteca.'
-      ],
-      [
-        'ChatGPT',
-        'No inventes, traduzcas, abrevies ni modifiques IDs.'
-      ],
-      [
-        'Sesiones',
-        'La rutina debe contener entre 2 y 6 sesiones.'
-      ],
-      [
-        'Series',
-        'Cada ejercicio debe tener entre 1 y 10 series.'
-      ],
-      [
-        'Repeticiones',
-        'Usa objetivos entre 1 y 100 repeticiones.'
-      ],
-      [
-        'Duración',
-        'Si Tipo de objetivo es duración, Objetivo mínimo y máximo se expresan en segundos.'
-      ],
-      [
-        'Tipo de objetivo',
-        'Usa "repeticiones" para reps o "duración" para ejercicios temporizados.'
-      ],
-      [
-        'RIR',
-        'Usa valores entre 0 y 10.'
-      ],
-      [
-        'Descanso',
-        'Usa entre 0 y 600 segundos.'
-      ],
-      [
-        'Importación',
-        'Aptus volverá a validar todos los IDs contra su catálogo actual.'
-      ],
-      [
-        'Activación',
-        'Importar no activa automáticamente la rutina. Primero debe revisarse.'
-      ]
+      ...this.strengthImportContractRules()
     ];
 
     const sessions = [
@@ -2848,10 +2937,70 @@ export class Routines implements OnInit {
       )
     } as any;
 
-    XLSX.writeFile(
-      workbook,
-      'Aptus_plantilla_rutina_v2.xlsx'
-    );
+    return workbook;
+  }
+
+  async downloadChatGPTRoutineTemplate(): Promise<void> {
+    this.importError.set(null);
+    this.importMessage.set(null);
+
+    if (!this.exercises().length) {
+      this.importError.set(
+        'No se puede generar la plantilla porque la biblioteca de ejercicios no está disponible.'
+      );
+
+      return;
+    }
+
+    const workbook =
+      this.buildChatGPTRoutineWorkbook();
+
+    const filename =
+      'Aptus_plantilla_rutina_v2.xlsx';
+
+    try {
+      if (!Capacitor.isNativePlatform()) {
+        XLSX.writeFile(
+          workbook,
+          filename
+        );
+
+        return;
+      }
+
+      const data =
+        XLSX.write(
+          workbook,
+          {
+            bookType: 'xlsx',
+            type: 'base64',
+            compression: true
+          }
+        );
+
+      const result =
+        await Filesystem.writeFile({
+          path: filename,
+          data,
+          directory: Directory.Cache,
+          recursive: true
+        });
+
+      await Share.share({
+        title:
+          'Aptus · Plantilla de rutina',
+        text:
+          'Plantilla oficial de Aptus para preparar una rutina de fuerza',
+        url:
+          result.uri,
+        dialogTitle:
+          'Compartir plantilla'
+      });
+    } catch {
+      this.importError.set(
+        'No se pudo generar o compartir la plantilla.'
+      );
+    }
   }
 
   openExportRecords(): void {

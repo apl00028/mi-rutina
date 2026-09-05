@@ -1,3 +1,13 @@
+@if (editorContext) {
+  <section class="embedded-routine-editor">
+    @if (discipline() === 'swimming') {
+      <ng-container *ngTemplateOutlet="swimmingEditor" />
+      @if (swimmingRoutineSaveError()) { <p class="error-message" role="alert">{{ swimmingRoutineSaveError() }}</p> }
+    } @else {
+      <ng-container *ngTemplateOutlet="runningEditor" />
+    }
+  </section>
+} @else {
 <main class="endurance-page">
 
   <header class="page-header">
@@ -250,396 +260,7 @@
               as draft
             ) {
 
-              <div class="swimming-routine-editor">
-
-                <div class="swimming-routine-editor-grid">
-
-                  <label>
-                    <span>Título</span>
-
-                    <input
-                      type="text"
-                      [value]="draft.title"
-                      (input)="updateSwimmingRoutineField(
-                        'title',
-                        $any($event.target).value
-                      )"
-                    />
-                  </label>
-
-                  <label>
-                    <span>Fecha</span>
-
-                    <input
-                      type="date"
-                      [value]="draft.date"
-                      (input)="updateSwimmingRoutineField(
-                        'date',
-                        $any($event.target).value
-                      )"
-                    />
-                  </label>
-
-                  <label class="wide">
-                    <span>Objetivo</span>
-
-                    <textarea
-                      rows="3"
-                      [value]="draft.objective"
-                      (input)="updateSwimmingRoutineField(
-                        'objective',
-                        $any($event.target).value
-                      )"
-                    ></textarea>
-                  </label>
-
-                  <label>
-                    <span>Piscina</span>
-
-                    <div class="swimming-routine-input-unit">
-                      <input
-                        type="number"
-                        min="1"
-                        step="1"
-                        [value]="draft.poolLengthMeters"
-                        (input)="updateSwimmingRoutineField(
-                          'poolLengthMeters',
-                          $any($event.target).value
-                        )"
-                      />
-
-                      <span>m</span>
-                    </div>
-                  </label>
-
-                  <label>
-                    <span>Duración estimada</span>
-
-                    <div class="swimming-routine-input-unit">
-                      <input
-                        type="number"
-                        min="0"
-                        step="1"
-                        [value]="draft.estimatedDurationMinutes"
-                        (input)="updateSwimmingRoutineField(
-                          'estimatedDurationMinutes',
-                          $any($event.target).value
-                        )"
-                      />
-
-                      <span>min</span>
-                    </div>
-                  </label>
-
-                </div>
-
-
-                <div class="swimming-routine-editor-blocks">
-
-                  @for (
-                    block of draft.blocks;
-                    track block.id;
-                    let blockIndex = $index
-                  ) {
-
-                    <article
-                      class="swimming-routine-editor-block"
-                      [attr.data-block-type]="block.type"
-                    >
-
-                      <label class="swimming-routine-block-title-field">
-                        <span>Bloque</span>
-
-                        <input
-                          type="text"
-                          [value]="block.title"
-                          (input)="updateSwimmingRoutineBlockTitle(
-                            blockIndex,
-                            $any($event.target).value
-                          )"
-                        />
-                      </label>
-
-
-                      @for (
-                        set of block.sets;
-                        track $index;
-                        let setIndex = $index
-                      ) {
-
-                        <div class="swimming-routine-set-editor">
-
-                          <div class="swimming-routine-set-editor-grid">
-
-                            <label>
-                              <span>Repeticiones</span>
-
-                              <input
-                                type="number"
-                                min="1"
-                                step="1"
-                                [value]="set.repetitions"
-                                (input)="updateSwimmingRoutineSetField(
-                                  blockIndex,
-                                  setIndex,
-                                  'repetitions',
-                                  $any($event.target).value
-                                )"
-                              />
-                            </label>
-
-                            <label>
-                              <span>Distancia</span>
-
-                              <div class="swimming-routine-input-unit">
-                                <input
-                                  type="number"
-                                  min="1"
-                                  step="1"
-                                  [value]="set.distanceMeters"
-                                  (input)="updateSwimmingRoutineSetField(
-                                    blockIndex,
-                                    setIndex,
-                                    'distanceMeters',
-                                    $any($event.target).value
-                                  )"
-                                />
-
-                                <span>m</span>
-                              </div>
-                            </label>
-
-                            <label>
-                              <span>Estilo</span>
-
-                              <select
-                                [value]="set.stroke"
-                                (change)="updateSwimmingRoutineSetField(
-                                  blockIndex,
-                                  setIndex,
-                                  'stroke',
-                                  $any($event.target).value
-                                )"
-                              >
-                                <option value="freestyle">
-                                  Crol
-                                </option>
-                                <option value="backstroke">
-                                  Espalda
-                                </option>
-                                <option value="breaststroke">
-                                  Braza
-                                </option>
-                                <option value="mixed">
-                                  Mixto
-                                </option>
-                              </select>
-                            </label>
-
-                            <label>
-                              <span>Trabajo</span>
-
-                              <select
-                                [value]="set.workType"
-                                (change)="updateSwimmingRoutineSetField(
-                                  blockIndex,
-                                  setIndex,
-                                  'workType',
-                                  $any($event.target).value
-                                )"
-                              >
-                                <option value="swim">
-                                  Nado
-                                </option>
-                                <option value="technique">
-                                  Técnica
-                                </option>
-                                <option value="kick">
-                                  Piernas
-                                </option>
-                                <option value="pull">
-                                  Pull
-                                </option>
-                              </select>
-                            </label>
-
-                            <label>
-                              <span>Intensidad</span>
-
-                              <select
-                                [value]="set.intensity"
-                                (change)="updateSwimmingRoutineSetField(
-                                  blockIndex,
-                                  setIndex,
-                                  'intensity',
-                                  $any($event.target).value
-                                )"
-                              >
-                                <option value="easy">
-                                  Suave
-                                </option>
-                                <option value="controlled">
-                                  Controlado
-                                </option>
-                                <option value="strong">
-                                  Fuerte
-                                </option>
-                              </select>
-                            </label>
-
-                            <label>
-                              <span>Descanso</span>
-
-                              <div class="swimming-routine-input-unit">
-                                <input
-                                  type="number"
-                                  min="0"
-                                  step="5"
-                                  [value]="set.restSeconds"
-                                  (input)="updateSwimmingRoutineSetField(
-                                    blockIndex,
-                                    setIndex,
-                                    'restSeconds',
-                                    $any($event.target).value
-                                  )"
-                                />
-
-                                <span>s</span>
-                              </div>
-                            </label>
-
-                            <label class="wide">
-                              <span>Indicaciones</span>
-
-                              <input
-                                type="text"
-                                [value]="set.instruction ?? ''"
-                                (input)="updateSwimmingRoutineSetField(
-                                  blockIndex,
-                                  setIndex,
-                                  'instruction',
-                                  $any($event.target).value
-                                )"
-                              />
-                            </label>
-
-                          </div>
-
-                          @if (block.sets.length > 1) {
-                            <button
-                              type="button"
-                              class="swimming-routine-remove-button"
-                              (click)="removeSwimmingRoutineSet(
-                                blockIndex,
-                                setIndex
-                              )"
-                            >
-                              Eliminar serie
-                            </button>
-                          }
-
-                        </div>
-
-                      }
-
-                      <button
-                        type="button"
-                        class="swimming-routine-add-button"
-                        (click)="addSwimmingRoutineSet(
-                          blockIndex
-                        )"
-                      >
-                        + Añadir serie
-                      </button>
-
-                    </article>
-
-                  }
-
-                </div>
-
-
-                <div class="swimming-routine-editor-focus">
-
-                  <strong>
-                    Foco técnico
-                  </strong>
-
-                  @for (
-                    focus of draft.technicalFocus;
-                    track $index;
-                    let focusIndex = $index
-                  ) {
-
-                    <div>
-                      <input
-                        type="text"
-                        [value]="focus"
-                        (input)="updateSwimmingTechnicalFocus(
-                          focusIndex,
-                          $any($event.target).value
-                        )"
-                      />
-
-                      <button
-                        type="button"
-                        (click)="removeSwimmingTechnicalFocus(
-                          focusIndex
-                        )"
-                      >
-                        ×
-                      </button>
-                    </div>
-
-                  }
-
-                  <button
-                    type="button"
-                    class="swimming-routine-add-button"
-                    (click)="addSwimmingTechnicalFocus()"
-                  >
-                    + Añadir foco
-                  </button>
-
-                </div>
-
-
-                @if (
-                  swimmingRoutineSaveError();
-                  as saveError
-                ) {
-                  <p class="swimming-routine-save-error">
-                    {{ saveError }}
-                  </p>
-                }
-
-
-                <div class="swimming-routine-editor-actions">
-
-                  <button
-                    type="button"
-                    [disabled]="swimmingRoutineSaving()"
-                    (click)="cancelEditingSwimmingRoutine()"
-                  >
-                    Cancelar
-                  </button>
-
-                  <button
-                    type="button"
-                    class="primary"
-                    [disabled]="swimmingRoutineSaving()"
-                    (click)="saveSwimmingRoutine()"
-                  >
-                    @if (swimmingRoutineSaving()) {
-                      Guardando…
-                    } @else {
-                      Guardar rutina
-                    }
-                  </button>
-
-                </div>
-
-              </div>
+              <ng-container *ngTemplateOutlet="swimmingEditor" />
 
             } @else {
 
@@ -2295,7 +1916,815 @@
 
           } @else if (runningRoutineDraft(); as draft) {
 
-            <div class="running-routine-editor">
+            <ng-container *ngTemplateOutlet="runningEditor" />
+
+          }
+
+        </section>
+
+      } @else {
+
+        <section class="discipline-card">
+
+          <span class="eyebrow">
+            Rutina
+          </span>
+
+          <h2>
+            Sin rutina activa
+          </h2>
+
+          <p>
+            No hay una rutina de carrera activa.
+          </p>
+
+          <button
+            type="button"
+            class="primary-action"
+            [disabled]="runningRoutineSaving()"
+            (click)="createDefaultRunningRoutine()"
+          >
+            {{
+              runningRoutineSaving()
+                ? 'Creando…'
+                : 'Crear rutina'
+            }}
+          </button>
+
+          @if (runningRoutineSaveError(); as error) {
+            <p class="error-message">
+              {{ error }}
+            </p>
+          }
+
+        </section>
+
+      }
+
+    } @else if (
+      runningView() === 'analytics'
+    ) {
+
+      <section class="discipline-card">
+        <span class="eyebrow">
+          Análisis
+        </span>
+
+        <h2>
+          Próximamente
+        </h2>
+
+        <p>
+          El análisis de carrera estará disponible
+          en una próxima versión.
+        </p>
+      </section>
+
+    } @else if (
+      !runningHealthConnectSupported()
+    ) {
+
+      <section class="discipline-card">
+
+        <span class="eyebrow">
+          Sesiones de carrera
+        </span>
+
+        <h2>
+          Disponible en Android
+        </h2>
+
+        <p>
+          Health Connect solo está disponible
+          en la app Android.
+        </p>
+
+        <p>
+          Tus sesiones registradas con Garmin
+          se consultan desde Aptus en el móvil.
+        </p>
+
+      </section>
+
+    } @else if (
+      !runningHealthConnectSupported()
+    ) {
+
+      <section class="discipline-card">
+
+        <span class="eyebrow">
+          Sesiones de carrera
+        </span>
+
+        <h2>
+          Disponible en Android
+        </h2>
+
+        <p>
+          Health Connect solo está disponible
+          en la app Android.
+        </p>
+
+        <p>
+          Tus sesiones registradas con Garmin
+          se consultan desde Aptus en el móvil.
+        </p>
+
+      </section>
+
+    } @else if (
+      !runningHealthConnectSupported()
+    ) {
+
+      <section class="discipline-card">
+
+        <span class="eyebrow">
+          Sesiones de carrera
+        </span>
+
+        <h2>
+          Disponible en Android
+        </h2>
+
+        <p>
+          Health Connect solo está disponible
+          en la app Android.
+        </p>
+
+        <p>
+          Tus sesiones registradas con Garmin
+          se consultan desde Aptus en el móvil.
+        </p>
+
+      </section>
+
+    } @else if (runningLoading()) {
+
+      <section class="discipline-card">
+        <p>
+          Cargando sesiones de carrera…
+        </p>
+      </section>
+
+    } @else if (runningError(); as error) {
+
+      <section class="discipline-card">
+        <span class="eyebrow">
+          Health Connect
+        </span>
+
+        <h2>
+          No se pudieron cargar las sesiones
+        </h2>
+
+        <p>
+          {{ error }}
+        </p>
+
+        <button
+          type="button"
+          (click)="loadRunning()"
+        >
+          Reintentar
+        </button>
+      </section>
+
+    } @else if (
+      runningSessions().length === 0
+    ) {
+
+      <section class="discipline-card">
+        <span class="eyebrow">
+          Garmin
+        </span>
+
+        <h2>
+          Sin sesiones recientes
+        </h2>
+
+        <p>
+          No se han encontrado sesiones de carrera
+          de Garmin en los últimos 30 días.
+        </p>
+      </section>
+
+    } @else {
+
+      <section class="endurance-toolbar">
+        <div class="endurance-session-selector">
+          <label for="running-session">
+            Sesión
+          </label>
+
+          <select
+            id="running-session"
+            #runningSessionSelect
+            [value]="selectedRunningSessionIndex()"
+            (change)="
+              selectRunningSession(
+                runningSessionSelect.value
+              )
+            "
+          >
+            @for (
+              session of runningSessions();
+              track session.startTime;
+              let index = $index
+            ) {
+              <option [value]="index">
+                {{
+                  session.startTime
+                    | date:'dd/MM/yyyy'
+                }}
+                ·
+                {{
+                  formatRunningDistance(
+                    session.distanceMeters
+                  )
+                }}
+                ·
+                {{
+                  runningSessionTypeLabel(
+                    session.exerciseType
+                  )
+                }}
+              </option>
+            }
+          </select>
+        </div>
+      </section>
+
+
+      @if (
+        selectedRunningSession();
+        as session
+      ) {
+        <section
+          class="discipline-card endurance-session"
+        >
+          <div class="endurance-session-header">
+            <div>
+              <span class="eyebrow">
+                {{
+                  runningSessionTypeLabel(
+                    session.exerciseType
+                  )
+                }}
+              </span>
+
+              <h2>
+                {{
+                  session.startTime
+                    | date:'dd/MM/yyyy'
+                }}
+              </h2>
+            </div>
+
+            <strong class="endurance-distance">
+              {{
+                formatRunningDistance(
+                  session.distanceMeters
+                )
+              }}
+            </strong>
+          </div>
+
+          <div class="endurance-metrics-grid">
+            <div>
+              <span>Duración</span>
+              <strong>
+                {{
+                  formatDuration(
+                    session.durationSeconds
+                  )
+                }}
+              </strong>
+            </div>
+
+            <div>
+              <span>Ritmo medio</span>
+              <strong>
+                {{
+                  formatRunningPace(
+                    session
+                      .paceSecondsPerKmFromSpeed
+                  )
+                }}
+              </strong>
+            </div>
+
+            <div>
+              <span>FC media</span>
+              <strong>
+                @if (
+                  session.heartRateAverageBpm !==
+                    undefined
+                ) {
+                  {{ session.heartRateAverageBpm }} ppm
+                } @else {
+                  —
+                }
+              </strong>
+            </div>
+
+            <div>
+              <span>FC máxima</span>
+              <strong>
+                @if (
+                  session.heartRateMaxBpm !==
+                    undefined
+                ) {
+                  {{ session.heartRateMaxBpm }} ppm
+                } @else {
+                  —
+                }
+              </strong>
+            </div>
+
+            <div>
+              <span>Velocidad media</span>
+              <strong>
+                {{
+                  formatRunningSpeed(
+                    session
+                      .speedAverageMetersPerSecond
+                  )
+                }}
+              </strong>
+            </div>
+
+            <div>
+              <span>Velocidad máxima</span>
+              <strong>
+                {{
+                  formatRunningSpeed(
+                    session
+                      .speedMaxMetersPerSecond
+                  )
+                }}
+              </strong>
+            </div>
+
+            <div>
+              <span>Vueltas</span>
+              <strong>
+                {{ session.lapCount }}
+              </strong>
+            </div>
+
+            <div>
+              <span>Segmentos</span>
+              <strong>
+                {{ session.segmentCount }}
+              </strong>
+            </div>
+
+            <div>
+              <span>Ruta</span>
+              <strong>
+                {{ session.hasRoute ? 'Sí' : 'No' }}
+              </strong>
+            </div>
+
+            <div>
+              <span>Tipo</span>
+              <strong>
+                {{
+                  runningSessionTypeLabel(
+                    session.exerciseType
+                  )
+                }}
+              </strong>
+            </div>
+          </div>
+        </section>
+      }
+
+    }
+
+  } @else {
+
+    <section class="discipline-card">
+
+      <span class="eyebrow">
+        Sesiones
+      </span>
+
+      <h2>
+        Registro de
+        {{ disciplineLabel() }}
+      </h2>
+
+      <p>
+        Aquí aparecerán las sesiones
+        realizadas y el registro de una
+        nueva actividad.
+      </p>
+
+    </section>
+
+  }
+
+</main>
+
+}
+<ng-template #swimmingEditor>
+@if (swimmingRoutineDraft(); as draft) {
+<div class="swimming-routine-editor">
+
+                <div class="swimming-routine-editor-grid">
+
+                  <label>
+                    <span>Título de sesión</span>
+
+                    <input
+                      type="text"
+                      [value]="draft.title"
+                      (input)="updateSwimmingRoutineField(
+                        'title',
+                        $any($event.target).value
+                      )"
+                    />
+                  </label>
+
+                  <label>
+                    <span>Fecha</span>
+
+                    <input
+                      type="date"
+                      [value]="draft.date"
+                      (input)="updateSwimmingRoutineField(
+                        'date',
+                        $any($event.target).value
+                      )"
+                    />
+                  </label>
+
+                  <label class="wide">
+                    <span>Objetivo</span>
+
+                    <textarea
+                      rows="3"
+                      [value]="draft.objective"
+                      (input)="updateSwimmingRoutineField(
+                        'objective',
+                        $any($event.target).value
+                      )"
+                    ></textarea>
+                  </label>
+
+                  <label>
+                    <span>Piscina</span>
+
+                    <div class="swimming-routine-input-unit">
+                      <input
+                        type="number"
+                        min="1"
+                        step="1"
+                        [value]="draft.poolLengthMeters"
+                        (input)="updateSwimmingRoutineField(
+                          'poolLengthMeters',
+                          $any($event.target).value
+                        )"
+                      />
+
+                      <span>m</span>
+                    </div>
+                  </label>
+
+                  <label>
+                    <span>Duración estimada</span>
+
+                    <div class="swimming-routine-input-unit">
+                      <input
+                        type="number"
+                        min="0"
+                        step="1"
+                        [value]="draft.estimatedDurationMinutes"
+                        (input)="updateSwimmingRoutineField(
+                          'estimatedDurationMinutes',
+                          $any($event.target).value
+                        )"
+                      />
+
+                      <span>min</span>
+                    </div>
+                  </label>
+
+                </div>
+
+
+                <div class="swimming-routine-editor-blocks">
+
+                  @for (
+                    block of draft.blocks;
+                    track block.id;
+                    let blockIndex = $index
+                  ) {
+
+                    <article
+                      class="swimming-routine-editor-block"
+                      [attr.data-block-type]="block.type"
+                    >
+
+                      <label class="swimming-routine-block-title-field">
+                        <span>Bloque</span>
+
+                        <input
+                          type="text"
+                          [value]="block.title"
+                          (input)="updateSwimmingRoutineBlockTitle(
+                            blockIndex,
+                            $any($event.target).value
+                          )"
+                        />
+                      </label>
+
+
+                      @for (
+                        set of block.sets;
+                        track $index;
+                        let setIndex = $index
+                      ) {
+
+                        <div class="swimming-routine-set-editor">
+
+                          <div class="swimming-routine-set-editor-grid">
+
+                            <label>
+                              <span>Repeticiones</span>
+
+                              <input
+                                type="number"
+                                min="1"
+                                step="1"
+                                [value]="set.repetitions"
+                                (input)="updateSwimmingRoutineSetField(
+                                  blockIndex,
+                                  setIndex,
+                                  'repetitions',
+                                  $any($event.target).value
+                                )"
+                              />
+                            </label>
+
+                            <label>
+                              <span>Distancia</span>
+
+                              <div class="swimming-routine-input-unit">
+                                <input
+                                  type="number"
+                                  min="1"
+                                  step="1"
+                                  [value]="set.distanceMeters"
+                                  (input)="updateSwimmingRoutineSetField(
+                                    blockIndex,
+                                    setIndex,
+                                    'distanceMeters',
+                                    $any($event.target).value
+                                  )"
+                                />
+
+                                <span>m</span>
+                              </div>
+                            </label>
+
+                            <label>
+                              <span>Estilo</span>
+
+                              <select
+                                [value]="set.stroke"
+                                (change)="updateSwimmingRoutineSetField(
+                                  blockIndex,
+                                  setIndex,
+                                  'stroke',
+                                  $any($event.target).value
+                                )"
+                              >
+                                <option value="freestyle">
+                                  Crol
+                                </option>
+                                <option value="backstroke">
+                                  Espalda
+                                </option>
+                                <option value="breaststroke">
+                                  Braza
+                                </option>
+                                <option value="mixed">
+                                  Mixto
+                                </option>
+                              </select>
+                            </label>
+
+                            <label>
+                              <span>Trabajo</span>
+
+                              <select
+                                [value]="set.workType"
+                                (change)="updateSwimmingRoutineSetField(
+                                  blockIndex,
+                                  setIndex,
+                                  'workType',
+                                  $any($event.target).value
+                                )"
+                              >
+                                <option value="swim">
+                                  Nado
+                                </option>
+                                <option value="technique">
+                                  Técnica
+                                </option>
+                                <option value="kick">
+                                  Piernas
+                                </option>
+                                <option value="pull">
+                                  Pull
+                                </option>
+                              </select>
+                            </label>
+
+                            <label>
+                              <span>Intensidad</span>
+
+                              <select
+                                [value]="set.intensity"
+                                (change)="updateSwimmingRoutineSetField(
+                                  blockIndex,
+                                  setIndex,
+                                  'intensity',
+                                  $any($event.target).value
+                                )"
+                              >
+                                <option value="easy">
+                                  Suave
+                                </option>
+                                <option value="controlled">
+                                  Controlado
+                                </option>
+                                <option value="strong">
+                                  Fuerte
+                                </option>
+                              </select>
+                            </label>
+
+                            <label>
+                              <span>Descanso</span>
+
+                              <div class="swimming-routine-input-unit">
+                                <input
+                                  type="number"
+                                  min="0"
+                                  step="5"
+                                  [value]="set.restSeconds"
+                                  (input)="updateSwimmingRoutineSetField(
+                                    blockIndex,
+                                    setIndex,
+                                    'restSeconds',
+                                    $any($event.target).value
+                                  )"
+                                />
+
+                                <span>s</span>
+                              </div>
+                            </label>
+
+                            <label class="wide">
+                              <span>Indicaciones</span>
+
+                              <input
+                                type="text"
+                                [value]="set.instruction ?? ''"
+                                (input)="updateSwimmingRoutineSetField(
+                                  blockIndex,
+                                  setIndex,
+                                  'instruction',
+                                  $any($event.target).value
+                                )"
+                              />
+                            </label>
+
+                          </div>
+
+                          @if (block.sets.length > 1) {
+                            <button
+                              type="button"
+                              class="swimming-routine-remove-button"
+                              (click)="removeSwimmingRoutineSet(
+                                blockIndex,
+                                setIndex
+                              )"
+                            >
+                              Eliminar serie
+                            </button>
+                          }
+
+                        </div>
+
+                      }
+
+                      <button
+                        type="button"
+                        class="swimming-routine-add-button"
+                        (click)="addSwimmingRoutineSet(
+                          blockIndex
+                        )"
+                      >
+                        + Añadir serie
+                      </button>
+
+                    </article>
+
+                  }
+
+                </div>
+
+
+                <div class="swimming-routine-editor-focus">
+
+                  <strong>
+                    Foco técnico
+                  </strong>
+
+                  @for (
+                    focus of draft.technicalFocus;
+                    track $index;
+                    let focusIndex = $index
+                  ) {
+
+                    <div>
+                      <input
+                        type="text"
+                        [value]="focus"
+                        (input)="updateSwimmingTechnicalFocus(
+                          focusIndex,
+                          $any($event.target).value
+                        )"
+                      />
+
+                      <button
+                        type="button"
+                        (click)="removeSwimmingTechnicalFocus(
+                          focusIndex
+                        )"
+                      >
+                        ×
+                      </button>
+                    </div>
+
+                  }
+
+                  <button
+                    type="button"
+                    class="swimming-routine-add-button"
+                    (click)="addSwimmingTechnicalFocus()"
+                  >
+                    + Añadir foco
+                  </button>
+
+                </div>
+
+
+                @if (
+                  swimmingRoutineSaveError();
+                  as saveError
+                ) {
+                  <p class="swimming-routine-save-error">
+                    {{ saveError }}
+                  </p>
+                }
+
+
+                <div class="swimming-routine-editor-actions">
+
+                  <button
+                    type="button"
+                    [disabled]="swimmingRoutineSaving()"
+                    (click)="cancelEditingSwimmingRoutine()"
+                  >
+                    Cancelar
+                  </button>
+
+                  <button
+                    type="button"
+                    class="primary"
+                    [disabled]="swimmingRoutineSaving()"
+                    (click)="saveSwimmingRoutine()"
+                  >
+                    @if (swimmingRoutineSaving()) {
+                      Guardando…
+                    } @else {
+                      {{ editorContext?.saveLabel ?? 'Guardar rutina' }}
+                    }
+                  </button>
+
+                </div>
+
+              </div>
+}
+</ng-template>
+<ng-template #runningEditor>
+@if (runningRoutineDraft(); as draft) {
+<div class="running-routine-editor">
 
               <span class="eyebrow">
                 Editor de rutina
@@ -2781,419 +3210,12 @@
                   {{
                     runningRoutineSaving()
                       ? 'Guardando…'
-                      : 'Guardar rutina'
+                      : (editorContext?.saveLabel ?? 'Guardar rutina')
                   }}
                 </button>
 
               </div>
 
             </div>
-
-          }
-
-        </section>
-
-      } @else {
-
-        <section class="discipline-card">
-
-          <span class="eyebrow">
-            Rutina
-          </span>
-
-          <h2>
-            Sin rutina activa
-          </h2>
-
-          <p>
-            No hay una rutina de carrera activa.
-          </p>
-
-          <button
-            type="button"
-            class="primary-action"
-            [disabled]="runningRoutineSaving()"
-            (click)="createDefaultRunningRoutine()"
-          >
-            {{
-              runningRoutineSaving()
-                ? 'Creando…'
-                : 'Crear rutina'
-            }}
-          </button>
-
-          @if (runningRoutineSaveError(); as error) {
-            <p class="error-message">
-              {{ error }}
-            </p>
-          }
-
-        </section>
-
-      }
-
-    } @else if (
-      runningView() === 'analytics'
-    ) {
-
-      <section class="discipline-card">
-        <span class="eyebrow">
-          Análisis
-        </span>
-
-        <h2>
-          Próximamente
-        </h2>
-
-        <p>
-          El análisis de carrera estará disponible
-          en una próxima versión.
-        </p>
-      </section>
-
-    } @else if (
-      !runningHealthConnectSupported()
-    ) {
-
-      <section class="discipline-card">
-
-        <span class="eyebrow">
-          Sesiones de carrera
-        </span>
-
-        <h2>
-          Disponible en Android
-        </h2>
-
-        <p>
-          Health Connect solo está disponible
-          en la app Android.
-        </p>
-
-        <p>
-          Tus sesiones registradas con Garmin
-          se consultan desde Aptus en el móvil.
-        </p>
-
-      </section>
-
-    } @else if (
-      !runningHealthConnectSupported()
-    ) {
-
-      <section class="discipline-card">
-
-        <span class="eyebrow">
-          Sesiones de carrera
-        </span>
-
-        <h2>
-          Disponible en Android
-        </h2>
-
-        <p>
-          Health Connect solo está disponible
-          en la app Android.
-        </p>
-
-        <p>
-          Tus sesiones registradas con Garmin
-          se consultan desde Aptus en el móvil.
-        </p>
-
-      </section>
-
-    } @else if (
-      !runningHealthConnectSupported()
-    ) {
-
-      <section class="discipline-card">
-
-        <span class="eyebrow">
-          Sesiones de carrera
-        </span>
-
-        <h2>
-          Disponible en Android
-        </h2>
-
-        <p>
-          Health Connect solo está disponible
-          en la app Android.
-        </p>
-
-        <p>
-          Tus sesiones registradas con Garmin
-          se consultan desde Aptus en el móvil.
-        </p>
-
-      </section>
-
-    } @else if (runningLoading()) {
-
-      <section class="discipline-card">
-        <p>
-          Cargando sesiones de carrera…
-        </p>
-      </section>
-
-    } @else if (runningError(); as error) {
-
-      <section class="discipline-card">
-        <span class="eyebrow">
-          Health Connect
-        </span>
-
-        <h2>
-          No se pudieron cargar las sesiones
-        </h2>
-
-        <p>
-          {{ error }}
-        </p>
-
-        <button
-          type="button"
-          (click)="loadRunning()"
-        >
-          Reintentar
-        </button>
-      </section>
-
-    } @else if (
-      runningSessions().length === 0
-    ) {
-
-      <section class="discipline-card">
-        <span class="eyebrow">
-          Garmin
-        </span>
-
-        <h2>
-          Sin sesiones recientes
-        </h2>
-
-        <p>
-          No se han encontrado sesiones de carrera
-          de Garmin en los últimos 30 días.
-        </p>
-      </section>
-
-    } @else {
-
-      <section class="endurance-toolbar">
-        <div class="endurance-session-selector">
-          <label for="running-session">
-            Sesión
-          </label>
-
-          <select
-            id="running-session"
-            #runningSessionSelect
-            [value]="selectedRunningSessionIndex()"
-            (change)="
-              selectRunningSession(
-                runningSessionSelect.value
-              )
-            "
-          >
-            @for (
-              session of runningSessions();
-              track session.startTime;
-              let index = $index
-            ) {
-              <option [value]="index">
-                {{
-                  session.startTime
-                    | date:'dd/MM/yyyy'
-                }}
-                ·
-                {{
-                  formatRunningDistance(
-                    session.distanceMeters
-                  )
-                }}
-                ·
-                {{
-                  runningSessionTypeLabel(
-                    session.exerciseType
-                  )
-                }}
-              </option>
-            }
-          </select>
-        </div>
-      </section>
-
-
-      @if (
-        selectedRunningSession();
-        as session
-      ) {
-        <section
-          class="discipline-card endurance-session"
-        >
-          <div class="endurance-session-header">
-            <div>
-              <span class="eyebrow">
-                {{
-                  runningSessionTypeLabel(
-                    session.exerciseType
-                  )
-                }}
-              </span>
-
-              <h2>
-                {{
-                  session.startTime
-                    | date:'dd/MM/yyyy'
-                }}
-              </h2>
-            </div>
-
-            <strong class="endurance-distance">
-              {{
-                formatRunningDistance(
-                  session.distanceMeters
-                )
-              }}
-            </strong>
-          </div>
-
-          <div class="endurance-metrics-grid">
-            <div>
-              <span>Duración</span>
-              <strong>
-                {{
-                  formatDuration(
-                    session.durationSeconds
-                  )
-                }}
-              </strong>
-            </div>
-
-            <div>
-              <span>Ritmo medio</span>
-              <strong>
-                {{
-                  formatRunningPace(
-                    session
-                      .paceSecondsPerKmFromSpeed
-                  )
-                }}
-              </strong>
-            </div>
-
-            <div>
-              <span>FC media</span>
-              <strong>
-                @if (
-                  session.heartRateAverageBpm !==
-                    undefined
-                ) {
-                  {{ session.heartRateAverageBpm }} ppm
-                } @else {
-                  —
-                }
-              </strong>
-            </div>
-
-            <div>
-              <span>FC máxima</span>
-              <strong>
-                @if (
-                  session.heartRateMaxBpm !==
-                    undefined
-                ) {
-                  {{ session.heartRateMaxBpm }} ppm
-                } @else {
-                  —
-                }
-              </strong>
-            </div>
-
-            <div>
-              <span>Velocidad media</span>
-              <strong>
-                {{
-                  formatRunningSpeed(
-                    session
-                      .speedAverageMetersPerSecond
-                  )
-                }}
-              </strong>
-            </div>
-
-            <div>
-              <span>Velocidad máxima</span>
-              <strong>
-                {{
-                  formatRunningSpeed(
-                    session
-                      .speedMaxMetersPerSecond
-                  )
-                }}
-              </strong>
-            </div>
-
-            <div>
-              <span>Vueltas</span>
-              <strong>
-                {{ session.lapCount }}
-              </strong>
-            </div>
-
-            <div>
-              <span>Segmentos</span>
-              <strong>
-                {{ session.segmentCount }}
-              </strong>
-            </div>
-
-            <div>
-              <span>Ruta</span>
-              <strong>
-                {{ session.hasRoute ? 'Sí' : 'No' }}
-              </strong>
-            </div>
-
-            <div>
-              <span>Tipo</span>
-              <strong>
-                {{
-                  runningSessionTypeLabel(
-                    session.exerciseType
-                  )
-                }}
-              </strong>
-            </div>
-          </div>
-        </section>
-      }
-
-    }
-
-  } @else {
-
-    <section class="discipline-card">
-
-      <span class="eyebrow">
-        Sesiones
-      </span>
-
-      <h2>
-        Registro de
-        {{ disciplineLabel() }}
-      </h2>
-
-      <p>
-        Aquí aparecerán las sesiones
-        realizadas y el registro de una
-        nueva actividad.
-      </p>
-
-    </section>
-
-  }
-
-</main>
+}
+</ng-template>

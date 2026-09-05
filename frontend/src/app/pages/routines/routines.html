@@ -8,6 +8,7 @@
   "
 >
 
+  @if (!editorContext) {
   <header class="training-hub-header">
 
     <span class="eyebrow">
@@ -110,6 +111,7 @@
     </h1>
 
   </header>
+  }
 
   @if (saveMessage()) {
     <p class="success-message">
@@ -236,7 +238,7 @@
     </section>
   }
 
-  @if (!creating()) {
+  @if (!creating() && !editorContext) {
     <section class="routine-management routine-management-direct">
 
 
@@ -352,6 +354,7 @@
     </section>
   }
 
+@if (!editorContext) {
 <details
   class="routine-management analysis-management"
   [open]="trainingView() === 'analysis'"
@@ -994,16 +997,25 @@
   </div>
 </details>
 
+}
+
+  @if (editorContext?.mode === 'import' && !creating()) {
+    <label class="routine-import-input">Archivo Excel (.xlsx, .xls)
+      <input type="file" accept=".xlsx,.xls" [disabled]="loadingExercises()" (change)="importRoutineFile($event)" />
+    </label>
+    <p>Se validará con el catálogo de ejercicios de Aptus. Podrás revisar el contenido antes de guardar.</p>
+    @if (error()) { <p class="error-message" role="alert">{{ error() }}</p> }
+  }
   @if (creating()) {
     <section class="builder">
       <div class="builder-header">
         <div>
           <h2>
-            Nueva rutina
+            {{ editorContext ? 'Contenido de la plantilla' : 'Nueva rutina' }}
           </h2>
 
           <p>
-            Revisa las sesiones antes de guardar y activar.
+            {{ editorContext ? 'Revisa las sesiones antes de guardar.' : 'Revisa las sesiones antes de guardar y activar.' }}
           </p>
         </div>
       </div>
@@ -1052,10 +1064,12 @@
                   {{ exercise.name }}
                 </strong>
 
+                @if (!editorContext) {
                 <small>
                   Aptus ID:
                   {{ exercise.exerciseId }}
                 </small>
+                }
               </div>
 
               <div class="exercise-fields">
@@ -1221,7 +1235,7 @@
           {{
             savingRoutine()
               ? 'Guardando...'
-              : 'Guardar y activar rutina'
+              : (editorContext?.saveLabel ?? 'Guardar y activar rutina')
           }}
         </button>
       </div>
@@ -1282,9 +1296,9 @@
                 {{ exercise.equipment }}
               </span>
 
-              <small>
+              @if (!editorContext) {<small>
                 {{ exercise.id }}
-              </small>
+              </small>}
             </button>
           }
         </div>

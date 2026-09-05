@@ -1,4 +1,4 @@
-import { Component, OnInit, signal } from '@angular/core';
+import { Component, Input, OnInit, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import {
@@ -28,6 +28,8 @@ import {
 } from '@capacitor/share';
 import * as XLSX from 'xlsx';
 
+import { RoutineDocument, RoutineEditorContext } from '../../features/routines/domain/routine-editor';
+
 import { AuthService } from '../../core/auth.service';
 
 interface Exercise {
@@ -42,6 +44,7 @@ interface Exercise {
 }
 
 interface RoutineExercise {
+  source?: any;
   exerciseId: string;
   name: string;
   sets: number;
@@ -55,6 +58,7 @@ interface RoutineExercise {
 }
 
 interface RoutineSessionDraft {
+  source?: any;
   sessionId: string;
   name: string;
   exercises: RoutineExercise[];
@@ -223,6 +227,7 @@ interface ChartPoint {
   styleUrl: './routines.scss'
 })
 export class Routines implements OnInit {
+  @Input() editorContext: RoutineEditorContext | null = null;
   trainingView =
     signal<TrainingView>('routine');
 
@@ -287,6 +292,12 @@ export class Routines implements OnInit {
   ) {}
 
   async ngOnInit(): Promise<void> {
+    if (this.editorContext) {
+      if (this.editorContext.mode !== 'import') this.loadEditorRoutine(this.editorContext.routine);
+      await this.loadExercises();
+      return;
+    }
+
 
     const view =
       this.route.snapshot.data[
@@ -952,6 +963,34 @@ export class Routines implements OnInit {
     ).format(date);
   }
 
+  private loadEditorRoutine(routine: RoutineDocument): void {
+    this.routineName.set(routine.name ?? '');
+    this.creating.set(true);
+    this.sessions.set(routine.sessions.map(session => ({
+      source: session,
+      sessionId: session.sessionId,
+      name: session.name ?? session.title ?? 'Sesión',
+      exercises: (session.exercises ?? []).map((exercise: any) => {
+        const p = exercise.prescription ?? exercise;
+        const target = p.target;
+        const duration = p.recordType === 'duration' || target?.type === 'duration';
+        const range = typeof target === 'object' ? target : p.reps;
+        const numbers = String(exercise.target ?? '').match(/\d+(?:\.\d+)?/g)?.map(Number);
+        return {
+          source: exercise, exerciseId: exercise.exerciseId ?? exercise.id,
+          name: exercise.name ?? 'Ejercicio', sets: p.sets ?? 3,
+          targetType: duration ? 'duración' : 'repeticiones',
+          repsMin: range?.min ?? numbers?.[0] ?? 8,
+          repsMax: range?.max ?? numbers?.[1] ?? numbers?.[0] ?? 12,
+          rirMin: p.targetRir?.min ?? exercise.targetRir?.min ?? 1,
+          rirMax: p.targetRir?.max ?? exercise.targetRir?.max ?? 3,
+          restSeconds: p.restSeconds ?? exercise.restSeconds ?? 120,
+          weight: p.weight ?? exercise.weight ?? null,
+        };
+      }),
+    })));
+  }
+
   startManualRoutine(): void {
     this.creating.set(true);
 
@@ -1210,15 +1249,17 @@ export class Routines implements OnInit {
     const now = new Date().toISOString();
 
     return {
-      routineId: `routine-${crypto.randomUUID()}`,
-      schemaVersion: '4.2',
-      revision: 1,
+      ...this.editorContext?.routine,
+      routineId: this.editorContext?.routine.routineId ?? `routine-${crypto.randomUUID()}`,
+      schemaVersion: this.editorContext?.routine.schemaVersion ?? '4.2',
+      revision: this.editorContext ? this.editorContext.routine.revision + (this.editorContext.mode === 'edit' ? 1 : 0) : 1,
       name: this.routineName().trim(),
-      createdAt: now,
+      createdAt: this.editorContext?.routine.createdAt ?? now,
       updatedAt: now,
 
       sessions: this.sessions().map(
         (session, sessionIndex) => ({
+          ...session.source,
           sessionId: session.sessionId,
           name: session.name,
           label: session.name,
@@ -1231,6 +1272,7 @@ export class Routines implements OnInit {
                 'duración';
 
               return {
+                ...exercise.source,
                 exerciseId: exercise.exerciseId,
                 id: exercise.exerciseId,
                 name: exercise.name,
@@ -1262,6 +1304,7 @@ export class Routines implements OnInit {
                     : exercise.weight ?? null,
 
                 prescription: {
+                  ...exercise.source?.prescription,
                   sets: exercise.sets,
                   recordType:
                     isDuration
@@ -1310,6 +1353,7 @@ export class Routines implements OnInit {
   }
 
   async saveAndActivateRoutine(): Promise<void> {
+    if (this.savingRoutine()) return;
     const validationError = this.validateRoutine();
 
     if (validationError) {
@@ -1323,6 +1367,11 @@ export class Routines implements OnInit {
     this.saveMessage.set(null);
 
     try {
+      if (this.editorContext) {
+        await this.editorContext.save(this.buildCanonicalRoutine());
+        return;
+      }
+
       const token = await this.auth.getAccessToken();
 
       if (!token) {

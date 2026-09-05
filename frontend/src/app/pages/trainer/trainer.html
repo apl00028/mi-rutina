@@ -131,6 +131,7 @@
 
   @if (activeView() === 'templates') {
     <section class="trainer-section templates-section">
+      @if (templateMessage()) { <p class="feedback-message" role="status">{{ templateMessage() }}</p> }
       @if (assignmentSuccess()) {
         <div class="feedback-message" role="status">{{ assignmentSuccess() }}</div>
       }
@@ -143,7 +144,49 @@
           <button class="back-button" (click)="loadTemplates()">Reintentar</button>
         </div>
       }
-      @if (loadingTemplates()) {
+      @if (templateAction(); as action) {
+        <section class="assignment-panel template-editor-panel">
+          <button class="back-button" type="button" [disabled]="templateBusy()" (click)="cancelTemplateAction()">← {{ selectedTemplate() ? 'Detalle de plantilla' : 'Plantillas' }}</button>
+          <h2>{{ action === 'edit' ? 'Editar plantilla' : action === 'duplicate' ? 'Duplicar plantilla' : action === 'delete' ? 'Eliminar plantilla' : 'Nueva plantilla' }}</h2>
+          @if (templateActionError()) { <p class="error-message" role="alert">{{ templateActionError() }}</p> }
+          @if (editorContext(); as editor) {
+            <p class="muted">La plantilla se guarda en tu biblioteca. Las copias ya asignadas no se modificarán.</p>
+            @defer (on immediate) { <app-routine-editor [context]="editor" /> }
+            @placeholder { <p>Cargando editor…</p> }
+          } @else if (templateBusy()) {
+            <p role="status">Procesando plantilla…</p>
+          } @else if (action === 'new') {
+            <div class="template-actions">
+              <button class="secondary-button" type="button" (click)="templateAction.set('create')">Crear desde cero</button>
+              <button class="secondary-button" type="button" (click)="templateAction.set('import')">Importar rutina</button>
+            </div>
+          } @else if (action === 'create' || action === 'import') {
+            <p>Elige la disciplina</p>
+            <div class="template-actions">
+              <button class="secondary-button" type="button" (click)="startTemplate('strength')">{{ action === 'import' ? 'Fuerza · Excel' : 'Fuerza' }}</button>
+              @if (action === 'create') { <button class="secondary-button" type="button" (click)="startTemplate('swimming')">Natación</button> }
+              <button class="secondary-button" type="button" (click)="startTemplate('running')">{{ action === 'import' ? 'Carrera · JSON' : 'Carrera' }}</button>
+            </div>
+            <p class="muted">{{ action === 'import' ? 'Usa el Excel de rutinas de Aptus o el JSON de carrera de Health OS. No hay un importador de rutinas de natación o bici.' : 'El editor de bici todavía no está disponible.' }}</p>
+          } @else if (actionTemplate(); as target) {
+            @if (action === 'delete') {
+              <h3>¿Eliminar «{{ target.name }}»?</h3>
+              <p>Las rutinas ya asignadas a deportistas no se modificarán.</p>
+              <p class="muted">Las plantillas con asignaciones no se pueden eliminar.</p>
+              <div class="template-actions">
+                <button class="secondary-button" type="button" (click)="cancelTemplateAction()">Cancelar</button>
+                <button class="secondary-button danger-button" type="button" (click)="deleteTemplate()">Confirmar eliminación</button>
+              </div>
+            } @else {
+              <label>Nombre de la plantilla
+                <input required [ngModel]="templateName()" (ngModelChange)="templateName.set($event)" />
+              </label>
+              @if (action === 'edit') { <p class="muted">Puedes renombrar esta plantilla de bici. La edición de contenido aún no está disponible.</p> }
+              <button class="primary-button" type="button" (click)="saveTemplateCopyOrName()">{{ action === 'duplicate' ? 'Guardar copia' : 'Guardar plantilla' }}</button>
+            }
+          }
+        </section>
+      } @else if (loadingTemplates()) {
         <div class="state-card">Cargando plantillas...</div>
       } @else if (selectedTemplate(); as template) {
         <article class="assignment-panel">
@@ -210,9 +253,15 @@
                 <p class="muted">Esta plantilla no tiene sesiones disponibles.</p>
               }
             </div>
-            <button type="button" class="primary-button" (click)="assignTemplateFromDetail()">
-              Asignar a deportista
-            </button>
+            <div class="template-actions">
+              <button type="button" class="primary-button" (click)="assignTemplateFromDetail()">Asignar a deportista</button>
+              <button type="button" class="secondary-button" (click)="manageTemplate('edit')">Editar</button>
+              <details class="template-more">
+                <summary>Más opciones</summary>
+                <button type="button" class="secondary-button" (click)="manageTemplate('duplicate')">Duplicar</button>
+                <button type="button" class="secondary-button danger-button" (click)="manageTemplate('delete')">Eliminar</button>
+              </details>
+            </div>
           } @else {
             <h3>Asignar plantilla</h3>
             <p class="muted">
@@ -256,9 +305,10 @@
       } @else if (!templatesError()) {
         <div class="section-heading">
           <p>{{ templateCount() }} {{ templateCount() === 1 ? 'plantilla' : 'plantillas' }}</p>
-          <button type="button" class="secondary-button" (click)="loadTemplates()">
-            Actualizar
-          </button>
+          <div class="template-actions">
+            <button type="button" class="primary-button" (click)="newTemplate()">+ Nueva plantilla</button>
+            <button type="button" class="secondary-button" (click)="loadTemplates()">Actualizar</button>
+          </div>
         </div>
         <div class="discipline-filters" role="group" aria-label="Filtrar plantillas por modalidad">
           @for (discipline of disciplineFilters; track discipline) {

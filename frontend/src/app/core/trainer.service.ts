@@ -204,6 +204,9 @@ export interface TrainerTemplateAssignment {
 }
 
 
+export type TrainerTemplateUpdate = Pick<TrainerRoutineTemplate, 'name' | 'discipline' | 'data'>;
+export type TrainerTemplateCreate = TrainerTemplateUpdate & { id: string };
+
 @Injectable({
   providedIn: 'root'
 })
@@ -355,6 +358,34 @@ export class TrainerService {
     );
   }
 
+
+  async getTemplate(templateId: string): Promise<TrainerRoutineTemplate> {
+    const headers = await this.headers();
+    return await firstValueFrom(this.http.get<TrainerRoutineTemplate>(
+      `${this.apiUrl}/trainer/templates/${encodeURIComponent(templateId)}`, { headers }
+    ));
+  }
+
+  async createTemplate(template: TrainerTemplateCreate): Promise<TrainerRoutineTemplate> {
+    const headers = await this.headers();
+    return await firstValueFrom(this.http.post<TrainerRoutineTemplate>(
+      `${this.apiUrl}/trainer/templates`, template, { headers }
+    ));
+  }
+
+  async updateTemplate(templateId: string, template: TrainerTemplateUpdate): Promise<TrainerRoutineTemplate> {
+    const headers = await this.headers();
+    return await firstValueFrom(this.http.put<TrainerRoutineTemplate>(
+      `${this.apiUrl}/trainer/templates/${encodeURIComponent(templateId)}`, template, { headers }
+    ));
+  }
+
+  async deleteTemplate(templateId: string): Promise<void> {
+    const headers = await this.headers();
+    await firstValueFrom(this.http.delete<void>(
+      `${this.apiUrl}/trainer/templates/${encodeURIComponent(templateId)}`, { headers }
+    ));
+  }
 
   async assignTemplate(
     templateId: string,

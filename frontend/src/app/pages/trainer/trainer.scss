@@ -338,3 +338,10 @@ select:focus-visible {
     width: 100%;
   }
 }
+
+.template-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.template-more summary { min-height: 44px; display: flex; align-items: center; cursor: pointer; font-size: 13px; }
+.template-more[open] { display: grid; gap: 8px; }
+.danger-button { color: var(--aptus-danger); }
+.template-editor-panel input { width: 100%; min-height: 44px; box-sizing: border-box; border: 1px solid var(--aptus-border); border-radius: var(--aptus-radius-sm); padding: 10px; color: var(--aptus-text); background: var(--aptus-input-bg); font: inherit; }
+@media (max-width: 480px) { .templates-section .section-heading { flex-wrap: wrap; } }

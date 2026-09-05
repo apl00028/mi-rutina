@@ -3,6 +3,7 @@ import asyncio
 from fastapi import HTTPException
 from fastapi.testclient import TestClient
 import httpx
+import pytest
 
 from app.core.auth import AuthenticatedUser, require_user
 from main import app
@@ -1176,6 +1177,84 @@ def test_foreign_trainer_template_delete_returns_404(monkeypatch):
         )
 
     assert response.status_code == 404
+
+
+@pytest.mark.parametrize(
+    "upstream_status,upstream_body,expected_status",
+    [
+        (409, {"code": "23503"}, 409),
+        (409, {"code": "23505"}, 502),
+        (409, {}, 502),
+        (409, [], 502),
+        (409, "not-json", 502),
+        (500, {"code": "23503"}, 502),
+        (503, {"code": "08006"}, 502),
+    ],
+)
+def test_delete_template_classifies_only_upstream_foreign_key_conflicts(
+    monkeypatch, upstream_status, upstream_body, expected_status
+):
+    from app.domains.trainer import repository
+
+    real_client = httpx.AsyncClient
+
+    def upstream(request):
+        assert request.method == "DELETE"
+        assert request.url.path == "/rest/v1/trainer_routine_templates"
+        assert request.url.params["trainer_id"] == "eq.trainer-123"
+        assert request.url.params["id"] == "eq.template-1"
+        assert request.headers["Authorization"] == "Bearer token-123"
+        if isinstance(upstream_body, str):
+            return httpx.Response(upstream_status, text=upstream_body)
+        return httpx.Response(upstream_status, json=upstream_body)
+
+    # Exercise the real repository -> service -> router path using a fake upstream.
+    monkeypatch.setattr(repository, "_supabase_config", lambda: ("https://example.supabase.co", "test-key"))
+    monkeypatch.setattr(
+        httpx, "AsyncClient",
+        lambda **kwargs: real_client(transport=httpx.MockTransport(upstream), **kwargs),
+    )
+    app.dependency_overrides[require_user] = trainer_user
+    try:
+        response = client.delete(
+            "/api/v1/trainer/templates/template-1",
+            headers={"Authorization": "Bearer token-123"},
+        )
+    finally:
+        app.dependency_overrides.pop(require_user, None)
+
+    assert response.status_code == expected_status
+    assert response.json() == {
+        "detail": (
+            "Trainer template has existing assignments and cannot be deleted"
+            if expected_status == 409
+            else "Could not delete trainer template"
+        )
+    }
+
+
+@pytest.mark.parametrize("user", [normal_user, admin_user])
+def test_delete_template_still_requires_trainer_role(monkeypatch, user):
+    from app.domains.trainer import router as trainer_api
+
+    async def unexpected_delete(*args):
+        pytest.fail("Unauthorized deletion reached the service")
+
+    monkeypatch.setattr(trainer_api, "delete_authenticated_trainer_template", unexpected_delete)
+    app.dependency_overrides[require_user] = user
+    try:
+        response = client.delete(
+            "/api/v1/trainer/templates/template-1",
+            headers={"Authorization": "Bearer token-123"},
+        )
+    finally:
+        app.dependency_overrides.pop(require_user, None)
+    assert response.status_code == 403
+
+
+def test_delete_template_still_requires_authentication():
+    response = client.delete("/api/v1/trainer/templates/template-1")
+    assert response.status_code == 401
 
 
 def test_trainer_templates_route_does_not_accept_trainer_id_query():

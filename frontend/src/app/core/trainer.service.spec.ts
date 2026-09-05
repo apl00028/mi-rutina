@@ -89,6 +89,42 @@ describe(
     }
 
 
+    it.each(['GET', 'POST', 'PUT', 'DELETE'] as const)('uses the authenticated template %s contract', async (method) => {
+      const input = { name: 'Base fuerza', discipline: 'strength' as const, data: { routineId: 'template/a', schemaVersion: '4.2', revision: 1, sessions: [] } };
+      const promise = method === 'GET' ? service.getTemplate('template/a')
+        : method === 'POST' ? service.createTemplate({ id: 'template/a', ...input })
+        : method === 'PUT' ? service.updateTemplate('template/a', input)
+        : service.deleteTemplate('template/a');
+      await flushPromises();
+      const request = http.expectOne(`${environment.apiUrl}/trainer/templates${method === 'POST' ? '' : '/template%2Fa'}`);
+      expect(request.request.method).toBe(method);
+      expect(request.request.headers.get('Authorization')).toBe('Bearer access-token');
+      if (method === 'POST') expect(request.request.body).toEqual({ id: 'template/a', ...input });
+      if (method === 'PUT') expect(request.request.body).toEqual(input);
+      if (method === 'DELETE') {
+        request.flush(null, { status: 204, statusText: 'No Content' });
+        await expect(promise).resolves.toBeUndefined();
+      } else {
+        const response = { id: 'template/a', ...input, created_at: '2026-09-05', updated_at: '2026-09-05' };
+        request.flush(response);
+        await expect(promise).resolves.toEqual(response);
+      }
+    });
+
+    it('propagates the template deletion conflict without changing its status or detail', async () => {
+      const promise = service.deleteTemplate('template-1');
+      const assertion = expect(promise).rejects.toMatchObject({
+        status: 409,
+        error: { detail: 'Trainer template has existing assignments and cannot be deleted' },
+      });
+      await flushPromises();
+      http.expectOne(`${environment.apiUrl}/trainer/templates/template-1`).flush(
+        { detail: 'Trainer template has existing assignments and cannot be deleted' },
+        { status: 409, statusText: 'Conflict' },
+      );
+      await assertion;
+    });
+
     it(
       'loads trainer athletes with the authenticated token',
       async () => {

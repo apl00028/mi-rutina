@@ -350,6 +350,159 @@ describe('Trainer experience', () => {
     expect(text()).toContain('Esta asignación ya existe');
     expect(fixture.componentInstance.routineId()).toBe(id);
   });
+  async function manage(action: 'edit' | 'duplicate' | 'delete') {
+    await start('?view=templates&template=strength-base');
+    const promise = fixture.componentInstance.manageTemplate(action);
+    await settle();
+    const template = templateWithRoutineData();
+    template.data['schemaVersion'] = '4.2';
+    template.data['revision'] = 3;
+    http.expectOne(`${api}/templates/strength-base`).flush(template);
+    await promise;
+    await settle();
+    return template;
+  }
+
+  it('offers creation and the existing supported import formats without a cycling editor', async () => {
+    await start('?view=templates');
+    await click('+ Nueva plantilla');
+    expect(text()).toContain('Crear desde cero');
+    await click('Importar rutina');
+    expect(text()).toContain('Fuerza · Excel');
+    expect(text()).toContain('Carrera · JSON');
+    expect(text()).toContain('No hay un importador de rutinas de natación o bici');
+  });
+
+  it('creates a named template with an internal ID and stays in the reusable library', async () => {
+    await start('?view=templates');
+    await click('+ Nueva plantilla');
+    await click('Crear desde cero');
+    await click('Fuerza');
+    const context = fixture.componentInstance.editorContext()!;
+    expect(context.mode).toBe('create');
+    expect(context.routine.discipline).toBe('strength');
+    expect(context.routine.routineId).toMatch(/^routine-[a-f0-9-]{36}$/);
+    await expect(context.save(context.routine)).rejects.toThrow('Indica un nombre');
+    const data = { ...context.routine, name: '  Base triatlón  ' };
+    const promise = context.save(data);
+    await settle();
+    const request = http.expectOne(`${api}/templates`);
+    expect(request.request.method).toBe('POST');
+    expect(request.request.body.name).toBe('Base triatlón');
+    expect(request.request.body.id).toBe(context.routine.routineId);
+    request.flush({ ...templateWithRoutineData(), id: context.routine.routineId, name: 'Base triatlón', data });
+    await promise;
+    await settle();
+    expect(text()).toContain('Plantilla creada.');
+    expect(fixture.componentInstance.templateCount()).toBe(2);
+    expect(text()).not.toContain(context.routine.routineId);
+    http.expectNone(req => req.url.includes('/routines'));
+  });
+
+  it('loads current content for editing and renames using PUT without assigning or activating', async () => {
+    const template = await manage('edit');
+    const context = fixture.componentInstance.editorContext()!;
+    expect(context.routine.sessions).toEqual(template.data['sessions']);
+    expect(context.routine.revision).toBe(3);
+    const promise = context.save({ ...context.routine, name: 'Plan revisado', revision: 4 });
+    await settle();
+    const request = http.expectOne(`${api}/templates/strength-base`);
+    expect(request.request.method).toBe('PUT');
+    expect(Object.keys(request.request.body).sort()).toEqual(['data', 'discipline', 'name']);
+    expect(request.request.body.name).toBe('Plan revisado');
+    expect(request.request.body.data.revision).toBe(4);
+    request.flush({ ...template, name: 'Plan revisado', data: request.request.body.data });
+    await promise;
+    await settle();
+    expect(text()).toContain('Plan revisado');
+    expect(text()).toContain('Plantilla actualizada.');
+    http.expectNone(req => req.url.includes('/assign') || req.url.includes('/routines'));
+  });
+
+  it('duplicates with editable name, new routine/session IDs and unchanged catalogue exercise IDs', async () => {
+    const template = await manage('duplicate');
+    expect(fixture.componentInstance.templateName()).toBe('Base fuerza · copia');
+    fixture.componentInstance.templateName.set('Otro plan');
+    const promise = fixture.componentInstance.saveTemplateCopyOrName();
+    await settle();
+    const request = http.expectOne(`${api}/templates`);
+    const body = request.request.body;
+    expect(request.request.method).toBe('POST');
+    expect(body.name).toBe('Otro plan');
+    expect(body.id).not.toBe(template.id);
+    expect(body.data.routineId).toBe(body.id);
+    expect(body.data.sessions[0].sessionId).not.toBe('session-a');
+    expect(body.data.sessions[0].exercises[0].exerciseId).toBe('bench-press');
+    expect(body.data.schemaVersion).toBe('4.2');
+    expect(body.data.revision).toBe(1);
+    request.flush({ ...template, id: body.id, name: body.name, data: body.data });
+    await promise;
+    await settle();
+    expect(fixture.componentInstance.templateCount()).toBe(2);
+  });
+
+  it('requires a name for the duplicate', async () => {
+    await manage('duplicate');
+    fixture.componentInstance.templateName.set('  ');
+    await click('Guardar copia');
+    expect(text()).toContain('Indica un nombre');
+    http.expectNone(req => req.method === 'POST');
+  });
+
+  it('shows explicit deletion confirmation and cancelling never deletes', async () => {
+    await manage('delete');
+    expect(text()).toContain('¿Eliminar «Base fuerza»?');
+    expect(text()).toContain('Las plantillas con asignaciones no se pueden eliminar.');
+    http.expectNone(req => req.method === 'DELETE');
+    await click('Cancelar');
+    expect(fixture.componentInstance.templateCount()).toBe(1);
+    expect(fixture.componentInstance.templateAction()).toBeNull();
+    http.expectNone(req => req.method === 'DELETE');
+  });
+
+  it('deletes only after confirmation and returns to the refreshed library', async () => {
+    await manage('delete');
+    await click('Confirmar eliminación');
+    const request = http.expectOne(`${api}/templates/strength-base`);
+    expect(request.request.method).toBe('DELETE');
+    request.flush(null, { status: 204, statusText: 'No Content' });
+    await settle();
+    expect(fixture.componentInstance.templateCount()).toBe(0);
+    expect(fixture.componentInstance.selectedTemplateId()).toBeNull();
+    expect(text()).toContain('Plantilla eliminada.');
+  });
+
+  it.each([409, 502, 503, 404, 0])('retains the template and reports deletion error %s accurately', async (status) => {
+    await manage('delete');
+    await click('Confirmar eliminación');
+    const request = http.expectOne(`${api}/templates/strength-base`);
+    if (status === 0) request.error(new ProgressEvent('error'));
+    else request.flush({}, { status, statusText: 'Error' });
+    await settle();
+    if (status === 409) {
+      expect(text()).toContain('Esta plantilla tiene asignaciones y no puede eliminarse.');
+    } else {
+      expect(text()).toContain('No se pudo eliminar la plantilla. Inténtalo de nuevo.');
+      expect(text()).not.toContain('Esta plantilla tiene asignaciones');
+    }
+    expect(fixture.componentInstance.templateCount()).toBe(1);
+    expect(fixture.componentInstance.templateBusy()).toBe(false);
+  });
+
+  it('ignores a late edit load after navigating away', async () => {
+    await start('?view=templates&template=strength-base');
+    const promise = fixture.componentInstance.manageTemplate('edit');
+    await settle();
+    const request = http.expectOne(`${api}/templates/strength-base`);
+    await router.navigateByUrl('/trainer?view=clients');
+    await settle();
+    request.flush(templateWithRoutineData());
+    await promise;
+    await settle();
+    expect(fixture.componentInstance.editorContext()).toBeNull();
+    expect(fixture.componentInstance.templateAction()).toBeNull();
+  });
+
   function templateWithRoutineData(): TrainerRoutineTemplate {
     return {
       id: 'strength-base',

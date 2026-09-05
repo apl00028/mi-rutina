@@ -1,14 +1,18 @@
+import { parseRunningRoutine } from '../../features/routines/domain/running-routine-import';
+import { RoutineEditorContext } from '../../features/routines/domain/routine-editor';
 import {
   Component,
   Inject,
   InjectionToken,
   OnInit,
-  signal
+  signal,
+  Input
 } from '@angular/core';
 
 import {
   DatePipe,
-  DecimalPipe
+  DecimalPipe,
+  NgTemplateOutlet
 } from '@angular/common';
 
 import {
@@ -268,6 +272,7 @@ const RUNNING_TREADMILL_EXERCISE_TYPE = 34;
   selector: 'app-endurance',
   standalone: true,
   imports: [
+    NgTemplateOutlet,
     DatePipe,
     DecimalPipe,
     TrainingNavigation
@@ -277,6 +282,7 @@ const RUNNING_TREADMILL_EXERCISE_TYPE = 34;
 })
 export class Endurance
   implements OnInit {
+  @Input() editorContext: RoutineEditorContext | null = null;
 
   private readonly apiUrl =
     environment.apiUrl;
@@ -514,6 +520,11 @@ export class Endurance
 
 
   ngOnInit(): void {
+    if (this.editorContext) {
+      this.initializeEmbeddedEditor();
+      return;
+    }
+
 
     const discipline =
       this.route.snapshot.data[
@@ -545,6 +556,79 @@ export class Endurance
     }
   }
 
+
+  private readSwimmingRoutine(stored: StoredSwimmingRoutine): void {
+    const session = stored.sessions[0];
+    if (!session) return;
+      this.swimmingRoutine.set({
+        id: session.sessionId,
+        date: session.date ?? '',
+        title:
+          session.title
+          ?? session.name
+          ?? stored.name
+          ?? 'Rutina de natación',
+        objective:
+          session.objective
+          ?? '',
+        poolLengthMeters:
+          session.poolLengthMeters
+          ?? 25,
+        estimatedDurationMinutes:
+          session.estimatedDurationMinutes
+          ?? 0,
+        blocks:
+          session.blocks
+          ?? [],
+        technicalFocus:
+          session.technicalFocus
+          ?? []
+      });
+  }
+
+  private readRunningRoutine(stored: StoredRunningRoutine): void {
+    const session = stored.sessions[0];
+    if (!session) return;
+      this.runningRoutine.set({
+        id: session.sessionId,
+        date: session.date ?? '',
+        title:
+          session.title
+          ?? session.name
+          ?? stored.name
+          ?? 'Rutina de carrera',
+        objective:
+          session.objective
+          ?? '',
+        estimatedDurationMinutes:
+          session.estimatedDurationMinutes
+          ?? 0,
+        blocks:
+          session.blocks
+          ?? [],
+        notes:
+        session.notes
+        ?? ''
+      });
+  }
+
+  private initializeEmbeddedEditor(): void {
+    const stored = this.editorContext!.routine;
+    const session = stored.sessions[0];
+    if (!session) return;
+    if (stored.discipline === 'swimming') {
+      this.discipline.set('swimming');
+      this.activeSwimmingRoutineRecord.set(stored);
+      this.readSwimmingRoutine(stored);
+      this.startEditingSwimmingRoutine();
+    }
+    if (stored.discipline === 'running') {
+      this.discipline.set('running');
+      this.activeRunningRoutineRecord.set(stored);
+      this.readRunningRoutine(stored);
+      this.startEditingRunningRoutine();
+    }
+  }
 
   changeTrainingDiscipline(
     discipline: string
@@ -624,30 +708,7 @@ export class Endurance
         );
       }
 
-      this.swimmingRoutine.set({
-        id: session.sessionId,
-        date: session.date ?? '',
-        title:
-          session.title
-          ?? session.name
-          ?? stored.name
-          ?? 'Rutina de natación',
-        objective:
-          session.objective
-          ?? '',
-        poolLengthMeters:
-          session.poolLengthMeters
-          ?? 25,
-        estimatedDurationMinutes:
-          session.estimatedDurationMinutes
-          ?? 0,
-        blocks:
-          session.blocks
-          ?? [],
-        technicalFocus:
-          session.technicalFocus
-          ?? []
-      });
+      this.readSwimmingRoutine(stored);
 
     } catch (error: any) {
 
@@ -724,27 +785,7 @@ export class Endurance
         );
       }
 
-      this.runningRoutine.set({
-        id: session.sessionId,
-        date: session.date ?? '',
-        title:
-          session.title
-          ?? session.name
-          ?? stored.name
-          ?? 'Rutina de carrera',
-        objective:
-          session.objective
-          ?? '',
-        estimatedDurationMinutes:
-          session.estimatedDurationMinutes
-          ?? 0,
-        blocks:
-          session.blocks
-          ?? [],
-        notes:
-        session.notes
-        ?? ''
-      });
+      this.readRunningRoutine(stored);
 
     } catch (error: any) {
 
@@ -786,170 +827,13 @@ export class Endurance
   async importRunningRoutineJson():
     Promise<void> {
 
-    const raw =
-      this.runningRoutineImportText()
-        .trim();
-
-    if (!raw) {
-
-      this.runningRoutineSaveError.set(
-        'Pega primero una rutina de Health OS.'
-      );
-
-      return;
-    }
-
-
-    let routine:
-      StoredRunningRoutine;
-
-
+    let routine: StoredRunningRoutine;
     try {
-
-      routine =
-        JSON.parse(raw) as StoredRunningRoutine;
-
-    } catch {
-
-      this.runningRoutineSaveError.set(
-        'El JSON de la rutina no es válido.'
-      );
-
+      routine = parseRunningRoutine(this.runningRoutineImportText().trim());
+    } catch (error) {
+      this.runningRoutineSaveError.set((error as Error).message);
       return;
     }
-
-
-    if (
-      !routine
-      || typeof routine !== 'object'
-      || !routine.routineId
-      || !routine.schemaVersion
-      || !Number.isFinite(
-        routine.revision
-      )
-      || routine.discipline !==
-        'running'
-      || !Array.isArray(
-        routine.sessions
-      )
-      || routine.sessions.length === 0
-    ) {
-
-      this.runningRoutineSaveError.set(
-        'La rutina no tiene el formato esperado para carrera.'
-      );
-
-      return;
-    }
-
-
-    const session =
-      routine.sessions[0];
-
-
-    if (
-      !session
-      || !session.sessionId
-      || !session.title
-      || !Array.isArray(
-        session.blocks
-      )
-      || session.blocks.length === 0
-    ) {
-
-      this.runningRoutineSaveError.set(
-        'La rutina necesita al menos una sesión de carrera con bloques.'
-      );
-
-      return;
-    }
-
-
-    const invalidBlock =
-      session.blocks.some(
-        block =>
-          !block
-          || !block.id
-          || !block.title
-          || !Array.isArray(
-            block.sets
-          )
-          || block.sets.length === 0
-      );
-
-
-    if (invalidBlock) {
-
-      this.runningRoutineSaveError.set(
-        'Cada bloque debe contener al menos una prescripción.'
-      );
-
-      return;
-    }
-
-
-    const invalidSet =
-      session.blocks.some(
-        block =>
-          block.sets.some(
-            set => {
-
-              if (
-                !set
-                || !Number.isFinite(
-                  set.repetitions
-                )
-                || set.repetitions <= 0
-              ) {
-                return true;
-              }
-
-
-              if (
-                set.targetType ===
-                  'duration'
-              ) {
-
-                return (
-                  set.durationSeconds == null
-                  || !Number.isFinite(
-                    set.durationSeconds
-                  )
-                  || set.durationSeconds <= 0
-                );
-              }
-
-
-              if (
-                set.targetType ===
-                  'distance'
-              ) {
-
-                return (
-                  set.distanceMeters == null
-                  || !Number.isFinite(
-                    set.distanceMeters
-                  )
-                  || set.distanceMeters <= 0
-                );
-              }
-
-
-              return true;
-            }
-          )
-      );
-
-
-    if (invalidSet) {
-
-      this.runningRoutineSaveError.set(
-        'Hay una prescripción de carrera no válida.'
-      );
-
-      return;
-    }
-
 
     this.runningRoutineSaving.set(
       true
@@ -1387,6 +1271,7 @@ export class Endurance
 
   cancelEditingRunningRoutine():
     void {
+    if (this.editorContext) { this.editorContext.cancel(); return; }
 
     this.runningRoutineDraft.set(null);
 
@@ -1816,6 +1701,7 @@ export class Endurance
   async saveRunningRoutine():
     Promise<void> {
 
+    if (this.runningRoutineSaving()) return;
     const draft =
       this.runningRoutineDraft();
 
@@ -1946,27 +1832,6 @@ export class Endurance
 
     try {
 
-      const token =
-        await this.auth.getAccessToken();
-
-
-      if (!token) {
-
-        throw new Error(
-          'Necesitas iniciar sesión.'
-        );
-      }
-
-
-      const headers =
-        new HttpHeaders({
-          Authorization:
-            `Bearer ${token}`,
-          'Content-Type':
-            'application/json'
-        });
-
-
       const session =
         stored.sessions[0];
 
@@ -2021,6 +1886,32 @@ export class Endurance
             ...stored.sessions.slice(1)
           ]
         };
+
+
+      if (this.editorContext) {
+        await this.editorContext.save(payload);
+        return;
+      }
+
+      const token =
+        await this.auth.getAccessToken();
+
+
+      if (!token) {
+
+        throw new Error(
+          'Necesitas iniciar sesión.'
+        );
+      }
+
+
+      const headers =
+        new HttpHeaders({
+          Authorization:
+            `Bearer ${token}`,
+          'Content-Type':
+            'application/json'
+        });
 
 
       const saved =
@@ -2165,6 +2056,7 @@ export class Endurance
 
   cancelEditingSwimmingRoutine():
     void {
+    if (this.editorContext) { this.editorContext.cancel(); return; }
 
     this.swimmingRoutineDraft.set(null);
     this.swimmingRoutineEditing.set(false);
@@ -2447,6 +2339,7 @@ export class Endurance
   async saveSwimmingRoutine():
     Promise<void> {
 
+    if (this.swimmingRoutineSaving()) return;
     const draft =
       this.swimmingRoutineDraft();
 
@@ -2521,23 +2414,6 @@ export class Endurance
     );
 
     try {
-      const token =
-        await this.auth.getAccessToken();
-
-      if (!token) {
-        throw new Error(
-          'Necesitas iniciar sesión.'
-        );
-      }
-
-      const headers =
-        new HttpHeaders({
-          Authorization:
-            `Bearer ${token}`,
-          'Content-Type':
-            'application/json'
-        });
-
       const session =
         stored.sessions[0];
 
@@ -2590,6 +2466,28 @@ export class Endurance
             ...stored.sessions.slice(1)
           ]
         };
+
+      if (this.editorContext) {
+        await this.editorContext.save(payload);
+        return;
+      }
+
+      const token =
+        await this.auth.getAccessToken();
+
+      if (!token) {
+        throw new Error(
+          'Necesitas iniciar sesión.'
+        );
+      }
+
+      const headers =
+        new HttpHeaders({
+          Authorization:
+            `Bearer ${token}`,
+          'Content-Type':
+            'application/json'
+        });
 
       const saved =
         await firstValueFrom(

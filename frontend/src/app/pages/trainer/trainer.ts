@@ -1,3 +1,5 @@
+import { RoutineEditor } from '../../features/routines/components/routine-editor/routine-editor';
+import { copyRoutine, newRoutine, RoutineDocument, RoutineEditorContext } from '../../features/routines/domain/routine-editor';
 import { CommonModule } from '@angular/common';
 
 import { Component, OnDestroy, OnInit, computed, signal } from '@angular/core';
@@ -24,7 +26,7 @@ type TrainerView = 'dashboard' | 'athletes' | 'templates';
 @Component({
   selector: 'app-trainer',
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterLink],
+  imports: [CommonModule, FormsModule, RouterLink, RoutineEditor],
   templateUrl: './trainer.html',
   styleUrl: './trainer.scss',
 })
@@ -86,6 +88,155 @@ export class Trainer implements OnInit, OnDestroy {
       .slice(0, 4),
   );
 
+  templateAction = signal<'new' | 'create' | 'import' | 'edit' | 'duplicate' | 'delete' | null>(null);
+  editorContext = signal<RoutineEditorContext | null>(null);
+  actionTemplate = signal<TrainerRoutineTemplate | null>(null);
+  templateName = signal('');
+  templateBusy = signal(false);
+  templateActionError = signal<string | null>(null);
+  templateMessage = signal<string | null>(null);
+  private templateRequestId = 0;
+  private duplicateId: string | null = null;
+
+  newTemplate(): void {
+    this.cancelTemplateAction();
+    this.templateMessage.set(null);
+    this.templateAction.set('new');
+  }
+
+  cancelTemplateAction(): void {
+    if (this.templateBusy()) return;
+    ++this.templateRequestId;
+    this.templateAction.set(null);
+    this.editorContext.set(null);
+    this.actionTemplate.set(null);
+    this.templateActionError.set(null);
+  }
+
+  startTemplate(discipline: 'strength' | 'swimming' | 'running'): void {
+    const mode = this.templateAction() === 'import' ? 'import' : 'create';
+    this.openEditor(newRoutine(discipline), mode);
+  }
+
+  private openEditor(routine: RoutineDocument, mode: RoutineEditorContext['mode']): void {
+    this.editorContext.set({
+      routine, mode, saveLabel: 'Guardar plantilla',
+      cancel: () => this.cancelTemplateAction(),
+      save: async (data) => {
+        if (this.templateBusy()) return;
+        const requestId = this.templateRequestId;
+        const name = data.name?.trim();
+        if (!name) throw new Error('Indica un nombre para la plantilla.');
+        const payload = { name, discipline: routine.discipline as TrainerDiscipline, data: { ...data, routineId: routine.routineId, name } };
+        this.templateBusy.set(true);
+        try {
+          const saved = mode === 'edit'
+            ? await this.trainerService.updateTemplate(routine.routineId, payload)
+            : await this.trainerService.createTemplate({ id: routine.routineId, ...payload });
+          if (requestId !== this.templateRequestId) return;
+          this.applySavedTemplate(saved, mode === 'edit' ? 'Plantilla actualizada.' : 'Plantilla creada.');
+        } catch (error) {
+          throw new Error(this.templateError(error, 'No se pudo guardar la plantilla.'));
+        } finally { if (requestId === this.templateRequestId) this.templateBusy.set(false); }
+      },
+    });
+  }
+
+  async manageTemplate(action: 'edit' | 'duplicate' | 'delete'): Promise<void> {
+    const selected = this.selectedTemplate();
+    if (!selected || this.templateBusy()) return;
+    const requestId = ++this.templateRequestId;
+    this.templateAction.set(action);
+    this.templateBusy.set(true);
+    this.templateActionError.set(null);
+    this.templateMessage.set(null);
+    try {
+      const template = await this.trainerService.getTemplate(selected.id);
+      if (requestId !== this.templateRequestId) return;
+      this.actionTemplate.set(template);
+      this.templateName.set(action === 'duplicate' ? `${template.name} · copia` : template.name);
+      if (action === 'duplicate') this.duplicateId = `routine-${crypto.randomUUID()}`;
+      if (action === 'edit' && template.discipline !== 'cycling') {
+        this.openEditor({ ...template.data, routineId: template.id, name: template.name, discipline: template.discipline } as unknown as RoutineDocument, 'edit');
+      }
+    } catch (error) {
+      if (requestId === this.templateRequestId) this.templateActionError.set(this.templateError(error, 'No se pudo cargar la plantilla.'));
+    } finally {
+      if (requestId === this.templateRequestId) this.templateBusy.set(false);
+    }
+  }
+
+  async saveTemplateCopyOrName(): Promise<void> {
+    const template = this.actionTemplate();
+    const name = this.templateName().trim();
+    if (!template || this.templateBusy()) return;
+    if (!name) { this.templateActionError.set('Indica un nombre para la plantilla.'); return; }
+    const requestId = this.templateRequestId;
+    this.templateBusy.set(true);
+    this.templateActionError.set(null);
+    try {
+      const duplicate = this.templateAction() === 'duplicate';
+      const data = duplicate
+        ? copyRoutine(template.data as unknown as RoutineDocument)
+        : structuredClone(template.data) as unknown as RoutineDocument;
+      if (duplicate) data.routineId = this.duplicateId!;
+      data.name = name;
+      if (!duplicate) data.revision += 1;
+      data.updatedAt = new Date().toISOString();
+      const payload = { name, discipline: template.discipline, data: { ...data } };
+      const saved = duplicate
+        ? await this.trainerService.createTemplate({ id: data.routineId, ...payload })
+        : await this.trainerService.updateTemplate(template.id, payload);
+      if (requestId !== this.templateRequestId) return;
+      this.applySavedTemplate(saved, duplicate ? 'Plantilla duplicada.' : 'Plantilla actualizada.');
+    } catch (error) {
+      if (requestId === this.templateRequestId) this.templateActionError.set(this.templateError(error, 'No se pudo guardar la plantilla.'));
+    } finally { if (requestId === this.templateRequestId) this.templateBusy.set(false); }
+  }
+
+  async deleteTemplate(): Promise<void> {
+    const template = this.actionTemplate();
+    if (!template || this.templateAction() !== 'delete' || this.templateBusy()) return;
+    const requestId = this.templateRequestId;
+    this.templateBusy.set(true);
+    this.templateActionError.set(null);
+    try {
+      await this.trainerService.deleteTemplate(template.id);
+      this.templates.update(items => items.filter(item => item.id !== template.id));
+      if (requestId !== this.templateRequestId) return;
+      this.templateAction.set(null);
+      this.actionTemplate.set(null);
+      this.templateMessage.set('Plantilla eliminada.');
+      this.backToTemplateList();
+    } catch (error) {
+      if (requestId !== this.templateRequestId) return;
+      this.templateActionError.set(
+        error instanceof HttpErrorResponse && error.status === 409
+          ? 'Esta plantilla tiene asignaciones y no puede eliminarse.'
+          : 'No se pudo eliminar la plantilla. Inténtalo de nuevo.',
+      );
+    } finally { if (requestId === this.templateRequestId) this.templateBusy.set(false); }
+  }
+
+  private applySavedTemplate(template: TrainerRoutineTemplate, message: string): void {
+    this.templates.update(items => [template, ...items.filter(item => item.id !== template.id)]);
+    this.disciplineFilter.set('all');
+    this.templateAction.set(null);
+    this.editorContext.set(null);
+    this.actionTemplate.set(null);
+    this.templateMessage.set(message);
+    this.selectTemplate(template);
+  }
+
+  private templateError(error: unknown, fallback: string): string {
+    if (error instanceof HttpErrorResponse) {
+      if (error.status === 404) return 'La plantilla ya no está disponible. Vuelve a la biblioteca y actualiza el listado.';
+      if (error.status === 422) return 'El contenido de la rutina no es válido. Revisa las sesiones antes de guardar.';
+      return fallback;
+    }
+    return error instanceof Error ? error.message : fallback;
+  }
+
   private overviewLoadId = 0;
   private routeSubscription: Subscription | null = null;
 
@@ -114,6 +265,12 @@ export class Trainer implements OnInit, OnDestroy {
 
   ngOnInit(): void {
     this.routeSubscription = this.route.queryParamMap.subscribe((params) => {
+      ++this.templateRequestId;
+      this.templateAction.set(null);
+      this.editorContext.set(null);
+      this.actionTemplate.set(null);
+      this.templateBusy.set(false);
+      this.templateActionError.set(null);
       this.activeView.set(this.viewFromQuery(params.get('view')));
       this.selectedTemplateId.set(params.get('template'));
       this.assigningFromDetail.set(false);
@@ -125,6 +282,7 @@ export class Trainer implements OnInit, OnDestroy {
 
   ngOnDestroy(): void {
     ++this.overviewLoadId;
+    ++this.templateRequestId;
     this.routeSubscription?.unsubscribe();
   }
 

@@ -485,6 +485,26 @@ async def delete_trainer_template(
             detail="Supabase is not configured.",
         ) from exc
     except httpx.HTTPStatusError as exc:
+        # PostgREST also uses 409 for other constraint errors (e.g. 23505).
+        # Only a confirmed foreign-key violation is an assignment conflict.
+        if exc.response.status_code == status.HTTP_409_CONFLICT:
+            try:
+                upstream_error = exc.response.json()
+            except ValueError:
+                upstream_error = None
+
+            if (
+                isinstance(upstream_error, dict)
+                and upstream_error.get("code") == "23503"
+            ):
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail=(
+                        "Trainer template has existing assignments "
+                        "and cannot be deleted"
+                    ),
+                ) from exc
+
         raise HTTPException(
             status_code=(
                 status.HTTP_502_BAD_GATEWAY

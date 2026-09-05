@@ -1180,3 +1180,6 @@
     flex: 1 1 140px;
   }
 }
+
+.embedded-routine-editor { min-width: 0; }
+.embedded-routine-editor input, .embedded-routine-editor select, .embedded-routine-editor textarea { max-width: 100%; box-sizing: border-box; }

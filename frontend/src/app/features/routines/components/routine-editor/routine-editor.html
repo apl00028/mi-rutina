@@ -1,0 +1,43 @@
+@if (context.routine.discipline === 'strength') {
+  @defer (on immediate) { <app-routines [editorContext]="context" /> }
+  @placeholder { <p>Cargando editor…</p> }
+} @else {
+  @if (error()) { <p class="error-message" role="alert">{{ error() }}</p> }
+  @if (context.mode === 'import' && !importReady()) {
+    <label>Archivo JSON de carrera
+      <input type="file" accept=".json,application/json" (change)="readJson($event)" />
+    </label>
+    <label>O pega la rutina de Health OS
+      <textarea [ngModel]="importText()" (ngModelChange)="importText.set($event)" rows="5"></textarea>
+    </label>
+    <button type="button" (click)="importJson()">Previsualizar rutina</button>
+  } @else {
+    <label>Nombre de la plantilla
+      <input type="text" required [disabled]="saving()" [ngModel]="name()" (ngModelChange)="name.set($event)" />
+    </label>
+    @if (sessionContext(); as session) {
+      @defer (on immediate) { <app-endurance [editorContext]="session" /> }
+      @placeholder { <p>Cargando editor…</p> }
+    } @else {
+      <p>Revisa las sesiones antes de guardar la plantilla.</p>
+      @for (session of document()!.sessions; track session.sessionId) {
+        <article>
+          <strong>{{ sessionTitle(session, $index) }}</strong>
+          @for (block of session.blocks; track $index) {
+            <p>{{ block.title }} · {{ block.sets.length }} {{ block.sets.length === 1 ? 'serie' : 'series' }}</p>
+          }
+          <div class="actions">
+            <button type="button" [disabled]="saving()" (click)="editSession($index)">Editar sesión</button>
+            @if (document()!.sessions.length > 1) {
+              <button type="button" [disabled]="saving()" (click)="removeSession($index)">Eliminar sesión</button>
+            }
+          </div>
+        </article>
+      }
+      <div class="actions">
+        <button type="button" [disabled]="saving()" (click)="addSession()">+ Añadir sesión</button>
+        <button class="primary-action" type="button" [disabled]="saving()" (click)="save()">{{ saving() ? 'Guardando…' : context.saveLabel }}</button>
+      </div>
+    }
+  }
+}

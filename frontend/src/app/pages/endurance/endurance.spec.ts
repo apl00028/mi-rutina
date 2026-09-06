@@ -34,6 +34,7 @@ import {
 import type {
   HealthConnectRunningMetricSession
 } from '../../core/health-connect.plugin';
+import { RunningService, PersistedRunningSession } from '../../core/running.service';
 import {
   ENDURANCE_HEALTH_CONNECT,
   Endurance
@@ -538,6 +539,10 @@ describe('Endurance swimming integration', () => {
 
 
 describe('Endurance running session', () => {
+  const runningApi = {
+    listSessions: vi.fn(),
+    syncSessions: vi.fn()
+  };
 
   const http = {
     get: vi.fn(),
@@ -558,6 +563,15 @@ describe('Endurance running session', () => {
     http.get.mockReset();
     http.post.mockReset();
     http.put.mockReset();
+
+    runningApi.listSessions.mockReset().mockResolvedValue([]);
+    runningApi.syncSessions.mockReset().mockImplementation(async (sessions: HealthConnectRunningMetricSession[]) => ({
+      synced: sessions.length,
+      results: sessions.map((session, index) => ({
+        index, recordId: session.recordId, sourcePackage: session.sourcePackage,
+        session: persistedSession({ source_record_id: session.recordId, source_package: session.sourcePackage })
+      }))
+    }));
 
     await TestBed.configureTestingModule({
       imports: [
@@ -594,7 +608,8 @@ describe('Endurance running session', () => {
         {
           provide: ENDURANCE_HEALTH_CONNECT,
           useValue: healthConnect
-        }
+        },
+        { provide: RunningService, useValue: runningApi }
       ]
     }).compileComponents();
   });
@@ -626,6 +641,17 @@ describe('Endurance running session', () => {
       speedMaxMetersPerSecond: 5,
       speedSampleCount: 100,
       paceSecondsPerKmFromSpeed: 250,
+      ...overrides
+    };
+  }
+
+  function persistedSession(overrides: Partial<PersistedRunningSession> = {}): PersistedRunningSession {
+    return {
+      id: 'persisted-1', source: 'health_connect',
+      source_package: 'com.garmin.android.apps.connectmobile', source_record_id: 'hc-running-1',
+      started_at: '2026-08-30T08:00:00Z', ended_at: '2026-08-30T08:25:00Z',
+      data: { schema_version: 1, exercise_type: 33, distance_meters: 5000,
+        speed_average_meters_per_second: 4 },
       ...overrides
     };
   }
@@ -668,6 +694,7 @@ describe('Endurance running session', () => {
 
     fixture.detectChanges();
     await fixture.whenStable();
+    await vi.waitFor(() => expect(fixture.componentInstance.runningLoading()).toBe(false));
     fixture.detectChanges();
 
     return {
@@ -729,6 +756,7 @@ describe('Endurance running session', () => {
 
     fixture.detectChanges();
     await fixture.whenStable();
+    await vi.waitFor(() => expect(fixture.componentInstance.runningLoading()).toBe(false));
     fixture.detectChanges();
 
     expect(
@@ -743,16 +771,149 @@ describe('Endurance running session', () => {
     expect(
       fixture.nativeElement.textContent
     ).toContain(
-      'Disponible en Android'
+      'Sin sesiones de carrera'
     );
 
-    expect(
-      fixture.nativeElement.textContent
-    ).toContain(
-      'Health Connect solo está disponible'
-    );
+    expect(runningApi.listSessions).toHaveBeenCalledOnce();
+    expect(runningApi.syncSessions).not.toHaveBeenCalled();
   });
 
+
+  it('shows persisted sessions on web with elapsed duration, pace and unknown metrics', async () => {
+    runningApi.listSessions.mockResolvedValue([persistedSession()]);
+    const fixture = TestBed.createComponent(Endurance);
+    vi.spyOn(fixture.componentInstance, 'runningHealthConnectSupported').mockReturnValue(false);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    await vi.waitFor(() => expect(fixture.componentInstance.runningLoading()).toBe(false));
+    fixture.detectChanges();
+    const text = fixture.nativeElement.textContent;
+    expect(text).toContain('5.00 km');
+    expect(text).toContain('25:00');
+    expect(text).toContain('4:10 /km');
+    expect(fixture.componentInstance.selectedRunningSession()?.lapCount).toBeUndefined();
+    expect(text).toContain('—');
+    expect(healthConnect.readGarminRunningMetrics).not.toHaveBeenCalled();
+    expect(runningApi.syncSessions).not.toHaveBeenCalled();
+  });
+
+  it('deduplicates by writer and record, prefers local metrics, and keeps same-time records', async () => {
+    runningApi.listSessions.mockResolvedValue([persistedSession({
+      data: { schema_version: 1, exercise_type: 33, distance_meters: 4000 }
+    })]);
+    const local = runningSession();
+    const { fixture } = await renderRunning([
+      local, runningSession({ recordId: 'other' }), runningSession({ sourcePackage: 'other.writer' })
+    ]);
+    expect(fixture.componentInstance.runningSessions()).toHaveLength(3);
+    expect(fixture.componentInstance.runningSessions().find(s =>
+      s.recordId === local.recordId && s.sourcePackage === local.sourcePackage
+    )).toEqual(local);
+    expect(fixture.nativeElement.querySelectorAll('#running-session option')).toHaveLength(3);
+    expect(runningApi.listSessions).toHaveBeenCalledOnce();
+  });
+
+  it('keeps local sessions visible when GET and sync fail', async () => {
+    runningApi.listSessions.mockRejectedValue(new Error('GET failed'));
+    runningApi.syncSessions.mockRejectedValue(new Error('POST failed'));
+    const { fixture } = await renderRunning([runningSession()]);
+    expect(fixture.componentInstance.runningSessions()).toHaveLength(1);
+    expect(fixture.nativeElement.textContent).toContain('5.00 km');
+    expect(fixture.componentInstance.runningError()).toContain('sesiones guardadas');
+    expect(fixture.componentInstance.runningSyncError()).toContain('sincronizar');
+  });
+
+  it('keeps persisted sessions when Health Connect fails', async () => {
+    runningApi.listSessions.mockResolvedValue([persistedSession()]);
+    healthConnect.readGarminRunningMetrics.mockRejectedValue(new Error('HC unavailable'));
+    const fixture = TestBed.createComponent(Endurance);
+    vi.spyOn(fixture.componentInstance, 'runningHealthConnectSupported').mockReturnValue(true);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    await vi.waitFor(() => expect(fixture.componentInstance.runningLoading()).toBe(false));
+    fixture.detectChanges();
+    expect(fixture.nativeElement.textContent).toContain('5.00 km');
+    expect(fixture.componentInstance.runningError()).toBe('HC unavailable');
+    expect(runningApi.syncSessions).not.toHaveBeenCalled();
+  });
+
+  it('shows a web GET error without attempting Health Connect', async () => {
+    runningApi.listSessions.mockRejectedValue(new Error('offline'));
+    const fixture = TestBed.createComponent(Endurance);
+    vi.spyOn(fixture.componentInstance, 'runningHealthConnectSupported').mockReturnValue(false);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    await vi.waitFor(() => expect(fixture.componentInstance.runningLoading()).toBe(false));
+    fixture.detectChanges();
+    expect(fixture.nativeElement.textContent).toContain('No se pudieron cargar las sesiones');
+    expect(healthConnect.readGarminRunningMetrics).not.toHaveBeenCalled();
+  });
+
+  it('keeps successful GET and local data when sync rejects or partially fails', async () => {
+    runningApi.listSessions.mockResolvedValue([persistedSession({ source_record_id: 'persisted-only' })]);
+    runningApi.syncSessions.mockResolvedValue({ synced: 1, results: [
+      { index: 0, recordId: 'hc-running-1', sourcePackage: runningSession().sourcePackage, session: persistedSession() },
+      { index: 1, recordId: 'failed', sourcePackage: runningSession().sourcePackage,
+        error: { status_code: 502, detail: 'Unavailable' } }
+    ] });
+    const { fixture } = await renderRunning([runningSession(), runningSession({ recordId: 'failed' })]);
+    expect(fixture.componentInstance.runningSessions()).toHaveLength(3);
+    expect(fixture.componentInstance.runningSyncError()).toBeTruthy();
+    runningApi.syncSessions.mockRejectedValue(new Error('offline'));
+    await fixture.componentInstance.loadRunning();
+    expect(fixture.componentInstance.runningSessions()).toHaveLength(3);
+  });
+
+  it('handles empty sources without syncing an empty batch', async () => {
+    const { fixture } = await renderRunning([]);
+    expect(fixture.nativeElement.textContent).toContain('Sin sesiones de carrera');
+    expect(runningApi.syncSessions).not.toHaveBeenCalled();
+  });
+
+  it('sends all native fields in batches of 25 and continues after a failed batch', async () => {
+    const sessions = Array.from({ length: 51 }, (_, i) => runningSession({ recordId: `record-${i}` }));
+    runningApi.syncSessions.mockRejectedValueOnce(new Error('first batch failed'));
+    const { fixture } = await renderRunning(sessions);
+    expect(runningApi.syncSessions.mock.calls.map(call => call[0].length)).toEqual([25, 25, 1]);
+    expect(runningApi.syncSessions.mock.calls.flatMap(call => call[0])).toEqual(sessions);
+    expect(fixture.componentInstance.runningSessions()).toHaveLength(51);
+    expect(fixture.componentInstance.runningSyncError()).toBeTruthy();
+  });
+
+  it('resyncs corrected metrics and retains selection by identity after reordering', async () => {
+    const { fixture, readGarminRunningMetrics } = await renderRunning([
+      runningSession(), runningSession({ recordId: 'selected', startTime: '2026-08-29T08:00:00Z' })
+    ]);
+    fixture.componentInstance.selectRunningSession('1');
+    const corrected = runningSession({ recordId: 'selected', startTime: '2026-08-31T08:00:00Z',
+      endTime: '2026-08-31T08:25:00Z', distanceMeters: 6000 });
+    readGarminRunningMetrics.mockResolvedValue({ sessions: [corrected, runningSession()] });
+    await fixture.componentInstance.loadRunning();
+    expect(fixture.componentInstance.selectedRunningSession()).toEqual(corrected);
+    expect(fixture.componentInstance.selectedRunningSessionIndex()).toBe(0);
+    expect(runningApi.syncSessions).toHaveBeenCalledTimes(2);
+    expect(runningApi.syncSessions.mock.calls[1][0][0]).toEqual(corrected);
+  });
+
+  it('publishes local sessions while GET is pending and avoids concurrent duplicate loads', async () => {
+    let resolveGet!: (value: PersistedRunningSession[]) => void;
+    runningApi.listSessions.mockReturnValue(new Promise(resolve => { resolveGet = resolve; }));
+    mockRunningSessions([runningSession(), runningSession({ recordId: 'selected-late' })]);
+    const fixture = TestBed.createComponent(Endurance);
+    vi.spyOn(fixture.componentInstance, 'runningHealthConnectSupported').mockReturnValue(true);
+    const loading = fixture.componentInstance.loadRunning();
+    await Promise.resolve();
+    await fixture.componentInstance.loadRunning();
+    expect(fixture.componentInstance.runningSessions()).toHaveLength(2);
+    fixture.componentInstance.selectRunningSession('1');
+    expect(runningApi.listSessions).toHaveBeenCalledOnce();
+    expect(healthConnect.readGarminRunningMetrics).toHaveBeenCalledOnce();
+    await vi.waitFor(() => expect(runningApi.syncSessions).toHaveBeenCalledOnce());
+    resolveGet([]);
+    await loading;
+    expect(fixture.componentInstance.runningSessions()).toHaveLength(2);
+    expect(fixture.componentInstance.selectedRunningSession()?.recordId).toBe('selected-late');
+  });
 
   it('loads the active running routine for the running discipline', async () => {
     http.get.mockReturnValue(
@@ -1144,6 +1305,7 @@ describe('Endurance running session', () => {
       await renderRunning([
         runningSession(),
         runningSession({
+          recordId: 'hc-treadmill-2',
           exerciseType: 34,
           startTime:
             '2026-08-29T08:00:00Z',
@@ -1228,6 +1390,7 @@ describe('Endurance running session', () => {
 
     fixture.detectChanges();
     await fixture.whenStable();
+    await vi.waitFor(() => expect(fixture.componentInstance.runningLoading()).toBe(false));
     fixture.detectChanges();
 
     expect(

@@ -1595,6 +1595,18 @@
     discipline() === 'running'
   ) {
 
+    @if (runningView() === 'session') {
+      <button type="button" (click)="loadRunning()" [disabled]="runningLoading()">
+        {{ runningLoading() ? 'Actualizando…' : 'Actualizar sesiones' }}
+      </button>
+      @if (runningError() && runningSessions().length > 0) {
+        <p class="error-message" role="alert">{{ runningError() }}</p>
+      }
+      @if (runningSyncError()) {
+        <p class="error-message" role="alert">{{ runningSyncError() }}</p>
+      }
+    }
+
     @if (
       runningView() === 'routine'
     ) {
@@ -1980,85 +1992,7 @@
         </p>
       </section>
 
-    } @else if (
-      !runningHealthConnectSupported()
-    ) {
-
-      <section class="discipline-card">
-
-        <span class="eyebrow">
-          Sesiones de carrera
-        </span>
-
-        <h2>
-          Disponible en Android
-        </h2>
-
-        <p>
-          Health Connect solo está disponible
-          en la app Android.
-        </p>
-
-        <p>
-          Tus sesiones registradas con Garmin
-          se consultan desde Aptus en el móvil.
-        </p>
-
-      </section>
-
-    } @else if (
-      !runningHealthConnectSupported()
-    ) {
-
-      <section class="discipline-card">
-
-        <span class="eyebrow">
-          Sesiones de carrera
-        </span>
-
-        <h2>
-          Disponible en Android
-        </h2>
-
-        <p>
-          Health Connect solo está disponible
-          en la app Android.
-        </p>
-
-        <p>
-          Tus sesiones registradas con Garmin
-          se consultan desde Aptus en el móvil.
-        </p>
-
-      </section>
-
-    } @else if (
-      !runningHealthConnectSupported()
-    ) {
-
-      <section class="discipline-card">
-
-        <span class="eyebrow">
-          Sesiones de carrera
-        </span>
-
-        <h2>
-          Disponible en Android
-        </h2>
-
-        <p>
-          Health Connect solo está disponible
-          en la app Android.
-        </p>
-
-        <p>
-          Tus sesiones registradas con Garmin
-          se consultan desde Aptus en el móvil.
-        </p>
-
-      </section>
-
-    } @else if (runningLoading()) {
+    } @else if (runningLoading() && runningSessions().length === 0) {
 
       <section class="discipline-card">
         <p>
@@ -2066,11 +2000,11 @@
         </p>
       </section>
 
-    } @else if (runningError(); as error) {
+    } @else if (runningSessions().length === 0 && runningError(); as error) {
 
       <section class="discipline-card">
         <span class="eyebrow">
-          Health Connect
+          Sesiones de carrera
         </span>
 
         <h2>
@@ -2099,12 +2033,11 @@
         </span>
 
         <h2>
-          Sin sesiones recientes
+          Sin sesiones de carrera
         </h2>
 
         <p>
-          No se han encontrado sesiones de carrera
-          de Garmin en los últimos 30 días.
+          No hay sesiones de carrera disponibles.
         </p>
       </section>
 
@@ -2128,7 +2061,7 @@
           >
             @for (
               session of runningSessions();
-              track session.startTime;
+              track runningSessionKey(session);
               let index = $index
             ) {
               <option [value]="index">
@@ -2217,8 +2150,7 @@
               <span>FC media</span>
               <strong>
                 @if (
-                  session.heartRateAverageBpm !==
-                    undefined
+                  session.heartRateAverageBpm != null
                 ) {
                   {{ session.heartRateAverageBpm }} ppm
                 } @else {
@@ -2231,8 +2163,7 @@
               <span>FC máxima</span>
               <strong>
                 @if (
-                  session.heartRateMaxBpm !==
-                    undefined
+                  session.heartRateMaxBpm != null
                 ) {
                   {{ session.heartRateMaxBpm }} ppm
                 } @else {
@@ -2268,21 +2199,21 @@
             <div>
               <span>Vueltas</span>
               <strong>
-                {{ session.lapCount }}
+                {{ session.lapCount ?? '—' }}
               </strong>
             </div>
 
             <div>
               <span>Segmentos</span>
               <strong>
-                {{ session.segmentCount }}
+                {{ session.segmentCount ?? '—' }}
               </strong>
             </div>
 
             <div>
               <span>Ruta</span>
               <strong>
-                {{ session.hasRoute ? 'Sí' : 'No' }}
+                {{ session.hasRoute == null ? '—' : session.hasRoute ? 'Sí' : 'No' }}
               </strong>
             </div>
 

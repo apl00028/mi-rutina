@@ -1,5 +1,9 @@
 import { parseRunningRoutine } from '../../features/routines/domain/running-routine-import';
 import { RoutineEditorContext } from '../../features/routines/domain/routine-editor';
+import { RunningService } from '../../core/running.service';
+import {
+  RunningSessionView, mergeRunningSessions, persistedRunningSessionToView, runningSessionKey
+} from '../../features/running/domain/running-session';
 import {
   Component,
   Inject,
@@ -333,12 +337,17 @@ export class Endurance
     signal<string | null>(null);
 
   readonly runningSessions =
-    signal<HealthConnectRunningMetricSession[]>(
+    signal<RunningSessionView[]>(
       []
     );
 
   readonly selectedRunningSessionIndex =
     signal(0);
+
+  readonly runningSessionKey = runningSessionKey;
+  readonly runningSyncError = signal<string | null>(null);
+  private runningPersistedSessions: RunningSessionView[] = [];
+  private runningLocalSessions: HealthConnectRunningMetricSession[] = [];
 
   readonly runningView =
     signal<
@@ -513,6 +522,7 @@ export class Endurance
     private router: Router,
     private http: HttpClient,
     private auth: AuthService,
+    private runningApi: RunningService,
     @Inject(ENDURANCE_HEALTH_CONNECT)
     private healthConnect:
       EnduranceHealthConnect
@@ -1977,53 +1987,75 @@ export class Endurance
 
 
   async loadRunning(): Promise<void> {
-
-    if (this.runningLoading()) {
-      return;
-    }
-
-    if (!this.runningHealthConnectSupported()) {
-      this.runningSessions.set([]);
-      this.runningError.set(null);
-      this.runningLoading.set(false);
-      return;
-    }
-
+    if (this.runningLoading()) return;
+    const selected = this.selectedRunningSession();
+    const selectedKey = selected ? runningSessionKey(selected) : null;
     this.runningLoading.set(true);
     this.runningError.set(null);
+    this.runningSyncError.set(null);
+    const errors: string[] = [];
+    const confirmedDuringLoad: RunningSessionView[] = [];
+    const publish = () => {
+      const current = this.selectedRunningSession();
+      const preferredKey = current ? runningSessionKey(current) : selectedKey;
+      const sessions = mergeRunningSessions(this.runningPersistedSessions, this.runningLocalSessions);
+      this.runningSessions.set(sessions);
+      const index = sessions.findIndex(session => runningSessionKey(session) === preferredKey);
+      this.selectedRunningSessionIndex.set(index >= 0 ? index : 0);
+    };
+    const failed = (message: string) => {
+      errors.push(message);
+      this.runningError.set(errors.join(' '));
+    };
+
+    const persisted = (async () => {
+      try {
+        const sessions = await this.runningApi.listSessions();
+        this.runningPersistedSessions = mergeRunningSessions(
+          [...sessions.map(persistedRunningSessionToView), ...confirmedDuringLoad], [],
+        );
+        publish();
+      } catch {
+        failed('No se pudieron cargar las sesiones guardadas de carrera.');
+      }
+    })();
+
+    const local = (async () => {
+      if (!this.runningHealthConnectSupported()) return;
+      try {
+        const result = await this.healthConnect.readGarminRunningMetrics();
+        this.runningLocalSessions = result.sessions;
+        publish();
+      } catch (error: any) {
+        failed(error?.message ?? 'No se pudieron leer las carreras de Health Connect.');
+        return;
+      }
+
+      // Sync independently of GET. Keep confirmations from this load so a
+      // late GET snapshot cannot overwrite newly saved sessions.
+      for (let offset = 0; offset < this.runningLocalSessions.length; offset += 25) {
+        const batch = this.runningLocalSessions.slice(offset, offset + 25);
+        try {
+          const response = await this.runningApi.syncSessions(batch);
+          const confirmed = response.results.flatMap(item =>
+            item.session && !item.error ? [persistedRunningSessionToView(item.session)] : [],
+          );
+          confirmedDuringLoad.push(...confirmed);
+          this.runningPersistedSessions = mergeRunningSessions(
+            [...this.runningPersistedSessions, ...confirmed], [],
+          );
+          if (confirmed.length !== batch.length || response.results.some(item => item.error)) {
+            this.runningSyncError.set('Algunas carreras no se pudieron sincronizar. Puedes reintentar.');
+          }
+          publish();
+        } catch {
+          this.runningSyncError.set('No se pudieron sincronizar algunas carreras. Puedes reintentar.');
+        }
+      }
+    })();
 
     try {
-      const result =
-        await this.healthConnect
-          .readGarminRunningMetrics();
-
-      const sessions = [
-        ...result.sessions
-      ].sort(
-        (left, right) =>
-          new Date(
-            right.startTime
-          ).getTime()
-          -
-          new Date(
-            left.startTime
-          ).getTime()
-      );
-
-      this.runningSessions.set(
-        sessions
-      );
-
-      this.selectedRunningSessionIndex.set(
-        0
-      );
-
-    } catch (error: any) {
-      this.runningError.set(
-        error?.message
-        ?? 'No se pudieron cargar las sesiones de carrera.'
-      );
-
+      await Promise.all([persisted, local]);
     } finally {
       this.runningLoading.set(false);
     }
@@ -3490,7 +3522,7 @@ export class Endurance
 
 
   selectedRunningSession():
-    HealthConnectRunningMetricSession | null {
+    RunningSessionView | null {
 
     return this.runningSessions()[
       this.selectedRunningSessionIndex()

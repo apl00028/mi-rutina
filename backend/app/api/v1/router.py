@@ -20,6 +20,7 @@ from app.domains.telemetry.router import (
     router as telemetry_router,
 )
 from app.domains.swimming.router import router as swimming_router
+from app.domains.running.router import router as running_router
 from app.domains.trainer.router import router as trainer_router
 
 
@@ -76,6 +77,8 @@ router.include_router(
 router.include_router(
     swimming_router
 )
+
+router.include_router(running_router)
 
 
 router.include_router(

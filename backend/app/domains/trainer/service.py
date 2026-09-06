@@ -14,6 +14,7 @@ from app.domains.trainer.models import (
     TrainerAthlete,
     TrainerAthleteOverview,
     TrainerPerformanceSession,
+    TrainerRunningSessionDetail,
     TrainerStrengthSession,
     TrainerSwimmingSessionDetail,
 )
@@ -23,6 +24,7 @@ from app.domains.trainer.repository import (
     delete_routine_template,
     get_active_trainer_athlete,
     get_trainer_athlete_overview,
+    get_trainer_athlete_running_session,
     get_trainer_athlete_swimming_session,
     get_routine_template_by_id,
     list_trainer_athlete_running_sessions,
@@ -134,6 +136,25 @@ async def list_authenticated_trainer_running_sessions(
         TrainerPerformanceSession.model_validate(row)
         for row in rows
     ]
+
+
+async def get_authenticated_trainer_running_session(
+    trainer: AuthenticatedUser,
+    athlete_id: str,
+    session_id: str,
+) -> TrainerRunningSessionDetail | None:
+    row = await get_trainer_athlete_running_session(
+        trainer,
+        athlete_id,
+        session_id,
+    )
+
+    if row is None:
+        return None
+
+    return TrainerRunningSessionDetail.model_validate(
+        row
+    )
 
 
 def _validate_template_data(

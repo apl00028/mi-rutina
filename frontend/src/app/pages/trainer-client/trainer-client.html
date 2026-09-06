@@ -534,6 +534,179 @@
                       </details>
                     }
                   }
+                } @else if (
+                  event.discipline === 'running' &&
+                  event.id.startsWith('running:health-connect:')
+                ) {
+                  @if (runningDetailLoading()) {
+                    <div class="state-card compact-state">
+                      Cargando detalle de carrera...
+                    </div>
+                  } @else if (runningDetailError()) {
+                    <div class="error-message compact-state">
+                      {{ runningDetailError() }}
+                      <button
+                        type="button"
+                        class="back-link"
+                        (click)="loadSelectedRunningDetail()"
+                      >
+                        Reintentar
+                      </button>
+                    </div>
+                  } @else if (currentRunningDetail(); as running) {
+                    <header class="session-header">
+                      <div>
+                        <h3>{{ running.title }}</h3>
+                        <p>
+                          {{ formatDate(running.event_at) }}
+                          · {{ runningSourceLabel(running) }}
+                        </p>
+                      </div>
+                    </header>
+
+                    <dl class="metric-grid swimming-summary">
+                      @if (running.distance_meters !== null) {
+                        <div>
+                          <dt>Distancia</dt>
+                          <dd>
+                            {{ formatDistance(running.distance_meters) }}
+                          </dd>
+                        </div>
+                      }
+
+                      <div>
+                        <dt>Duración</dt>
+                        <dd>
+                          {{ formatDuration(running.duration_seconds) }}
+                        </dd>
+                      </div>
+
+                      @if (
+                        running.average_pace_seconds_per_km !== null
+                      ) {
+                        <div>
+                          <dt>Ritmo medio</dt>
+                          <dd>
+                            {{
+                              formatPacePerKm(
+                                running.average_pace_seconds_per_km
+                              )
+                            }}
+                          </dd>
+                        </div>
+                      }
+                    </dl>
+
+                    @if (
+                      running.heart_rate_average_bpm !== null ||
+                      running.heart_rate_max_bpm !== null
+                    ) {
+                      <section class="swimming-detail-block">
+                        <h4>Cardiovascular</h4>
+
+                        <dl class="metric-grid swimming-summary">
+                          @if (
+                            running.heart_rate_average_bpm !== null
+                          ) {
+                            <div>
+                              <dt>FC media</dt>
+                              <dd>
+                                {{
+                                  formatDecimal(
+                                    running.heart_rate_average_bpm,
+                                    0
+                                  )
+                                }}
+                                ppm
+                              </dd>
+                            </div>
+                          }
+
+                          @if (running.heart_rate_max_bpm !== null) {
+                            <div>
+                              <dt>FC máxima</dt>
+                              <dd>
+                                {{
+                                  formatDecimal(
+                                    running.heart_rate_max_bpm,
+                                    0
+                                  )
+                                }}
+                                ppm
+                              </dd>
+                            </div>
+                          }
+                        </dl>
+                      </section>
+                    }
+
+                    @if (
+                      running.average_speed_meters_per_second !== null ||
+                      running.max_speed_meters_per_second !== null
+                    ) {
+                      <section class="swimming-detail-block">
+                        <h4>Velocidad</h4>
+
+                        <dl class="metric-grid swimming-summary">
+                          @if (
+                            running.average_speed_meters_per_second !== null
+                          ) {
+                            <div>
+                              <dt>Media</dt>
+                              <dd>
+                                {{
+                                  formatSpeedKmh(
+                                    running.average_speed_meters_per_second
+                                  )
+                                }}
+                              </dd>
+                            </div>
+                          }
+
+                          @if (
+                            running.max_speed_meters_per_second !== null
+                          ) {
+                            <div>
+                              <dt>Máxima</dt>
+                              <dd>
+                                {{
+                                  formatSpeedKmh(
+                                    running.max_speed_meters_per_second
+                                  )
+                                }}
+                              </dd>
+                            </div>
+                          }
+                        </dl>
+                      </section>
+                    }
+
+                    <section class="swimming-detail-block">
+                      <h4>Registro</h4>
+
+                      <dl class="metric-grid swimming-summary">
+                        <div>
+                          <dt>Inicio</dt>
+                          <dd>
+                            {{
+                              running.started_at |
+                                date: 'dd/MM/yyyy HH:mm'
+                            }}
+                          </dd>
+                        </div>
+
+                        <div>
+                          <dt>Fin</dt>
+                          <dd>
+                            {{
+                              running.finished_at |
+                                date: 'dd/MM/yyyy HH:mm'
+                            }}
+                          </dd>
+                        </div>
+                      </dl>
+                    </section>
+                  }
                 } @else {
                   <header class="session-header">
                     <div>
@@ -572,7 +745,9 @@
                       </div>
                     }
                   </dl>
-                  <p class="card-note">No hay más métricas disponibles para esta sesión.</p>
+                  <p class="card-note">
+                    No hay más métricas disponibles para esta sesión.
+                  </p>
                 }
               </section>
             }

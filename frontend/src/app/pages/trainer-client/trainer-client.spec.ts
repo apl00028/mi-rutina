@@ -358,16 +358,74 @@ describe('Trainer client experience', () => {
     expect(text()).toContain('800 m');
     expect(fixture.componentInstance.swimmingDetailError()).toBeNull();
   });
-  it('renders running timestamps and elapsed time without inventing unsupported metrics', async () => {
+  it('fetches rich Health Connect running detail only after selection', async () => {
+    await start(
+      athleteOverview(),
+      [strengthSession()],
+      [performanceSession('swimming')],
+      [
+        performanceSession('running', {
+          id: 'health-connect:run-1',
+          title: 'Carrera exterior',
+          event_at: '2026-09-04T06:00:00Z',
+          started_at: '2026-09-04T06:00:00Z',
+          finished_at: '2026-09-04T06:31:03Z',
+          duration_seconds: 1863,
+          routine_id: null,
+          session_id: null,
+          source: 'health_connect',
+        }),
+      ],
+    );
+
+    await day(4);
+
+    http.expectNone(
+      `${api}/running-sessions/health-connect%3Arun-1`,
+    );
+
+    await openSession('Carrera exterior');
+
+    http
+      .expectOne(
+        `${api}/running-sessions/health-connect%3Arun-1`,
+      )
+      .flush(runningDetail());
+
+    await settle();
+
+    expect(text()).toContain('5.01 km');
+    expect(text()).toContain('31:03');
+    expect(text()).toContain('6:11/km');
+    expect(text()).toContain('FC media');
+    expect(text()).toContain('157');
+    expect(text()).toContain('FC máxima');
+    expect(text()).toContain('175');
+    expect(text()).toContain('9,7 km/h');
+    expect(text()).toContain('12,7 km/h');
+    expect(text()).toContain('Garmin Connect');
+    expect(text()).not.toContain(
+      'No hay más métricas disponibles',
+    );
+  });
+
+  it('keeps the basic fallback for non-Health-Connect running workouts', async () => {
     await start();
     await day(4);
     await openSession('Control aeróbico');
-    expect(text()).toContain('Tiempo entre inicio y fin');
+
+    http.expectNone(
+      `${api}/running-sessions/run-1`,
+    );
+
+    expect(text()).toContain(
+      'Tiempo entre inicio y fin',
+    );
     expect(text()).toContain('40:00');
-    expect(text()).toContain('No hay más métricas disponibles');
-    expect(text()).not.toContain('próximamente');
+    expect(text()).toContain(
+      'No hay más métricas disponibles',
+    );
     expect(text()).not.toContain('FC media');
-    expect(text()).not.toContain('Distancia total');
   });
 });
 
@@ -422,6 +480,33 @@ function performanceSession(
     ...patch,
   };
 }
+
+function runningDetail(
+  patch: Record<string, unknown> = {},
+) {
+  return {
+    id: 'health-connect:run-1',
+    discipline: 'running',
+    title: 'Carrera exterior',
+    event_at: '2026-09-04T06:00:00Z',
+    started_at: '2026-09-04T06:00:00Z',
+    finished_at: '2026-09-04T06:31:03Z',
+    duration_seconds: 1863,
+    distance_meters: 5006.43017578125,
+    average_pace_seconds_per_km: 370.6228,
+    heart_rate_average_bpm: 157,
+    heart_rate_max_bpm: 175,
+    average_speed_meters_per_second:
+      2.6981612804435913,
+    max_speed_meters_per_second:
+      3.5360000133514404,
+    has_route: false,
+    source_package:
+      'com.garmin.android.apps.connectmobile',
+    ...patch,
+  };
+}
+
 
 function swimmingDetail(patch: Record<string, unknown> = {}) {
   return {

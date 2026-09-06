@@ -145,6 +145,25 @@ export interface TrainerPerformanceSession {
 }
 
 
+export interface TrainerRunningSessionDetail {
+  id: string;
+  discipline: 'running';
+  title: string;
+  event_at: string;
+  started_at: string;
+  finished_at: string;
+  duration_seconds: number;
+  distance_meters: number | null;
+  average_pace_seconds_per_km: number | null;
+  heart_rate_average_bpm: number | null;
+  heart_rate_max_bpm: number | null;
+  average_speed_meters_per_second: number | null;
+  max_speed_meters_per_second: number | null;
+  has_route: boolean | null;
+  source_package: string;
+}
+
+
 export interface TrainerSwimmingLength {
   start_time: string | null;
   duration_seconds: number | null;
@@ -312,6 +331,31 @@ export class TrainerService {
     return await this.listPerformanceSessions(
       athleteId,
       'running-sessions'
+    );
+  }
+
+
+  async getRunningSession(
+    athleteId: string,
+    sessionId: string
+  ): Promise<TrainerRunningSessionDetail> {
+    const headers =
+      await this.headers();
+
+    return await firstValueFrom(
+      this.http.get<
+        TrainerRunningSessionDetail
+      >(
+        (
+          `${this.apiUrl}/trainer/athletes/` +
+          `${encodeURIComponent(athleteId)}/` +
+          'running-sessions/' +
+          encodeURIComponent(sessionId)
+        ),
+        {
+          headers
+        }
+      )
     );
   }
 

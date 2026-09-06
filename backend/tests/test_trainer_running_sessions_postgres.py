@@ -150,6 +150,7 @@ def database():
             "running-sessions.sql",
             "trainer-athletes.sql",
             "trainer-athlete-running-sessions.sql",
+            "trainer-athlete-running-session-detail.sql",
         ]:
             execute(
                 (SQL_DIR / filename).read_text(
@@ -572,6 +573,188 @@ def test_rpc_execute_privileges(db):
     trainer_rows(
         db,
         OTHER_TRAINER,
+        role="anon",
+        error="42501",
+    )
+
+
+def running_detail(
+    db,
+    user: str,
+    session_id: str,
+    *,
+    athlete: str = ATHLETE,
+    role: str = "authenticated",
+    error: str | None = None,
+):
+    output = db(
+        f"""
+        select row_to_json(detail_row)
+        from public.trainer_get_athlete_running_session(
+          '{athlete}'::uuid,
+          {literal(session_id)}
+        ) as detail_row;
+        """,
+        role=role,
+        user=user,
+        error=error,
+    )
+
+    if error or not output:
+        return None
+
+    return json.loads(output)
+
+
+def test_external_running_detail_metrics(db):
+    add_external(
+        db,
+        row_id="detail-run",
+        started_at="2026-08-30T15:15:35Z",
+        ended_at="2026-08-30T15:46:38Z",
+        exercise_type=33,
+    )
+
+    db(
+        """
+        update public.running_sessions
+        set data = data || '{
+          "distance_meters": 5006.43017578125,
+          "heart_rate_average_bpm": 157,
+          "heart_rate_max_bpm": 175,
+          "speed_average_meters_per_second": 2.6981612804435913,
+          "speed_max_meters_per_second": 3.5360000133514404,
+          "has_route": false
+        }'::jsonb
+        where id = 'detail-run';
+        """
+    )
+
+    row = running_detail(
+        db,
+        TRAINER,
+        "health-connect:detail-run",
+    )
+
+    assert row is not None
+    assert row["id"] == "health-connect:detail-run"
+    assert row["discipline"] == "running"
+    assert row["title"] == "Carrera exterior"
+
+    assert row["event_at"] == row["started_at"]
+    assert row["finished_at"] == "2026-08-30 15:46:38+00"
+    assert row["duration_seconds"] == 1863
+
+    assert row["distance_meters"] == pytest.approx(
+        5006.43017578125
+    )
+
+    assert row["average_pace_seconds_per_km"] == pytest.approx(
+        1000 / 2.6981612804435913
+    )
+
+    assert row["heart_rate_average_bpm"] == 157
+    assert row["heart_rate_max_bpm"] == 175
+
+    assert row[
+        "average_speed_meters_per_second"
+    ] == pytest.approx(
+        2.6981612804435913
+    )
+
+    assert row[
+        "max_speed_meters_per_second"
+    ] == pytest.approx(
+        3.5360000133514404
+    )
+
+    assert row["has_route"] is False
+
+    assert (
+        row["source_package"]
+        == "com.garmin.android.apps.connectmobile"
+    )
+
+
+def test_running_detail_security_boundary(db):
+    add_external(
+        db,
+        row_id="detail-private",
+        started_at="2026-08-30T10:00:00Z",
+        ended_at="2026-08-30T10:20:00Z",
+    )
+
+    session_id = "health-connect:detail-private"
+
+    assert (
+        running_detail(
+            db,
+            TRAINER,
+            session_id,
+        )
+        is not None
+    )
+
+    assert (
+        running_detail(
+            db,
+            OTHER_TRAINER,
+            session_id,
+        )
+        is None
+    )
+
+    assert (
+        running_detail(
+            db,
+            ATHLETE,
+            session_id,
+        )
+        is None
+    )
+
+    assert (
+        running_detail(
+            db,
+            INACTIVE_TRAINER,
+            session_id,
+        )
+        is None
+    )
+
+    assert (
+        running_detail(
+            db,
+            TRAINER,
+            "health-connect:not-found",
+        )
+        is None
+    )
+
+
+def test_running_detail_rpc_privileges(db):
+    privileges = db(
+        """
+        select
+          has_function_privilege(
+            'authenticated',
+            'public.trainer_get_athlete_running_session(uuid,text)',
+            'EXECUTE'
+          ),
+          has_function_privilege(
+            'anon',
+            'public.trainer_get_athlete_running_session(uuid,text)',
+            'EXECUTE'
+          );
+        """
+    )
+
+    assert privileges == "t|f"
+
+    running_detail(
+        db,
+        TRAINER,
+        "health-connect:anything",
         role="anon",
         error="42501",
     )

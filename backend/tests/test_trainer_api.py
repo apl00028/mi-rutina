@@ -1537,3 +1537,110 @@ def test_assign_duplicate_routine_id_returns_409(monkeypatch):
     assert response.json() == {
         "detail": "Routine already exists"
     }
+
+
+def test_trainer_can_get_running_session_detail(monkeypatch):
+    from app.domains.trainer import router as trainer_api
+    from app.domains.trainer.models import TrainerRunningSessionDetail
+
+    async def fake_get(trainer, athlete_id, session_id):
+        assert trainer.id == "trainer-123"
+        assert athlete_id == "athlete-1"
+        assert session_id == "health-connect:run-1"
+
+        return TrainerRunningSessionDetail(
+            id="health-connect:run-1",
+            discipline="running",
+            title="Carrera exterior",
+            event_at="2026-08-30T15:15:35Z",
+            started_at="2026-08-30T15:15:35Z",
+            finished_at="2026-08-30T15:46:38Z",
+            duration_seconds=1863,
+            distance_meters=5006.43,
+            average_pace_seconds_per_km=370.62,
+            heart_rate_average_bpm=157,
+            heart_rate_max_bpm=175,
+            average_speed_meters_per_second=2.698,
+            max_speed_meters_per_second=3.536,
+            has_route=False,
+            source_package=(
+                "com.garmin.android.apps.connectmobile"
+            ),
+        )
+
+    monkeypatch.setattr(
+        trainer_api,
+        "get_authenticated_trainer_running_session",
+        fake_get,
+    )
+
+    session = asyncio.run(
+        trainer_api.get_trainer_athlete_running_session_endpoint(
+            "athlete-1",
+            "health-connect:run-1",
+            trainer=asyncio.run(trainer_user()),
+        )
+    )
+
+    assert session.id == "health-connect:run-1"
+    assert session.distance_meters == 5006.43
+    assert session.heart_rate_average_bpm == 157
+    assert session.heart_rate_max_bpm == 175
+    assert session.has_route is False
+
+
+def test_missing_running_session_detail_returns_404(monkeypatch):
+    from app.domains.trainer import router as trainer_api
+
+    async def fake_get(_trainer, _athlete_id, _session_id):
+        return None
+
+    monkeypatch.setattr(
+        trainer_api,
+        "get_authenticated_trainer_running_session",
+        fake_get,
+    )
+
+    try:
+        asyncio.run(
+            trainer_api.get_trainer_athlete_running_session_endpoint(
+                "athlete-1",
+                "health-connect:missing",
+                trainer=asyncio.run(trainer_user()),
+            )
+        )
+    except HTTPException as exc:
+        assert exc.status_code == 404
+        assert exc.detail == (
+            "Trainer running session not found"
+        )
+    else:
+        raise AssertionError(
+            "Expected HTTPException"
+        )
+
+
+def test_normal_user_cannot_get_running_session_detail():
+    app.dependency_overrides[
+        require_user
+    ] = normal_user
+
+    try:
+        response = client.get(
+            (
+                "/api/v1/trainer/athletes/"
+                "athlete-1/running-sessions/"
+                "health-connect%3Arun-1"
+            ),
+            headers={
+                "Authorization":
+                    "Bearer token-123"
+            },
+        )
+    finally:
+        app.dependency_overrides.pop(
+            require_user,
+            None,
+        )
+
+    assert response.status_code == 403

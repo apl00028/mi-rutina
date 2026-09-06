@@ -20,6 +20,7 @@ import {
   TrainerAthleteOverview,
   TrainerDiscipline,
   TrainerPerformanceSession,
+  TrainerRunningSessionDetail,
   TrainerStrengthExercise,
   TrainerStrengthSession,
   TrainerStrengthSet,
@@ -91,6 +92,14 @@ export class TrainerClient implements OnInit {
 
   runningSessions = signal<TrainerPerformanceSession[]>([]);
 
+  runningDetailLoading = signal(false);
+
+  runningDetailError = signal<string | null>(null);
+
+  runningDetailCache = signal<
+    Record<string, TrainerRunningSessionDetail>
+  >({});
+
   swimmingDetailLoading = signal(false);
 
   swimmingDetailError = signal<string | null>(null);
@@ -100,6 +109,8 @@ export class TrainerClient implements OnInit {
   selectedPerformanceEventId = signal<string | null>(null);
 
   private swimmingDetailRequest = 0;
+
+  private runningDetailRequest = 0;
 
   selectedPerformanceDateKey = signal<string | null>(null);
 
@@ -151,6 +162,21 @@ export class TrainerClient implements OnInit {
     const selected = this.currentPerformanceEvent();
 
     return selected && selected.discipline !== 'strength' ? selected : null;
+  });
+
+  readonly currentRunningDetail = computed(() => {
+    const selected = this.currentPerformanceEvent();
+
+    if (!selected || selected.discipline !== 'running') {
+      return null;
+    }
+
+    const sessionId =
+      this.runningSessionIdFromEvent(selected);
+
+    return sessionId
+      ? (this.runningDetailCache()[sessionId] ?? null)
+      : null;
   });
 
   readonly currentSwimmingDetail = computed(() => {
@@ -301,6 +327,11 @@ export class TrainerClient implements OnInit {
     ++this.swimmingDetailRequest;
     this.swimmingDetailLoading.set(false);
     this.swimmingDetailError.set(null);
+
+    ++this.runningDetailRequest;
+    this.runningDetailLoading.set(false);
+    this.runningDetailError.set(null);
+
     this.focusAfterRender('.day-sessions');
   }
 
@@ -380,6 +411,7 @@ export class TrainerClient implements OnInit {
     this.performanceCalendarMonth.set(this.monthKeyFromValue(event.event_at));
     this.focusAfterRender('.detail-back');
     void this.loadSelectedSwimmingDetail();
+    void this.loadSelectedRunningDetail();
   }
 
   athleteSubtitle(athlete: TrainerAthleteOverview): string | null {
@@ -523,6 +555,68 @@ export class TrainerClient implements OnInit {
     }
   }
 
+  async loadSelectedRunningDetail(): Promise<void> {
+    const requestId = ++this.runningDetailRequest;
+
+    this.runningDetailError.set(null);
+    this.runningDetailLoading.set(false);
+
+    const selected = this.currentPerformanceEvent();
+
+    if (!selected || selected.discipline !== 'running') {
+      return;
+    }
+
+    const athleteId =
+      this.route.snapshot.paramMap.get('athleteId');
+
+    const sessionId =
+      this.runningSessionIdFromEvent(selected);
+
+    if (
+      !athleteId ||
+      !sessionId ||
+      !sessionId.startsWith('health-connect:') ||
+      this.runningDetailCache()[sessionId]
+    ) {
+      return;
+    }
+
+    this.runningDetailLoading.set(true);
+
+    try {
+      const detail =
+        await this.trainerService.getRunningSession(
+          athleteId,
+          sessionId,
+        );
+
+      if (requestId !== this.runningDetailRequest) {
+        return;
+      }
+
+      this.runningDetailCache.set({
+        ...this.runningDetailCache(),
+        [sessionId]: detail,
+      });
+    } catch (error) {
+      if (requestId !== this.runningDetailRequest) {
+        return;
+      }
+
+      this.runningDetailError.set(
+        this.errorMessage(
+          error,
+          'No se pudo cargar el detalle de carrera.',
+        ),
+      );
+    } finally {
+      if (requestId === this.runningDetailRequest) {
+        this.runningDetailLoading.set(false);
+      }
+    }
+  }
+
   async loadSelectedSwimmingDetail(): Promise<void> {
     const requestId = ++this.swimmingDetailRequest;
     this.swimmingDetailError.set(null);
@@ -656,6 +750,41 @@ export class TrainerClient implements OnInit {
     return new Intl.NumberFormat('es-ES', {
       maximumFractionDigits,
     }).format(value);
+  }
+
+  formatPacePerKm(
+    value: number | null | undefined
+  ): string {
+    const pace = this.formatDuration(value);
+
+    return pace === '—' ? pace : `${pace}/km`;
+  }
+
+  formatSpeedKmh(
+    value: number | null | undefined
+  ): string {
+    if (
+      value === null ||
+      value === undefined ||
+      !Number.isFinite(value)
+    ) {
+      return '—';
+    }
+
+    return `${this.formatDecimal(value * 3.6, 1)} km/h`;
+  }
+
+  runningSourceLabel(
+    running: TrainerRunningSessionDetail
+  ): string {
+    if (
+      running.source_package ===
+      'com.garmin.android.apps.connectmobile'
+    ) {
+      return 'Garmin Connect';
+    }
+
+    return 'Health Connect';
   }
 
   formatPacePer100m(value: number | null | undefined): string {
@@ -819,6 +948,14 @@ export class TrainerClient implements OnInit {
           ? session.title
           : this.disciplineLabel(session.discipline),
     };
+  }
+
+  private runningSessionIdFromEvent(
+    event: PerformanceCalendarEvent
+  ): string | null {
+    return event.id.startsWith('running:')
+      ? event.id.slice('running:'.length)
+      : null;
   }
 
   private swimmingSessionIdFromEvent(event: PerformanceCalendarEvent): string | null {

@@ -1266,3 +1266,145 @@ def test_assign_routine_template_propagates_duplicate_conflict(
         raise AssertionError(
             "Expected duplicate routine conflict"
         )
+
+
+def test_get_running_session_calls_trainer_rpc(monkeypatch):
+    monkeypatch.setenv(
+        "SUPABASE_URL",
+        "https://example.supabase.co/",
+    )
+    monkeypatch.setenv(
+        "SUPABASE_PUBLISHABLE_KEY",
+        "publishable-key",
+    )
+
+    row = {
+        "id": "health-connect:run-1",
+        "discipline": "running",
+        "title": "Carrera exterior",
+        "event_at": "2026-08-30T15:15:35Z",
+        "started_at": "2026-08-30T15:15:35Z",
+        "finished_at": "2026-08-30T15:46:38Z",
+        "duration_seconds": 1863,
+        "distance_meters": 5006.43,
+        "average_pace_seconds_per_km": 370.62,
+        "heart_rate_average_bpm": 157,
+        "heart_rate_max_bpm": 175,
+        "average_speed_meters_per_second": 2.698,
+        "max_speed_meters_per_second": 3.536,
+        "has_route": False,
+        "source_package": (
+            "com.garmin.android.apps.connectmobile"
+        ),
+    }
+
+    captured = {}
+
+    class FakeResponse:
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return [row]
+
+    class FakeClient:
+        def __init__(self, timeout):
+            captured["timeout"] = timeout
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return None
+
+        async def post(self, url, headers, json):
+            captured["url"] = url
+            captured["headers"] = headers
+            captured["json"] = json
+            return FakeResponse()
+
+    monkeypatch.setattr(
+        repository.httpx,
+        "AsyncClient",
+        FakeClient,
+    )
+
+    result = asyncio.run(
+        repository.get_trainer_athlete_running_session(
+            _trainer(),
+            "athlete-1",
+            "health-connect:run-1",
+        )
+    )
+
+    assert result == row
+    assert captured["timeout"] == 10.0
+    assert captured["url"] == (
+        "https://example.supabase.co/rest/v1/rpc/"
+        "trainer_get_athlete_running_session"
+    )
+    assert captured["headers"] == {
+        "Authorization": "Bearer access-token",
+        "apikey": "publishable-key",
+        "Content-Type": "application/json",
+    }
+    assert captured["json"] == {
+        "p_athlete_id": "athlete-1",
+        "p_session_id": "health-connect:run-1",
+    }
+
+
+def test_running_session_detail_service_validates_contract(
+    monkeypatch,
+):
+    row = {
+        "id": "health-connect:run-1",
+        "discipline": "running",
+        "title": "Carrera exterior",
+        "event_at": "2026-08-30T15:15:35Z",
+        "started_at": "2026-08-30T15:15:35Z",
+        "finished_at": "2026-08-30T15:46:38Z",
+        "duration_seconds": 1863,
+        "distance_meters": 5006.43,
+        "average_pace_seconds_per_km": 370.62,
+        "heart_rate_average_bpm": 157,
+        "heart_rate_max_bpm": 175,
+        "average_speed_meters_per_second": 2.698,
+        "max_speed_meters_per_second": 3.536,
+        "has_route": False,
+        "source_package": (
+            "com.garmin.android.apps.connectmobile"
+        ),
+    }
+
+    async def fake_get(
+        trainer,
+        athlete_id,
+        session_id,
+    ):
+        assert trainer.id == "trainer-123"
+        assert athlete_id == "athlete-1"
+        assert session_id == "health-connect:run-1"
+        return row
+
+    monkeypatch.setattr(
+        service,
+        "get_trainer_athlete_running_session",
+        fake_get,
+    )
+
+    session = asyncio.run(
+        service.get_authenticated_trainer_running_session(
+            _trainer(),
+            "athlete-1",
+            "health-connect:run-1",
+        )
+    )
+
+    assert session is not None
+    assert session.discipline == "running"
+    assert session.distance_meters == 5006.43
+    assert session.average_pace_seconds_per_km == 370.62
+    assert session.source_package == (
+        "com.garmin.android.apps.connectmobile"
+    )

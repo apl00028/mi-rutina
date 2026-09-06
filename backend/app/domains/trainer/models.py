@@ -140,6 +140,24 @@ class TrainerPerformanceSession(BaseModel):
     source: str | None = None
 
 
+class TrainerRunningSessionDetail(BaseModel):
+    id: str
+    discipline: Literal["running"]
+    title: str
+    event_at: str
+    started_at: str
+    finished_at: str
+    duration_seconds: float
+    distance_meters: float | None = None
+    average_pace_seconds_per_km: float | None = None
+    heart_rate_average_bpm: float | None = None
+    heart_rate_max_bpm: float | None = None
+    average_speed_meters_per_second: float | None = None
+    max_speed_meters_per_second: float | None = None
+    has_route: bool | None = None
+    source_package: str
+
+
 class TrainerSwimmingLength(BaseModel):
     start_time: str | None = None
     duration_seconds: float | None = None

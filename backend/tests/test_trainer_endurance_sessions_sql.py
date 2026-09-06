@@ -73,18 +73,41 @@ def test_running_sessions_rpc_contract_and_source():
     assert "  routine_id text," in sql
     assert "  session_id text," in sql
     assert "  started_at text," in sql
-    assert "  finished_at text" in sql
+    assert "  finished_at text," in sql
+    assert "  duration_seconds double precision," in sql
+    assert "  source text" in sql
+
     assert "from authorized_relation" in sql
+
+    # Existing Aptus running workouts remain supported.
     assert "join public.workouts" in sql
     assert "join public.routines" in sql
-    assert "workouts.data->>'finishedat' as event_at" in sql
     assert "routines.discipline = 'running'" in sql
     assert "workouts.data->>'status' = 'finished'" in sql
     assert "workouts.data ? 'finishedat'" in sql
-    assert (
-        "order by (workouts.data->>'finishedat')::timestamptz desc"
-        in sql
-    )
+    assert "workouts.data->>'finishedat' as event_at" in sql
+    assert "'aptus_workout'::text as source" in sql
+    assert "'aptus-workout:' ||" in sql
+
+    # Persisted external running sessions are now exposed too.
+    assert "join public.running_sessions" in sql
+    assert "running_sessions.user_id =" in sql
+    assert "running_sessions.started_at::text as event_at" in sql
+    assert "running_sessions.started_at::text as started_at" in sql
+    assert "running_sessions.ended_at::text as finished_at" in sql
+    assert "'health_connect'::text as source" in sql
+    assert "'health-connect:' ||" in sql
+    assert "when '33' then 'carrera exterior'" in sql
+    assert "when '34' then 'carrera en cinta'" in sql
+    assert "epoch from (" in sql
+
+    # Both sources survive; there is no heuristic deduplication.
+    assert "union all" in sql
+
+    # Ordering and limit apply after combining both sources.
+    assert "combined.event_at::timestamptz desc" in sql
+    assert "combined.source asc" in sql
+    assert "combined.id asc" in sql
     assert "limit 25" in sql
 
 

@@ -52,6 +52,9 @@ begin
   delete from public.workouts
   where user_id = p_user_id;
 
+  delete from public.running_sessions
+  where user_id = p_user_id;
+
   delete from public.nutrition_plans
   where user_id = p_user_id;
 

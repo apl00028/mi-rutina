@@ -31,6 +31,9 @@ import {
 import {
   AuthService
 } from '../../core/auth.service';
+import type {
+  HealthConnectRunningMetricSession
+} from '../../core/health-connect.plugin';
 import {
   ENDURANCE_HEALTH_CONNECT,
   Endurance
@@ -603,9 +606,11 @@ describe('Endurance running session', () => {
 
 
   function runningSession(
-    overrides: Record<string, unknown> = {}
-  ) {
+    overrides: Partial<HealthConnectRunningMetricSession> = {}
+  ): HealthConnectRunningMetricSession {
     return {
+      recordId: 'hc-running-1',
+      sourcePackage: 'com.garmin.android.apps.connectmobile',
       exerciseType: 33,
       startTime: '2026-08-30T08:00:00Z',
       endTime: '2026-08-30T08:25:00Z',
@@ -670,6 +675,40 @@ describe('Endurance running session', () => {
       readGarminRunningMetrics
     };
   }
+
+
+  it('preserves per-record identity, timestamps and metrics when reading and rereading running', async () => {
+    const session = runningSession({
+      recordId: 'health-connect-record-30-08',
+      sourcePackage: 'test.record.writer'
+    });
+    const { fixture, readGarminRunningMetrics } =
+      await renderRunning([session]);
+
+    // The per-record writer must survive independently of the response-level
+    // Garmin filter. The complete session includes the existing metrics.
+    expect(fixture.componentInstance.runningSessions()).toEqual([session]);
+    expect(fixture.componentInstance.selectedRunningSession()).toEqual(session);
+
+    const updated = {
+      ...session,
+      distanceMeters: 5100,
+      durationSeconds: 1560,
+      endTime: '2026-08-30T08:26:00Z'
+    };
+    readGarminRunningMetrics.mockResolvedValue({
+      sourcePackage: 'com.garmin.android.apps.connectmobile',
+      lookbackDays: 30,
+      count: 1,
+      sessions: [updated]
+    });
+
+    await fixture.componentInstance.loadRunning();
+
+    expect(fixture.componentInstance.runningSessions()).toEqual([updated]);
+    expect(fixture.componentInstance.selectedRunningSession()?.recordId)
+      .toBe(session.recordId);
+  });
 
 
   it('does not call Health Connect for running on web', async () => {

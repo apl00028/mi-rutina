@@ -1199,6 +1199,18 @@ public class HealthConnectPlugin
                                 new JSObject();
 
                         session.put(
+                                "recordId",
+                                record.getMetadata().getId()
+                        );
+
+                        session.put(
+                                "sourcePackage",
+                                record.getMetadata()
+                                        .getDataOrigin()
+                                        .getPackageName()
+                        );
+
+                        session.put(
                                 "exerciseType",
                                 record.getExerciseType()
                         );

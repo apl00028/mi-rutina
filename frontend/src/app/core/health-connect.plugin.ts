@@ -142,6 +142,8 @@ export interface HealthConnectSwimmingMetrics {
 
 
 export interface HealthConnectRunningMetricSession {
+  recordId: string;
+  sourcePackage: string;
   exerciseType: number;
   startTime: string;
   endTime: string;

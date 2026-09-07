@@ -22,6 +22,7 @@ from app.domains.telemetry.router import (
 from app.domains.swimming.router import router as swimming_router
 from app.domains.running.router import router as running_router
 from app.domains.trainer.router import router as trainer_router
+from app.domains.connections.router import router as connections_router
 
 
 router = APIRouter(
@@ -79,6 +80,7 @@ router.include_router(
 )
 
 router.include_router(running_router)
+router.include_router(connections_router)
 
 
 router.include_router(

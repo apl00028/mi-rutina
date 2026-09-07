@@ -1,3 +1,4 @@
+import { RunningHealthConnectSyncService } from './core/running-health-connect-sync.service';
 import {
   Component,
   HostListener,
@@ -148,8 +149,10 @@ export class App implements OnDestroy {
     public workoutSessionState:
       WorkoutSessionStateService,
     private telemetry:
-      TelemetryService
+      TelemetryService,
+    private runningSync: RunningHealthConnectSyncService
   ) {
+    this.runningSync.start();
     this.syncRouteState();
 
     if (this.isStandalonePage()) {
@@ -186,6 +189,7 @@ export class App implements OnDestroy {
 
 
   ngOnDestroy(): void {
+    this.runningSync.stop();
     this.clearInitializationTimers();
   }
 

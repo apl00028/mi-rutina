@@ -1,3 +1,4 @@
+import { RunningHealthConnectSyncService } from './core/running-health-connect-sync.service';
 import {
   Component,
   signal,
@@ -97,6 +98,7 @@ class AdminAccessStub {}
 class TrainerStub {}
 
 describe('App', () => {
+  const runningSync = { start: vi.fn(), stop: vi.fn() };
   let authUser:
     WritableSignal<any>;
 
@@ -128,6 +130,7 @@ describe('App', () => {
     await TestBed.configureTestingModule({
       imports: [App],
       providers: [
+        { provide: RunningHealthConnectSyncService, useValue: runningSync },
         provideRouter([
           {
             path:
@@ -198,6 +201,15 @@ describe('App', () => {
     }).compileComponents();
   });
 
+
+  it('starts the running lifecycle once and stops it on destruction', () => {
+    runningSync.start.mockClear();
+    runningSync.stop.mockClear();
+    const fixture = TestBed.createComponent(App);
+    expect(runningSync.start).toHaveBeenCalledTimes(1);
+    fixture.destroy();
+    expect(runningSync.stop).toHaveBeenCalledTimes(1);
+  });
 
   afterEach(() => {
     vi.useRealTimers();

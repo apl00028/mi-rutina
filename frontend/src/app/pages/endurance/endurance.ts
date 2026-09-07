@@ -1,3 +1,4 @@
+import { RunningHealthConnectSyncService } from '../../core/running-health-connect-sync.service';
 import { parseRunningRoutine } from '../../features/routines/domain/running-routine-import';
 import { RoutineEditorContext } from '../../features/routines/domain/routine-editor';
 import { RunningService } from '../../core/running.service';
@@ -523,6 +524,7 @@ export class Endurance
     private http: HttpClient,
     private auth: AuthService,
     private runningApi: RunningService,
+    private runningSync: RunningHealthConnectSyncService,
     @Inject(ENDURANCE_HEALTH_CONNECT)
     private healthConnect:
       EnduranceHealthConnect
@@ -2022,36 +2024,17 @@ export class Endurance
 
     const local = (async () => {
       if (!this.runningHealthConnectSupported()) return;
-      try {
-        const result = await this.healthConnect.readGarminRunningMetrics();
-        this.runningLocalSessions = result.sessions;
+      await this.runningSync.sync(progress => {
+        if (progress.local) this.runningLocalSessions = progress.local;
+        const confirmed = progress.confirmed.map(persistedRunningSessionToView);
+        confirmedDuringLoad.splice(0, confirmedDuringLoad.length, ...confirmed);
+        this.runningPersistedSessions = mergeRunningSessions(
+          [...this.runningPersistedSessions, ...confirmed], [],
+        );
+        if (progress.readError) failed(progress.readError);
+        if (progress.syncError) this.runningSyncError.set(progress.syncError);
         publish();
-      } catch (error: any) {
-        failed(error?.message ?? 'No se pudieron leer las carreras de Health Connect.');
-        return;
-      }
-
-      // Sync independently of GET. Keep confirmations from this load so a
-      // late GET snapshot cannot overwrite newly saved sessions.
-      for (let offset = 0; offset < this.runningLocalSessions.length; offset += 25) {
-        const batch = this.runningLocalSessions.slice(offset, offset + 25);
-        try {
-          const response = await this.runningApi.syncSessions(batch);
-          const confirmed = response.results.flatMap(item =>
-            item.session && !item.error ? [persistedRunningSessionToView(item.session)] : [],
-          );
-          confirmedDuringLoad.push(...confirmed);
-          this.runningPersistedSessions = mergeRunningSessions(
-            [...this.runningPersistedSessions, ...confirmed], [],
-          );
-          if (confirmed.length !== batch.length || response.results.some(item => item.error)) {
-            this.runningSyncError.set('Algunas carreras no se pudieron sincronizar. Puedes reintentar.');
-          }
-          publish();
-        } catch {
-          this.runningSyncError.set('No se pudieron sincronizar algunas carreras. Puedes reintentar.');
-        }
-      }
+      });
     })();
 
     try {

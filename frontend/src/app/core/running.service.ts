@@ -55,13 +55,18 @@ export class RunningService {
     ));
   }
 
-  async syncSessions(sessions: HealthConnectRunningMetricSession[]): Promise<RunningSyncResult> {
+  async syncSessions(sessions: HealthConnectRunningMetricSession[], expectedUserId?: string): Promise<RunningSyncResult> {
     if (sessions.length < 1 || sessions.length > 25) {
       throw new Error('La sincronización admite entre 1 y 25 sesiones por lote.');
     }
+    const headers = await this.headers();
+    // Do not upload a previous account's native read with a new account's token.
+    if (expectedUserId !== undefined && this.auth.user()?.id !== expectedUserId) {
+      throw new Error('La sesión de usuario ha cambiado.');
+    }
     return firstValueFrom(this.http.post<RunningSyncResult>(
       `${environment.apiUrl}/running/sync-health-connect`, { sessions },
-      { headers: await this.headers() },
+      { headers },
     ));
   }
 }

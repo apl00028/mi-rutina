@@ -1,3 +1,4 @@
+import { signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
@@ -11,6 +12,7 @@ describe('RunningService', () => {
   let service: RunningService;
   let http: HttpTestingController;
   const getAccessToken = vi.fn();
+  const user = signal<{ id: string } | null>({ id: 'athlete-a' });
   const session: HealthConnectRunningMetricSession = {
     recordId: 'hc-record', sourcePackage: 'real.writer', exerciseType: 33,
     startTime: '2026-08-30T08:00:00Z', endTime: '2026-08-30T08:25:00Z',
@@ -20,9 +22,10 @@ describe('RunningService', () => {
   };
 
   beforeEach(() => {
+    user.set({ id: 'athlete-a' });
     getAccessToken.mockReset().mockResolvedValue('user-token');
     TestBed.configureTestingModule({ providers: [provideHttpClient(), provideHttpClientTesting(),
-      { provide: AuthService, useValue: { getAccessToken } }] });
+      { provide: AuthService, useValue: { getAccessToken, user } }] });
     service = TestBed.inject(RunningService);
     http = TestBed.inject(HttpTestingController);
   });
@@ -51,6 +54,16 @@ describe('RunningService', () => {
       sourcePackage: session.sourcePackage, error: { status_code: 502, detail: 'Unavailable' } }] };
     request.flush(result);
     expect(await response).toEqual(result);
+  });
+
+  it('rejects a changed account after waiting for the token without sending native data', async () => {
+    let resolveToken!: (token: string) => void;
+    getAccessToken.mockReturnValue(new Promise(resolve => { resolveToken = resolve; }));
+    const response = service.syncSessions([session], 'athlete-a');
+    user.set({ id: 'athlete-b' });
+    resolveToken('token-b');
+    await expect(response).rejects.toThrow('usuario ha cambiado');
+    http.expectNone(() => true);
   });
 
   it('does not issue requests without a user token or for invalid batch sizes', async () => {

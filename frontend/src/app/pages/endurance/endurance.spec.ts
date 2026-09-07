@@ -1,3 +1,4 @@
+import { RunningHealthConnectSyncService, RUNNING_HEALTH_CONNECT } from '../../core/running-health-connect-sync.service';
 /**
  * @vitest-environment jsdom
  */
@@ -109,6 +110,7 @@ describe('Endurance swimming integration', () => {
         {
           provide: AuthService,
           useValue: {
+            user: () => ({ id: 'athlete' }),
             getAccessToken:
               vi.fn(async () => 'token')
           }
@@ -601,6 +603,7 @@ describe('Endurance running session', () => {
         {
           provide: AuthService,
           useValue: {
+            user: () => ({ id: 'athlete' }),
             getAccessToken:
               vi.fn(async () => 'token')
           }
@@ -609,9 +612,11 @@ describe('Endurance running session', () => {
           provide: ENDURANCE_HEALTH_CONNECT,
           useValue: healthConnect
         },
+        { provide: RUNNING_HEALTH_CONNECT, useValue: healthConnect },
         { provide: RunningService, useValue: runningApi }
       ]
     }).compileComponents();
+    vi.spyOn(TestBed.inject(RunningHealthConnectSyncService), 'supported').mockReturnValue(true);
   });
 
 

@@ -1,3 +1,4 @@
+import { athleteConnectionsGuard } from './core/athlete-connections.guard';
 import { Routes } from '@angular/router';
 
 import {
@@ -18,6 +19,11 @@ import {
 
 
 export const routes: Routes = [
+  {
+    path: 'entrenadores',
+    loadComponent: () => import('./pages/trainers/trainers').then(m => m.Trainers),
+    canActivate: [accessGuard, athleteConnectionsGuard],
+  },
   {
     path: 'login',
     loadComponent: () =>

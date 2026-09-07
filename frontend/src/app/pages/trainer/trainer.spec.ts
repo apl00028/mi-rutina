@@ -1,3 +1,5 @@
+import { By } from '@angular/platform-browser';
+import { ConnectionInvitations } from '../../features/connections/invitations';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
@@ -46,6 +48,23 @@ describe('Trainer experience', () => {
     router.setUpLocationChangeListener();
   });
   afterEach(() => http.verify());
+
+  async function flushInvitationLists() {
+    await vi.waitFor(() => {
+      const requests = http.match(
+        request =>
+          request.method === 'GET' &&
+          request.url.endsWith('/connections/invitations'),
+      );
+
+      expect(
+        requests.map(request => request.request.params.get('box')).sort(),
+      ).toEqual(['received', 'sent']);
+
+      requests.forEach(request => request.flush([]));
+    });
+  }
+
   async function settle() {
     for (let i = 0; i < 12; i++) await Promise.resolve();
     fixture?.detectChanges();
@@ -63,9 +82,17 @@ describe('Trainer experience', () => {
     fixture = TestBed.createComponent(Trainer);
     fixture.detectChanges();
     await settle();
+
     http.expectOne(`${api}/athletes`).flush(clients);
     http.expectOne(`${api}/templates`).flush(templates);
+
     await settle();
+
+    if (view.includes('view=clients')) {
+      await flushInvitationLists();
+      await settle();
+    }
+
     for (const client of clients) {
       const req = http.expectOne(`${api}/athletes/${client.athlete_id}`);
       if (failOverview) req.flush({}, { status: 503, statusText: 'Unavailable' });
@@ -103,6 +130,33 @@ describe('Trainer experience', () => {
       });
   }
 
+  it('accepting a received invitation refreshes clients and both inboxes', async () => {
+    await start('?view=clients', [], []);
+    const panel = fixture.debugElement.query(By.directive(ConnectionInvitations)).componentInstance as ConnectionInvitations;
+    const item = {
+      id: 'invitation', trainer_id: 'trainer', athlete_id: 'athlete-1', inviter_id: 'athlete-1', recipient_id: 'trainer',
+      direction: 'athlete_to_trainer' as const, status: 'pending' as const,
+      created_at: '2026-09-07T08:00:00Z', expires_at: '2099-09-14T08:00:00Z',
+      accepted_at: null, revoked_at: null, revoked_by: null, other_display_name: 'Athlete One', other_alias: null,
+    };
+    panel.received.set([item]);
+    fixture.detectChanges();
+    expect(text()).toContain('Añadir cliente');
+    const action = panel.act(item, 'accept');
+    await settle();
+    http.expectOne(`${environment.apiUrl}/connections/invitations/invitation/accept`).flush(null);
+    await settle();
+    http.expectOne(`${api}/athletes`).flush([athlete]);
+    const inboxes = http.match(request => request.url.endsWith('/connections/invitations'));
+    expect(inboxes.map(request => request.request.params.get('box')).sort()).toEqual(['received', 'sent']);
+    inboxes.forEach(request => request.flush([]));
+    await settle();
+    http.expectOne(`${api}/athletes/${athlete.athlete_id}`).flush(overviewResponse(athlete));
+    await action; await settle();
+    expect(fixture.componentInstance.athletes()).toEqual([athlete]);
+    expect(text()).toContain('Athlete One');
+  });
+
   it('shows a compact dashboard with scoped totals and recent activity, without full lists or duplicate navigation', async () => {
     await start();
     expect(text()).toContain('Panel de entrenador');
@@ -120,6 +174,8 @@ describe('Trainer experience', () => {
     await start();
     await router.navigateByUrl('/trainer?view=clients');
     await settle();
+    await settle();
+    http.match(request => request.url.endsWith('/connections/invitations')).forEach(request => request.flush([]));
     expect(fixture.nativeElement.querySelector('.athlete-card')).toBeTruthy();
     await router.navigateByUrl('/trainer?view=templates');
     await settle();
@@ -127,6 +183,8 @@ describe('Trainer experience', () => {
     TestBed.inject(Location).back();
     await vi.waitFor(() => expect(router.url).toBe('/trainer?view=clients'));
     await settle();
+    await settle();
+    http.match(request => request.url.endsWith('/connections/invitations')).forEach(request => request.flush([]));
     expect(fixture.componentInstance.activeView()).toBe('athletes');
     TestBed.inject(Location).forward();
     await vi.waitFor(() => expect(router.url).toBe('/trainer?view=templates'));
@@ -151,8 +209,13 @@ describe('Trainer experience', () => {
   it('does not present missing overviews as zero activity', async () => {
     await start('', [], [athlete], true);
     expect(fixture.componentInstance.summarySessionsLabel()).toBe('—');
+
     await router.navigateByUrl('/trainer?view=clients');
     await settle();
+
+    await flushInvitationLists();
+    await settle();
+
     expect(text()).toContain('Sesiones no disponibles');
     expect(text()).not.toContain('0 rutinas activas');
   });
@@ -496,8 +559,12 @@ describe('Trainer experience', () => {
     const request = http.expectOne(`${api}/templates/strength-base`);
     await router.navigateByUrl('/trainer?view=clients');
     await settle();
+
     request.flush(templateWithRoutineData());
     await promise;
+    await settle();
+
+    await flushInvitationLists();
     await settle();
     expect(fixture.componentInstance.editorContext()).toBeNull();
     expect(fixture.componentInstance.templateAction()).toBeNull();

@@ -150,6 +150,26 @@
           }
         </a>
 
+        @if (aptusMe()?.role === 'user') {
+          <a
+            routerLink="/entrenadores"
+            routerLinkActive="active"
+            [attr.aria-current]="isCurrentRoute('/entrenadores') ? 'page' : null"
+            title="Entrenadores"
+          >
+            <svg
+              class="nav-icon"
+              lucideUserRound
+              [size]="20"
+              [strokeWidth]="2"
+            ></svg>
+
+            @if (sidebarExpanded()) {
+              <span class="nav-label">Entrenadores</span>
+            }
+          </a>
+        }
+
         }
 
         @if (isTrainer()) {
@@ -361,6 +381,15 @@
 
               }
 
+              @if (aptusMe()?.role === 'user') {
+                <a routerLink="/entrenadores" routerLinkActive="active"
+                  [attr.aria-current]="isCurrentRoute('/entrenadores') ? 'page' : null"
+                  (click)="closeMobileNav()">
+                  <svg class="nav-icon" lucideUserRound [size]="20" [strokeWidth]="2"></svg>
+                  <span class="nav-label">Entrenadores</span>
+                </a>
+              }
+
               @if (isTrainer()) {
                 <a
                   routerLink="/trainer"
@@ -539,6 +568,11 @@
                     Solicitudes de acceso
                 </a>
               }
+
+                @if (aptusMe()?.role === 'user') {
+                  <a class="user-dropdown-link" routerLink="/entrenadores"
+                    (click)="closeUserMenu()" role="menuitem">Entrenadores</a>
+                }
 
                 @if (isTrainer()) {
                   <a

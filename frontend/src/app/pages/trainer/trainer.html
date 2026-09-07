@@ -79,6 +79,7 @@
   }
 
   @if (activeView() === 'athletes') {
+    <app-connection-invitations context="trainer" (accepted)="loadAthletes()" />
     <section class="trainer-section">
       <div class="section-heading">
         <p>

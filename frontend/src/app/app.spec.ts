@@ -362,6 +362,32 @@ describe('App', () => {
       .toEqual([trainerGuard]);
   });
 
+  it('offers Entrenadores to athletes from mobile navigation and the user menu', async () => {
+    const user = {
+      id: 'athlete-user',
+      email: 'athlete@example.com',
+    };
+
+    authUser.set(user);
+    waitForSession.mockResolvedValue({ user });
+    getMe.mockResolvedValue({ access_status: 'active', role: 'user' });
+
+    const fixture = await createReadyApp('/');
+
+    expect(
+      fixture.nativeElement.querySelector(
+        '.sidebar-nav a[href="/entrenadores"]',
+      ),
+    ).toBeTruthy();
+
+    (fixture.nativeElement.querySelector('.mobile-brand') as HTMLButtonElement).click();
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('.mobile-nav-menu a[href="/entrenadores"]')?.textContent).toContain('Entrenadores');
+    (fixture.nativeElement.querySelector('.user-button') as HTMLButtonElement).click();
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('.user-dropdown a[href="/entrenadores"]')?.textContent).toContain('Entrenadores');
+  });
+
   it('renders mobile bottom navigation with the same primary routes', async () => {
     const fixture =
       await createReadyApp();

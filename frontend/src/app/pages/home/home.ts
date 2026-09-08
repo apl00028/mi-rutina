@@ -1,3 +1,4 @@
+import { PullRefresh } from '../../core/pull-refresh.component';
 import {
   Component,
   OnInit,
@@ -72,11 +73,13 @@ interface DashboardWeightSummary {
 @Component({
   selector: 'app-home',
   standalone: true,
-  imports: [],
+  imports: [PullRefresh,],
   templateUrl: './home.html',
   styleUrl: './home.scss'
 })
 export class Home implements OnInit {
+  readonly refreshPage = () => this.loadDashboard();
+
 
   private readonly apiUrl =
     environment.apiUrl;

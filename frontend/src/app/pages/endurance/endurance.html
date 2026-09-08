@@ -1,3 +1,4 @@
+<app-pull-refresh [refresh]="refreshPage" [disabled]="!!editorContext || discipline() === 'cycling' || runningLoading() || swimmingLoading() || runningRoutineEditing() || swimmingRoutineEditing() || swimmingFitImporting()">
 @if (editorContext) {
   <section class="embedded-routine-editor">
     @if (discipline() === 'swimming') {
@@ -3150,3 +3151,5 @@
             </div>
 }
 </ng-template>
+
+</app-pull-refresh>

@@ -1,3 +1,7 @@
+<app-pull-refresh
+  [refresh]="refreshPage"
+  [disabled]="loading() || saving() || shoppingLoading() || !!savingMealCompletion() || savingRecipe() || !!selectedMeal() || !!preview()"
+>
 <section class="nutrition-page">
 
   <header class="nutrition-header">
@@ -1287,3 +1291,4 @@
   }
 
 </section>
+</app-pull-refresh>

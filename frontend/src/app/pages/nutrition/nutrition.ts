@@ -20,6 +20,7 @@ import * as XLSX from 'xlsx';
 
 import { environment } from '../../../environments/environment';
 import { AuthService } from '../../core/auth.service';
+import { PullRefresh } from '../../core/pull-refresh.component';
 
 
 type NutritionGoal =
@@ -148,6 +149,7 @@ interface NutritionMealCompletion {
   selector: 'app-nutrition',
   standalone: true,
   imports: [
+    PullRefresh,
     CommonModule,
     LucideCheck,
     LucideChevronLeft,
@@ -160,6 +162,45 @@ interface NutritionMealCompletion {
   styleUrl: './nutrition.scss'
 })
 export class Nutrition implements OnInit {
+
+  readonly refreshPage = async (): Promise<void> => {
+    await this.loadPlans();
+
+    const plan = this.activePlan();
+
+    if (!plan) {
+      this.mealCompletions.set([]);
+      this.shoppingList.set([]);
+      this.selectedNutritionDate.set('');
+      return;
+    }
+
+    const selectedDate =
+      this.selectedNutritionDate();
+
+    if (
+      !selectedDate ||
+      !this.weekDays(plan).some(
+        day => day.date === selectedDate
+      )
+    ) {
+      this.selectDefaultNutritionDay();
+    }
+
+    await this.loadMealCompletions(
+      plan.planId
+    );
+
+    if (
+      this.nutritionSection() ===
+      'shopping'
+    ) {
+      await this.loadShoppingList(
+        plan.planId
+      );
+    }
+  };
+
 
   private readonly apiUrl =
     environment.apiUrl;

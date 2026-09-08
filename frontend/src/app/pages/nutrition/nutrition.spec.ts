@@ -748,4 +748,81 @@ describe('Nutrition import', () => {
   );
 
 
+
+  it(
+    'refreshes plan, completions and the active shopping list without losing a valid selected day',
+    async () => {
+      const fixture =
+        TestBed.createComponent(
+          Nutrition
+        );
+
+      const component =
+        fixture.componentInstance;
+
+      const plan = {
+        planId: 'plan-1',
+        schemaVersion: '1.0',
+        weekStart: '2026-08-24',
+        status: 'active',
+        goal: 'maintain',
+        days: [
+          {
+            date: '2026-08-24',
+            meals: []
+          }
+        ]
+      } as any;
+
+      component.plans.set([plan]);
+      component.selectedNutritionDate.set(
+        '2026-08-24'
+      );
+      component.nutritionSection.set(
+        'shopping'
+      );
+
+      const loadPlans =
+        vi.spyOn(
+          component,
+          'loadPlans'
+        ).mockImplementation(
+          async () => {
+            component.plans.set([plan]);
+          }
+        );
+
+      const loadMealCompletions =
+        vi.spyOn(
+          component,
+          'loadMealCompletions'
+        ).mockResolvedValue();
+
+      const loadShoppingList =
+        vi.spyOn(
+          component,
+          'loadShoppingList'
+        ).mockResolvedValue();
+
+      await component.refreshPage();
+
+      expect(loadPlans)
+        .toHaveBeenCalledTimes(1);
+
+      expect(loadMealCompletions)
+        .toHaveBeenCalledWith(
+          'plan-1'
+        );
+
+      expect(loadShoppingList)
+        .toHaveBeenCalledWith(
+          'plan-1'
+        );
+
+      expect(
+        component.selectedNutritionDate()
+      ).toBe('2026-08-24');
+    }
+  );
+
 });

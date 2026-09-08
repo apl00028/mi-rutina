@@ -840,4 +840,21 @@ describe('Health', () => {
   );
 
 
+
+  it(
+    'refreshes the complete health state through loadHealth',
+    async () => {
+      const loadHealth =
+        vi.spyOn(
+          component,
+          'loadHealth'
+        ).mockResolvedValue();
+
+      await component.refreshPage();
+
+      expect(loadHealth)
+        .toHaveBeenCalledTimes(1);
+    }
+  );
+
 });

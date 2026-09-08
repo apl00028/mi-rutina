@@ -29,6 +29,7 @@ import { firstValueFrom } from 'rxjs';
 
 import { environment } from '../../../environments/environment';
 import { AuthService } from '../../core/auth.service';
+import { PullRefresh } from '../../core/pull-refresh.component';
 
 
 interface WeightEntry {
@@ -134,6 +135,7 @@ interface WeeklyCheckIn {
   selector: 'app-health',
   standalone: true,
   imports: [
+    PullRefresh,
     CommonModule,
     LucideTrash2
   ],
@@ -141,6 +143,8 @@ interface WeeklyCheckIn {
   styleUrl: './health.scss'
 })
 export class Health implements OnInit {
+
+  readonly refreshPage = () => this.loadHealth();
 
   readonly Math = Math;
 

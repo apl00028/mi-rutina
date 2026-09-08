@@ -1,3 +1,4 @@
+import { WorkoutOutboxService } from './core/workout-outbox.service';
 import { RunningHealthConnectSyncService } from './core/running-health-connect-sync.service';
 import {
   Component,
@@ -150,9 +151,11 @@ export class App implements OnDestroy {
       WorkoutSessionStateService,
     private telemetry:
       TelemetryService,
+    private outbox: WorkoutOutboxService,
     private runningSync: RunningHealthConnectSyncService
   ) {
     this.runningSync.start();
+    this.outbox.start();
     this.syncRouteState();
 
     if (this.isStandalonePage()) {
@@ -190,6 +193,7 @@ export class App implements OnDestroy {
 
   ngOnDestroy(): void {
     this.runningSync.stop();
+    this.outbox.stop();
     this.clearInitializationTimers();
   }
 

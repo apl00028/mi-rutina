@@ -1,3 +1,7 @@
+<app-pull-refresh
+  [refresh]="refreshPage"
+  [disabled]="loading() || savingWeight() || savingCheckin() || savingDailyCheckin() || savingBodyMeasurement() || !!deletingWeight()"
+>
 <section class="health-page">
 
   <header class="health-header">
@@ -1418,3 +1422,4 @@
   }
 
 </section>
+</app-pull-refresh>

@@ -1,3 +1,4 @@
+import { PullRefresh } from '../../core/pull-refresh.component';
 import { RoutineEditor } from '../../features/routines/components/routine-editor/routine-editor';
 import { copyRoutine, newRoutine, RoutineDocument, RoutineEditorContext } from '../../features/routines/domain/routine-editor';
 import { CommonModule } from '@angular/common';
@@ -26,11 +27,13 @@ type TrainerView = 'dashboard' | 'athletes' | 'templates';
 @Component({
   selector: 'app-trainer',
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterLink, RoutineEditor],
+  imports: [PullRefresh,CommonModule, FormsModule, RouterLink, RoutineEditor],
   templateUrl: './trainer.html',
   styleUrl: './trainer.scss',
 })
 export class Trainer implements OnInit, OnDestroy {
+  readonly refreshPage = () => this.loadAthletes();
+
   activeView = signal<TrainerView>('dashboard');
 
   athletes = signal<TrainerAthlete[]>([]);

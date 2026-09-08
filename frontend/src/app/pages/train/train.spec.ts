@@ -58,6 +58,7 @@ describe('Train first workout flow', () => {
     HttpTestingController;
 
   beforeEach(async () => {
+    localStorage.clear();
     await TestBed.configureTestingModule({
       imports: [
         Train
@@ -70,6 +71,7 @@ describe('Train first workout flow', () => {
           useValue: {
             user:
               signal({
+                id: 'test-user',
                 email:
                   'test@example.com'
               }),
@@ -4610,7 +4612,7 @@ describe('Train first workout flow', () => {
       .not.toHaveBeenCalled();
 
     const retry =
-      component.finishWorkout();
+      component.outbox.sync();
 
     await waitForHttpTick();
 
@@ -4758,162 +4760,31 @@ describe('Train first workout flow', () => {
   });
 
 
-  it('does not render a finish summary when workout persistence fails', async () => {
-    const fixture =
-      await createLoadedTrain([
-        {
-          ...activeWorkout(),
-          sets: [
-            historySet(0, {
-              weight: 80,
-              reps: 8
-            })
-          ]
-        },
-        finishedWorkout([
-          historySet(0, {
-            weight: 75,
-            reps: 8
-          })
-        ])
-      ]);
-
-    vi.spyOn(window, 'confirm')
-      .mockReturnValue(true);
-
-    (
-      fixture.nativeElement.querySelector(
-        '.finish-button'
-      ) as HTMLButtonElement
-    ).click();
+  it('finishes locally on connectivity failure, retains the snapshot and retries the same ID', async () => {
+    const fixture = await createLoadedTrain([activeWorkout()]);
+    const component = fixture.componentInstance;
+    const first = component.finishWorkout(); const second = component.finishWorkout();
+    expect(component.activeWorkout()).toBeNull();
+    expect(component.outbox.snapshots()[0].status).toBe('finished');
     await waitForHttpTick();
-
-    http.expectOne(
-      `${environment.apiUrl}/workouts/active-workout`
-    ).flush(
-      {
-        detail:
-          'No se pudo guardar'
-      },
-      {
-        status: 502,
-        statusText: 'Bad Gateway'
-      }
-    );
-    await fixture.whenStable();
-    await waitForHttpTick();
-    fixture.detectChanges();
-
-    expect(
-      fixture.nativeElement.querySelector(
-        '.workout-finish-summary'
-      )
-    ).toBeNull();
-    expect(
-      fixture.componentInstance
-        .activeWorkout()
-    ).not.toBeNull();
+    const failed = http.expectOne(`${environment.apiUrl}/workouts/active-workout`);
+    const snapshot = failed.request.body;
+    failed.flush({}, {status:502,statusText:'Offline'}); await Promise.all([first,second]);
+    expect(component.outbox.pendingCount()).toBe(1);
+    expect(component.activeWorkout()).toBeNull();
+    const retry=component.outbox.sync(); await waitForHttpTick();
+    const saved=http.expectOne(`${environment.apiUrl}/workouts/active-workout`);
+    expect(saved.request.body).toEqual(snapshot); saved.flush(snapshot); await retry;
+    expect(component.outbox.pendingCount()).toBe(0);
   });
 
-
-  it('does not clear the active workout when finish persistence fails and allows retry', async () => {
-    const fixture =
-      await createLoadedTrain([
-        {
-          workoutId:
-            'workout-1',
-          routineId:
-            'routine-1',
-          sessionId:
-            'session-1',
-          status:
-            'in_progress',
-          sets: []
-        }
-      ]);
-
-    const component =
-      fixture.componentInstance;
-
-    const first =
-      component.finishWorkout();
-    const second =
-      component.finishWorkout();
-
-    await waitForHttpTick();
-
-    const failed =
-      http.expectOne(
-        `${environment.apiUrl}/workouts/workout-1`
-      );
-
-    http.expectNone(
-      `${environment.apiUrl}/workouts/workout-1`
-    );
-
-    expect(failed.request.body.status)
-      .toBe('finished');
-
-    failed.flush(
-      {
-        detail:
-          'Workouts service is unavailable'
-      },
-      {
-        status: 502,
-        statusText: 'Bad Gateway'
-      }
-    );
-
-    await Promise.all([
-      first,
-      second
-    ]);
-
-    expect(
-      component.activeWorkout()
-        ?.status
-    ).toBe('in_progress');
-    expect(
-      component.workoutError()
-    ).toBe(
-      'Workouts service is unavailable'
-    );
-
-    const retry =
-      component.finishWorkout();
-
-    await waitForHttpTick();
-
-    const saved =
-      http.expectOne(
-        `${environment.apiUrl}/workouts/workout-1`
-      );
-
-    saved.flush(
-      saved.request.body
-    );
-
-    await retry;
-
-    expect(
-      component.activeWorkout()
-    ).toBeNull();
-    expect(
-      component.activeSession()
-    ).toBeNull();
-    const sessionState =
-      TestBed.inject(
-        WorkoutSessionStateService
-      );
-
-    expect(sessionState.state())
-      .toBe('idle');
-    expect(
-      sessionState.shouldHideBottomNav()
-    ).toBe(false);
+  it('keeps the active session if the local snapshot cannot be stored', async () => {
+    const fixture = await createLoadedTrain([activeWorkout()]);
+    const store=vi.spyOn(Storage.prototype,'setItem').mockImplementation(()=>{throw new Error('Storage full');});
+    await fixture.componentInstance.finishWorkout();
+    expect(fixture.componentInstance.activeWorkout()).not.toBeNull();
+    http.expectNone(`${environment.apiUrl}/workouts/active-workout`);store.mockRestore();
   });
-
 
   it('asks for confirmation before finishing from the UI action', async () => {
     const fixture =
@@ -5664,7 +5535,7 @@ describe('Train first workout flow', () => {
       autosave.request.body
     );
 
-    await vi.runOnlyPendingTimersAsync();
+    await vi.advanceTimersByTimeAsync(0);
 
     const finalSave =
       http.expectOne(

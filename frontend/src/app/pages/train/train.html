@@ -1,4 +1,13 @@
+<app-pull-refresh [refresh]="refreshPage" [disabled]="loading() || !!activeWorkout()">
 <main class="train-page">
+  @if (outbox.pendingCount()) { <p role="status">Sesión finalizada en este dispositivo. Pendiente de sincronizar ({{ outbox.pendingCount() }}).</p> }
+  @if (inactivityReminder()) {
+    <section class="workout-header" aria-label="Recordatorio de entrenamiento">
+      <div><h2>¿Sigues entrenando?</h2><p>Parece que llevas un tiempo sin registrar actividad.</p></div>
+      <button type="button" (click)="continueTraining()">Continuar entrenando</button>
+      <button type="button" [disabled]="workoutLoading() || cancellingWorkout()" (click)="finishWorkout()">Finalizar sesión</button>
+    </section>
+  }
   @if (visibleActiveWorkout(); as workout) {
     @if (activeSession(); as session) {
       <section class="active-workout">
@@ -1607,3 +1616,5 @@
     </section>
   }
 </main>
+
+</app-pull-refresh>

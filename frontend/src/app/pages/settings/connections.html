@@ -1,3 +1,4 @@
+<app-pull-refresh [refresh]="refreshPage" [disabled]="loading() || busy() || !!editing() || !!unlinking() || !!invitations()?.busy() || !!invitations()?.formOpen()">
 <section class="connections-page">
   <a class="back-link" routerLink="/ajustes">← Ajustes</a>
   <header class="page-header">
@@ -69,3 +70,5 @@
     <app-connection-invitations [context]="space" (accepted)="refresh()" />
   }
 </section>
+
+</app-pull-refresh>

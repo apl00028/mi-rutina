@@ -1,8 +1,11 @@
+import { PullRefresh } from '../../core/pull-refresh.component';
+import { WorkoutOutboxService } from '../../core/workout-outbox.service';
+import { WorkoutInactivityService } from '../../core/workout-inactivity.service';
 import {
   TelemetryService
 } from '../../core/telemetry.service';
 
-import { Component, OnDestroy, OnInit, signal } from '@angular/core';
+import { Component, OnDestroy, OnInit, signal, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { Router } from '@angular/router';
 import { HttpClient, HttpHeaders } from '@angular/common/http';
@@ -237,7 +240,7 @@ type AutosaveStatus =
 @Component({
   selector: 'app-train',
   standalone: true,
-  imports: [
+  imports: [PullRefresh,
     CommonModule,
     LucideCheck,
     LucideCircle,
@@ -247,10 +250,25 @@ type AutosaveStatus =
   styleUrl: './train.scss'
 })
 export class Train implements OnInit, OnDestroy {
+  readonly refreshPage = async () => { await this.loadRoutine(); await this.loadWorkoutHistory(); this.restoreActiveWorkout(); };
+
   routine = signal<Routine | null>(null);
   loading = signal(true);
   error = signal<string | null>(null);
 
+  readonly outbox = inject(WorkoutOutboxService);
+  private readonly inactivity = inject(WorkoutInactivityService);
+  readonly inactivityReminder = signal(false);
+  private inactivityTimer?: ReturnType<typeof setInterval>;
+  private readonly checkInactivity = () => {
+    const workout = this.activeWorkout();
+    this.inactivityReminder.set(Boolean(workout && !this.finishingWorkout && !this.cancellingWorkout() && this.inactivity.idle(workout)));
+  };
+  continueTraining(): void {
+    const workout = this.activeWorkout();
+    if (workout) this.inactivity.touch(workout.workoutId);
+    this.inactivityReminder.set(false);
+  }
   activeWorkout = signal<Workout | null>(null);
   activeSession = signal<RoutineSession | null>(null);
 
@@ -402,11 +420,17 @@ export class Train implements OnInit, OnDestroy {
     await this.loadRoutine();
     await this.loadWorkoutHistory();
     this.restoreActiveWorkout();
+    this.checkInactivity();
+    this.inactivityTimer = setInterval(this.checkInactivity, 60000);
+    document.addEventListener('visibilitychange', this.checkInactivity);
+
   }
 
 
   ngOnDestroy(): void {
     this.destroyed = true;
+    clearInterval(this.inactivityTimer);
+    document.removeEventListener('visibilitychange', this.checkInactivity);
     this.unilateralExecution.set(null);
     this.workoutSessionState
       .setIdle();
@@ -684,7 +708,8 @@ export class Train implements OnInit, OnDestroy {
           });
       });
 
-      this.workoutHistory.set(workouts);
+      const pending = this.outbox.reconciledSnapshots<Workout>();
+      this.workoutHistory.set([...pending, ...workouts.filter(row => !pending.some(item => item.workoutId === row.workoutId))]);
 
     } catch (err) {
       console.error(
@@ -4907,6 +4932,7 @@ export class Train implements OnInit, OnDestroy {
       return;
     }
 
+    this.continueTraining();
     this.autosaveStatus.set('idle');
 
     if (this.autosaveTimer) {
@@ -5014,7 +5040,7 @@ export class Train implements OnInit, OnDestroy {
               snapshotVersion;
           }
 
-          if (!this.cancellingWorkout()) {
+          if (!this.cancellingWorkout() && !this.outbox.snapshots().some(row => row.workoutId === saved.workoutId)) {
             this.updateWorkoutHistory(saved);
           }
 
@@ -5057,14 +5083,8 @@ export class Train implements OnInit, OnDestroy {
 
     if (
       !workout ||
-      this.cancellingWorkout()
-    ) {
-      return;
-    }
-
-    if (
-      this.workoutLoading() ||
-      this.cancellingWorkout()
+      this.cancellingWorkout() ||
+      this.workoutLoading()
     ) {
       return;
     }
@@ -5072,20 +5092,10 @@ export class Train implements OnInit, OnDestroy {
     this.clearSetTimer();
     this.clearRestTimer();
     this.unilateralExecution.set(null);
-
     this.cancelAutosaveTimer();
     this.finishingWorkout = true;
 
-    if (this.currentSave) {
-      try {
-        await this.currentSave;
-      } catch {
-        // Finalization below persists the current in-memory workout.
-      }
-    }
-
-    const currentWorkout =
-      this.activeWorkout();
+    const currentWorkout = this.activeWorkout();
 
     if (!currentWorkout) {
       this.finishingWorkout = false;
@@ -5098,63 +5108,74 @@ export class Train implements OnInit, OnDestroy {
       finishedAt: new Date().toISOString()
     };
 
+    const previousWorkouts = this.workoutHistory();
+    const exercises =
+      this.activeSession()?.exercises ?? [];
+
+    /*
+     * Persist the user's intention locally first.
+     * This is the only failure that must prevent
+     * the active session from being released.
+     */
     try {
-      const saved =
-        await this.persistWorkout(
-          finishedWorkout,
-          {
-            showLoading: true
-          }
-        );
-
-      const records =
-        detectPersonalRecords({
-          currentWorkout: saved,
-          previousWorkouts:
-            this.workoutHistory(),
-          exercises:
-            this.activeSession()
-              ?.exercises ?? []
-        });
-
-      this.workoutFinishSummary.set({
-        records,
-        groups:
-          this.groupPersonalRecords(
-            records
-          )
-      });
-
-      void this.telemetry.track({
-        event_name:
-          'workout_completed',
-        route:
-          '/entrenar',
-        metadata: {}
-      });
-
-      this.updateWorkoutHistory(saved);
-      this.persistedEditVersion =
-        this.workoutEditVersion;
-      this.autosaveStatus.set('saved');
-
-      this.activeWorkout.set(null);
-      this.activeSession.set(null);
-      this.workoutSessionState
-        .setIdle();
-      this.expandedExerciseId.set(null);
-      this.expandedSetKey.set(null);
-      this.cancelConfirmationOpen.set(false);
-
+      this.outbox.enqueue(
+        finishedWorkout,
+        this.currentSave ?? undefined
+      );
     } catch (err: any) {
       this.workoutError.set(
         err?.error?.detail ??
         err?.message ??
         'No se pudo finalizar el entrenamiento.'
       );
-    } finally {
       this.finishingWorkout = false;
+      return;
     }
+
+    this.inactivityReminder.set(false);
+    this.updateWorkoutHistory(finishedWorkout);
+    this.persistedEditVersion =
+      this.workoutEditVersion;
+    this.autosaveStatus.set('idle');
+
+    this.activeWorkout.set(null);
+    this.activeSession.set(null);
+    this.workoutSessionState.setIdle();
+    this.expandedExerciseId.set(null);
+    this.expandedSetKey.set(null);
+    this.cancelConfirmationOpen.set(false);
+    this.finishingWorkout = false;
+
+    /*
+     * The workout is already safely finalized locally.
+     * Derived UI information must never undo that.
+     */
+    try {
+      const records =
+        detectPersonalRecords({
+          currentWorkout: finishedWorkout,
+          previousWorkouts,
+          exercises
+        });
+
+      this.workoutFinishSummary.set({
+        records,
+        groups:
+          this.groupPersonalRecords(records)
+      });
+    } catch (err) {
+      console.error(
+        'No se pudo calcular el resumen final del entrenamiento',
+        err
+      );
+      this.workoutFinishSummary.set(null);
+    }
+
+    /*
+     * Remote confirmation is opportunistic. The outbox
+     * will retry on startup, resume and connectivity recovery.
+     */
+    void this.outbox.sync();
   }
 
 
@@ -5281,6 +5302,7 @@ export class Train implements OnInit, OnDestroy {
       this.expandedExerciseId.set(null);
       this.expandedSetKey.set(null);
       this.cancelConfirmationOpen.set(false);
+      this.continueTraining();
       this.autosaveStatus.set('idle');
       this.workoutEditVersion = 0;
       this.persistedEditVersion = 0;

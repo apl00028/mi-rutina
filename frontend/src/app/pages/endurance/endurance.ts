@@ -1,3 +1,4 @@
+import { PullRefresh } from '../../core/pull-refresh.component';
 import { RunningHealthConnectSyncService } from '../../core/running-health-connect-sync.service';
 import { parseRunningRoutine } from '../../features/routines/domain/running-routine-import';
 import { RoutineEditorContext } from '../../features/routines/domain/routine-editor';
@@ -276,7 +277,7 @@ const RUNNING_TREADMILL_EXERCISE_TYPE = 34;
 @Component({
   selector: 'app-endurance',
   standalone: true,
-  imports: [
+  imports: [PullRefresh,
     NgTemplateOutlet,
     DatePipe,
     DecimalPipe,
@@ -287,6 +288,8 @@ const RUNNING_TREADMILL_EXERCISE_TYPE = 34;
 })
 export class Endurance
   implements OnInit {
+  readonly refreshPage = () => this.discipline() === 'running' ? this.loadRunning() : this.loadSwimming();
+
   @Input() editorContext: RoutineEditorContext | null = null;
 
   private readonly apiUrl =

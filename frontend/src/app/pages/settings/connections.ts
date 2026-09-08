@@ -1,3 +1,4 @@
+import { PullRefresh } from '../../core/pull-refresh.component';
 import { Component, OnDestroy, OnInit, inject, signal, viewChild } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { AuthService } from '../../core/auth.service';
@@ -7,10 +8,12 @@ import { ConnectionInvitations } from '../../features/connections/invitations';
 
 @Component({
   selector: 'app-connection-settings', standalone: true,
-  imports: [RouterLink, ConnectionInvitations],
+  imports: [PullRefresh,RouterLink, ConnectionInvitations],
   templateUrl: './connections.html', styleUrl: './connections.scss',
 })
 export class ConnectionSettings implements OnInit, OnDestroy {
+  readonly refreshPage = () => this.refreshAll();
+
   private readonly auth = inject(AuthService);
   private readonly api = inject(ConnectionsService);
   private destroyed = false;

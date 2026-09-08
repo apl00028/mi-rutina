@@ -1,3 +1,4 @@
+import { TrainingExportService } from '../../core/training-export.service';
 import {
   Component,
   OnInit,
@@ -13,6 +14,7 @@ import {
   LucideChevronLeft,
   LucideChevronRight,
   LucideDatabase,
+  LucideDownload,
   LucideDumbbell,
   LucideInfo,
   LucidePalette,
@@ -1444,7 +1446,8 @@ export class SettingsAppearance {
   standalone: true,
   imports: [
     RouterLink,
-    LucideChevronLeft
+    LucideChevronLeft,
+    LucideDownload
   ],
   template: `
     <section class="settings-page">
@@ -1469,6 +1472,19 @@ export class SettingsAppearance {
       </header>
 
 
+      <section class="settings-panel" aria-label="Exportación de entrenamientos">
+        <div class="settings-field">
+          <span>Historial de entrenamiento</span>
+          <small>Todas las disciplinas guardadas en Aptus, con sus detalles originales, en un archivo JSON.</small>
+          <button type="button" class="settings-button" [disabled]="trainingExport.busy()"
+            [attr.aria-busy]="trainingExport.busy()" (click)="trainingExport.download()">
+            <svg lucideDownload [size]="18" aria-hidden="true"></svg>
+            {{ trainingExport.busy() ? 'Preparando historial…' : 'Exportar entrenamientos' }}
+          </button>
+          @if (trainingExport.message()) { <p role="status">{{ trainingExport.message() }}</p> }
+          @if (trainingExport.error()) { <p role="alert">{{ trainingExport.error() }}</p> }
+        </div>
+      </section>
       <section class="settings-panel">
         <div class="settings-field">
           <span>
@@ -2180,6 +2196,8 @@ export class SettingsAppearance {
 })
 export class SettingsData
   implements OnInit {
+
+  readonly trainingExport = inject(TrainingExportService);
 
   constructor(
     private telemetry:

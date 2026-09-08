@@ -1,3 +1,4 @@
+import { TrainingExportService } from '../../core/training-export.service';
 /**
  * @vitest-environment jsdom
  */
@@ -119,6 +120,9 @@ describe('Settings pages', () => {
             component: SettingsAbout
           }
         ]),
+        {
+          provide: TrainingExportService, useValue: {busy: signal(false), message: signal(''), error: signal(''), download: vi.fn()}
+        },
         {
           provide: AuthService,
           useValue: {
@@ -528,6 +532,15 @@ describe('Settings pages', () => {
       document.documentElement.classList
         .contains('aptus-theme-light')
     ).toBe(true);
+  });
+
+  it('offers the shared training export in data settings with busy feedback', () => {
+    const fixture = TestBed.createComponent(SettingsData); fixture.detectChanges();
+    const exporter = TestBed.inject(TrainingExportService);
+    const button = Array.from(fixture.nativeElement.querySelectorAll('button')).find((b: any) => b.textContent.includes('Exportar entrenamientos')) as HTMLButtonElement;
+    expect(button).toBeTruthy(); button.click(); expect(exporter.download).toHaveBeenCalledTimes(1);
+    exporter.busy.set(true); exporter.message.set('Historial preparado.'); fixture.detectChanges();
+    expect(button.disabled).toBe(true); expect(fixture.nativeElement.textContent).toContain('Historial preparado.');
   });
 
   it('does not render fake data actions', () => {

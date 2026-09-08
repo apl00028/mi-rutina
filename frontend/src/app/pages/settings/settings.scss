@@ -710,3 +710,22 @@
   }
 
 }
+
+.settings-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 44px;
+  width: fit-content;
+  max-width: 100%;
+  padding: 10px 14px;
+  border: 1px solid var(--aptus-border-strong);
+  border-radius: var(--aptus-radius-md);
+  background: var(--aptus-surface);
+  color: var(--aptus-text);
+  font: inherit;
+  cursor: pointer;
+}
+.settings-button:disabled { opacity: .55; cursor: wait; }
+.settings-button:focus-visible { outline: 3px solid var(--aptus-focus-ring); outline-offset: 2px; }

@@ -34,8 +34,7 @@
 
 .builder-header,
 .session-header,
-.builder-actions,
-.export-actions {
+.builder-actions {
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -228,51 +227,6 @@ select:focus-visible {
   padding: 12px;
 }
 
-.period-options {
-  display: grid;
-  gap: 10px;
-
-  margin: 16px 0;
-}
-
-.period-options label {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.period-options input {
-  width: auto;
-}
-
-.custom-date-range {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
-
-  margin: 16px 0;
-}
-
-.export-records-picker {
-  z-index: 1000;
-  pointer-events: auto;
-
-  padding: 20px;
-}
-
-.export-panel {
-  position: relative;
-  z-index: 1;
-
-  box-sizing: border-box;
-  width: min(600px, 100%);
-}
-
-.export-actions {
-  position: relative;
-  z-index: 2;
-}
-
 @media (max-width: 700px) {
   .exercise-fields {
     grid-template-columns:
@@ -282,18 +236,7 @@ select:focus-visible {
       );
   }
 
-  .custom-date-range {
-    grid-template-columns: 1fr;
-  }
 
-  .export-actions {
-    align-items: stretch;
-    flex-direction: column-reverse;
-  }
-
-  .export-actions button {
-    width: 100%;
-  }
 }
 
 @media (max-width: 450px) {
@@ -514,17 +457,6 @@ select:focus-visible {
   border-radius: 0;
 
   background: var(--aptus-surface);
-}
-
-.analysis-export-action
-.routine-action-card {
-  width: 100%;
-}
-
-.analysis-export-action {
-  overflow: hidden;
-  border: 1px solid var(--aptus-border);
-  border-radius: var(--aptus-radius-md);
 }
 
 .analysis-period {

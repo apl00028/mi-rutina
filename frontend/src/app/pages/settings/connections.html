@@ -1,43 +1,71 @@
 <section class="connections-page">
-  <a routerLink="/ajustes">← Ajustes</a>
-  <h1>Conexiones / {{ context() === 'trainer' ? 'Clientes' : 'Entrenadores' }}</h1>
+  <a class="back-link" routerLink="/ajustes">← Ajustes</a>
+  <header class="page-header">
+    <div>
+      <h1>Conexiones</h1>
+      <p>{{ context() === 'trainer' ? 'Tus clientes y la información que comparten contigo.' : 'Gestiona quién puede acceder a tus datos.' }}</p>
+    </div>
+    @if (context()) {
+      <button class="icon-button" type="button" aria-label="Actualizar toda la pantalla" title="Actualizar toda la pantalla"
+        [disabled]="busy() || loading() || invitations()?.busy() || invitations()?.loading()" (click)="refreshAll()"><span aria-hidden="true">↻</span></button>
+    }
+  </header>
   @if (error()) { <p role="alert" class="error">{{ error() }}</p> }
   @if (message()) { <p role="status">{{ message() }}</p> }
   @if (context(); as space) {
-    <p>El atleta decide qué comparte con cada entrenador. Una vinculación nueva no concede acceso a sus datos.</p>
-    <h2>{{ space === 'trainer' ? 'Clientes vinculados' : 'Entrenadores vinculados' }}</h2>
-    <button type="button" [disabled]="busy() || loading()" (click)="refresh()">Actualizar conexiones</button>
+    <h2>{{ space === 'trainer' ? 'Clientes' : 'Entrenadores' }}</h2>
     @if (loading()) { <p role="status">Cargando conexiones…</p> }
+    <div class="relationship-list" [attr.aria-busy]="loading() || busy()">
     @for (row of relationships(); track row.trainer_id + row.athlete_id) {
-      <article>
-        <h3>{{ row.other_display_name || row.other_alias || (space === 'trainer' ? 'Atleta' : 'Entrenador') }}</h3>
-        <p>Información compartida:</p>
-        <ul>@for (domain of row.domains; track domain) { <li>{{ labels[domain] }}</li> }
-          @empty { <li>Ninguno. No hay acceso a datos de entrenamiento ni salud.</li> }</ul>
+      <article class="relationship-card">
+        <div class="card-heading">
+          <span class="avatar" aria-hidden="true">{{ initials(row) }}</span>
+          <div class="identity">
+            <h3>{{ displayName(row) }}</h3>
+            <ul class="chips" aria-label="Información compartida actualmente">
+              @for (domain of row.domains; track domain) { <li class="chip">{{ labels[domain] }}</li> }
+              @empty { <li class="chip muted">Sin acceso</li> }
+            </ul>
+          </div>
+        </div>
         @if (editing() === row) {
-          <fieldset [disabled]="busy() || loading()">
-            <legend>Qué compartes con este entrenador</legend>
-            @for (domain of domains; track domain) {
-              <label><input type="checkbox" [checked]="draft().includes(domain)"
-                (change)="toggle(domain, $any($event.target).checked)" />{{ labels[domain] }}</label>
-            }
-          </fieldset>
-          <p>Los permisos de deporte permiten consultar sesiones y rutinas, y asignar rutinas de esa disciplina.</p>
-          <button type="button" [disabled]="busy() || loading()" (click)="save()">Guardar permisos</button>
-          <button type="button" [disabled]="busy() || loading()" (click)="editing.set(null)">Cancelar edición</button>
-        } @else if (space === 'athlete') {
-          <button type="button" [disabled]="busy() || loading()" (click)="edit(row)">Editar permisos</button>
-        } @else { <p>Solo el atleta puede cambiar estos permisos.</p> }
+          <div class="permission-editor">
+            <fieldset [disabled]="busy() || loading()">
+              <legend>Qué compartes con {{ displayName(row) }}</legend>
+              @for (domain of domains; track domain) {
+                <label><input type="checkbox" [checked]="draft().includes(domain)"
+                  (change)="toggle(domain, $any($event.target).checked)" />{{ labels[domain] }}</label>
+              }
+            </fieldset>
+            <p>Los cambios se aplican al guardar. Cada deporte incluye sesiones, consulta y asignación de rutinas.</p>
+            <div class="actions">
+              <button class="primary" type="button" [disabled]="busy() || loading()" (click)="save()">Guardar permisos</button>
+              <button type="button" [disabled]="busy() || loading()" (click)="editing.set(null)">Cancelar edición</button>
+            </div>
+          </div>
+        } @else if (!unlinking() || unlinking() !== row) {
+          <div class="card-actions">
+            @if (space === 'athlete') {
+              <button class="text-button" type="button" [disabled]="busy() || loading()" (click)="edit(row)">Gestionar permisos</button>
+            } @else { <p>Permisos elegidos por el atleta</p> }
+            <details class="more-actions">
+              <summary [attr.aria-label]="'Más opciones para ' + displayName(row)" title="Más opciones"><span aria-hidden="true">⋮</span></summary>
+              <button class="danger" type="button" [disabled]="busy() || loading()" (click)="askUnlink(row)">Desvincular</button>
+            </details>
+          </div>
+        }
         @if (unlinking() === row) {
-          <p>¿Desvincular? Se retirarán todos los permisos. Para volver a conectar será necesaria una nueva invitación.</p>
-          <button type="button" [disabled]="busy() || loading()" (click)="unlink()">Confirmar desvinculación</button>
-          <button type="button" [disabled]="busy() || loading()" (click)="unlinking.set(null)">Cancelar</button>
-        } @else {
-          <button type="button" [disabled]="busy() || loading()" (click)="askUnlink(row)">Desvincular</button>
+          <div class="confirmation">
+            <p>¿Desvincular a {{ displayName(row) }}? Se retirarán todos los permisos. Para volver a conectar será necesaria una nueva invitación.</p>
+            <div class="actions">
+              <button class="danger" type="button" [disabled]="busy() || loading()" (click)="unlink()">Confirmar desvinculación</button>
+              <button type="button" [disabled]="busy() || loading()" (click)="unlinking.set(null)">Cancelar</button>
+            </div>
+          </div>
         }
       </article>
-    } @empty { @if (!loading()) { <p>No tienes conexiones activas.</p> } }
-    <h2>Invitaciones</h2>
+    } @empty { @if (!loading() && !error()) { <p class="empty-state">{{ space === 'trainer' ? 'Aún no tienes clientes vinculados.' : 'Aún no tienes entrenadores vinculados.' }}</p> } }
+    </div>
     <app-connection-invitations [context]="space" (accepted)="refresh()" />
   }
 </section>

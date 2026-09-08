@@ -1,9 +1,8 @@
 <section class="connections" aria-label="Vinculación entrenador y atleta" [attr.aria-busy]="loading() || busy()">
   <div class="actions">
-    <button type="button" class="primary" [disabled]="busy() || loading()" (click)="formOpen.set(true)">
+    <button type="button" class="primary" [disabled]="busy() || loading()" [attr.aria-expanded]="formOpen()" (click)="formOpen.set(true)">
       {{ context === 'trainer' ? 'Añadir cliente' : 'Añadir entrenador' }}
     </button>
-    <button type="button" [disabled]="busy() || loading()" (click)="refresh()">Actualizar invitaciones</button>
   </div>
   @if (formOpen()) {
     <form (ngSubmit)="invite()">
@@ -19,23 +18,17 @@
   }
   @if (error()) { <p class="error" role="alert">{{ error() }}</p> }
   @if (message()) { <p class="success" role="status">{{ message() }}</p> }
-  <details class="contact">
-    <summary>Mi código de contacto</summary>
-    <p>Compártelo con {{ context === 'trainer' ? 'tu atleta' : 'tu entrenador' }} para recibir una invitación.</p>
-    <p>Generar uno nuevo invalida el anterior. Si pierdes este código, genera uno nuevo.</p>
-    <button type="button" [disabled]="busy() || loading()" (click)="generateCode()">Generar código</button>
-    @if (code()) {
-      <div class="actions"><code>{{ code() }}</code><button type="button" [disabled]="busy()" (click)="copyCode()">Copiar código</button></div>
-      <p>Solo se muestra en esta visita; al salir no podrás recuperarlo.</p>
-    }
-  </details>
+
   @if (loading()) { <p role="status">Cargando invitaciones…</p> }
+  <h2>Invitaciones</h2>
+  @if (!loading() && !error() && !received().length && !sent().length) { <p class="empty-state">Sin invitaciones pendientes.</p> }
   <div class="inboxes">
+    @if (received().length) {
     <section aria-label="Solicitudes recibidas">
-      <h2>Solicitudes recibidas</h2>
+      <h3>Solicitudes recibidas</h3>
       @for (item of received(); track item.id) {
         <article>
-          <h3>{{ item.other_display_name || item.other_alias || (context === 'trainer' ? 'Atleta' : 'Entrenador') }}</h3>
+          <h4>{{ item.other_display_name || item.other_alias || (context === 'trainer' ? 'Atleta' : 'Entrenador') }}</h4>
           @if (item.other_alias && item.other_display_name) { <p>{{ item.other_alias }}</p> }
           <p>{{ context === 'trainer' ? 'Quiere que seas su entrenador.' : 'Quiere ser tu entrenador.' }}</p>
           <p>Caduca: {{ item.expires_at | date:'dd/MM/yyyy HH:mm' }}</p>
@@ -46,20 +39,33 @@
             </div>
           } @else { <p>Esta solicitud ya no está pendiente.</p> }
         </article>
-      } @empty { @if (!loading()) { <p>No hay solicitudes pendientes.</p> } }
+      }
     </section>
+    }
+    @if (sent().length) {
     <section aria-label="Invitaciones enviadas">
-      <h2>Invitaciones enviadas</h2>
+      <h3>Invitaciones enviadas</h3>
       @for (item of sent(); track item.id) {
         <article>
-          <h3>{{ item.other_display_name || item.other_alias || (context === 'trainer' ? 'Atleta' : 'Entrenador') }}</h3>
+          <h4>{{ item.other_display_name || item.other_alias || (context === 'trainer' ? 'Atleta' : 'Entrenador') }}</h4>
           <p>Enviada: {{ item.created_at | date:'dd/MM/yyyy' }}</p>
           <p>Caduca: {{ item.expires_at | date:'dd/MM/yyyy HH:mm' }}</p>
           @if (isPending(item)) {
             <button type="button" [disabled]="busy() || loading()" (click)="act(item, 'revoke')">Cancelar invitación</button>
           } @else { <p>Esta invitación ya no está pendiente.</p> }
         </article>
-      } @empty { @if (!loading()) { <p>No hay invitaciones pendientes.</p> } }
+      }
     </section>
+    }
   </div>
+  <details class="contact">
+    <summary>Mi código de contacto</summary>
+    <p>Compártelo con {{ context === 'trainer' ? 'tu atleta' : 'tu entrenador' }} para recibir una invitación.</p>
+    <p>Generar uno nuevo invalida el anterior. Si pierdes este código, genera uno nuevo.</p>
+    <button type="button" [disabled]="busy() || loading()" (click)="generateCode()">Generar código</button>
+    @if (code()) {
+      <div class="actions"><code>{{ code() }}</code><button type="button" [disabled]="busy()" (click)="copyCode()">Copiar código</button></div>
+      <p>Solo se muestra en esta visita; al salir no podrás recuperarlo.</p>
+    }
+  </details>
 </section>

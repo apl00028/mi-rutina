@@ -1,4 +1,4 @@
-import { Component, OnDestroy, OnInit, inject, signal } from '@angular/core';
+import { Component, OnDestroy, OnInit, inject, signal, viewChild } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { AuthService } from '../../core/auth.service';
 import { ConnectionsService, connectionError } from '../../core/connections.service';
@@ -15,6 +15,7 @@ export class ConnectionSettings implements OnInit, OnDestroy {
   private readonly api = inject(ConnectionsService);
   private destroyed = false;
   private refreshPending = false;
+  readonly invitations = viewChild(ConnectionInvitations);
   readonly context = signal<'trainer' | 'athlete' | null>(null);
   readonly relationships = signal<TrainerAthleteConnection[]>([]);
   readonly loading = signal(false);
@@ -25,7 +26,7 @@ export class ConnectionSettings implements OnInit, OnDestroy {
   readonly draft = signal<ConnectionDomain[]>([]);
   readonly unlinking = signal<TrainerAthleteConnection | null>(null);
   readonly domains = connectionDomains;
-  readonly labels: Record<ConnectionDomain, string> = { swimming: 'Natación', running: 'Carrera', cycling: 'Ciclismo', strength: 'Fuerza', health: 'Salud y composición corporal' };
+  readonly labels: Record<ConnectionDomain, string> = { swimming: 'Natación', running: 'Carrera', cycling: 'Ciclismo', strength: 'Fuerza', health: 'Salud' };
 
   async ngOnInit(): Promise<void> {
     try {
@@ -39,6 +40,18 @@ export class ConnectionSettings implements OnInit, OnDestroy {
     } catch (error) { if (!this.destroyed) this.error.set(connectionError(error)); }
   }
   ngOnDestroy(): void { this.destroyed = true; }
+  displayName(row: TrainerAthleteConnection): string {
+    return row.other_display_name || row.other_alias || (this.context() === 'trainer' ? 'Atleta' : 'Entrenador');
+  }
+  initials(row: TrainerAthleteConnection): string {
+    return this.displayName(row).trim().split(/\s+/).slice(0, 2).map(part => part[0]).join('').toUpperCase();
+  }
+  async refreshAll(): Promise<void> {
+    const panel = this.invitations();
+    if (this.busy() || this.loading() || panel?.busy() || panel?.loading()) return;
+    await Promise.all([this.refresh(), panel?.refresh()]);
+  }
+
   async refresh(): Promise<void> {
     if (this.destroyed) return;
     if (this.busy()) { this.refreshPending = true; return; }

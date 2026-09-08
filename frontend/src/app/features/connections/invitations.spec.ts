@@ -60,6 +60,8 @@ describe.each(['trainer', 'athlete'] as const)('Invitations in %s context', cont
     const storage = vi.spyOn(Storage.prototype, 'setItem');
     const copy = vi.fn().mockResolvedValue(undefined);
     Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: copy } });
+    const contact = fixture.nativeElement.querySelector('details.contact') as HTMLDetailsElement;
+    expect(contact.open).toBe(false); contact.querySelector('summary')!.click();
     await click('Generar código'); await click('Copiar código');
     expect(copy).toHaveBeenCalledWith('APT-ABCD-EFGH-JKLM-NPQR'); expect(storage).not.toHaveBeenCalled();
     expect(fixture.nativeElement.textContent).toContain('invalida el anterior');
@@ -94,4 +96,17 @@ describe.each(['trainer', 'athlete'] as const)('Invitations in %s context', cont
     fixture.destroy(); resolve({ code: 'secret' }); await first;
     expect(component.code()).toBe('');
   });
+  it('uses one compact empty state and only displays populated inboxes', async () => {
+    api.list.mockResolvedValue([]); await component.refresh(); await settle();
+    expect(fixture.nativeElement.textContent).toContain('Sin invitaciones pendientes.');
+    expect(fixture.nativeElement.querySelector('[aria-label="Solicitudes recibidas"]')).toBeNull();
+    expect(fixture.nativeElement.querySelector('[aria-label="Invitaciones enviadas"]')).toBeNull();
+    expect(fixture.nativeElement.textContent).not.toContain('Actualizar invitaciones');
+    component.received.set([invitation('received')]); await settle();
+    expect(fixture.nativeElement.querySelector('[aria-label="Solicitudes recibidas"]')).not.toBeNull();
+    expect(fixture.nativeElement.querySelector('[aria-label="Invitaciones enviadas"]')).toBeNull();
+    expect(fixture.nativeElement.textContent).toContain('Aceptar');
+    expect(fixture.nativeElement.textContent).toContain('Rechazar');
+  });
+
 });

@@ -1,11 +1,36 @@
 :host { display: block; }
-.connections-page { width: min(100%, 1000px); padding: 24px; margin: auto; box-sizing: border-box; }
-h1 { font-size: clamp(24px, 4vw, 30px); } h2 { font-size: 20px; } h3 { font-size: 17px; overflow-wrap: anywhere; }
-p { color: var(--aptus-text-muted); line-height: 1.6; }
-article { padding: 18px; margin: 18px 0; border: 1px solid var(--aptus-border); border-radius: 14px; background: var(--aptus-surface); }
-button { min-height: 44px; margin: 4px; padding: 10px 14px; border: 1px solid var(--aptus-border); border-radius: 10px; color: var(--aptus-text); background: var(--aptus-surface); font: inherit; cursor: pointer; }
+.connections-page { width: min(100%, 760px); padding: 24px; margin: auto; box-sizing: border-box; color: var(--aptus-text); }
+.back-link { display: inline-flex; align-items: center; min-height: 44px; color: var(--aptus-text-muted); font-size: 14px; }
+.page-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin: 8px 0 24px; }
+h1 { font-size: clamp(24px, 4vw, 30px); margin: 0 0 6px; }
+h2 { font-size: 14px; margin: 0 0 12px; font-weight: 750; }
+h3 { font-size: 16px; margin: 0; overflow-wrap: anywhere; }
+p { color: var(--aptus-text-muted); line-height: 1.5; font-size: 13px; margin: 0; }
+.relationship-list { display: grid; gap: 10px; margin-bottom: 12px; }
+.relationship-card { padding: 14px; border: 1px solid var(--aptus-border); border-radius: 14px; background: var(--aptus-surface); min-width: 0; }
+.card-heading { display: flex; align-items: center; gap: 12px; }
+.avatar { display: grid; place-items: center; flex: 0 0 44px; height: 44px; border-radius: 50%; background: var(--aptus-accent-soft); font-size: 14px; font-weight: 750; }
+.identity { min-width: 0; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; list-style: none; padding: 0; margin: 6px 0 0; }
+.chip { padding: 3px 8px; border-radius: var(--aptus-radius-full); background: var(--aptus-accent-soft); color: var(--aptus-accent-text); font-size: 12px; }
+.chip.muted { background: var(--aptus-surface-muted); color: var(--aptus-text-muted); }
+button { min-height: 44px; padding: 10px 14px; border: 1px solid var(--aptus-border); border-radius: var(--aptus-radius-md); color: var(--aptus-text); background: var(--aptus-surface); font: inherit; font-size: 14px; cursor: pointer; }
 button:disabled { opacity: .55; cursor: wait; }
-fieldset { border: 1px solid var(--aptus-border); } label { display: flex; align-items: center; gap: 10px; min-height: 44px; }
-input { width: 20px; height: 20px; } .error { color: var(--aptus-danger); }
-button:focus-visible, a:focus-visible { outline: 2px solid var(--aptus-focus-ring); }
+.primary { background: var(--aptus-accent); color: var(--aptus-accent-contrast); border-color: var(--aptus-accent); }
+.icon-button { flex: 0 0 44px; padding: 0; font-size: 24px; }
+.card-actions { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 8px; }
+.text-button { padding-inline: 0; border-color: transparent; color: var(--aptus-accent-text); font-weight: 650; }
+.more-actions { position: relative; margin-left: auto; }
+.more-actions summary { display: grid; place-items: center; width: 44px; min-height: 44px; list-style: none; cursor: pointer; font-size: 24px; border-radius: var(--aptus-radius-md); }
+.more-actions summary::-webkit-details-marker { display: none; }
+.more-actions button { position: absolute; right: 0; top: 100%; z-index: 1; box-shadow: 0 4px 16px #0002; }
+.actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.permission-editor, .confirmation { border-top: 1px solid var(--aptus-border); margin-top: 14px; padding-top: 14px; }
+fieldset { border: 0; padding: 0; margin: 0 0 10px; }
+legend { font-size: 14px; font-weight: 650; margin-bottom: 8px; overflow-wrap: anywhere; }
+label { display: flex; align-items: center; gap: 10px; min-height: 44px; font-size: 14px; }
+input { width: 20px; height: 20px; accent-color: var(--aptus-accent); }
+.error, .danger { color: var(--aptus-danger); }
+.empty-state { padding: 12px 0; }
+button:focus-visible, a:focus-visible, summary:focus-visible, input:focus-visible { outline: 2px solid var(--aptus-focus-ring); outline-offset: 3px; }
 @media(max-width: 640px) { .connections-page { padding: 16px; } }

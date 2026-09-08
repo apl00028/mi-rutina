@@ -26,11 +26,11 @@ describe('Connection settings', () => {
       { provide: ConnectionsService, useValue: api }, { provide: AuthService, useValue: { resolveAccess } }] }).compileComponents();
   });
   async function settle() { for(let i=0;i<12;i++) await Promise.resolve(); fixture.detectChanges(); }
-  async function start() { fixture=TestBed.createComponent(ConnectionSettings); component=fixture.componentInstance; fixture.detectChanges(); await settle(); }
+  async function start() { fixture=TestBed.createComponent(ConnectionSettings); component=fixture.componentInstance; fixture.detectChanges(); await settle(); await fixture.whenStable(); fixture.detectChanges(); }
   afterEach(() => fixture?.destroy());
   it('shows per-trainer grants and keeps the athlete invitation context', async () => {
     await start(); expect(fixture.nativeElement.textContent).toContain('Natación');
-    expect(fixture.nativeElement.textContent).toContain('Editar permisos');
+    expect(fixture.nativeElement.textContent).toContain('Gestionar permisos');
     expect(fixture.debugElement.query(By.directive(ConnectionInvitations)).componentInstance.context).toBe('athlete');
     expect(api.setPermissions).not.toHaveBeenCalled();
   });
@@ -53,7 +53,7 @@ describe('Connection settings', () => {
   });
   it('trainer can view permissions but cannot edit them', async () => {
     resolveAccess.mockResolvedValue({role:'trainer',access_status:'active'}); await start();
-    expect(fixture.nativeElement.textContent).not.toContain('Editar permisos');
+    expect(fixture.nativeElement.textContent).not.toContain('Gestionar permisos');
     component.edit(row); await component.save(); expect(api.setPermissions).not.toHaveBeenCalled();
     expect(fixture.debugElement.query(By.directive(ConnectionInvitations)).componentInstance.context).toBe('trainer');
   });
@@ -78,4 +78,42 @@ describe('Connection settings', () => {
     component.edit(row); component.toggle('swimming',false); await component.save();
     expect(api.setPermissions).toHaveBeenCalledWith(row.trainer_id,[],row.updated_at);
   });
+  it('shows no access compactly and offers one refresh for the whole screen', async () => {
+    api.relationships.mockResolvedValue([{...row, domains: []}]); await start();
+    expect(fixture.nativeElement.textContent).toContain('Sin acceso');
+    expect(fixture.nativeElement.textContent).not.toContain('Actualizar conexiones');
+    expect(fixture.nativeElement.textContent).not.toContain('Actualizar invitaciones');
+    api.relationships.mockClear(); api.list.mockClear();
+    fixture.nativeElement.querySelector('button[aria-label="Actualizar toda la pantalla"]').click();
+    await settle();
+    expect(api.relationships).toHaveBeenCalledTimes(1);
+    expect(api.list.mock.calls).toEqual([['received'], ['sent']]);
+  });
+  it('edits through controls and keeps confirmed chips until explicit save', async () => {
+    await start();
+    const button = (text: string) => Array.from(fixture.nativeElement.querySelectorAll('button'))
+      .find((node: any) => node.textContent.trim() === text) as HTMLButtonElement;
+    button('Gestionar permisos').click(); await settle();
+    const labels = Array.from(fixture.nativeElement.querySelectorAll('fieldset label')) as HTMLLabelElement[];
+    labels.find(label => label.textContent?.includes('Carrera'))!.querySelector('input')!.click();
+    await settle();
+    expect(api.setPermissions).not.toHaveBeenCalled();
+    expect(fixture.nativeElement.querySelector('.chips').textContent).not.toContain('Carrera');
+    button('Guardar permisos').click(); await settle();
+    expect(api.setPermissions).toHaveBeenCalledWith('trainer', ['swimming','running'], row.updated_at);
+    expect(fixture.nativeElement.querySelector('.chips').textContent).toContain('Carrera');
+  });
+  it('keeps unlink behind options and requires a separate confirmation click', async () => {
+    await start();
+    const options = fixture.nativeElement.querySelector('details.more-actions') as HTMLDetailsElement;
+    expect(options.open).toBe(false);
+    options.querySelector('summary')!.click(); await settle();
+    options.querySelector('button')!.click(); await settle();
+    expect(api.unlink).not.toHaveBeenCalled();
+    const confirm = Array.from(fixture.nativeElement.querySelectorAll('button'))
+      .find((node: any) => node.textContent.trim() === 'Confirmar desvinculación') as HTMLButtonElement;
+    confirm.click(); await settle();
+    expect(api.unlink).toHaveBeenCalledWith('trainer', row.updated_at);
+  });
+
 });

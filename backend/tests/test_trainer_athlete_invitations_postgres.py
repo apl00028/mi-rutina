@@ -111,7 +111,7 @@ def test_contact_collision_is_sanitized(db):
 
 
 @pytest.mark.parametrize('status,expiry,role', [
-    ('active', None, 'admin'), ('suspended', None, 'user'), ('pending', None, 'user'),
+    ('suspended', None, 'admin'), ('suspended', None, 'user'), ('pending', None, 'user'),
     ('rejected', None, 'trainer'), ('active', "now() - interval '1 day'", 'user'),
 ])
 def test_invalid_actor_cannot_use_contact_or_lists(db, status, expiry, role):
@@ -158,7 +158,10 @@ def test_invalid_unknown_codes_same_error(db, code):
 def test_creation_requires_both_eligible_accounts(db, actor, target, who, change):
     user = actor if who == 'actor' else target
     db(f"update public.gymos_users set {change} where user_id='{user}';")
-    create(db, actor, target, error='42501' if who == 'actor' else 'invitation_target_unavailable')
+    if user == A and change == "role='admin'":
+        assert create(db, actor, target)
+    else:
+        create(db, actor, target, error='42501' if who == 'actor' else 'invitation_target_unavailable')
 
 
 @pytest.mark.parametrize('actor,name,target', [(A,'trainer_create_athlete_invitation',T), (T,'athlete_create_trainer_invitation',A)])
@@ -211,7 +214,7 @@ def test_accept_creates_or_reactivates_once(db, actor,target,existing):
 @pytest.mark.parametrize('change',["role='admin'","role='trainer'","role='user'","status='pending'",
                                   "status='suspended'","status='rejected'","expires_at=now()-interval '1 day'"])
 def test_accept_revalidates_accounts(db,who,change):
-    if (who==T and change=="role='trainer'") or (who==A and change=="role='user'"):
+    if (who==T and change=="role='trainer'") or (who==A and change in ("role='user'", "role='admin'")):
         return
     invitation=create(db)
     db(f"update public.gymos_users set {change} where user_id='{who}';")

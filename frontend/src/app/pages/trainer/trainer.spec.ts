@@ -1,5 +1,3 @@
-import { By } from '@angular/platform-browser';
-import { ConnectionInvitations } from '../../features/connections/invitations';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
@@ -49,22 +47,6 @@ describe('Trainer experience', () => {
   });
   afterEach(() => http.verify());
 
-  async function flushInvitationLists() {
-    await vi.waitFor(() => {
-      const requests = http.match(
-        request =>
-          request.method === 'GET' &&
-          request.url.endsWith('/connections/invitations'),
-      );
-
-      expect(
-        requests.map(request => request.request.params.get('box')).sort(),
-      ).toEqual(['received', 'sent']);
-
-      requests.forEach(request => request.flush([]));
-    });
-  }
-
   async function settle() {
     for (let i = 0; i < 12; i++) await Promise.resolve();
     fixture?.detectChanges();
@@ -88,10 +70,6 @@ describe('Trainer experience', () => {
 
     await settle();
 
-    if (view.includes('view=clients')) {
-      await flushInvitationLists();
-      await settle();
-    }
 
     for (const client of clients) {
       const req = http.expectOne(`${api}/athletes/${client.athlete_id}`);
@@ -130,31 +108,10 @@ describe('Trainer experience', () => {
       });
   }
 
-  it('accepting a received invitation refreshes clients and both inboxes', async () => {
+  it('links to connection settings from Clients', async () => {
     await start('?view=clients', [], []);
-    const panel = fixture.debugElement.query(By.directive(ConnectionInvitations)).componentInstance as ConnectionInvitations;
-    const item = {
-      id: 'invitation', trainer_id: 'trainer', athlete_id: 'athlete-1', inviter_id: 'athlete-1', recipient_id: 'trainer',
-      direction: 'athlete_to_trainer' as const, status: 'pending' as const,
-      created_at: '2026-09-07T08:00:00Z', expires_at: '2099-09-14T08:00:00Z',
-      accepted_at: null, revoked_at: null, revoked_by: null, other_display_name: 'Athlete One', other_alias: null,
-    };
-    panel.received.set([item]);
-    fixture.detectChanges();
-    expect(text()).toContain('Añadir cliente');
-    const action = panel.act(item, 'accept');
-    await settle();
-    http.expectOne(`${environment.apiUrl}/connections/invitations/invitation/accept`).flush(null);
-    await settle();
-    http.expectOne(`${api}/athletes`).flush([athlete]);
-    const inboxes = http.match(request => request.url.endsWith('/connections/invitations'));
-    expect(inboxes.map(request => request.request.params.get('box')).sort()).toEqual(['received', 'sent']);
-    inboxes.forEach(request => request.flush([]));
-    await settle();
-    http.expectOne(`${api}/athletes/${athlete.athlete_id}`).flush(overviewResponse(athlete));
-    await action; await settle();
-    expect(fixture.componentInstance.athletes()).toEqual([athlete]);
-    expect(text()).toContain('Athlete One');
+    expect(fixture.nativeElement.querySelector('a[href="/ajustes/conexiones"]')).toBeTruthy();
+    expect(fixture.nativeElement.querySelector('app-connection-invitations')).toBeNull();
   });
 
   it('shows a compact dashboard with scoped totals and recent activity, without full lists or duplicate navigation', async () => {
@@ -213,7 +170,6 @@ describe('Trainer experience', () => {
     await router.navigateByUrl('/trainer?view=clients');
     await settle();
 
-    await flushInvitationLists();
     await settle();
 
     expect(text()).toContain('Sesiones no disponibles');
@@ -564,7 +520,6 @@ describe('Trainer experience', () => {
     await promise;
     await settle();
 
-    await flushInvitationLists();
     await settle();
     expect(fixture.componentInstance.editorContext()).toBeNull();
     expect(fixture.componentInstance.templateAction()).toBeNull();

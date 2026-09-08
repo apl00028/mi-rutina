@@ -1,3 +1,4 @@
+from .models import Connection, ConnectionPermissionsUpdate, ConnectionUpdated, ConnectionVersion
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Response
 from fastapi.exceptions import RequestValidationError
@@ -43,7 +44,7 @@ router = APIRouter(tags=["Connections"], route_class=ConnectionRoute)
 
 
 async def require_participant(user: AuthenticatedUser = Depends(require_user)) -> AuthenticatedUser:
-    if user.role not in {"user", "trainer"}:
+    if user.role not in {"user", "admin", "trainer"}:
         raise HTTPException(403, "Operación no autorizada.")
     return user
 
@@ -54,8 +55,8 @@ async def require_inviting_trainer(user: AuthenticatedUser = Depends(require_par
     return user
 
 
-async def require_inviting_athlete(user: AuthenticatedUser = Depends(require_participant)) -> AuthenticatedUser:
-    if user.role != "user":
+async def require_athlete_owner(user: AuthenticatedUser = Depends(require_participant)) -> AuthenticatedUser:
+    if user.role not in {"user", "admin"}:
         raise HTTPException(403, "Operación no autorizada.")
     return user
 
@@ -72,7 +73,7 @@ async def trainer_invite(body: InvitationCreate, user: AuthenticatedUser = Depen
 
 
 @router.post("/athlete/invitations", response_model=InvitationCreated, status_code=201)
-async def athlete_invite(body: InvitationCreate, user: AuthenticatedUser = Depends(require_inviting_athlete)):
+async def athlete_invite(body: InvitationCreate, user: AuthenticatedUser = Depends(require_athlete_owner)):
     return await service.create_invitation(user, body.contact_code.get_secret_value(), trainer=False)
 
 
@@ -94,3 +95,20 @@ async def reject_invitation(id: UUID, user: AuthenticatedUser = Depends(require_
 @router.post("/connections/invitations/{id}/revoke", status_code=204)
 async def revoke_invitation(id: UUID, user: AuthenticatedUser = Depends(require_participant)):
     await repository.transition(user, id, "revoke")
+
+
+@router.get("/connections/relationships", response_model=list[Connection])
+async def list_connections(user: AuthenticatedUser = Depends(require_participant)):
+    return await service.list_connections(user)
+
+
+@router.put("/connections/trainers/{trainer_id}/permissions", response_model=ConnectionUpdated)
+async def set_permissions(trainer_id: UUID, body: ConnectionPermissionsUpdate,
+                          user: AuthenticatedUser = Depends(require_athlete_owner)):
+    return await service.set_permissions(user, trainer_id, body)
+
+
+@router.post("/connections/relationships/{other_user_id}/unlink", status_code=204)
+async def unlink(other_user_id: UUID, body: ConnectionVersion,
+                 user: AuthenticatedUser = Depends(require_participant)):
+    await repository.unlink(user, other_user_id, body.expected_updated_at.isoformat())

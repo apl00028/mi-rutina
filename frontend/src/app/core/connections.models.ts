@@ -16,3 +16,16 @@ export interface ConnectionInvitation {
   other_display_name: string | null;
   other_alias: string | null;
 }
+
+export const connectionDomains = ['swimming', 'running', 'cycling', 'strength', 'health'] as const;
+export type ConnectionDomain = typeof connectionDomains[number];
+export interface TrainerAthleteConnection {
+  trainer_id: string;
+  athlete_id: string;
+  status: 'active' | 'inactive';
+  created_at: string;
+  updated_at: string;
+  other_display_name: string | null;
+  other_alias: string | null;
+  domains: ConnectionDomain[];
+}

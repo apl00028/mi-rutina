@@ -11,9 +11,8 @@ import {
   provideHttpClientTesting
 } from '@angular/common/http/testing';
 
-import {
-  AuthService
-} from './auth.service';
+import type { AuthService as AuthServiceInstance } from './auth.service';
+let AuthService: typeof import('./auth.service').AuthService;
 
 import {
   environment
@@ -109,7 +108,7 @@ describe(
   'AuthService',
   () => {
     let service:
-      AuthService;
+      AuthServiceInstance;
 
     let http:
       HttpTestingController;
@@ -160,7 +159,7 @@ describe(
     }
 
 
-    beforeEach(() => {
+    beforeEach(async () => {
       setAuthUrl('');
 
       supabaseMock.auth.getSession
@@ -224,6 +223,9 @@ describe(
           auth:
             supabaseMock.auth
         });
+
+      // Load after registering the SDK mock, including when esbuild shares chunks.
+      ({ AuthService } = await import('./auth.service'));
 
       TestBed.configureTestingModule({
         providers: [

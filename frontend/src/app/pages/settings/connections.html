@@ -1,0 +1,43 @@
+<section class="connections-page">
+  <a routerLink="/ajustes">← Ajustes</a>
+  <h1>Conexiones / {{ context() === 'trainer' ? 'Clientes' : 'Entrenadores' }}</h1>
+  @if (error()) { <p role="alert" class="error">{{ error() }}</p> }
+  @if (message()) { <p role="status">{{ message() }}</p> }
+  @if (context(); as space) {
+    <p>El atleta decide qué comparte con cada entrenador. Una vinculación nueva no concede acceso a sus datos.</p>
+    <h2>{{ space === 'trainer' ? 'Clientes vinculados' : 'Entrenadores vinculados' }}</h2>
+    <button type="button" [disabled]="busy() || loading()" (click)="refresh()">Actualizar conexiones</button>
+    @if (loading()) { <p role="status">Cargando conexiones…</p> }
+    @for (row of relationships(); track row.trainer_id + row.athlete_id) {
+      <article>
+        <h3>{{ row.other_display_name || row.other_alias || (space === 'trainer' ? 'Atleta' : 'Entrenador') }}</h3>
+        <p>Información compartida:</p>
+        <ul>@for (domain of row.domains; track domain) { <li>{{ labels[domain] }}</li> }
+          @empty { <li>Ninguno. No hay acceso a datos de entrenamiento ni salud.</li> }</ul>
+        @if (editing() === row) {
+          <fieldset [disabled]="busy() || loading()">
+            <legend>Qué compartes con este entrenador</legend>
+            @for (domain of domains; track domain) {
+              <label><input type="checkbox" [checked]="draft().includes(domain)"
+                (change)="toggle(domain, $any($event.target).checked)" />{{ labels[domain] }}</label>
+            }
+          </fieldset>
+          <p>Los permisos de deporte permiten consultar sesiones y rutinas, y asignar rutinas de esa disciplina.</p>
+          <button type="button" [disabled]="busy() || loading()" (click)="save()">Guardar permisos</button>
+          <button type="button" [disabled]="busy() || loading()" (click)="editing.set(null)">Cancelar edición</button>
+        } @else if (space === 'athlete') {
+          <button type="button" [disabled]="busy() || loading()" (click)="edit(row)">Editar permisos</button>
+        } @else { <p>Solo el atleta puede cambiar estos permisos.</p> }
+        @if (unlinking() === row) {
+          <p>¿Desvincular? Se retirarán todos los permisos. Para volver a conectar será necesaria una nueva invitación.</p>
+          <button type="button" [disabled]="busy() || loading()" (click)="unlink()">Confirmar desvinculación</button>
+          <button type="button" [disabled]="busy() || loading()" (click)="unlinking.set(null)">Cancelar</button>
+        } @else {
+          <button type="button" [disabled]="busy() || loading()" (click)="askUnlink(row)">Desvincular</button>
+        }
+      </article>
+    } @empty { @if (!loading()) { <p>No tienes conexiones activas.</p> } }
+    <h2>Invitaciones</h2>
+    <app-connection-invitations [context]="space" (accepted)="refresh()" />
+  }
+</section>

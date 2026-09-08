@@ -619,6 +619,8 @@ async def assign_trainer_template(
             detail="Supabase is not configured.",
         ) from exc
     except httpx.HTTPStatusError as exc:
+        if exc.response.status_code == 403:
+            raise HTTPException(403, "El atleta no ha autorizado esta disciplina.") from None
         if exc.response.status_code == 409:
             raise HTTPException(
                 status_code=(

@@ -1644,3 +1644,21 @@ def test_normal_user_cannot_get_running_session_detail():
         )
 
     assert response.status_code == 403
+
+
+def test_assignment_domain_denial_is_sanitized(monkeypatch):
+    from app.domains.trainer import router as trainer_api
+
+    async def denied(*args):
+        request = httpx.Request('POST', 'https://supabase.test/rest/v1/rpc/trainer_assign_routine_template')
+        response = httpx.Response(403, request=request, json={'message': 'trainer_domain_not_authorized', 'details': 'private'})
+        raise httpx.HTTPStatusError('private', request=request, response=response)
+
+    monkeypatch.setattr(trainer_api, 'assign_authenticated_trainer_template', denied)
+    app.dependency_overrides[require_user] = trainer_user
+    try:
+        response = client.post('/api/v1/trainer/templates/template-1/assign', json=_assignment_payload())
+    finally:
+        app.dependency_overrides.pop(require_user, None)
+    assert response.status_code == 403
+    assert response.json() == {'detail': 'El atleta no ha autorizado esta disciplina.'}

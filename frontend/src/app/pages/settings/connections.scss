@@ -1,0 +1,11 @@
+:host { display: block; }
+.connections-page { width: min(100%, 1000px); padding: 24px; margin: auto; box-sizing: border-box; }
+h1 { font-size: clamp(24px, 4vw, 30px); } h2 { font-size: 20px; } h3 { font-size: 17px; overflow-wrap: anywhere; }
+p { color: var(--aptus-text-muted); line-height: 1.6; }
+article { padding: 18px; margin: 18px 0; border: 1px solid var(--aptus-border); border-radius: 14px; background: var(--aptus-surface); }
+button { min-height: 44px; margin: 4px; padding: 10px 14px; border: 1px solid var(--aptus-border); border-radius: 10px; color: var(--aptus-text); background: var(--aptus-surface); font: inherit; cursor: pointer; }
+button:disabled { opacity: .55; cursor: wait; }
+fieldset { border: 1px solid var(--aptus-border); } label { display: flex; align-items: center; gap: 10px; min-height: 44px; }
+input { width: 20px; height: 20px; } .error { color: var(--aptus-danger); }
+button:focus-visible, a:focus-visible { outline: 2px solid var(--aptus-focus-ring); }
+@media(max-width: 640px) { .connections-page { padding: 16px; } }

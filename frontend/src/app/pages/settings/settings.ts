@@ -1,7 +1,8 @@
 import {
   Component,
   OnInit,
-  signal
+  signal,
+  inject
 } from '@angular/core';
 
 import {
@@ -171,8 +172,13 @@ const settingsSections = [
   styleUrl: './settings.scss'
 })
 export class SettingsHub {
-  readonly sections =
-    settingsSections;
+  private readonly auth = inject(AuthService);
+  get sections() {
+    const role = this.auth.me()?.role;
+    return role === 'user' || role === 'admin' || role === 'trainer'
+      ? [{ icon: 'account', title: 'Conexiones', description: role === 'trainer' ? 'Clientes, invitaciones y permisos compartidos.' : 'Entrenadores, invitaciones y permisos que compartes.', route: '/ajustes/conexiones' }, ...settingsSections]
+      : settingsSections;
+  }
 }
 
 

@@ -1,4 +1,4 @@
-import { athleteConnectionsGuard } from './core/athlete-connections.guard';
+import { connectionsGuard } from './core/connections.guard';
 import { Routes } from '@angular/router';
 
 import {
@@ -21,8 +21,12 @@ import {
 export const routes: Routes = [
   {
     path: 'entrenadores',
-    loadComponent: () => import('./pages/trainers/trainers').then(m => m.Trainers),
-    canActivate: [accessGuard, athleteConnectionsGuard],
+    redirectTo: 'ajustes/conexiones', pathMatch: 'full',
+  },
+  {
+    path: 'ajustes/conexiones',
+    loadComponent: () => import('./pages/settings/connections').then(m => m.ConnectionSettings),
+    canActivate: [accessGuard, connectionsGuard],
   },
   {
     path: 'login',

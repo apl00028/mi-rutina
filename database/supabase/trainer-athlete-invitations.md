@@ -15,7 +15,10 @@ Production prerequisites confirmed for this phase: `gymos_users.user_id` referen
 `auth.users`, `role` is `user|trainer|admin`, `status` is
 `pending|active|rejected|suspended`, and `expires_at` is nullable timestamptz.
 Eligible accounts have active status and no expired access. Only role `trainer`
-can occupy trainer_id, only `user` can occupy athlete_id. Admin is excluded.
+can occupy trainer_id; `user` and `admin` may occupy athlete_id as owners.
+Admin has no trainer capability and no authority over other athletes.
+For an already-deployed phase 1A, apply `trainer-athlete-permissions.sql`, which
+upgrades the existing invitation functions without recreating these tables.
 
 Both new tables have RLS enabled, no client policies and no privileges for
 PUBLIC, anon or authenticated. No direct reads or writes. Existing
@@ -154,3 +157,13 @@ and trainer identity RPC SQL are executed unmodified. Tests use actual PostgreSQ
 privileges, role switching, row locks, constraints, transactions and concurrent
 connections. Fixture-only setup uses the local database owner, not a service role
 for client RPC invocations.
+
+## Bootstrap y reaplicación
+
+El orden único es base/históricos → invitaciones →
+`trainer-athlete-permissions.sql` al final; véase
+[el procedimiento completo](trainer-athlete-permissions.md#orden-único-de-bootstrap-y-barrera-de-históricos).
+Este archivo también aborta antes de modificar nada si existe
+`public.trainer_athlete_permissions`. No reaplicar históricos después de instalar
+permisos; la transacción impide cambios parciales incluso si el cliente continúa
+tras el error.

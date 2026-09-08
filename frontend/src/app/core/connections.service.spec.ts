@@ -62,3 +62,21 @@ describe('ConnectionsService', () => {
     expect(connectionError(new HttpErrorResponse({ status: 403 }))).toContain('autorización');
   });
 });
+
+describe('Connections permissions contracts', () => {
+  it('uses bearer, exact RPC-facing HTTP bodies and version precision', async () => {
+    TestBed.configureTestingModule({ providers: [provideHttpClient(), provideHttpClientTesting(),
+      {provide:AuthService,useValue:{getAccessToken:vi.fn().mockResolvedValue('actor')}}] });
+    const service=TestBed.inject(ConnectionsService), http=TestBed.inject(HttpTestingController);
+    const stamp='2026-09-07T08:00:00.123456Z';
+    const listing=service.relationships(); await Promise.resolve(); await Promise.resolve();
+    const list=http.expectOne(environment.apiUrl+'/connections/relationships');list.flush([]);await listing;
+    const saving=service.setPermissions('trainer',['swimming'],stamp);await Promise.resolve();await Promise.resolve();
+    const update=http.expectOne(environment.apiUrl+'/connections/trainers/trainer/permissions');
+    expect(update.request.method).toBe('PUT');expect(update.request.headers.get('Authorization')).toBe('Bearer actor');
+    expect(update.request.body).toEqual({domains:['swimming'],expected_updated_at:stamp});update.flush({updated_at:stamp});await saving;
+    const unlinking=service.unlink('trainer',stamp);await Promise.resolve();await Promise.resolve();
+    const unlink=http.expectOne(environment.apiUrl+'/connections/relationships/trainer/unlink');
+    expect(unlink.request.body).toEqual({expected_updated_at:stamp});unlink.flush(null);await unlinking;http.verify();
+  });
+});

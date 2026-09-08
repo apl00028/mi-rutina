@@ -122,6 +122,7 @@ describe('Settings pages', () => {
         {
           provide: AuthService,
           useValue: {
+            me: signal({ role: 'user', access_status: 'active' }),
             user: signal({
               email:
                 'adrian@example.com',
@@ -242,6 +243,7 @@ describe('Settings pages', () => {
           .trim()
       )
     ).toEqual([
+      'Conexiones Entrenadores, invitaciones y permisos que compartes.',
       'Cuenta Identidad, acceso, email y unidades.',
       'Entrenamiento Registro, RIR y descanso.',
       'Apariencia Tema, texto y movimiento.',
@@ -253,12 +255,23 @@ describe('Settings pages', () => {
         link.getAttribute('href')
       )
     ).toEqual([
+      '/ajustes/conexiones',
       '/ajustes/cuenta',
       '/ajustes/entrenamiento',
       '/ajustes/apariencia',
       '/ajustes/datos',
       '/ajustes/acerca-de'
     ]);
+  });
+
+  it('shows trainer connections and owner connections for admin', () => {
+    const auth = TestBed.inject(AuthService);
+    auth.me.update(me => me ? { ...me, role: 'trainer' } : me);
+    const fixture = TestBed.createComponent(SettingsHub); fixture.detectChanges();
+    expect(text(fixture.nativeElement)).toContain('Clientes, invitaciones y permisos compartidos.');
+    auth.me.update(me => me ? { ...me, role: 'admin' } : me); fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('a[href="/ajustes/conexiones"]')).toBeTruthy();
+    expect(text(fixture.nativeElement)).toContain('Entrenadores, invitaciones y permisos que compartes.');
   });
 
   it('shows account identity and default units', () => {

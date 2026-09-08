@@ -4,7 +4,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ConnectionInvitations } from './invitations';
 import { ConnectionsService } from '../../core/connections.service';
 import { ConnectionInvitation } from '../../core/connections.models';
-import { Trainers } from '../../pages/trainers/trainers';
 
 const invitation = (id: string, status: ConnectionInvitation['status'] = 'pending'): ConnectionInvitation => ({
   id, trainer_id: 'trainer', athlete_id: 'athlete', inviter_id: 'trainer', recipient_id: 'athlete',
@@ -94,16 +93,5 @@ describe.each(['trainer', 'athlete'] as const)('Invitations in %s context', cont
     expect(api.generateContactCode).toHaveBeenCalledTimes(1);
     fixture.destroy(); resolve({ code: 'secret' }); await first;
     expect(component.code()).toBe('');
-  });
-});
-
-describe('Trainers page', () => {
-  it('provides the athlete context', async () => {
-    await TestBed.configureTestingModule({ imports: [Trainers], providers: [{ provide: ConnectionsService,
-      useValue: { list: vi.fn().mockResolvedValue([]) } }] }).compileComponents();
-    const fixture = TestBed.createComponent(Trainers); fixture.detectChanges();
-    expect(fixture.nativeElement.textContent).toContain('Entrenadores');
-    expect(fixture.nativeElement.textContent).toContain('Añadir entrenador');
-    fixture.destroy();
   });
 });

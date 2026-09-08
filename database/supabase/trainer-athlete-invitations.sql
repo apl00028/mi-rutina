@@ -1,6 +1,18 @@
+-- Historical bootstrap only. Keep this guard before every schema mutation.
+-- The transaction also prevents partial application if the client continues on error.
+begin;
+do $permissions_guard$
+begin
+  if pg_catalog.to_regclass('public.trainer_athlete_permissions') is not null then
+    raise exception 'trainer_permissions_installed: historical trainer SQL cannot be reapplied'
+      using errcode = '55000',
+            hint = 'Use a reviewed forward migration; do not reapply historical trainer SQL.';
+  end if;
+end;
+$permissions_guard$;
+
 -- Phase 1A. Apply after schema.sql, account-profile.sql and trainer-athletes.sql.
 -- No remote execution is performed by the tests. See companion documentation.
-begin;
 
 create table public.connection_contact_codes (
   user_id uuid primary key references auth.users(id) on delete cascade,
@@ -54,7 +66,7 @@ returns text language plpgsql security definer set search_path = '' as $$
 declare actor_role text;
 begin
   select u.role into actor_role from public.gymos_users u
-  where u.user_id = auth.uid() and u.role in ('user', 'trainer')
+  where u.user_id = auth.uid() and u.role in ('user', 'admin', 'trainer')
     and u.status = 'active' and (u.expires_at is null or u.expires_at > clock_timestamp());
   if not found then
     raise exception 'connection_actor_not_authorized' using errcode = '42501';
@@ -94,7 +106,7 @@ declare
   created timestamptz;
 begin
   if (p_trainer_invites and actor_role <> 'trainer')
-    or (not p_trainer_invites and actor_role <> 'user') then
+    or (not p_trainer_invites and actor_role not in ('user', 'admin')) then
     raise exception 'connection_actor_not_authorized' using errcode = '42501';
   end if;
   if p_contact_code_hash is null or p_contact_code_hash !~ '^[0-9a-f]{64}$' then
@@ -103,7 +115,8 @@ begin
   select c.user_id into target
   from public.connection_contact_codes c join public.gymos_users u on u.user_id = c.user_id
   where c.code_hash = p_contact_code_hash and c.user_id <> actor
-    and u.role = case when p_trainer_invites then 'user' else 'trainer' end
+    and ((p_trainer_invites and u.role in ('user', 'admin'))
+      or (not p_trainer_invites and u.role = 'trainer'))
     and u.status = 'active' and (u.expires_at is null or u.expires_at > clock_timestamp());
   if not found then
     raise exception 'invitation_target_unavailable' using errcode = '22023';
@@ -142,16 +155,19 @@ create function aptus_private.transition_trainer_athlete_invitation(p_invitation
 returns void language plpgsql security definer set search_path = '' as $$
 declare
   actor uuid := auth.uid();
+  actor_role text := aptus_private.connection_actor_role();
   invitation public.trainer_athlete_invitations%rowtype;
   recipient uuid;
   changed uuid;
 begin
-  perform aptus_private.connection_actor_role();
   select * into invitation from public.trainer_athlete_invitations
   where id = p_invitation_id for update;
   recipient := case when invitation.inviter_id = invitation.trainer_id
     then invitation.athlete_id else invitation.trainer_id end;
-  if not found or (p_action = 'revoke' and actor <> invitation.inviter_id)
+  if not found
+    or (actor_role = 'trainer' and actor <> invitation.trainer_id)
+    or (actor_role in ('user', 'admin') and actor <> invitation.athlete_id)
+    or (p_action = 'revoke' and actor <> invitation.inviter_id)
     or (p_action in ('accept', 'reject') and actor <> recipient)
     or p_action is null or p_action not in ('accept', 'reject', 'revoke') then
     raise exception 'invitation_not_available' using errcode = '42501';
@@ -168,7 +184,7 @@ begin
       and u.role = 'trainer' and u.status = 'active'
       and (u.expires_at is null or u.expires_at > clock_timestamp()))
       or not exists (select 1 from public.gymos_users u where u.user_id = invitation.athlete_id
-      and u.role = 'user' and u.status = 'active'
+      and u.role in ('user', 'admin') and u.status = 'active'
       and (u.expires_at is null or u.expires_at > clock_timestamp())) then
       raise exception 'invitation_accounts_not_eligible' using errcode = '42501';
     end if;
@@ -197,8 +213,8 @@ returns table (
   other_display_name text, other_alias text
 )
 language plpgsql security definer set search_path = '' as $$
+declare actor_role text := aptus_private.connection_actor_role();
 begin
-  perform aptus_private.connection_actor_role();
   return query
   select i.id, i.trainer_id, i.athlete_id, i.inviter_id,
     case when i.inviter_id = i.trainer_id then i.athlete_id else i.trainer_id end,
@@ -208,8 +224,10 @@ begin
     p.display_name, p.alias
   from public.trainer_athlete_invitations i
   left join public.profiles p on p.id = case when i.trainer_id = auth.uid() then i.athlete_id else i.trainer_id end
-  where (p_sent and i.inviter_id = auth.uid())
-    or (not p_sent and (case when i.inviter_id = i.trainer_id then i.athlete_id else i.trainer_id end) = auth.uid())
+  where ((p_sent and i.inviter_id = auth.uid())
+    or (not p_sent and (case when i.inviter_id = i.trainer_id then i.athlete_id else i.trainer_id end) = auth.uid()))
+    and ((actor_role = 'trainer' and i.trainer_id = auth.uid())
+      or (actor_role in ('user', 'admin') and i.athlete_id = auth.uid()))
   order by i.created_at desc, i.id;
 end;
 $$;

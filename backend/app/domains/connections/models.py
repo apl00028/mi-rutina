@@ -37,3 +37,30 @@ class Invitation(BaseModel):
     revoked_by: UUID | None
     other_display_name: str | None
     other_alias: str | None
+
+
+ConnectionDomain = Literal["swimming", "running", "cycling", "strength", "health"]
+
+
+class Connection(BaseModel):
+    trainer_id: UUID
+    athlete_id: UUID
+    status: Literal["active", "inactive"]
+    created_at: AwareDatetime
+    updated_at: AwareDatetime
+    other_display_name: str | None
+    other_alias: str | None
+    domains: list[ConnectionDomain]
+
+
+class ConnectionVersion(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    expected_updated_at: AwareDatetime
+
+
+class ConnectionPermissionsUpdate(ConnectionVersion):
+    domains: list[ConnectionDomain]
+
+
+class ConnectionUpdated(BaseModel):
+    updated_at: AwareDatetime

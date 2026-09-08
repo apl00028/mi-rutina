@@ -1,3 +1,4 @@
+from .models import Connection, ConnectionPermissionsUpdate, ConnectionUpdated
 from uuid import UUID
 
 from pydantic import TypeAdapter
@@ -19,6 +20,9 @@ class ConnectionError(Exception):
 
 # Match complete SQL messages, never forward PostgREST details or constraint names.
 SQL_ERRORS = {
+    "connection_not_available": (404, "Conexión no disponible."),
+    "connection_changed": (409, "La conexión ha cambiado. Actualiza antes de guardar."),
+    "connection_permissions_invalid": (400, "Los permisos no son válidos."),
     "invitation_target_unavailable": (400, TARGET_UNAVAILABLE),
     "invitation_conflict": (409, "Ya existe una invitación o relación para este contacto."),
     "relationship_already_active": (409, "La relación ya está activa."),
@@ -50,3 +54,14 @@ async def create_invitation(user: AuthenticatedUser, code: str, *, trainer: bool
 
 async def list_invitations(user: AuthenticatedUser, box: InvitationBox) -> list[Invitation]:
     return TypeAdapter(list[Invitation]).validate_python(await repository.list_invitations(user, box))
+
+
+async def list_connections(user: AuthenticatedUser) -> list[Connection]:
+    return TypeAdapter(list[Connection]).validate_python(await repository.list_connections(user))
+
+
+async def set_permissions(user: AuthenticatedUser, trainer_id: UUID, request: ConnectionPermissionsUpdate) -> ConnectionUpdated:
+    if len(request.domains) != len(set(request.domains)):
+        raise ConnectionError(400, "Los permisos no son válidos.")
+    stamp = await repository.set_permissions(user, trainer_id, request.domains, request.expected_updated_at.isoformat())
+    return ConnectionUpdated(updated_at=stamp)

@@ -3,7 +3,7 @@ import { Injectable, inject } from '@angular/core';
 import { firstValueFrom } from 'rxjs';
 import { environment } from '../../environments/environment';
 import { AuthService } from './auth.service';
-import { ConnectionInvitation, InvitationAction, InvitationBox } from './connections.models';
+import { ConnectionInvitation, InvitationAction, InvitationBox, TrainerAthleteConnection, ConnectionDomain } from './connections.models';
 
 @Injectable({ providedIn: 'root' })
 export class ConnectionsService {
@@ -41,6 +41,26 @@ export class ConnectionsService {
     ));
   }
 
+  async relationships(): Promise<TrainerAthleteConnection[]> {
+    return firstValueFrom(this.http.get<TrainerAthleteConnection[]>(
+      `${this.url}/connections/relationships`, { headers: await this.headers() },
+    ));
+  }
+
+  async setPermissions(trainerId: string, domains: ConnectionDomain[], expectedUpdatedAt: string): Promise<{ updated_at: string }> {
+    return firstValueFrom(this.http.put<{ updated_at: string }>(
+      `${this.url}/connections/trainers/${encodeURIComponent(trainerId)}/permissions`,
+      { domains, expected_updated_at: expectedUpdatedAt }, { headers: await this.headers() },
+    ));
+  }
+
+  async unlink(otherUserId: string, expectedUpdatedAt: string): Promise<void> {
+    return firstValueFrom(this.http.post<void>(
+      `${this.url}/connections/relationships/${encodeURIComponent(otherUserId)}/unlink`,
+      { expected_updated_at: expectedUpdatedAt }, { headers: await this.headers() },
+    ));
+  }
+
   async act(id: string, action: InvitationAction): Promise<void> {
     return firstValueFrom(this.http.post<void>(
       `${this.url}/connections/invitations/${encodeURIComponent(id)}/${action}`, null,
@@ -51,6 +71,9 @@ export class ConnectionsService {
 
 // Only public messages verified in the connections backend may reach the UI.
 const publicMessages = new Set([
+  'Conexión no disponible.',
+  'La conexión ha cambiado. Actualiza antes de guardar.',
+  'Los permisos no son válidos.',
   'El código de contacto no es válido o no está disponible.',
   'Ya existe una invitación o relación para este contacto.',
   'La relación ya está activa.',

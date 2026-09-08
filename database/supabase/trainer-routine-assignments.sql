@@ -1,3 +1,16 @@
+-- Historical bootstrap only. Keep this guard before every schema mutation.
+-- The transaction also prevents partial application if the client continues on error.
+begin;
+do $permissions_guard$
+begin
+  if pg_catalog.to_regclass('public.trainer_athlete_permissions') is not null then
+    raise exception 'trainer_permissions_installed: historical trainer SQL cannot be reapplied'
+      using errcode = '55000',
+            hint = 'Use a reviewed forward migration; do not reapply historical trainer SQL.';
+  end if;
+end;
+$permissions_guard$;
+
 -- Trainer template assignments to athlete-owned routines.
 -- Run this once in the Supabase SQL Editor.
 
@@ -310,3 +323,5 @@ on function public.trainer_assign_routine_template(
   text
 )
 to authenticated;
+
+commit;

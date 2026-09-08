@@ -113,6 +113,7 @@ def test_contact_code_only_returns_raw_on_generation(api, monkeypatch, caplog):
 @pytest.mark.parametrize("role,path,rpc", [
     ("trainer", "trainer", "trainer_create_athlete_invitation"),
     ("user", "athlete", "athlete_create_trainer_invitation"),
+    ("admin", "athlete", "athlete_create_trainer_invitation"),
 ])
 def test_creation_contract(api, monkeypatch, caplog, role, path, rpc):
     client, state, calls = api
@@ -166,7 +167,7 @@ def test_list_full_contract(api, box):
 
 
 @pytest.mark.parametrize("action", ["accept", "reject", "revoke"])
-@pytest.mark.parametrize("role", ["user", "trainer"])
+@pytest.mark.parametrize("role", ["user", "admin", "trainer"])
 def test_mutation_contract(api, action, role):
     client, state, calls = api
     state["role"] = role
@@ -234,7 +235,7 @@ def test_non_json_error_and_void(api):
     assert client.post(f"{BASE}/connections/invitations/{ID}/accept").status_code == 204
 
 
-@pytest.mark.parametrize("role,path", [("trainer", "athlete"), ("user", "trainer"), ("admin", "trainer"), ("admin", "athlete")])
+@pytest.mark.parametrize("role,path", [("trainer", "athlete"), ("user", "trainer"), ("admin", "trainer")])
 def test_wrong_creation_role(api, role, path):
     client, state, calls = api
     state["role"] = role
@@ -246,9 +247,9 @@ def test_wrong_creation_role(api, role, path):
     ("post", "/connections/contact-code"), ("get", "/connections/invitations?box=sent"),
     *[("post", f"/connections/invitations/{ID}/{action}") for action in ("accept", "reject", "revoke")],
 ])
-def test_admin_excluded_from_common_operations(api, method, path):
+def test_unknown_role_excluded_from_common_operations(api, method, path):
     client, state, calls = api
-    state["role"] = "admin"
+    state["role"] = "unknown"
     assert getattr(client, method)(BASE + path).status_code == 403
     assert not calls
 
@@ -293,3 +294,71 @@ def test_openapi_registrations_and_safe_schemas(api):
     assert BASE + "/athlete/invitations" in paths
     for domain in ("trainer", "running", "swimming"):
         assert any(path.startswith(f"{BASE}/{domain}/") for path in paths)
+
+
+CONNECTION_ROW = {
+    'trainer_id': ID, 'athlete_id': OTHER, 'status': 'active',
+    'created_at': '2026-09-07T08:00:00Z', 'updated_at': '2026-09-07T08:00:00.123456Z',
+    'other_display_name': 'Persona', 'other_alias': None, 'domains': ['swimming'],
+}
+
+
+@pytest.mark.parametrize('role', ['user', 'admin'])
+def test_connections_list_rpc_contract(api, role):
+    client, state, calls = api
+    state.update(role=role, result=[CONNECTION_ROW])
+    response = client.get(BASE + '/connections/relationships')
+    assert response.status_code == 200 and response.json() == [CONNECTION_ROW]
+    assert calls[0].url.path.endswith('/list_my_trainer_athlete_connections')
+    assert json.loads(calls[0].content) == {}
+
+
+@pytest.mark.parametrize('role', ['user', 'admin'])
+def test_permission_update_contract_and_precision(api, role):
+    client, state, calls = api
+    state.update(role=role, result='2026-09-07T09:00:00.123456Z')
+    response = client.put(f'{BASE}/connections/trainers/{ID}/permissions', json={
+        'domains': ['swimming'], 'expected_updated_at': CONNECTION_ROW['updated_at'],
+    })
+    assert response.status_code == 200
+    assert response.json() == {'updated_at': '2026-09-07T09:00:00.123456Z'}
+    assert calls[0].url.path.endswith('/set_my_trainer_permissions')
+    assert json.loads(calls[0].content) == {
+        'p_trainer_id': ID, 'p_domains': ['swimming'], 'p_expected_updated_at': '2026-09-07T08:00:00.123456+00:00',
+    }
+
+
+@pytest.mark.parametrize('role', ['trainer'])
+def test_permissions_cannot_be_written_by_trainer(api, role):
+    client,state,calls=api;state['role']=role
+    response=client.put(f'{BASE}/connections/trainers/{ID}/permissions',json={'domains':[],'expected_updated_at':CONNECTION_ROW['updated_at']})
+    assert response.status_code == 403 and not calls
+
+
+@pytest.mark.parametrize('domains,status', [(['invalid'],422),(['swimming','swimming'],400),(None,422)])
+def test_invalid_permission_domains(api, domains, status):
+    client,state,calls=api;state['role']='user'
+    assert client.put(f'{BASE}/connections/trainers/{ID}/permissions',json={'domains':domains,'expected_updated_at':CONNECTION_ROW['updated_at']}).status_code == status
+    assert not calls
+
+
+@pytest.mark.parametrize('error,status', [('connection_changed',409),('connection_not_available',404),('connection_permissions_invalid',400)])
+def test_connection_errors_are_sanitized(api,error,status):
+    client,state,calls=api;state.update(status=400,result={'message':error,'details':'private'})
+    response=client.post(f'{BASE}/connections/relationships/{OTHER}/unlink',json={'expected_updated_at':CONNECTION_ROW['updated_at']})
+    assert response.status_code == status and error not in response.text and 'private' not in response.text
+    assert calls[0].url.path.endswith('/unlink_my_trainer_athlete_connection')
+    assert json.loads(calls[0].content)['p_other_user_id'] == OTHER
+
+
+def test_admin_owner_unlink_uses_own_bearer(api):
+    client, state, calls = api
+    state.update(role='admin', result=None)
+    response = client.post(f'{BASE}/connections/relationships/{OTHER}/unlink', json={
+        'expected_updated_at': CONNECTION_ROW['updated_at'],
+    })
+    assert response.status_code == 204
+    assert calls[0].headers['authorization'] == 'Bearer user-bearer'
+    assert json.loads(calls[0].content) == {
+        'p_other_user_id': OTHER, 'p_expected_updated_at': '2026-09-07T08:00:00.123456+00:00',
+    }

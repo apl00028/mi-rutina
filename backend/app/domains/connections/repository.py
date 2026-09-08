@@ -44,3 +44,19 @@ async def transition(user: AuthenticatedUser, invitation_id: UUID, action: Invit
         "revoke": "revoke_trainer_athlete_invitation",
     }[action]
     await _rpc(user, name, {"p_invitation_id": str(invitation_id)})
+
+
+async def list_connections(user: AuthenticatedUser) -> Any:
+    return await _rpc(user, "list_my_trainer_athlete_connections", {})
+
+
+async def set_permissions(user: AuthenticatedUser, trainer_id: UUID, domains: list[str], expected: str) -> Any:
+    return await _rpc(user, "set_my_trainer_permissions", {
+        "p_trainer_id": str(trainer_id), "p_domains": domains, "p_expected_updated_at": expected,
+    })
+
+
+async def unlink(user: AuthenticatedUser, other_user_id: UUID, expected: str) -> None:
+    await _rpc(user, "unlink_my_trainer_athlete_connection", {
+        "p_other_user_id": str(other_user_id), "p_expected_updated_at": expected,
+    })

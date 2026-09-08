@@ -362,7 +362,7 @@ describe('App', () => {
       .toEqual([trainerGuard]);
   });
 
-  it('offers Entrenadores to athletes from mobile navigation and the user menu', async () => {
+  it('keeps connection management out of primary navigation', async () => {
     const user = {
       id: 'athlete-user',
       email: 'athlete@example.com',
@@ -378,14 +378,14 @@ describe('App', () => {
       fixture.nativeElement.querySelector(
         '.sidebar-nav a[href="/entrenadores"]',
       ),
-    ).toBeTruthy();
+    ).toBeNull();
 
     (fixture.nativeElement.querySelector('.mobile-brand') as HTMLButtonElement).click();
     fixture.detectChanges();
-    expect(fixture.nativeElement.querySelector('.mobile-nav-menu a[href="/entrenadores"]')?.textContent).toContain('Entrenadores');
+    expect(fixture.nativeElement.querySelector('.mobile-nav-menu a[href="/entrenadores"]')).toBeNull();
     (fixture.nativeElement.querySelector('.user-button') as HTMLButtonElement).click();
     fixture.detectChanges();
-    expect(fixture.nativeElement.querySelector('.user-dropdown a[href="/entrenadores"]')?.textContent).toContain('Entrenadores');
+    expect(fixture.nativeElement.querySelector('.user-dropdown a[href="/entrenadores"]')).toBeNull();
   });
 
   it('renders mobile bottom navigation with the same primary routes', async () => {

@@ -1,4 +1,5 @@
 from fastapi import APIRouter
+from app.domains.workouts.export import router as training_export_router
 
 from app.domains.admin.router import router as admin_router
 from app.domains.analytics.router import (
@@ -86,3 +87,5 @@ router.include_router(connections_router)
 router.include_router(
     trainer_router
 )
+
+router.include_router(training_export_router)

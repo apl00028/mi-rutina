@@ -59,72 +59,13 @@
           }
           <div class="performance-body">
             @if (!currentPerformanceEvent()) {
-              <div class="calendar-panel">
-                <div class="calendar-header">
-                  <button
-                    type="button"
-                    aria-label="Mes anterior"
-                    (click)="previousPerformanceMonth()"
-                  >
-                    ←
-                  </button>
-
-                  <h3>
-                    {{ performanceMonthLabel() }}
-                  </h3>
-
-                  <button type="button" aria-label="Mes siguiente" (click)="nextPerformanceMonth()">
-                    →
-                  </button>
-                </div>
-
-                <div class="calendar-weekdays">
-                  <span>L</span>
-                  <span>M</span>
-                  <span>X</span>
-                  <span>J</span>
-                  <span>V</span>
-                  <span>S</span>
-                  <span>D</span>
-                </div>
-
-                <div class="calendar-grid">
-                  @for (day of performanceCalendarDays(); track day.dateKey) {
-                    <button
-                      type="button"
-                      class="calendar-day"
-                      [class.outside-month]="!day.inMonth"
-                      [class.has-session]="day.events.length > 0"
-                      [class.selected]="day.selected"
-                      [attr.aria-label]="calendarDayLabel(day)"
-                      [attr.aria-pressed]="day.selected"
-                      (click)="selectPerformanceDay(day)"
-                    >
-                      <span>
-                        {{ day.dayNumber }}
-                      </span>
-                      @if (day.events.length > 0) {
-                        <small class="calendar-marks">
-                          @for (mark of calendarDayMarks(day); track mark.discipline) {
-                            <span [class]="'performance-' + mark.discipline">
-                              {{ mark.label }}
-                            </span>
-                          }
-                        </small>
-                      }
-                    </button>
-                  }
-                </div>
-
-                <div class="performance-legend">
-                  <span class="performance-strength">F</span>
-                  Fuerza
-                  <span class="performance-swimming">N</span>
-                  Natación
-                  <span class="performance-running">C</span>
-                  Carrera
-                </div>
-              </div>
+              <app-activity-calendar
+                [month]="performanceCalendarMonth()!"
+                [events]="performanceEvents()"
+                [selectedDate]="selectedPerformanceDateKey()"
+                (monthChange)="changePerformanceMonth($event)"
+                (daySelected)="selectPerformanceDay($event)"
+              />
 
               @if (selectedPerformanceDateKey()) {
                 <section class="day-sessions" tabindex="-1" aria-live="polite">

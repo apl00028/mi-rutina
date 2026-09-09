@@ -27,6 +27,7 @@ class WorkoutSet(BaseModel):
     weight: float | None = Field(default=None, ge=0)
     reps: int | None = Field(default=None, ge=0)
     rir: float | None = Field(default=None, ge=0)
+    rpe: float | None = Field(default=None, ge=1, le=10)
     durationSeconds: int | None = Field(default=None, ge=0)
 
     completedAt: str | None = None

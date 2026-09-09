@@ -208,3 +208,27 @@ def test_foreign_workout_delete_returns_404(monkeypatch):
     assert response.json() == {
         "detail": "Workout not found"
     }
+
+
+def test_workout_api_validates_and_serializes_rpe(monkeypatch):
+    from app.domains.workouts import router as workouts_api
+
+    async def fake_replace(user, workout_id, workout):
+        assert workout.sets[0].rpe == 8.5
+        return workout
+
+    monkeypatch.setattr(workouts_api, "replace_user_workout", fake_replace)
+    app.dependency_overrides[require_user] = authenticated_user
+    payload = workout_payload()
+    payload["sets"] = [{"setId": "plank", "exerciseId": "plank", "setIndex": 0,
+                        "durationSeconds": 75, "rpe": 8.5}]
+    try:
+        response = client.put("/api/v1/workouts/workout-1", json=payload)
+        assert response.status_code == 200
+        assert response.json()["sets"][0]["rpe"] == 8.5
+        assert "rir" not in response.json()["sets"][0]
+        for invalid in (0, 11):
+            payload["sets"][0]["rpe"] = invalid
+            assert client.put("/api/v1/workouts/workout-1", json=payload).status_code == 422
+    finally:
+        app.dependency_overrides.pop(require_user, None)

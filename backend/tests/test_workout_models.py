@@ -120,3 +120,24 @@ def test_workout_rejects_rest_override_above_one_hour():
     raise AssertionError(
         "restOverrideSeconds > 3600 debería ser inválido."
     )
+
+
+def test_workout_rpe_is_an_explicit_optional_field_and_keeps_legacy_rir():
+    legacy = WorkoutSet(setId="legacy", exerciseId="plank", setIndex=0, rir=2, durationSeconds=75)
+    assert "rpe" in WorkoutSet.model_fields
+    assert legacy.rpe is None
+    assert legacy.rir == 2
+    assert "rpe" not in legacy.model_dump(exclude_none=True)
+    for rpe in (1, 8, 8.5, 10):
+        recorded = WorkoutSet.model_validate({**legacy.model_dump(), "rpe": rpe})
+        assert recorded.rpe == rpe
+        assert "rpe" not in recorded.model_extra
+        assert recorded.rir == 2
+
+
+def test_workout_rpe_rejects_values_outside_the_scale():
+    import pytest
+
+    for rpe in (0, -1, 10.5, float("inf"), float("nan"), "invalid"):
+        with pytest.raises(ValidationError):
+            WorkoutSet(setId="set", exerciseId="plank", setIndex=0, rpe=rpe)

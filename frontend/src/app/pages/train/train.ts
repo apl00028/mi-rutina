@@ -104,6 +104,7 @@ interface WorkoutSetInput {
   weight?: number | null;
   reps?: number | null;
   rir?: number | null;
+  rpe?: number | null;
   durationSeconds?: number | null;
   completedAt?: string | null;
 }
@@ -137,6 +138,7 @@ interface SetTimerState {
   accumulatedSeconds: number;
   elapsedSeconds: number;
   status: 'running' | 'paused' | 'finished';
+  restarted?: boolean;
 }
 
 interface ExerciseHistory {
@@ -281,6 +283,8 @@ export class Train implements OnInit, OnDestroy {
   workoutLoading = signal(false);
   workoutError = signal<string | null>(null);
   cancelConfirmationOpen = signal(false);
+  allSetsCompletedOpen = signal(false);
+  readonly durationParts = ['minutes', 'seconds'] as const;
   cancellingWorkout = signal(false);
   autosaveStatus =
     signal<AutosaveStatus>('idle');
@@ -290,6 +294,7 @@ export class Train implements OnInit, OnDestroy {
     );
   readonly restTimer =
     this.restTimerController.state;
+  readonly restTimerPhase = this.restTimerController.phase;
   readonly unilateralExecution =
     signal<UnilateralExecutionState | null>(null);
   setTimer =
@@ -1051,6 +1056,7 @@ export class Train implements OnInit, OnDestroy {
     exercise: Exercise
   ): boolean {
     return (
+      !this.isDurationExercise(exercise) &&
       this.settingsService
         .settings()
         .showRir &&
@@ -1065,19 +1071,6 @@ export class Train implements OnInit, OnDestroy {
     return this.isDurationExercise(exercise)
       ? 'Duración objetivo'
       : 'Reps objetivo';
-  }
-
-
-  durationInputLabel(
-    exercise: Exercise,
-    setIndex: number
-  ): string {
-    return (
-      'Duración realizada en segundos para ' +
-      exercise.name +
-      ', serie ' +
-      (setIndex + 1)
-    );
   }
 
 
@@ -1298,7 +1291,7 @@ export class Train implements OnInit, OnDestroy {
 
     return history.sets
       .map(set =>
-        this.formatHistoricalSet(set)
+        this.formatHistoricalSet(set, this.findSessionExercise(exerciseId))
       )
       .filter(Boolean)
       .join(' · ');
@@ -2458,8 +2451,13 @@ export class Train implements OnInit, OnDestroy {
 
 
   private formatHistoricalSet(
-    set: WorkoutSetInput
+    set: WorkoutSetInput,
+    exercise: Exercise | null
   ): string {
+    const duration = exercise
+      ? this.isDurationExercise(exercise)
+      : set.durationSeconds !== null && set.durationSeconds !== undefined;
+    if (duration) return this.durationSetSummary(set);
     const parts: string[] = [];
 
     if (
@@ -2856,6 +2854,12 @@ export class Train implements OnInit, OnDestroy {
       return;
     }
 
+    const timer = this.setTimerForSet(exerciseId, setIndex);
+    if (timer) {
+      if (timer.status !== 'finished' && !timer.restarted) void this.finishTimedSet();
+      this.clearSetTimer();
+    }
+
     /*
      * Los valores ya se actualizan mediante
      * updateSet() y su autosave.
@@ -2896,6 +2900,8 @@ export class Train implements OnInit, OnDestroy {
         ? 'siguiente'
         : 'pendiente';
     }
+
+    if (this.isDurationExercise(exercise)) return this.durationSetSummary(set) || 'completada';
 
     const parts: string[] = [];
 
@@ -3156,6 +3162,7 @@ export class Train implements OnInit, OnDestroy {
       set.weight,
       set.reps,
       set.rir,
+      set.rpe,
       set.durationSeconds
     ].some(
       value =>
@@ -3296,6 +3303,57 @@ export class Train implements OnInit, OnDestroy {
   }
 
 
+  closeWorkoutFinishSummary(): void {
+    this.workoutFinishSummary.set(null);
+  }
+
+
+  private updateCompletionSuggestion(markedCompleted: boolean): void {
+    const plan = this.executionPlan();
+    this.allSetsCompletedOpen.set(
+      markedCompleted && plan.length > 0 &&
+      plan.every(step => this.isExecutionStepCompleted(step))
+    );
+  }
+
+
+  durationPart(seconds: number | null | undefined, part: 'minutes' | 'seconds'): number {
+    const total = Number.isFinite(seconds)
+      ? Math.max(0, Math.floor(seconds!))
+      : 0;
+    return part === 'minutes' ? Math.floor(total / 60) : total % 60;
+  }
+
+
+  updateDurationPart(
+    exerciseId: string,
+    setIndex: number,
+    part: 'minutes' | 'seconds',
+    value: string
+  ): void {
+    const amount = Number(value);
+    if (!Number.isSafeInteger(amount) || amount < 0 || (part === 'seconds' && amount > 59)) return;
+    const current = this.getCurrentSet(exerciseId, setIndex)?.durationSeconds;
+    const minutes = part === 'minutes' ? amount : this.durationPart(current, 'minutes');
+    const seconds = part === 'seconds' ? amount : this.durationPart(current, 'seconds');
+    const total = minutes * 60 + seconds;
+    if (!Number.isSafeInteger(total)) return;
+    this.updateSet(exerciseId, setIndex, 'durationSeconds', String(total));
+  }
+
+
+  private durationSetSummary(set: WorkoutSetInput): string {
+    const parts: string[] = [];
+    if (set.durationSeconds != null && Number.isFinite(set.durationSeconds)) {
+      const minutes = this.durationPart(set.durationSeconds, 'minutes');
+      const seconds = this.durationPart(set.durationSeconds, 'seconds');
+      parts.push(`${minutes}:${String(seconds).padStart(2, '0')}`);
+    }
+    if (set.rpe != null && Number.isFinite(set.rpe)) parts.push(`RPE ${set.rpe}`);
+    return parts.join(' · ');
+  }
+
+
   private hasPendingSetAfter(
     exerciseId: string,
     setIndex: number
@@ -3433,6 +3491,7 @@ export class Train implements OnInit, OnDestroy {
 
     this.workoutLoading.set(true);
     this.workoutError.set(null);
+    this.allSetsCompletedOpen.set(false);
     this.workoutFinishSummary.set(null);
 
     try {
@@ -3827,6 +3886,7 @@ export class Train implements OnInit, OnDestroy {
       }
     }
 
+    this.updateCompletionSuggestion(shouldStartRestTimer);
     this.markWorkoutEdited();
   }
 
@@ -3902,7 +3962,7 @@ export class Train implements OnInit, OnDestroy {
   updateSet(
     exerciseId: string,
     setIndex: number,
-    field: 'weight' | 'reps' | 'rir' | 'durationSeconds',
+    field: 'weight' | 'reps' | 'rir' | 'rpe' | 'durationSeconds',
     value: string
   ): void {
     const workout = this.activeWorkout();
@@ -3922,12 +3982,19 @@ export class Train implements OnInit, OnDestroy {
     if (
       numericValue !== null &&
       (
-        Number.isNaN(numericValue) ||
-        numericValue < 0
+        !Number.isFinite(numericValue) ||
+        numericValue < 0 ||
+        (field === 'rpe' && (numericValue < 1 || numericValue > 10 || numericValue % 0.5 !== 0))
       )
     ) {
       return;
     }
+
+    const exercise = this.findSessionExercise(exerciseId);
+    if (exercise && (
+      (field === 'rir' && this.isDurationExercise(exercise)) ||
+      (field === 'rpe' && !this.isDurationExercise(exercise))
+    )) return;
 
     const existing = workout.sets.find(
       set =>
@@ -3967,6 +4034,10 @@ export class Train implements OnInit, OnDestroy {
               : null,
           rir:
             field === 'rir'
+              ? numericValue
+              : null,
+          rpe:
+            field === 'rpe'
               ? numericValue
               : null,
           durationSeconds:
@@ -4132,6 +4203,7 @@ export class Train implements OnInit, OnDestroy {
       }
     }
 
+    this.updateCompletionSuggestion(!wasCompleted);
     await this.saveWorkout();
   }
 
@@ -4154,7 +4226,8 @@ export class Train implements OnInit, OnDestroy {
 
   startTimedSet(
     exerciseId: string,
-    setIndex: number
+    setIndex: number,
+    restart = false
   ): void {
     const exercise =
       this.findSessionExercise(
@@ -4180,7 +4253,7 @@ export class Train implements OnInit, OnDestroy {
         setIndex
       );
     const initialSeconds =
-      Number.isFinite(
+      !restart && Number.isFinite(
         currentSet?.durationSeconds
       )
         ? Math.max(
@@ -4196,6 +4269,7 @@ export class Train implements OnInit, OnDestroy {
     this.setTimer.set({
       exerciseId,
       setIndex,
+      restarted: restart,
       targetMinSeconds:
         target?.min ?? null,
       targetMaxSeconds:
@@ -5133,6 +5207,7 @@ export class Train implements OnInit, OnDestroy {
     }
 
     this.inactivityReminder.set(false);
+    this.allSetsCompletedOpen.set(false);
     this.updateWorkoutHistory(finishedWorkout);
     this.persistedEditVersion =
       this.workoutEditVersion;
@@ -5158,11 +5233,11 @@ export class Train implements OnInit, OnDestroy {
           exercises
         });
 
-      this.workoutFinishSummary.set({
+      this.workoutFinishSummary.set(records.length ? {
         records,
         groups:
           this.groupPersonalRecords(records)
-      });
+      } : null);
     } catch (err) {
       console.error(
         'No se pudo calcular el resumen final del entrenamiento',

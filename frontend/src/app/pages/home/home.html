@@ -16,6 +16,54 @@
   </header>
 
 
+  <section class="activity-section" aria-labelledby="activity-calendar-title">
+    <h2 id="activity-calendar-title">Tus actividades</h2>
+    <app-activity-calendar [month]="calendarMonth()" [events]="history.activities()"
+      [selectedDate]="selectedDate()" (monthChange)="changeMonth($event)" (daySelected)="selectDay($event)" />
+    @if (history.loading()) { <p role="status">Actualizando actividades…</p> }
+    @for (error of history.errors(); track $index) { <p class="dashboard-warning" role="alert">{{ error }}</p> }
+
+    @if (selectedActivity(); as activity) {
+      <section class="activity-detail" aria-labelledby="activity-detail-title">
+        <button type="button" class="activity-back" (click)="openActivity(null)">← Volver a las actividades del día</button>
+        <h3 id="activity-detail-title">{{ activity.title }}</h3>
+        <p>{{ activityDisciplineLabel(activity.discipline) }} · {{ selectedDayLabel() }} · {{ activityTime(activity.event_at) }}</p>
+        <dl class="activity-metrics">
+          @for (metric of activity.metrics; track metric.label) {
+            <div><dt>{{ metric.label }}</dt><dd>{{ metric.value }}</dd></div>
+          }
+        </dl>
+        @for (exercise of activity.exercises ?? []; track exercise.id) {
+          <section class="activity-exercise">
+            <h4>{{ exercise.name }}</h4>
+            <ul>@for (set of exercise.sets; track $index) { <li><strong>{{ set.label }}</strong> · {{ set.value }}</li> }</ul>
+          </section>
+        }
+        @if (activity.lengths?.length) {
+          <details><summary>Largos de natación</summary>
+            <ul>@for (length of activity.lengths; track $index) { <li>{{ length.label }} · {{ length.value }}</li> }</ul>
+          </details>
+        }
+        @if (!activity.metrics.length && !activity.exercises?.length && !activity.lengths?.length) {
+          <p>No hay métricas adicionales registradas para esta sesión.</p>
+        }
+      </section>
+    } @else {
+      <section class="day-activities" tabindex="-1" aria-live="polite">
+        <h3>{{ selectedDayLabel() }}</h3>
+        @for (activity of dayActivities(); track activity.id) {
+          <button type="button" class="activity-row" (click)="openActivity(activity.id)">
+            <span class="activity-badge" [class]="'activity-badge performance-' + activity.discipline">{{ activityInitial(activity.discipline) }}</span>
+            <span>{{ activity.title }}</span><small>{{ activityTime(activity.event_at) }} ›</small>
+          </button>
+        } @empty {
+          @if (!history.loading()) { <p>No hay actividades disponibles para este día.</p> }
+        }
+      </section>
+    }
+  </section>
+
+
   @if (loading()) {
 
     <section class="home-card loading-card">

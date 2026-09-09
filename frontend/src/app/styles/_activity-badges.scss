@@ -1,0 +1,23 @@
+.performance-strength {
+  background: var(--aptus-accent-soft);
+  color: var(--aptus-accent-text);
+}
+
+.performance-swimming {
+  border: 1px solid var(--aptus-border-strong);
+  background: var(--aptus-surface-muted);
+  color: var(--aptus-text);
+}
+
+.performance-running {
+  background: var(--aptus-success-bg);
+  color: var(--aptus-success);
+}
+
+.performance-cycling {
+  background: var(--aptus-warning-bg);
+  color: var(--aptus-warning);
+}
+
+
+.performance-unknown { background: var(--aptus-surface-muted); color: var(--aptus-text-muted); }

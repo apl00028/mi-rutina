@@ -80,3 +80,13 @@ def test_unauthenticated_denied(api):
     client,state,app=api;app.dependency_overrides.clear()
     assert client.get('/training/export').status_code in (401,403)
     assert not state['requests']
+
+
+def test_export_preserves_duration_rpe_and_legacy_rir(api):
+    client, state, _ = api
+    sets = [{"exerciseId": "plank", "durationSeconds": 75, "rpe": 8.5, "rir": 2},
+            {"exerciseId": "press", "weight": 80, "reps": 8, "rir": 2}]
+    state['tables']['workouts'] = [row('rpe-workout', {'status': 'finished', 'sets': sets})]
+    response = client.get('/training/export')
+    assert response.status_code == 200
+    assert response.json()['sessions'][0]['data']['sets'] == sets

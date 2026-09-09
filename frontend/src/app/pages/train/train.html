@@ -369,24 +369,17 @@
                             />
                           </label>
                         } @else {
-                          <label class="warmup-input">
-                            <span>Seg</span>
-                            <input
-                              type="number"
-                              min="0"
-                              inputmode="numeric"
-                              [value]="
-                                warmup.durationSeconds ?? ''
-                              "
-                              (input)="
-                                updateWarmupSet(
-                                  warmup.setId,
-                                  'durationSeconds',
-                                  $any($event.target).value
-                                )
-                              "
-                            />
-                          </label>
+                          @for (part of durationParts; track part) {
+                            <label class="warmup-input">
+                              <span>{{ part === 'minutes' ? 'Min' : 'Seg' }}</span>
+                              <input type="number" min="0" step="1" inputmode="numeric"
+                                [max]="part === 'seconds' ? 59 : null"
+                                [attr.aria-label]="(part === 'minutes' ? 'Minutos' : 'Segundos') + ' de calentamiento para ' + exercise.name"
+                                [value]="durationPart(warmup.durationSeconds, part)"
+                                (input)="updateDurationPart(exercise.exerciseId, warmup.setIndex, part, $any($event.target).value)"
+                              />
+                            </label>
+                          }
                         }
 
                         <button
@@ -850,38 +843,32 @@
                       }
 
                       @if (isDurationExercise(exercise)) {
+                        @let setIndex = $index;
+                        @for (part of durationParts; track part) {
+                          <label>
+                            <span>{{ part === 'minutes' ? 'Minutos' : 'Segundos' }}</span>
+                            <input
+                              type="number" min="0" step="1" inputmode="numeric"
+                              [max]="part === 'seconds' ? 59 : null"
+                              enterkeyhint="next" autocomplete="off" placeholder="0"
+                              (focus)="keepWorkoutInputVisible($event)"
+                              [attr.aria-label]="(part === 'minutes' ? 'Minutos' : 'Segundos') + ' realizados para ' + exercise.name + ', serie ' + (setIndex + 1)"
+                              [value]="durationPart(getCurrentSet(exercise.exerciseId, setIndex)?.durationSeconds, part)"
+                              [disabled]="workoutLoading() || cancellingWorkout()"
+                              (input)="updateDurationPart(exercise.exerciseId, setIndex, part, $any($event.target).value)"
+                            />
+                          </label>
+                        }
                         <label>
-                          <span>Duración</span>
-
+                          <span>RPE</span>
                           <input
-                            type="number"
-                            min="0"
-                            step="1"
-                            inputmode="numeric"
-                            enterkeyhint="next"
-                            autocomplete="off"
-                          (focus)="keepWorkoutInputVisible($event)"
-                            placeholder="0"
-                            [attr.aria-label]="
-                              durationInputLabel(
-                                exercise,
-                                $index
-                              )
-                            "
-                            [value]="getCurrentSet(
-                              exercise.exerciseId,
-                              $index
-                            )?.durationSeconds ?? ''"
-                            [disabled]="
-                              workoutLoading() ||
-                              cancellingWorkout()
-                            "
-                            (input)="updateSet(
-                              exercise.exerciseId,
-                              $index,
-                              'durationSeconds',
-                              $any($event.target).value
-                            )"
+                            type="number" min="1" max="10" step="0.5" inputmode="decimal"
+                            enterkeyhint="done" autocomplete="off" placeholder="1–10"
+                            (focus)="keepWorkoutInputVisible($event)"
+                            [attr.aria-label]="'RPE realizado para ' + exercise.name + ', serie ' + ($index + 1)"
+                            [value]="getCurrentSet(exercise.exerciseId, $index)?.rpe ?? ''"
+                            [disabled]="workoutLoading() || cancellingWorkout()"
+                            (input)="updateSet(exercise.exerciseId, $index, 'rpe', $any($event.target).value)"
                           />
                         </label>
                       }
@@ -991,7 +978,7 @@
                                   cancellingWorkout()
                                 "
                               >
-                                Iniciar
+                                {{ (getCurrentSet(exercise.exerciseId, $index)?.durationSeconds ?? 0) > 0 ? 'Continuar' : 'Iniciar' }}
                               </button>
                             }
 
@@ -1005,7 +992,7 @@
                                   cancellingWorkout()
                                 "
                               >
-                                Finalizar
+                                Finalizar cronómetro
                               </button>
                             }
                           </div>
@@ -1039,14 +1026,17 @@
                             )"
                             [disabled]="
                               workoutLoading() ||
-                              cancellingWorkout() ||
-                              isSetCompleted(
-                                exercise.exerciseId,
-                                $index
-                              )
+                              cancellingWorkout()
                             "
                           >
-                            Iniciar
+                            {{ (getCurrentSet(exercise.exerciseId, $index)?.durationSeconds ?? 0) > 0 ? 'Continuar' : 'Iniciar' }}
+                          </button>
+                        }
+                        @if ((getCurrentSet(exercise.exerciseId, $index)?.durationSeconds ?? 0) > 0 || setTimerForSet(exercise.exerciseId, $index)) {
+                          <button type="button" class="secondary-button restart-set-timer-button"
+                            [disabled]="workoutLoading() || cancellingWorkout()"
+                            (click)="startTimedSet(exercise.exerciseId, $index, true)">
+                            Reiniciar
                           </button>
                         }
                       </div>
@@ -1149,7 +1139,9 @@
           @if (restTimer(); as timer) {
             <section
               class="rest-timer"
-              [class.finished]="timer.finished"
+              [class.rest-green]="restTimerPhase() === 'green'"
+              [class.rest-yellow]="restTimerPhase() === 'yellow'"
+              [class.rest-red]="restTimerPhase() === 'red'"
             >
               <div>
                 <span>
@@ -1267,6 +1259,22 @@
             Finalizar entrenamiento
           </button>
         </footer>
+
+        @if (allSetsCompletedOpen()) {
+          <section class="aptus-overlay-shell confirm-overlay"
+            role="dialog" aria-modal="true" aria-labelledby="all-sets-completed-title">
+            <div class="state-card confirm-modal">
+              <h2 id="all-sets-completed-title">Has completado todas las series</h2>
+              <div class="confirm-actions">
+                <button type="button" class="primary-button"
+                  [disabled]="workoutLoading() || cancellingWorkout()"
+                  (click)="finishWorkout()">Finalizar sesión</button>
+                <button type="button" class="secondary-button"
+                  (click)="allSetsCompletedOpen.set(false)">Seguir revisando</button>
+              </div>
+            </div>
+          </section>
+        }
 
         @if (cancelConfirmationOpen()) {
           <section
@@ -1405,61 +1413,65 @@
 
       @if (workoutFinishSummary(); as summary) {
         <section
-          class="state-card workout-finish-summary"
-          aria-live="polite"
+          class="aptus-overlay-shell confirm-overlay"
+          role="dialog" aria-modal="true" aria-labelledby="workout-finish-title"
         >
-          <h2>
-            Entrenamiento completado
-          </h2>
+          <div class="state-card confirm-modal workout-finish-summary">
+            <button type="button" class="secondary-button summary-close-button"
+              aria-label="Cerrar resumen del entrenamiento" (click)="closeWorkoutFinishSummary()">✕</button>
+            <h2 id="workout-finish-title">
+              Entrenamiento completado
+            </h2>
 
-          @if (summary.records.length) {
-            <strong class="personal-record-count">
-              {{ summary.records.length }}
-              {{
-                summary.records.length === 1
-                  ? 'récord personal'
-                  : 'récords personales'
-              }}
-            </strong>
+            @if (summary.records.length) {
+              <strong class="personal-record-count">
+                {{ summary.records.length }}
+                {{
+                  summary.records.length === 1
+                    ? 'récord personal'
+                    : 'récords personales'
+                }}
+              </strong>
 
-            <div class="personal-record-groups">
-              @for (
-                group of summary.groups;
-                track group.exerciseId
-              ) {
-                <section class="personal-record-group">
-                  <h3>
-                    {{ group.exerciseName }}
-                  </h3>
+              <div class="personal-record-groups">
+                @for (
+                  group of summary.groups;
+                  track group.exerciseId
+                ) {
+                  <section class="personal-record-group">
+                    <h3>
+                      {{ group.exerciseName }}
+                    </h3>
 
-                  <ul>
-                    @for (
-                      record of group.records;
-                      track record.type
-                    ) {
-                      <li>
-                        <span>
-                          {{
-                            personalRecordLabel(
-                              record.type
-                            )
-                          }}:
-                        </span>
+                    <ul>
+                      @for (
+                        record of group.records;
+                        track record.type
+                      ) {
+                        <li>
+                          <span>
+                            {{
+                              personalRecordLabel(
+                                record.type
+                              )
+                            }}:
+                          </span>
 
-                        <strong>
-                          {{
-                            personalRecordValue(
-                              record
-                            )
-                          }}
-                        </strong>
-                      </li>
-                    }
-                  </ul>
-                </section>
-              }
-            </div>
-          }
+                          <strong>
+                            {{
+                              personalRecordValue(
+                                record
+                              )
+                            }}
+                          </strong>
+                        </li>
+                      }
+                    </ul>
+                  </section>
+                }
+              </div>
+            }
+          </div>
         </section>
       }
 

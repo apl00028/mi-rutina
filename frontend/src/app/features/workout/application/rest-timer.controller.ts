@@ -1,4 +1,5 @@
 import {
+  computed,
   signal
 } from '@angular/core';
 
@@ -19,6 +20,7 @@ export interface RestTimerContext {
 export interface RestTimerState
   extends RestTimerContext {
   readonly endsAt: number;
+  readonly totalSeconds: number;
   readonly remainingSeconds: number;
   readonly finished: boolean;
 }
@@ -41,6 +43,15 @@ export class RestTimerController {
 
   readonly state =
     this.current.asReadonly();
+
+  readonly phase = computed(() => {
+    const timer = this.current();
+    if (!timer) return null;
+    const remainingRatio = timer.remainingSeconds / timer.totalSeconds;
+    return remainingRatio > 0.5
+      ? 'green'
+      : remainingRatio > 0.2 ? 'yellow' : 'red';
+  });
 
   private interval:
     ReturnType<typeof setInterval> | null = null;
@@ -67,8 +78,11 @@ export class RestTimerController {
     const duration =
       Math.floor(durationSeconds);
 
+    if (duration <= 0) return;
+
     this.current.set({
       ...context,
+      totalSeconds: duration,
       endsAt:
         Date.now() + duration * 1000,
       remainingSeconds:

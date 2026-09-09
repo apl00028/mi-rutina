@@ -759,6 +759,22 @@ button:disabled {
 
 .confirm-overlay {
   z-index: 60;
+  padding: 16px;
+}
+
+.confirm-modal {
+  width: min(100%, 520px);
+  box-sizing: border-box;
+  max-height: 85dvh;
+  overflow: auto;
+  background: var(--aptus-surface);
+  border-radius: var(--aptus-radius-md);
+}
+
+.confirm-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
 }
 
 
@@ -779,11 +795,23 @@ button:disabled {
   color: var(--aptus-info);
 }
 
-.rest-timer.finished {
+.rest-timer.rest-green {
   border-color: var(--aptus-success-border);
 
   background: var(--aptus-success-bg);
   color: var(--aptus-success);
+}
+
+.rest-timer.rest-yellow {
+  border-color: var(--aptus-warning-border);
+  background: var(--aptus-warning-bg);
+  color: var(--aptus-warning);
+}
+
+.rest-timer.rest-red {
+  border-color: var(--aptus-danger-border);
+  background: var(--aptus-danger-bg);
+  color: var(--aptus-danger);
 }
 
 .rest-timer > div:first-child {
@@ -867,9 +895,12 @@ button:disabled {
 }
 
 .workout-finish-summary {
-  margin-bottom: 20px;
-
   border-color: var(--aptus-success-border);
+}
+
+.summary-close-button {
+  float: right;
+  margin-left: 12px;
 }
 
 .personal-record-count {

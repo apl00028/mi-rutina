@@ -4703,6 +4703,18 @@ describe('Train first workout flow', () => {
       .toContain('Mayor peso: 80 kg');
     expect(pageText(fixture))
       .toContain('Nuevo e1RM: 101,3 kg');
+    const component = fixture.componentInstance;
+    const history = component.workoutHistory();
+    const dialog = fixture.nativeElement.querySelector('[aria-labelledby="workout-finish-title"]');
+    expect(dialog.getAttribute('role')).toBe('dialog');
+    expect(dialog.getAttribute('aria-modal')).toBe('true');
+    dialog.querySelector('[aria-label="Cerrar resumen del entrenamiento"]').click();
+    fixture.detectChanges();
+    expect(component.workoutFinishSummary()).toBeNull();
+    expect(component.workoutHistory()).toBe(history);
+    expect(component.activeWorkout()).toBeNull();
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('[aria-labelledby="workout-finish-title"]')).toBeNull();
   });
 
 
@@ -4748,8 +4760,9 @@ describe('Train first workout flow', () => {
     await waitForHttpTick();
     fixture.detectChanges();
 
+    expect(fixture.nativeElement.querySelector('[aria-labelledby=workout-finish-title]')).toBeNull();
     expect(pageText(fixture))
-      .toContain(
+      .not.toContain(
         'Entrenamiento completado'
       );
     expect(
@@ -5888,6 +5901,19 @@ describe('Train first workout flow', () => {
     expect(
       component.unilateralExecution()
     ).toBeNull();
+    expect(component.allSetsCompletedOpen()).toBe(false);
+    await component.completeSet('one-arm-dumbbell-row', 1);
+    expect(component.allSetsCompletedOpen()).toBe(false);
+    expect(component.restTimer()?.reason).toBe('between-sides');
+    component.skipRestTimer();
+    const completeLastSide = component.completeSet('one-arm-dumbbell-row', 1);
+    expect(component.allSetsCompletedOpen()).toBe(true);
+    expect(component.restTimer()).toBeNull();
+    await flushPromises();
+    const lastSave = http.expectOne(`${environment.apiUrl}/workouts/active-workout`);
+    expect(lastSave.request.body.sets).toHaveLength(2);
+    lastSave.flush(lastSave.request.body);
+    await completeLastSide;
   });
 
 
@@ -6029,8 +6055,9 @@ describe('Train first workout flow', () => {
 
     expect(inputLabels)
       .toEqual([
-        'Duración',
-        'RIR'
+        'Minutos',
+        'Segundos',
+        'RPE'
       ]);
     expect(
       pageText(fixture)
@@ -6181,8 +6208,8 @@ describe('Train first workout flow', () => {
     component.updateSet(
       'plank',
       0,
-      'rir',
-      '2'
+      'rpe',
+      '8.5'
     );
 
     const complete =
@@ -6204,7 +6231,7 @@ describe('Train first workout flow', () => {
           'plank',
         setIndex: 0,
         durationSeconds: 47,
-        rir: 2
+        rpe: 8.5
       });
     expect(
       save.request.body.sets[0].completedAt
@@ -6219,7 +6246,7 @@ describe('Train first workout flow', () => {
         component.activeSession()!.exercises[0],
         0
       )
-    ).toBe('47 s · RIR 2');
+    ).toBe('0:47 · RPE 8.5');
 
     expect(
       component.restTimerLabel()
@@ -7440,4 +7467,259 @@ describe('Train first workout flow', () => {
       `${environment.apiUrl}/workouts/workout-1`
     );
   });
+  async function createDurationTrain(seconds = 75, completedAt: string | null = null) {
+    const plan = routine();
+    const exercise = {
+      exerciseId: 'plank', name: 'Plancha', sets: 2, target: '45-60 s',
+      recordTypes: ['duration'], targetRir: { min: 2, max: 3 }, restSeconds: 60
+    };
+    return createLoadedTrain([{
+      ...activeWorkout(),
+      sets: [{ setId: 'plank-1', exerciseId: 'plank', setIndex: 1,
+        durationSeconds: seconds, rir: 2, rpe: 8, completedAt }]
+    }], undefined, { ...plan, sessions: [{ ...plan.sessions[0], exercises: [exercise] }] });
+  }
+
+  it.each([[47, '0', '47'], [75, '1', '15'], [120, '2', '0']])(
+    'splits %s seconds into the rendered minute and second inputs for the correct set',
+    async (total, minutes, seconds) => {
+      const fixture = await createDurationTrain(Number(total));
+      const component = fixture.componentInstance;
+      component.expandedSetKey.set(null);
+      component.toggleSet('plank', 1);
+      fixture.detectChanges();
+      const input = (prefix: string) => fixture.nativeElement.querySelector(`input[aria-label^="${prefix}"]`) as HTMLInputElement;
+      expect(input('Minutos realizados').value).toBe(minutes);
+      expect(input('Segundos realizados').value).toBe(seconds);
+      expect(input('Segundos realizados').max).toBe('59');
+      input('Minutos realizados').value = '3';
+      input('Minutos realizados').dispatchEvent(new Event('input'));
+      input('Segundos realizados').value = '12';
+      input('Segundos realizados').dispatchEvent(new Event('input'));
+      expect(component.getCurrentSet('plank', 1)?.durationSeconds).toBe(192);
+      expect(component.getCurrentSet('plank', 0)).toBeNull();
+      for (const value of ['60', '-1', '1.5', 'Infinity']) {
+        component.updateDurationPart('plank', 1, 'seconds', value);
+        expect(component.getCurrentSet('plank', 1)?.durationSeconds).toBe(192);
+      }
+      component.updateDurationPart('plank', 1, 'minutes', '-1');
+      expect(component.getCurrentSet('plank', 1)?.durationSeconds).toBe(192);
+      const pending = component.saveWorkout();
+      await flushPromises();
+      const save = http.expectOne(`${environment.apiUrl}/workouts/active-workout`);
+      save.flush(save.request.body);
+      await pending;
+      fixture.destroy();
+    }
+  );
+
+  it('records duration RPE independently, preserves legacy RIR and leaves repetition RIR unchanged', async () => {
+    const fixture = await createDurationTrain(75, '2026-09-09T08:00:00Z');
+    const component = fixture.componentInstance;
+    component.startSetCorrection('plank', 1);
+    component.settingsService.settings.update(settings => ({ ...settings, showRir: false }));
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('input[aria-label^="RIR"]')).toBeNull();
+    const rpe = fixture.nativeElement.querySelector('input[aria-label^="RPE"]') as HTMLInputElement;
+    expect(rpe.min).toBe('1');
+    expect(rpe.max).toBe('10');
+    expect(rpe.step).toBe('0.5');
+    rpe.value = '8.5';
+    rpe.dispatchEvent(new Event('input'));
+    component.updateSet('plank', 1, 'rir', '9');
+    for (const value of ['0', '10.5', '8.2', 'Infinity']) component.updateSet('plank', 1, 'rpe', value);
+    expect(component.getCurrentSet('plank', 1)).toMatchObject({ rpe: 8.5, rir: 2 });
+    expect(component.setSummary(component.activeSession()!.exercises[0], 1)).toBe('1:15 · RPE 8.5');
+    component.workoutHistory.set([{
+      ...component.activeWorkout()!, workoutId: 'previous-plank', status: 'finished', finishedAt: '2026-09-08T08:00:00Z'
+    }]);
+    expect(component.previousExerciseSummary('plank')).toBe('1:15 · RPE 8.5');
+    component.activeSession.set({ ...component.activeSession()!, exercises: routine().sessions[0].exercises });
+    component.updateSet('dumbbell-bench-press', 0, 'rir', '2.5');
+    component.updateSet('dumbbell-bench-press', 0, 'rpe', '8');
+    expect(component.getCurrentSet('dumbbell-bench-press', 0)).toMatchObject({ rir: 2.5, rpe: null });
+    const pending = component.saveWorkout();
+    await flushPromises();
+    const save = http.expectOne(`${environment.apiUrl}/workouts/active-workout`);
+    save.flush(save.request.body);
+    await pending;
+    fixture.destroy();
+  });
+
+  it.each(['finish', 'confirm-running', 'confirm-paused'])('reuses the completed-set stopwatch through %s without another completion or rest', async (action) => {
+    const completedAt = '2026-09-09T08:00:00Z';
+    const fixture = await createDurationTrain(75, completedAt);
+    const component = fixture.componentInstance;
+    vi.useFakeTimers();
+    const started = Date.now();
+    const complete = vi.spyOn(component, 'completeSet');
+    component.startSetCorrection('plank', 1);
+    fixture.detectChanges();
+    const start = fixture.nativeElement.querySelector('.start-set-timer-button') as HTMLButtonElement;
+    expect(start.disabled).toBe(false);
+    start.click();
+    expect(component.setTimer()?.elapsedSeconds).toBe(75);
+    vi.setSystemTime(started + 5000);
+    component.pauseSetTimer();
+    expect(component.setTimer()?.elapsedSeconds).toBe(80);
+    vi.setSystemTime(started + 15000);
+    component.resumeSetTimer();
+    vi.setSystemTime(started + 20000);
+    if (action === 'finish') await component.finishTimedSet();
+    if (action === 'confirm-paused') component.pauseSetTimer();
+    component.confirmSetCorrection('plank', 1);
+    expect(component.getCurrentSet('plank', 1)).toMatchObject({ durationSeconds: 85, completedAt });
+    expect(component.setTimer()).toBeNull();
+    expect(component.restTimer()).toBeNull();
+    expect(component.allSetsCompletedOpen()).toBe(false);
+    expect(complete).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(750);
+    await flushPromises();
+    const save = http.expectOne(`${environment.apiUrl}/workouts/active-workout`);
+    expect(save.request.body.sets[0]).toMatchObject({ durationSeconds: 85, completedAt, rpe: 8, rir: 2 });
+    save.flush(save.request.body);
+    await flushPromises();
+    fixture.destroy();
+  });
+
+  it('suggests finishing only after all planned steps, stays dismissed during corrections and rearms after unchecking', async () => {
+    const fixture = await createLoadedTrain([activeWorkout()]);
+    const component = fixture.componentInstance;
+    const complete = async (index: number) => {
+      const pending = component.completeSet('dumbbell-bench-press', index);
+      await flushPromises();
+      const save = http.expectOne(`${environment.apiUrl}/workouts/active-workout`);
+      save.flush(save.request.body);
+      await pending;
+      fixture.detectChanges();
+    };
+    // Completing the last index first must not confuse "no steps after" with "all completed".
+    await complete(1);
+    expect(component.allSetsCompletedOpen()).toBe(false);
+    await complete(0);
+    expect(component.restTimer()).toBeNull();
+    const dialog = fixture.nativeElement.querySelector('[aria-labelledby="all-sets-completed-title"]');
+    expect(dialog.getAttribute('role')).toBe('dialog');
+    expect(dialog.getAttribute('aria-modal')).toBe('true');
+    expect(dialog.textContent).toContain('Has completado todas las series');
+    dialog.querySelector('.secondary-button').click();
+    component.startSetCorrection('dumbbell-bench-press', 0);
+    component.updateSet('dumbbell-bench-press', 0, 'rir', '2');
+    component.confirmSetCorrection('dumbbell-bench-press', 0);
+    fixture.detectChanges();
+    expect(component.allSetsCompletedOpen()).toBe(false);
+    expect(fixture.nativeElement.querySelector('[aria-labelledby="all-sets-completed-title"]')).toBeNull();
+    await complete(0);
+    expect(component.allSetsCompletedOpen()).toBe(false);
+    await complete(0);
+    expect(component.allSetsCompletedOpen()).toBe(true);
+    expect(component.activeWorkout()?.status).toBe('in_progress');
+    fixture.nativeElement.querySelector('[aria-labelledby="all-sets-completed-title"] .primary-button').click();
+    expect(component.activeWorkout()).toBeNull();
+    expect(component.outbox.snapshots()[0]).toMatchObject({ workoutId: 'active-workout', status: 'finished' });
+    await flushPromises();
+    const finish = http.expectOne(`${environment.apiUrl}/workouts/active-workout`);
+    finish.error(new ProgressEvent('error'));
+    await flushPromises();
+    expect(component.outbox.snapshots()[0].status).toBe('finished');
+    expect(component.activeWorkout()).toBeNull();
+    fixture.destroy();
+  });
+
+  it('includes pending warmups in the finish suggestion and opens when the last warmup is completed', async () => {
+    const fixture = await createLoadedTrain([activeWorkout()]);
+    const component = fixture.componentInstance;
+    component.addWarmupSet('dumbbell-bench-press');
+    for (const index of [0, 1]) {
+      const complete = component.completeSet('dumbbell-bench-press', index);
+      await flushPromises();
+      const save = http.expectOne(`${environment.apiUrl}/workouts/active-workout`);
+      save.flush(save.request.body);
+      await complete;
+      expect(component.allSetsCompletedOpen()).toBe(false);
+    }
+    const warmup = component.warmupSets('dumbbell-bench-press')[0];
+    component.toggleWarmupCompleted(warmup.setId);
+    expect(component.allSetsCompletedOpen()).toBe(true);
+    expect(component.restTimer()).toBeNull();
+    component.toggleWarmupCompleted(warmup.setId);
+    expect(component.allSetsCompletedOpen()).toBe(false);
+    const pending = component.saveWorkout();
+    await flushPromises();
+    const save = http.expectOne(`${environment.apiUrl}/workouts/active-workout`);
+    save.flush(save.request.body);
+    await pending;
+    fixture.destroy();
+  });
+
+  it.each([null, '2026-09-09T08:00:00Z'])('restarts from zero and commits only on explicit stopwatch finish (completedAt=%s)', async (completedAt) => {
+    const fixture = await createDurationTrain(75, completedAt);
+    const component = fixture.componentInstance;
+    vi.useFakeTimers();
+    const now = Date.now();
+    const completeSet = vi.spyOn(component, 'completeSet');
+    if (completedAt) component.startSetCorrection('plank', 1);
+    else { component.expandedSetKey.set(null); component.toggleSet('plank', 1); }
+    fixture.detectChanges();
+    const scheduled = vi.spyOn(globalThis, 'setInterval');
+    const cleared = vi.spyOn(globalThis, 'clearInterval');
+    const continueButton = fixture.nativeElement.querySelector('.start-set-timer-button') as HTMLButtonElement;
+    expect(continueButton.textContent).toContain('Continuar');
+    continueButton.click();
+    expect(component.setTimer()?.elapsedSeconds).toBe(75);
+    const previousInterval = scheduled.mock.results.at(-1)!.value;
+    fixture.nativeElement.querySelector('.restart-set-timer-button').click();
+    fixture.detectChanges();
+    expect(component.setTimerLabel('plank', 1)).toBe('00:00');
+    expect(cleared).toHaveBeenCalledWith(previousInterval);
+    expect(scheduled).toHaveBeenCalledTimes(2);
+    expect(component.getCurrentSet('plank', 1)).toMatchObject({ durationSeconds: 75, completedAt });
+    vi.setSystemTime(now + 12000);
+    component.pauseSetTimer();
+    expect(component.setTimer()?.elapsedSeconds).toBe(12);
+    expect(component.getCurrentSet('plank', 1)?.durationSeconds).toBe(75);
+    component.resumeSetTimer();
+    vi.setSystemTime(now + 20000);
+    fixture.detectChanges();
+    const finish = Array.from(fixture.nativeElement.querySelectorAll('.set-timer-actions button'))
+      .find((button: any) => button.textContent.includes('Finalizar cronómetro')) as HTMLButtonElement;
+    finish.click();
+    expect(component.getCurrentSet('plank', 1)).toMatchObject({ durationSeconds: 20, completedAt });
+    expect(component.restTimer()).toBeNull();
+    expect(component.allSetsCompletedOpen()).toBe(false);
+    expect(completeSet).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(750);
+    const save = http.expectOne(`${environment.apiUrl}/workouts/active-workout`);
+    expect(save.request.body.sets[0]).toMatchObject({ durationSeconds: 20, completedAt });
+    save.flush(save.request.body);
+    await flushPromises();
+    fixture.destroy();
+  });
+
+  it.each(['confirm', 'exit', 'destroy'])('keeps the saved duration when abandoning a restarted stopwatch via %s', async action => {
+    const completedAt = '2026-09-09T08:00:00Z';
+    const fixture = await createDurationTrain(75, completedAt);
+    const component = fixture.componentInstance;
+    vi.useFakeTimers();
+    component.startSetCorrection('plank', 1);
+    component.startTimedSet('plank', 1, true);
+    await vi.advanceTimersByTimeAsync(5000);
+    expect(component.getCurrentSet('plank', 1)?.durationSeconds).toBe(75);
+    if (action === 'confirm') component.confirmSetCorrection('plank', 1);
+    if (action === 'exit') {
+      const exit = component.pauseWorkoutAndExit();
+      await flushPromises();
+      const save = http.expectOne(`${environment.apiUrl}/workouts/active-workout`);
+      expect(save.request.body.sets[0]).toMatchObject({ durationSeconds: 75, completedAt });
+      save.flush(save.request.body);
+      await exit;
+    }
+    if (action === 'destroy') fixture.destroy();
+    expect(component.getCurrentSet('plank', 1)).toMatchObject({ durationSeconds: 75, completedAt });
+    expect(component.setTimer()).toBeNull();
+    expect(component.restTimer()).toBeNull();
+    http.expectNone(`${environment.apiUrl}/workouts/active-workout`);
+    if (action !== 'destroy') fixture.destroy();
+  });
+
 });

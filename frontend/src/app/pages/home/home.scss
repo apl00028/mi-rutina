@@ -1,3 +1,4 @@
+@use '../../styles/activity-badges';
 :host {
   display: block;
 }
@@ -266,3 +267,42 @@
     font-size: 0.76rem;
   }
 }
+
+.activity-section {
+  padding: 16px;
+  margin-bottom: 16px;
+  border: 1px solid var(--aptus-border);
+  border-radius: var(--aptus-radius-md);
+  background: var(--aptus-surface);
+}
+.activity-section h2 { margin: 0 0 16px; font-size: 1.2rem; }
+.activity-section h3 { font-size: 1rem; }
+.day-activities, .activity-detail { margin-top: 20px; }
+.activity-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 48px;
+  padding: 10px;
+  margin-top: 8px;
+  border: 1px solid var(--aptus-border);
+  border-radius: var(--aptus-radius-sm);
+  background: var(--aptus-surface);
+  color: var(--aptus-text);
+  text-align: left;
+  font: inherit;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+.activity-row > span:nth-child(2) { min-width: 0; overflow-wrap: anywhere; }
+.activity-row small { margin-left: auto; white-space: nowrap; }
+.activity-badge { display: inline-grid; place-items: center; min-width: 24px; height: 24px; border-radius: 50%; font-weight: 800; }
+.activity-back { min-height: 44px; border: 0; padding: 0; background: transparent; color: var(--aptus-text); font: inherit; cursor: pointer; text-align: left; }
+.activity-metrics { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.activity-metrics dt { color: var(--aptus-text-muted); font-size: 0.75rem; }
+.activity-metrics dd { margin: 4px 0 0; font-weight: 700; }
+.activity-detail li { margin: 8px 0; overflow-wrap: anywhere; }
+.activity-detail ul { padding-left: 18px; }
+.activity-detail summary { min-height: 44px; align-content: center; cursor: pointer; }
+.activity-section button:focus-visible { outline: 2px solid var(--aptus-accent); outline-offset: 3px; }

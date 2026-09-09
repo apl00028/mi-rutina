@@ -1,8 +1,15 @@
+import { ActivityHistoryService } from '../../core/activity-history.service';
+import { ActivityCalendar, PerformanceCalendarDay, activityDateKey, calendarDateLabel, disciplineInitial, disciplineLabel, localDateKey } from '../../features/training/components/activity-calendar/activity-calendar';
 import { PullRefresh } from '../../core/pull-refresh.component';
 import {
   Component,
   OnInit,
-  signal
+  signal,
+  computed,
+  inject,
+  ElementRef,
+  Injector,
+  afterNextRender
 } from '@angular/core';
 
 import {
@@ -25,13 +32,6 @@ import {
 import {
   AuthService
 } from '../../core/auth.service';
-
-
-interface DashboardWorkout {
-  status:
-    | 'in_progress'
-    | 'finished';
-}
 
 
 interface DashboardMeal {
@@ -73,12 +73,54 @@ interface DashboardWeightSummary {
 @Component({
   selector: 'app-home',
   standalone: true,
-  imports: [PullRefresh,],
+  imports: [PullRefresh, ActivityCalendar],
+  providers: [ActivityHistoryService],
   templateUrl: './home.html',
   styleUrl: './home.scss'
 })
 export class Home implements OnInit {
   readonly refreshPage = () => this.loadDashboard();
+  readonly history = inject(ActivityHistoryService);
+  readonly calendarMonth = signal(localDateKey(new Date()).slice(0, 7));
+  readonly selectedDate = signal(localDateKey(new Date()));
+  readonly selectedActivityId = signal<string | null>(null);
+  readonly selectedActivity = computed(() => this.history.activities().find(activity => activity.id === this.selectedActivityId()) ?? null);
+  readonly dayActivities = computed(() => this.history.activities().filter(activity => activityDateKey(activity.event_at) === this.selectedDate()));
+  readonly selectedDayLabel = computed(() => calendarDateLabel(this.selectedDate()));
+  readonly activityInitial = disciplineInitial;
+  readonly activityDisciplineLabel = disciplineLabel;
+
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
+  private readonly injector = inject(Injector);
+
+  openActivity(id: string | null): void {
+    this.selectedActivityId.set(id);
+    afterNextRender(() => {
+      const target = this.host.nativeElement.querySelector<HTMLElement>(id ? '.activity-back' : '.day-activities');
+      target?.focus({ preventScroll: true });
+      target?.scrollIntoView?.({ block: 'nearest' });
+    }, { injector: this.injector });
+  }
+
+  changeMonth(month: string): void {
+    this.calendarMonth.set(month);
+    this.selectedDate.set(month === localDateKey(new Date()).slice(0, 7) ? localDateKey(new Date()) : `${month}-01`);
+    this.selectedActivityId.set(null);
+  }
+
+  selectDay(day: PerformanceCalendarDay): void {
+    this.selectedDate.set(day.dateKey);
+    this.calendarMonth.set(day.dateKey.slice(0, 7));
+    this.selectedActivityId.set(null);
+  }
+
+  activityTime(timestamp: string | null): string {
+    const date = timestamp ? new Date(timestamp) : null;
+    return date && Number.isFinite(date.getTime())
+      ? new Intl.DateTimeFormat('es-ES', { hour: '2-digit', minute: '2-digit' }).format(date)
+      : '';
+  }
+
 
 
   private readonly apiUrl =
@@ -229,6 +271,7 @@ export class Home implements OnInit {
         await this.auth.getAccessToken();
 
       if (!token) {
+        this.history.errors.set(['No se pudieron cargar las actividades.']);
         this.error.set(
           'No se pudo cargar el resumen.'
         );
@@ -249,14 +292,7 @@ export class Home implements OnInit {
       ] =
         await Promise.allSettled([
 
-          firstValueFrom(
-            this.http.get<
-              DashboardWorkout[]
-            >(
-              `${this.apiUrl}/workouts`,
-              { headers }
-            )
-          ),
+          this.history.load(true).then(() => this.history.workouts()),
 
           firstValueFrom(
             this.http.get<

@@ -83,6 +83,27 @@ describe('RestTimerController', () => {
     ).toBe(60);
   });
 
+  it.each([100, 200])('uses original percentages at both boundaries for %s seconds', async (duration) => {
+    controller.start(workingContext, duration);
+    expect(controller.state()?.totalSeconds).toBe(duration);
+    expect(controller.phase()).toBe('green');
+    await vi.advanceTimersByTimeAsync((duration / 2 - 1) * 1000);
+    expect(controller.phase()).toBe('green');
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(controller.phase()).toBe('yellow');
+    await vi.advanceTimersByTimeAsync((duration * 0.3 - 1) * 1000);
+    expect(controller.phase()).toBe('yellow');
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(controller.phase()).toBe('red');
+    controller.adjust(30);
+    expect(controller.state()?.totalSeconds).toBe(duration);
+    controller.adjust(-30);
+    expect(controller.phase()).toBe('red');
+    await vi.advanceTimersByTimeAsync(duration * 0.2 * 1000);
+    expect(controller.phase()).toBeNull();
+    expect(ended).toHaveBeenCalledOnce();
+  });
+
 
   it('replaces an active timer without leaving a stale interval', async () => {
     controller.start(

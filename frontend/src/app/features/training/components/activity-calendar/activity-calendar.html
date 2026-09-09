@@ -1,0 +1,32 @@
+<div class="calendar-panel">
+  <div class="calendar-header">
+    <button type="button" aria-label="Mes anterior" (click)="shiftMonth(-1)">←</button>
+    <h3 aria-live="polite">{{ monthLabel() }}</h3>
+    <button type="button" aria-label="Mes siguiente" (click)="shiftMonth(1)">→</button>
+  </div>
+  <div class="calendar-weekdays" aria-hidden="true">
+    @for (weekday of ['L', 'M', 'X', 'J', 'V', 'S', 'D']; track $index) { <span>{{ weekday }}</span> }
+  </div>
+  <div class="calendar-grid">
+    @for (day of days(); track day.dateKey) {
+      <button type="button" class="calendar-day" [class.outside-month]="!day.inMonth"
+        [class.has-session]="day.events.length > 0" [class.selected]="day.selected"
+        [attr.aria-label]="dayLabel(day)" [attr.aria-pressed]="day.selected"
+        (click)="daySelected.emit(day)">
+        <span>{{ day.dayNumber }}</span>
+        @if (day.events.length) {
+          <small class="calendar-marks">
+            @for (mark of marks(day); track mark.discipline) {
+              <span [class]="'performance-' + mark.discipline">{{ mark.label }}</span>
+            }
+          </small>
+        }
+      </button>
+    }
+  </div>
+  <div class="performance-legend">
+    @for (discipline of disciplines(); track discipline) {
+      <span [class]="'performance-' + discipline">{{ initial(discipline) }}</span>{{ label(discipline) }}
+    }
+  </div>
+</div>

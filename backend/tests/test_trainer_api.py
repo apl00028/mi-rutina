@@ -389,6 +389,11 @@ def test_trainer_can_list_strength_sessions(monkeypatch):
                                     "rir": 2,
                                     "rpe": None,
                                     "duration_seconds": None,
+                                },
+                                {
+                                    "set_index": 1, "set_order": 2,
+                                    "set_type": "working", "duration_seconds": 75,
+                                    "rpe": 8.5, "rir": None,
                                 }
                             ],
                         }
@@ -415,6 +420,11 @@ def test_trainer_can_list_strength_sessions(monkeypatch):
         sessions[0].exercises[0].sets[0].rir
         == 2
     )
+
+    duration_set = sessions[0].exercises[0].sets[1]
+    assert duration_set.rpe == 8.5
+    assert duration_set.rir is None
+    assert duration_set.model_dump()["duration_seconds"] == 75
 
 
 def test_strength_sessions_upstream_error_is_generic(monkeypatch):

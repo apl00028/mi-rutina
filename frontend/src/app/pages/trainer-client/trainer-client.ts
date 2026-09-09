@@ -1,3 +1,4 @@
+import { ActivityCalendar, ActivityDiscipline, PerformanceCalendarDay, PerformanceCalendarEvent, activityDateKey, localDateKey, disciplineInitial } from '../../features/training/components/activity-calendar/activity-calendar';
 import { CommonModule } from '@angular/common';
 
 import { HttpErrorResponse } from '@angular/common/http';
@@ -31,33 +32,10 @@ import {
 
 type StrengthMetricColumn = 'reps' | 'weight' | 'duration' | 'effort';
 
-interface PerformanceCalendarEvent {
-  id: string;
-  discipline: TrainerDiscipline;
-  event_at: string | null;
-  title: string;
-  started_at?: string | null;
-  finished_at?: string | null;
-  duration_seconds?: number | null;
-}
-
-interface PerformanceCalendarDay {
-  dateKey: string;
-  dayNumber: number;
-  inMonth: boolean;
-  events: PerformanceCalendarEvent[];
-  selected: boolean;
-}
-
-interface PerformanceCalendarMark {
-  discipline: TrainerDiscipline;
-  label: string;
-}
-
 @Component({
   selector: 'app-trainer-client',
   standalone: true,
-  imports: [CommonModule, RouterLink],
+  imports: [CommonModule, RouterLink, ActivityCalendar],
   templateUrl: './trainer-client.html',
   styleUrl: './trainer-client.scss',
 })
@@ -197,48 +175,6 @@ export class TrainerClient implements OnInit {
     return dateKey ? this.performanceEventsForDate(dateKey) : [];
   });
 
-  readonly performanceCalendarDays = computed(() => {
-    const monthKey = this.performanceCalendarMonth();
-
-    if (!monthKey) {
-      return [];
-    }
-
-    const monthStart = new Date(`${monthKey}-01T00:00:00Z`);
-    const firstWeekday = monthStart.getUTCDay() || 7;
-    const gridStart = new Date(monthStart);
-
-    gridStart.setUTCDate(monthStart.getUTCDate() - firstWeekday + 1);
-
-    return Array.from(
-      {
-        length:
-          Math.ceil(
-            (firstWeekday -
-              1 +
-              new Date(monthStart.getUTCFullYear(), monthStart.getUTCMonth() + 1, 0).getDate()) /
-              7,
-          ) * 7,
-      },
-      (_, index): PerformanceCalendarDay => {
-        const date = new Date(gridStart);
-
-        date.setUTCDate(gridStart.getUTCDate() + index);
-
-        const dateKey = date.toISOString().slice(0, 10);
-        const events = this.performanceEventsForDate(dateKey);
-
-        return {
-          dateKey,
-          dayNumber: date.getUTCDate(),
-          inMonth: date.toISOString().slice(0, 7) === monthKey,
-          events,
-          selected: dateKey === this.selectedPerformanceDateKey(),
-        };
-      },
-    );
-  });
-
   constructor(
     private route: ActivatedRoute,
     private trainerService: TrainerService,
@@ -309,12 +245,10 @@ export class TrainerClient implements OnInit {
     }
   }
 
-  previousPerformanceMonth(): void {
-    this.shiftPerformanceMonth(-1);
-  }
-
-  nextPerformanceMonth(): void {
-    this.shiftPerformanceMonth(1);
+  changePerformanceMonth(month: string): void {
+    this.selectedPerformanceDateKey.set(null);
+    this.closePerformanceDetail();
+    this.performanceCalendarMonth.set(month);
   }
 
   selectPerformanceDay(day: PerformanceCalendarDay): void {
@@ -386,17 +320,6 @@ export class TrainerClient implements OnInit {
           timeZone: 'UTC',
         }).format(new Date(`${key}T12:00:00Z`))
       : '';
-  }
-
-  calendarDayLabel(day: PerformanceCalendarDay): string {
-    return `${new Intl.DateTimeFormat('es-ES', {
-      day: 'numeric',
-      month: 'long',
-      year: 'numeric',
-      timeZone: 'UTC',
-    }).format(
-      new Date(`${day.dateKey}T12:00:00Z`),
-    )}, ${this.completedSessionsLabel(day.events.length)}`;
   }
 
   elapsedSessionSeconds(event: PerformanceCalendarEvent): number | null {
@@ -485,44 +408,10 @@ export class TrainerClient implements OnInit {
     );
   }
 
-  performanceMonthLabel(): string {
-    const monthKey = this.performanceCalendarMonth();
-
-    if (!monthKey) {
-      return '—';
-    }
-
-    return new Intl.DateTimeFormat('es-ES', {
-      month: 'long',
-      year: 'numeric',
-      timeZone: 'UTC',
-    }).format(new Date(`${monthKey}-01T00:00:00Z`));
-  }
-
   performanceEventsForDate(dateKey: string): PerformanceCalendarEvent[] {
     return this.performanceEvents().filter(
       (event) => this.dateKeyFromValue(event.event_at) === dateKey,
     );
-  }
-
-  calendarDayMarks(day: PerformanceCalendarDay): PerformanceCalendarMark[] {
-    return this.disciplines
-      .map((discipline) => {
-        const count = day.events.filter((event) => event.discipline === discipline).length;
-
-        if (count === 0) {
-          return null;
-        }
-
-        return {
-          discipline,
-          label:
-            count > 1
-              ? `${this.performanceDisciplineInitial(discipline)}×${count}`
-              : this.performanceDisciplineInitial(discipline),
-        };
-      })
-      .filter((mark): mark is PerformanceCalendarMark => mark !== null);
   }
 
   performanceEventTime(event: PerformanceCalendarEvent): string {
@@ -542,18 +431,7 @@ export class TrainerClient implements OnInit {
     }).format(date);
   }
 
-  performanceDisciplineInitial(discipline: TrainerDiscipline): string {
-    switch (discipline) {
-      case 'swimming':
-        return 'N';
-      case 'running':
-        return 'C';
-      case 'cycling':
-        return 'B';
-      default:
-        return 'F';
-    }
-  }
+  readonly performanceDisciplineInitial = disciplineInitial;
 
   async loadSelectedRunningDetail(): Promise<void> {
     const requestId = ++this.runningDetailRequest;
@@ -907,7 +785,7 @@ export class TrainerClient implements OnInit {
     return minutes > 0 ? `${minutes}:${seconds.toString().padStart(2, '0')}` : `${seconds} s`;
   }
 
-  disciplineLabel(discipline: TrainerDiscipline): string {
+  disciplineLabel(discipline: ActivityDiscipline): string {
     switch (discipline) {
       case 'swimming':
         return 'Natación';
@@ -976,22 +854,6 @@ export class TrainerClient implements OnInit {
     return Number.isNaN(date.getTime()) ? 0 : date.getTime();
   }
 
-  private shiftPerformanceMonth(delta: number): void {
-    const monthKey = this.performanceCalendarMonth();
-
-    if (!monthKey) {
-      return;
-    }
-
-    const date = new Date(`${monthKey}-01T00:00:00Z`);
-
-    date.setUTCMonth(date.getUTCMonth() + delta);
-
-    this.selectedPerformanceDateKey.set(null);
-    this.closePerformanceDetail();
-    this.performanceCalendarMonth.set(date.toISOString().slice(0, 7));
-  }
-
   private monthKeyFromValue(value: string | null | undefined): string | null {
     if (!value) {
       return null;
@@ -1010,23 +872,8 @@ export class TrainerClient implements OnInit {
     return this.dateKeyFromDate(date).slice(0, 7);
   }
 
-  private dateKeyFromValue(value: string | null | undefined): string | null {
-    if (!value) {
-      return null;
-    }
-
-    const date = new Date(value);
-
-    if (Number.isNaN(date.getTime())) {
-      return null;
-    }
-
-    return this.dateKeyFromDate(date);
-  }
-
-  private dateKeyFromDate(date: Date): string {
-    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
-  }
+  private readonly dateKeyFromValue = activityDateKey;
+  private readonly dateKeyFromDate = localDateKey;
 
   private errorMessage(error: unknown, fallback: string): string {
     if (error instanceof HttpErrorResponse) {

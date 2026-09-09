@@ -1,8 +1,10 @@
 import json
 import logging
 import time
+import traceback
 from collections.abc import Awaitable, Callable
 from uuid import uuid4
+from pathlib import Path
 
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
@@ -11,6 +13,28 @@ from starlette.responses import JSONResponse, Response
 logger = logging.getLogger(
     "uvicorn.error.aptus.requests"
 )
+
+
+def _safe_route_path(
+    request: Request,
+) -> str:
+    route = request.scope.get(
+        "route"
+    )
+
+    route_path = getattr(
+        route,
+        "path",
+        None,
+    )
+
+    if isinstance(
+        route_path,
+        str,
+    ) and route_path:
+        return route_path
+
+    return "<unmatched>"
 
 
 async def observe_request(
@@ -47,11 +71,26 @@ async def observe_request(
                     "method":
                         request.method,
                     "path":
-                        request.url.path,
+                        _safe_route_path(
+                            request
+                        ),
                     "duration_ms":
                         duration_ms,
                     "exception_type":
                         type(exc).__name__,
+                    "exception_frames": [
+                        {
+                            "file":
+                                Path(frame.filename).name,
+                            "function":
+                                frame.name,
+                            "line":
+                                frame.lineno,
+                        }
+                        for frame in traceback.extract_tb(
+                            exc.__traceback__
+                        )[-8:]
+                    ],
                 },
                 separators=(",", ":"),
             )
@@ -93,7 +132,9 @@ async def observe_request(
                 "method":
                     request.method,
                 "path":
-                    request.url.path,
+                    _safe_route_path(
+                        request
+                    ),
                 "status":
                     response.status_code,
                 "duration_ms":

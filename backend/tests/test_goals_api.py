@@ -125,6 +125,37 @@ def test_get_active_and_empty_contract(monkeypatch):
     assert response.json() is None
 
 
+def test_get_active_storage_failure_is_not_reported_as_empty(
+    monkeypatch,
+):
+    upstream_request = httpx.Request(
+        "GET",
+        "https://supabase.test/rest/v1/goals",
+    )
+    upstream_response = httpx.Response(
+        404,
+        request=upstream_request,
+    )
+
+    async def unavailable(actor):
+        raise httpx.HTTPStatusError(
+            "goals table is unavailable",
+            request=upstream_request,
+            response=upstream_response,
+        )
+
+    monkeypatch.setattr(
+        goals_api.service,
+        "get_user_active_goal",
+        unavailable,
+    )
+    response = request("GET", f"{BASE}/active")
+    assert response.status_code == 502
+    assert response.json() == {
+        "detail": "Goal service is unavailable"
+    }
+
+
 def test_list_history_contract(monkeypatch):
     async def history(actor):
         return [

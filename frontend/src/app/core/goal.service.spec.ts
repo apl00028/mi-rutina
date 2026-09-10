@@ -126,6 +126,17 @@ describe('GoalService', () => {
     await expect(result).resolves.toBeNull();
   });
 
+  it('does not turn an active Goal storage error into an empty Goal', async () => {
+    const result = service.getActive();
+    await tick();
+    http.expectOne(`${url}/active`).flush(
+      { detail: 'Goal service is unavailable' },
+      { status: 502, statusText: 'Bad Gateway' }
+    );
+    await expect(result).rejects
+      .toBeInstanceOf(HttpErrorResponse);
+  });
+
   it('lists and maps Goal history', async () => {
     const result = service.list();
     await tick();

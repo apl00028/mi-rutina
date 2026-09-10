@@ -394,11 +394,20 @@
         type="button"
         class="request-access-button"
         (click)="requestAccess()"
+        [disabled]="loading()"
       >
         {{
-          language() === 'es'
-            ? 'Solicitar acceso'
-            : 'Request access'
+          loading()
+            ? (
+                language() === 'es'
+                  ? 'Solicitando...'
+                  : 'Requesting...'
+              )
+            : (
+                language() === 'es'
+                  ? 'Solicitar acceso'
+                  : 'Request access'
+              )
         }}
       </button>
     </footer>

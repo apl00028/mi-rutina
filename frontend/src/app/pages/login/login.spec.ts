@@ -1071,12 +1071,80 @@ describe(
           'Accede a tus deportistas'
         );
 
-        component.requestAccess();
+        await component.requestAccess();
 
         expect(
           component.message()
         ).toContain(
           'entrenador'
+        );
+
+        expect(
+          authMock.signInWithMagicLink
+        ).not.toHaveBeenCalled();
+      }
+    );
+
+
+    it(
+      'starts athlete registration from the request access action',
+      async () => {
+        const fixture =
+          TestBed.createComponent(
+            Login
+          );
+
+        fixture.detectChanges();
+        await fixture.whenStable();
+
+        const component =
+          fixture.componentInstance;
+
+        component.email.set(
+          ' new@example.com '
+        );
+
+        await component.requestAccess();
+
+        expect(
+          authMock.signInWithMagicLink
+        ).toHaveBeenCalledWith(
+          'new@example.com'
+        );
+
+        expect(
+          component.message()
+        ).toContain(
+          'registrar tu solicitud pendiente'
+        );
+      }
+    );
+
+
+    it(
+      'requires an email before requesting athlete access',
+      async () => {
+        const fixture =
+          TestBed.createComponent(
+            Login
+          );
+
+        fixture.detectChanges();
+        await fixture.whenStable();
+
+        const component =
+          fixture.componentInstance;
+
+        await component.requestAccess();
+
+        expect(
+          authMock.signInWithMagicLink
+        ).not.toHaveBeenCalled();
+
+        expect(
+          component.error()
+        ).toContain(
+          'Introduce tu email'
         );
       }
     );

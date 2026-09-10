@@ -531,9 +531,9 @@ export class Login {
 
 
   async sendMagicLink(
-    event: Event
+    event?: Event
   ): Promise<void> {
-    event.preventDefault();
+    event?.preventDefault();
 
     const email =
       this.email().trim();
@@ -606,26 +606,40 @@ export class Login {
   }
 
 
-  requestAccess():
-    void {
+  async requestAccess():
+    Promise<void> {
     const role =
       this.requestedAccessRole();
 
-    this.message.set(
-      this.language() === 'es'
-        ? (
-            role === 'trainer'
-              ? 'Las cuentas de entrenador se activan actualmente mediante invitación.'
-              : 'Las nuevas cuentas de deportista se activan actualmente mediante invitación.'
-          )
-        : (
-            role === 'trainer'
-              ? 'Trainer accounts are currently activated by invitation.'
-              : 'New athlete accounts are currently activated by invitation.'
-          )
-    );
+    if (role === 'trainer') {
+      this.message.set(
+        this.language() === 'es'
+          ? 'Las cuentas de entrenador se activan actualmente mediante invitación.'
+          : 'Trainer accounts are currently activated by invitation.'
+      );
+      this.error.set(null);
+      return;
+    }
 
-    this.error.set(null);
+    if (!this.email().trim()) {
+      this.message.set(null);
+      this.error.set(
+        this.language() === 'es'
+          ? 'Introduce tu email para solicitar acceso.'
+          : 'Enter your email to request access.'
+      );
+      return;
+    }
+
+    await this.sendMagicLink();
+
+    if (this.message()) {
+      this.message.set(
+        this.language() === 'es'
+          ? 'Te hemos enviado un enlace de acceso. Ábrelo para autenticarte y registrar tu solicitud pendiente.'
+          : 'We sent you a sign-in link. Open it to authenticate and register your pending request.'
+      );
+    }
   }
 
 

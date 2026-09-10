@@ -24,6 +24,8 @@ from app.domains.swimming.router import router as swimming_router
 from app.domains.running.router import router as running_router
 from app.domains.trainer.router import router as trainer_router
 from app.domains.connections.router import router as connections_router
+from app.domains.goals.router import router as goals_router
+from app.domains.athlete_profile.router import router as athlete_profile_router
 
 
 router = APIRouter(
@@ -82,6 +84,9 @@ router.include_router(
 
 router.include_router(running_router)
 router.include_router(connections_router)
+
+router.include_router(goals_router)
+router.include_router(athlete_profile_router)
 
 
 router.include_router(

@@ -1,0 +1,54 @@
+.athlete-settings-page, .goal-settings-page { padding-bottom: 32px; overflow-x: clip; }
+.settings-eyebrow { margin: 0 0 5px !important; color: var(--aptus-text-muted); font-size: .72rem !important; font-weight: 800; text-transform: uppercase; }
+.settings-header > p { margin: 8px 0 0; color: var(--aptus-text-muted); font-size: .86rem; line-height: 1.45; }
+.profile-state { padding: 18px; }
+.profile-state h2, .profile-state p { margin: 0; }
+.profile-state p + button { margin-top: 12px; }
+.profile-form, .goal-sections { display: grid; gap: 14px; }
+.form-section { padding: 0; overflow: hidden; }
+.form-heading { padding: 15px; border-bottom: 1px solid var(--aptus-border); }
+.form-heading h2 { margin: 0; font-size: 1rem; }
+.form-heading p { margin: 4px 0 0; color: var(--aptus-text-muted); font-size: .78rem; }
+.form-section > label, .metric-edit label { display: grid; gap: 7px; padding: 13px 15px; color: var(--aptus-text); font-size: .82rem; font-weight: 800; }
+.form-section > label + label { border-top: 1px solid var(--aptus-border); }
+.form-section input, .form-section select, .form-section textarea, .metric-edit input, .goal-edit input, .goal-edit select {
+  width: 100%; min-height: 44px; box-sizing: border-box; padding: 9px 11px; border: 1px solid var(--aptus-border);
+  border-radius: var(--aptus-radius-sm); background: var(--aptus-surface); color: var(--aptus-text); font: inherit;
+}
+.form-section textarea { resize: vertical; }
+.input-with-unit { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 8px; }
+.input-with-unit > span { color: var(--aptus-text-muted); font-weight: 600; }
+.primary-action { background: var(--aptus-brand); color: var(--aptus-accent-contrast); }
+.settings-status-error { color: var(--aptus-danger); }
+.goal-summary { padding: 17px; }
+.goal-summary h2, .goal-summary p { margin: 0; }
+.goal-summary .goal-date { margin-top: 5px; color: var(--aptus-text-muted); }
+.goal-status { display: inline-block; margin-top: 10px; padding: 4px 8px; border-radius: 999px; background: var(--aptus-brand-soft); color: var(--aptus-accent-text); font-size: .72rem; font-weight: 800; }
+.goal-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+.goal-edit { display: grid; gap: 10px; margin-top: 15px; padding-top: 14px; border-top: 1px solid var(--aptus-border); }
+.goal-edit label { display: grid; gap: 6px; font-size: .8rem; font-weight: 800; }
+.confirm-panel { padding: 16px; border: 1px solid var(--aptus-danger); border-radius: var(--aptus-radius-md); background: var(--aptus-surface); }
+.confirm-panel h3, .confirm-panel p { margin: 0; }
+.confirm-panel p { margin-top: 6px; color: var(--aptus-text-muted); font-size: .82rem; line-height: 1.45; }
+.metric-card { padding: 16px; }
+.metric-card + .metric-card { border-top: 1px solid var(--aptus-border); }
+.metric-card h3 { margin: 0 0 12px; font-size: .95rem; }
+.metric-current { display: flex; justify-content: space-between; gap: 16px; padding: 11px; border-radius: var(--aptus-radius-sm); background: var(--aptus-surface-muted); }
+.metric-current span { color: var(--aptus-text-muted); font-size: .76rem; }
+.metric-current strong { text-align: right; }
+.metric-current small { display: block; margin-top: 3px; color: var(--aptus-text-muted); font-weight: 400; }
+.metric-edit { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-top: 10px; }
+.metric-edit label { padding: 0; }
+.metric-edit .settings-action { grid-column: 1 / -1; }
+.metric-options { display: flex; flex-wrap: wrap; gap: 8px; padding: 14px; border-top: 1px solid var(--aptus-border); }
+.goal-history { margin: 0; padding: 0; list-style: none; }
+.goal-history li { display: flex; justify-content: space-between; gap: 16px; padding: 13px 15px; border-bottom: 1px solid var(--aptus-border); }
+.goal-history li:last-child { border-bottom: 0; }
+.goal-history span { color: var(--aptus-text-muted); font-size: .78rem; }
+input:focus-visible, select:focus-visible, textarea:focus-visible, button:focus-visible { outline: 3px solid var(--aptus-focus-ring); outline-offset: 2px; }
+@media (max-width: 520px) {
+  .metric-edit { grid-template-columns: 1fr; }
+  .goal-actions { flex-direction: column; }
+  .goal-actions button { width: 100%; }
+  .goal-history li { display: grid; gap: 4px; }
+}

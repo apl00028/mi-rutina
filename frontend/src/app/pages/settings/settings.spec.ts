@@ -247,11 +247,13 @@ describe('Settings pages', () => {
           .trim()
       )
     ).toEqual([
-      'Conexiones Entrenadores, invitaciones y permisos que compartes.',
-      'Cuenta Identidad, acceso, email y unidades.',
+      'Perfil deportivo Disponibilidad, experiencia y restricciones.',
+      'Objetivo y progreso Goal activo, baseline, target e histórico.',
       'Entrenamiento Registro, RIR y descanso.',
       'Apariencia Tema, texto y movimiento.',
       'Datos Sincronización y exportación.',
+      'Conexiones Entrenadores, invitaciones y permisos que compartes.',
+      'Cuenta Identidad, acceso, email y unidades.',
       'Acerca de Versión y entorno.'
     ]);
     expect(
@@ -259,11 +261,13 @@ describe('Settings pages', () => {
         link.getAttribute('href')
       )
     ).toEqual([
-      '/ajustes/conexiones',
-      '/ajustes/cuenta',
+      '/ajustes/perfil-deportivo',
+      '/ajustes/objetivo',
       '/ajustes/entrenamiento',
       '/ajustes/apariencia',
       '/ajustes/datos',
+      '/ajustes/conexiones',
+      '/ajustes/cuenta',
       '/ajustes/acerca-de'
     ]);
   });

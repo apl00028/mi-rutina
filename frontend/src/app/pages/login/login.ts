@@ -18,6 +18,10 @@ import {
 } from '../../core/auth.service';
 
 import {
+  aptusEntryRoute
+} from '../../core/access-routing';
+
+import {
   AppLanguage,
   LanguageService
 } from '../../core/language.service';
@@ -290,34 +294,8 @@ export class Login {
   private async navigateAfterLogin(
     me: AptusMe
   ): Promise<void> {
-    if (
-      me.access_status ===
-      'active'
-    ) {
-      await this.router.navigateByUrl(
-        me.onboarding_completed
-          ? '/'
-          : '/onboarding'
-      );
-
-      return;
-    }
-
-    if (
-      me.access_status === 'pending' ||
-      me.access_status === 'suspended'
-    ) {
-      await this.router.navigateByUrl(
-        '/access-pending'
-      );
-
-      return;
-    }
-
-    throw new Error(
-      this.language() === 'es'
-        ? 'No se pudo determinar el estado de tu acceso.'
-        : 'Your access status could not be determined.'
+    await this.router.navigateByUrl(
+      aptusEntryRoute(me)
     );
   }
 

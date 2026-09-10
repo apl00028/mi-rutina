@@ -278,6 +278,70 @@ describe(
     });
 
 
+    it.each([
+      ['pending user', {
+        access_status: 'pending',
+        role: 'user',
+        onboarding_completed: false
+      }, '/access-pending'],
+      ['incomplete athlete', {
+        access_status: 'active',
+        role: 'user',
+        onboarding_completed: false
+      }, '/onboarding'],
+      ['complete athlete', {
+        access_status: 'active',
+        role: 'user',
+        onboarding_completed: true
+      }, '/'],
+      ['incomplete trainer', {
+        access_status: 'active',
+        role: 'trainer',
+        onboarding_completed: false
+      }, '/trainer'],
+      ['complete trainer', {
+        access_status: 'active',
+        role: 'trainer',
+        onboarding_completed: true
+      }, '/trainer'],
+      ['incomplete admin', {
+        access_status: 'active',
+        role: 'admin',
+        onboarding_completed: false
+      }, '/onboarding'],
+      ['complete admin', {
+        access_status: 'active',
+        role: 'admin',
+        onboarding_completed: true
+      }, '/']
+    ] as const)(
+      'routes a %s to %s after login',
+      async (_label, patch, expected) => {
+        authMock.waitForSession
+          .mockResolvedValue({
+            access_token: 'access-token'
+          });
+        authMock.resolveAccess
+          .mockResolvedValue({
+            user_id: 'user-123',
+            email: 'test@example.com',
+            plan: 'trial',
+            expires_at: null,
+            ...patch
+          });
+
+        const fixture =
+          TestBed.createComponent(Login);
+        fixture.detectChanges();
+        await fixture.whenStable();
+        await flushPromises();
+
+        expect(routerMock.navigateByUrl)
+          .toHaveBeenCalledWith(expected);
+      }
+    );
+
+
     it(
       'exchanges web recovery auth codes explicitly',
       async () => {

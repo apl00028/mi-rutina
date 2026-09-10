@@ -11,6 +11,10 @@ import {
   AuthService
 } from './auth.service';
 
+import {
+  protectedRouteRedirect
+} from './access-routing';
+
 
 export const accessGuard:
   CanActivateFn = async (
@@ -37,38 +41,15 @@ export const accessGuard:
     const me =
       await auth.resolveAccess();
 
-    if (
-      me.access_status !== 'active'
-    ) {
-      return router.createUrlTree(
-        ['/access-pending']
-      );
-    }
-
-    const goingToOnboarding =
-      state.url.startsWith(
-        '/onboarding'
+    const redirect =
+      protectedRouteRedirect(
+        me,
+        state.url
       );
 
-    if (
-      !me.onboarding_completed
-    ) {
-      if (goingToOnboarding) {
-        return true;
-      }
-
-      return router.createUrlTree(
-        ['/onboarding']
-      );
-    }
-
-    if (goingToOnboarding) {
-      return router.createUrlTree(
-        ['/']
-      );
-    }
-
-    return true;
+    return redirect
+      ? router.createUrlTree([redirect])
+      : true;
 
   } catch (error) {
     if (

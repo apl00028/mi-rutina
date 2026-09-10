@@ -1060,8 +1060,8 @@ describe('Train first workout flow', () => {
 
     expect(
       fixture.componentInstance.error()
-    ).toContain(
-      'rutina activa'
+    ).toBe(
+      'Todavía no tienes una rutina activa. Crea o activa una rutina antes de entrenar.'
     );
   });
 

@@ -1,5 +1,6 @@
 import { WorkoutOutboxService } from './core/workout-outbox.service';
 import { RunningHealthConnectSyncService } from './core/running-health-connect-sync.service';
+import { aptusEntryRoute } from './core/access-routing';
 import {
   Component,
   HostListener,
@@ -310,8 +311,7 @@ export class App implements OnDestroy {
         .split('#')[0];
 
     if (
-      me.access_status === 'active' &&
-      me.role === 'trainer' &&
+      aptusEntryRoute(me) === '/trainer' &&
       (
         path === '/' ||
         path === ''

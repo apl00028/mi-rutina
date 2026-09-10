@@ -15,6 +15,10 @@ import {
 } from '../../core/auth.service';
 
 import {
+  aptusEntryRoute
+} from '../../core/access-routing';
+
+import {
   AppLanguage,
   LanguageService
 } from '../../core/language.service';
@@ -92,13 +96,12 @@ export class AccessPending
 
       this.me.set(me);
 
-      if (
-        me.access_status === 'active'
-      ) {
+      const destination =
+        aptusEntryRoute(me);
+
+      if (destination !== '/access-pending') {
         await this.router.navigateByUrl(
-          me.onboarding_completed
-            ? '/'
-            : '/onboarding'
+          destination
         );
 
         return;

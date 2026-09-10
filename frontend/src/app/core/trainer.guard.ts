@@ -11,6 +11,10 @@ import {
   AuthService
 } from './auth.service';
 
+import {
+  hasActiveRole
+} from './access-routing';
+
 
 export const trainerGuard:
   CanActivateFn = async () => {
@@ -34,10 +38,7 @@ export const trainerGuard:
     const me =
       await auth.getMe();
 
-    if (
-      me.access_status === 'active' &&
-      me.role === 'trainer'
-    ) {
+    if (hasActiveRole(me, 'trainer')) {
       return true;
     }
 

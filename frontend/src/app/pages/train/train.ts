@@ -514,7 +514,7 @@ export class Train implements OnInit, OnDestroy {
     } catch (err: any) {
       if (err?.status === 404) {
         this.error.set(
-          'Todavía no tienes una rutina activa. Completa el onboarding o activa una rutina antes de entrenar.'
+          'Todavía no tienes una rutina activa. Crea o activa una rutina antes de entrenar.'
         );
         return;
       }

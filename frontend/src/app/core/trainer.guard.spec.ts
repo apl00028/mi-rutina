@@ -117,6 +117,25 @@ describe(
 
 
     it(
+      'allows active trainers regardless of athlete onboarding state',
+      async () => {
+        getMe.mockResolvedValue({
+          access_status:
+            'active',
+          role:
+            'trainer',
+          onboarding_completed:
+            false
+        });
+
+        await expect(
+          runGuard()
+        ).resolves.toBe(true);
+      }
+    );
+
+
+    it(
       'blocks normal users',
       async () => {
         getMe.mockResolvedValue({

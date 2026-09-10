@@ -18,6 +18,7 @@ import {
   LucideDumbbell,
   LucideInfo,
   LucidePalette,
+  LucideTarget,
   LucideUserRound
 } from '@lucide/angular';
 
@@ -59,13 +60,6 @@ import {
 
 const settingsSections = [
   {
-    icon: 'account',
-    title: 'Cuenta',
-    description:
-      'Identidad, acceso, email y unidades.',
-    route: '/ajustes/cuenta'
-  },
-  {
     icon: 'training',
     title: 'Entrenamiento',
     description:
@@ -87,6 +81,13 @@ const settingsSections = [
     route: '/ajustes/datos'
   },
   {
+    icon: 'account',
+    title: 'Cuenta',
+    description:
+      'Identidad, acceso, email y unidades.',
+    route: '/ajustes/cuenta'
+  },
+  {
     icon: 'about',
     title: 'Acerca de',
     description:
@@ -106,6 +107,7 @@ const settingsSections = [
     LucideDumbbell,
     LucideInfo,
     LucidePalette,
+    LucideTarget,
     LucideUserRound
   ],
   template: `
@@ -136,6 +138,9 @@ const settingsSections = [
                 }
                 @case ('training') {
                   <svg lucideDumbbell></svg>
+                }
+                @case ('goal') {
+                  <svg lucideTarget></svg>
                 }
                 @case ('appearance') {
                   <svg lucidePalette></svg>
@@ -177,9 +182,16 @@ export class SettingsHub {
   private readonly auth = inject(AuthService);
   get sections() {
     const role = this.auth.me()?.role;
-    return role === 'user' || role === 'admin' || role === 'trainer'
-      ? [{ icon: 'account', title: 'Conexiones', description: role === 'trainer' ? 'Clientes, invitaciones y permisos compartidos.' : 'Entrenadores, invitaciones y permisos que compartes.', route: '/ajustes/conexiones' }, ...settingsSections]
-      : settingsSections;
+    const athlete = role === 'user' || role === 'admin'
+      ? [
+          { icon: 'account', title: 'Perfil deportivo', description: 'Disponibilidad, experiencia y restricciones.', route: '/ajustes/perfil-deportivo' },
+          { icon: 'goal', title: 'Objetivo y progreso', description: 'Goal activo, baseline, target e histórico.', route: '/ajustes/objetivo' }
+        ]
+      : [];
+    const connections = role === 'user' || role === 'admin' || role === 'trainer'
+      ? [{ icon: 'account', title: 'Conexiones', description: role === 'trainer' ? 'Clientes, invitaciones y permisos compartidos.' : 'Entrenadores, invitaciones y permisos que compartes.', route: '/ajustes/conexiones' }]
+      : [];
+    return [...athlete, ...settingsSections.slice(0, 3), ...connections, ...settingsSections.slice(3)];
   }
 }
 

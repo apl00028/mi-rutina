@@ -1,0 +1,20 @@
+:host { display: block; }
+.progress-section { margin-top: 30px; }
+.section-heading p { margin: 0 0 5px; color: var(--aptus-text-muted); font-size: .72rem; font-weight: 800; text-transform: uppercase; }
+.section-heading h2 { margin: 0 0 14px; font-size: 1.35rem; }
+.metric-card { padding: 18px; margin-top: 10px; border: 1px solid var(--aptus-border); border-radius: var(--aptus-radius-md); background: var(--aptus-surface); }
+.metric-card h3 { margin: 0 0 16px; font-size: 1rem; }
+.metric-values { display: flex; align-items: center; gap: 14px; }
+.metric-values > div { flex: 1 1 0; min-width: 0; }
+.metric-values span { display: block; color: var(--aptus-text-muted); font-size: .72rem; }
+.metric-values strong { display: block; margin-top: 4px; font-family: var(--aptus-font-heading); font-size: clamp(1rem, 4vw, 1.32rem); overflow-wrap: anywhere; }
+.metric-arrow { flex: 0 0 auto; color: var(--aptus-text-subtle); font-size: 1rem; }
+.metric-difference, .metric-note { margin: 14px 0 0; font-size: .8rem; line-height: 1.45; }
+.metric-difference { font-weight: 750; }
+.metric-note, .progress-empty { color: var(--aptus-text-muted); }
+.progress-empty { margin: 0; padding: 16px 0; font-size: .88rem; }
+@media (max-width: 520px) {
+  .metric-values:not(.single) { display: grid; grid-template-columns: 1fr; gap: 7px; }
+  .metric-arrow { transform: rotate(90deg); justify-self: start; }
+  .metric-values strong { font-size: 1.08rem; }
+}

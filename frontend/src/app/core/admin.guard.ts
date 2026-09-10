@@ -11,6 +11,10 @@ import {
   AuthService
 } from './auth.service';
 
+import {
+  hasActiveRole
+} from './access-routing';
+
 
 export const adminGuard:
   CanActivateFn = async () => {
@@ -34,10 +38,7 @@ export const adminGuard:
     const me =
       await auth.getMe();
 
-    if (
-      me.access_status === 'active' &&
-      me.role === 'admin'
-    ) {
+    if (hasActiveRole(me, 'admin')) {
       return true;
     }
 

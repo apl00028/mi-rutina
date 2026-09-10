@@ -1,224 +1,103 @@
-<app-pull-refresh [refresh]="refreshPage" [disabled]="loading()">
-<main class="home-page">
+<app-pull-refresh [refresh]="refreshPage" [disabled]="goalLoading() || todayLoading()">
+  <main class="home-page">
+    <header class="home-header">
+      <p>{{ todayLabel }}</p>
+      <h1>Tu espacio en Aptus</h1>
+    </header>
 
-  <header class="home-header">
-    <span class="home-eyebrow">
-      Hoy
-    </span>
+    <section class="goal-section" aria-label="Objetivo">
+      <p class="section-kicker">Objetivo</p>
+      @if (goalLoading()) {
+        <div class="goal-card loading-block" role="status">Cargando tu objetivo…</div>
+      } @else if (goalError()) {
+        <div class="goal-card error-state">
+          <p role="alert">{{ goalError() }}</p>
+          <button type="button" class="text-action" (click)="loadGoal()">Reintentar</button>
+        </div>
+      } @else if (goal()) {
+        <div class="goal-card">
+          <div>
+            <h2 id="goal-title">{{ goalTitle() }}</h2>
+            @if (goalDate(); as date) { <p>{{ date }}</p> }
+          </div>
+          <span class="goal-mark" aria-hidden="true">◎</span>
+        </div>
+      } @else {
+        <div class="goal-card goal-empty">
+          <div>
+            <h2 id="goal-title">Tu objetivo</h2>
+            <p>Define tu objetivo para que Aptus pueda contextualizar tu progreso.</p>
+          </div>
+          <app-goal-definition (created)="goalCreated($event)" />
+        </div>
+      }
+    </section>
 
-    <h1>
-      Tu día en Aptus
-    </h1>
+    <section class="today-section" aria-labelledby="today-title">
+      <div class="section-heading"><p class="section-kicker">Hoy</p><h2 id="today-title">Tu siguiente acción</h2></div>
+      @if (todayLoading()) {
+        <div class="today-card loading-block" role="status">Comprobando tu entrenamiento…</div>
+      } @else {
+        <button type="button" class="today-card training-card" (click)="go('/entrenar')">
+          <span class="today-icon" aria-hidden="true">↗</span>
+          <span class="today-copy">
+            <strong>{{ hasActiveWorkout() ? 'Continuar entrenamiento' : hasActiveRoutine() ? 'Entrenamiento disponible' : 'Sin rutina activa' }}</strong>
+            <small>{{ hasActiveWorkout() ? 'Tienes una sesión sin terminar.' : hasActiveRoutine() ? 'Abre Entrenar y elige una sesión cuando quieras.' : 'Puedes crear o activar una rutina desde Entrenar.' }}</small>
+          </span>
+          <span class="today-action">{{ hasActiveWorkout() ? 'Continuar' : 'Ir a Entrenar' }} →</span>
+        </button>
+        @if (nutritionLabel(); as nutrition) {
+          <button type="button" class="nutrition-row" (click)="go('/nutricion')"><span><strong>Nutrición</strong><small>{{ nutrition }}</small></span><span>Ver →</span></button>
+        }
+        @if (todayError()) { <p class="section-warning" role="status">Parte del resumen diario no está disponible.</p> }
+      }
+    </section>
 
-    <p>
-      {{ todayLabel }}
-    </p>
-  </header>
+    @if (goal()) {
+      @if (metricsLoading()) {
+        <section class="progress-loading loading-block" role="status">Cargando tu progreso…</section>
+      } @else if (metricsError()) {
+        <section class="progress-error"><p role="alert">{{ metricsError() }}</p><button type="button" class="text-action" (click)="loadMetricStates(goal()!.id)">Reintentar</button></section>
+      } @else {
+        <app-goal-progress [states]="metricStates()" />
+      }
+    }
 
-
-  <section class="activity-section" aria-labelledby="activity-calendar-title">
-    <h2 id="activity-calendar-title">Tus actividades</h2>
-    <app-activity-calendar [month]="calendarMonth()" [events]="history.activities()"
-      [selectedDate]="selectedDate()" (monthChange)="changeMonth($event)" (daySelected)="selectDay($event)" />
-    @if (history.loading()) { <p role="status">Actualizando actividades…</p> }
-    @for (error of history.errors(); track $index) { <p class="dashboard-warning" role="alert">{{ error }}</p> }
-
-    @if (selectedActivity(); as activity) {
-      <section class="activity-detail" aria-labelledby="activity-detail-title">
-        <button type="button" class="activity-back" (click)="openActivity(null)">← Volver a las actividades del día</button>
-        <h3 id="activity-detail-title">{{ activity.title }}</h3>
-        <p>{{ activityDisciplineLabel(activity.discipline) }} · {{ selectedDayLabel() }} · {{ activityTime(activity.event_at) }}</p>
-        <dl class="activity-metrics">
-          @for (metric of activity.metrics; track metric.label) {
-            <div><dt>{{ metric.label }}</dt><dd>{{ metric.value }}</dd></div>
+    <section class="activity-section" aria-labelledby="activity-title">
+      <div class="section-heading"><p class="section-kicker">Actividad reciente</p><h2 id="activity-title">Últimas sesiones</h2></div>
+      @if (history.loading()) {
+        <p role="status" class="activity-status">Actualizando actividades…</p>
+      } @else if (!recentActivities().length) {
+        <p class="activity-empty">Todavía no hay actividades registradas.</p>
+      } @else {
+        <div class="recent-activities" tabindex="-1">
+          @for (activity of recentActivities(); track activity.id) {
+            <button type="button" class="activity-row" (click)="openActivity(activity.id)">
+              <span class="activity-badge" [class]="'activity-badge performance-' + activity.discipline">{{ activityInitial(activity.discipline) }}</span>
+              <span class="activity-copy"><strong>{{ activity.title }}</strong><small>{{ activityDisciplineLabel(activity.discipline) }} · {{ activityDate(activity.event_at) }}</small></span><span aria-hidden="true">›</span>
+            </button>
           }
-        </dl>
-        @for (exercise of activity.exercises ?? []; track exercise.id) {
-          <section class="activity-exercise">
-            <h4>{{ exercise.name }}</h4>
-            <ul>@for (set of exercise.sets; track $index) { <li><strong>{{ set.label }}</strong> · {{ set.value }}</li> }</ul>
-          </section>
-        }
-        @if (activity.lengths?.length) {
-          <details><summary>Largos de natación</summary>
-            <ul>@for (length of activity.lengths; track $index) { <li>{{ length.label }} · {{ length.value }}</li> }</ul>
-          </details>
-        }
-        @if (!activity.metrics.length && !activity.exercises?.length && !activity.lengths?.length) {
-          <p>No hay métricas adicionales registradas para esta sesión.</p>
-        }
-      </section>
-    } @else {
-      <section class="day-activities" tabindex="-1" aria-live="polite">
-        <h3>{{ selectedDayLabel() }}</h3>
-        @for (activity of dayActivities(); track activity.id) {
-          <button type="button" class="activity-row" (click)="openActivity(activity.id)">
-            <span class="activity-badge" [class]="'activity-badge performance-' + activity.discipline">{{ activityInitial(activity.discipline) }}</span>
-            <span>{{ activity.title }}</span><small>{{ activityTime(activity.event_at) }} ›</small>
-          </button>
-        } @empty {
-          @if (!history.loading()) { <p>No hay actividades disponibles para este día.</p> }
-        }
-      </section>
-    }
-  </section>
-
-
-  @if (loading()) {
-
-    <section class="home-card loading-card">
-      <span class="card-kicker">
-        Actualizando
-      </span>
-
-      <strong>
-        Preparando tu resumen…
-      </strong>
+        </div>
+      }
+      @for (message of history.errors(); track $index) { <p class="section-warning" role="status">{{ message }}</p> }
+      @if (selectedActivity(); as activity) {
+        <section class="activity-detail" tabindex="-1" aria-labelledby="activity-detail-title">
+          <button type="button" class="activity-back" (click)="openActivity(null)">← Cerrar detalle</button>
+          <h3 id="activity-detail-title">{{ activity.title }}</h3><p>{{ activityDisciplineLabel(activity.discipline) }} · {{ activityDate(activity.event_at) }}</p>
+          <dl class="activity-metrics">@for (metric of activity.metrics; track metric.label) { <div><dt>{{ metric.label }}</dt><dd>{{ metric.value }}</dd></div> }</dl>
+          @for (exercise of activity.exercises ?? []; track exercise.id) { <div class="activity-exercise"><h4>{{ exercise.name }}</h4><ul>@for (set of exercise.sets; track $index) { <li><strong>{{ set.label }}</strong> · {{ set.value }}</li> }</ul></div> }
+          @if (activity.lengths?.length) { <details><summary>Largos de natación</summary><ul>@for (length of activity.lengths; track $index) { <li>{{ length.label }} · {{ length.value }}</li> }</ul></details> }
+        </section>
+      }
+      <details class="calendar-disclosure">
+        <summary>Ver calendario de actividad</summary>
+        <app-activity-calendar [month]="calendarMonth()" [events]="history.activities()" [selectedDate]="selectedDate()" (monthChange)="changeMonth($event)" (daySelected)="selectDay($event)" />
+        <div class="day-activities"><h3>{{ selectedDayLabel() }}</h3>
+          @for (activity of dayActivities(); track activity.id) {
+            <button type="button" class="activity-row" (click)="openActivity(activity.id)"><span class="activity-badge" [class]="'activity-badge performance-' + activity.discipline">{{ activityInitial(activity.discipline) }}</span><span class="activity-copy"><strong>{{ activity.title }}</strong><small>{{ activityTime(activity.event_at) }}</small></span><span>›</span></button>
+          } @empty { <p class="activity-empty">No hay actividades disponibles para este día.</p> }
+        </div>
+      </details>
     </section>
-
-  } @else {
-
-    <button
-      type="button"
-      class="home-card training-card"
-      (click)="go('/entrenar')"
-    >
-      <span class="card-top">
-        <span class="card-kicker">
-          Entrenamiento
-        </span>
-
-        <span
-          class="status-badge"
-          [class.active]="
-            hasActiveWorkout()
-          "
-        >
-          {{
-            hasActiveWorkout()
-              ? 'En curso'
-              : 'Disponible'
-          }}
-        </span>
-      </span>
-
-      <strong class="card-title">
-        {{
-          hasActiveWorkout()
-            ? 'Continúa tu entrenamiento'
-            : '¿Entrenamos?'
-        }}
-      </strong>
-
-      <span class="card-description">
-        {{
-          hasActiveWorkout()
-            ? 'Tienes una sesión sin terminar.'
-            : 'Abre Entrenar y elige tu sesión.'
-        }}
-      </span>
-
-      <span class="card-action">
-        {{
-          hasActiveWorkout()
-            ? 'Continuar'
-            : 'Ir a Entrenar'
-        }}
-        →
-      </span>
-    </button>
-
-
-    <section class="home-grid">
-
-      <button
-        type="button"
-        class="home-card"
-        (click)="go('/nutricion')"
-      >
-        <span class="card-kicker">
-          Nutrición
-        </span>
-
-        @if (
-          todayMealsTotal() !== null &&
-          todayMealsTotal()! > 0
-        ) {
-
-          <strong class="metric-value">
-            {{ todayMealsCompleted() ?? 0 }}
-            /
-            {{ todayMealsTotal() }}
-          </strong>
-
-          <span class="metric-label">
-            comidas de hoy
-          </span>
-
-          <span
-            class="progress-track"
-            aria-hidden="true"
-          >
-            <span
-              class="progress-value"
-              [style.width.%]="
-                nutritionProgress()
-              "
-            ></span>
-          </span>
-
-        } @else {
-
-          <strong class="empty-value">
-            Sin comidas para hoy
-          </strong>
-
-          <span class="metric-label">
-            Consulta tu planificación.
-          </span>
-
-        }
-
-        <span class="card-action">
-          Ver nutrición →
-        </span>
-      </button>
-
-
-      <button
-        type="button"
-        class="home-card"
-        (click)="go('/salud')"
-      >
-        <span class="card-kicker">
-          Salud
-        </span>
-
-        <strong class="metric-value">
-          {{ weightLabel() }}
-        </strong>
-
-        <span class="metric-label">
-          {{ weightTrendLabel() }}
-        </span>
-
-        <span class="card-action">
-          Ver salud →
-        </span>
-      </button>
-
-    </section>
-
-
-    @if (error()) {
-      <p class="dashboard-warning">
-        Algunos datos no se pudieron
-        actualizar.
-      </p>
-    }
-
-  }
-
-</main>
-
+  </main>
 </app-pull-refresh>

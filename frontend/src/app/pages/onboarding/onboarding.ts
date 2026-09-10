@@ -1,1418 +1,677 @@
 import { CommonModule } from '@angular/common';
-
-import {
-  Component,
-  OnInit,
-  signal
-} from '@angular/core';
-
-import {
-  FormsModule
-} from '@angular/forms';
+import { HttpClient, HttpHeaders } from '@angular/common/http';
+import { Component, OnInit, computed, signal } from '@angular/core';
+import { FormsModule } from '@angular/forms';
+import { Router } from '@angular/router';
 import {
   LucideArrowLeft,
   LucideArrowRight,
-  LucideX
+  LucideCheck,
+  LucideTarget
 } from '@lucide/angular';
+import { firstValueFrom } from 'rxjs';
 
+import { environment } from '../../../environments/environment';
+import { AuthService } from '../../core/auth.service';
 import {
-  HttpClient,
-  HttpHeaders
-} from '@angular/common/http';
-
+  Goal,
+  GoalCreateInput,
+  GoalMetricKey,
+  GoalMetricSourceType,
+  GoalMetricState,
+  GoalVariant
+} from '../../core/goal.models';
+import { GoalService } from '../../core/goal.service';
 import {
-  Router
-} from '@angular/router';
+  GOAL_VARIANT_OPTIONS,
+  ONBOARDING_GOALS,
+  ONBOARDING_METRICS,
+  OnboardingGoalOption,
+  goalOption
+} from './onboarding.config';
 
-import {
-  environment
-} from '../../../environments/environment';
-
-import {
-  AuthService
-} from '../../core/auth.service';
-
-
-interface GeneratedExercise {
-  exercise_id: string;
-  name: string;
-  movement_pattern: string;
-  role: string;
-  record_type: string;
-  sets: number;
-  target: string;
-  target_rir?: string | null;
-  rest_seconds: number;
-}
-
-
-interface GeneratedSession {
-  session_id: string;
-  name: string;
-  focus: string;
-  exercises: GeneratedExercise[];
-}
-
-
-interface RoutineGenerationResult {
-  structure_id: string;
-  structure_label: string;
-  sessions: GeneratedSession[];
-  warnings: string[];
-  rationale: string[];
-}
-
-
-interface MotivationOption {
-  value: string;
-  label: string;
-}
-
-
-interface PainAreaOption {
-  value: string;
-  label: string;
-}
-
-
-interface ExerciseOption {
+interface WeightEntryResponse {
   id: string;
-  name: string;
-  muscle?: string;
-  equipment?: string;
-  category?: string;
+  measurementDate: string;
+  weightKg: number;
+  source: 'manual' | 'imported' | 'scale';
 }
 
-
-interface CompleteOnboardingResponse {
+interface OnboardingCompleteResponse {
   onboarding_completed: boolean;
-  routine: unknown;
 }
 
+interface OptionalMetricInput {
+  key: GoalMetricKey;
+  targetValue: number | null;
+  baseline: {
+    value: number;
+    measuredAt: string;
+    sourceType: GoalMetricSourceType;
+    sourceDomain?: 'health_weight_entries';
+    sourceRecordId?: string;
+  } | null;
+}
 
 @Component({
   selector: 'app-onboarding',
   standalone: true,
-
   imports: [
     CommonModule,
     FormsModule,
     LucideArrowLeft,
     LucideArrowRight,
-    LucideX
+    LucideCheck,
+    LucideTarget
   ],
-
   templateUrl: './onboarding.html',
   styleUrl: './onboarding.scss'
 })
 export class Onboarding implements OnInit {
+  readonly goalOptions = ONBOARDING_GOALS;
+  readonly metricOptions = ONBOARDING_METRICS;
 
-  private readonly apiUrl =
-    environment.apiUrl;
+  currentStep = signal(1);
+  selectedGoal = signal<OnboardingGoalOption | null>(null);
+  selectedVariant = signal<GoalVariant | null>(null);
+  variantChosen = signal(false);
+  targetDate = signal('');
+  strengthExperience = signal('');
+  hasLimitations = signal(false);
+  limitationNotes = signal('');
+  bodyMetricKey = signal<
+    'body_weight' | 'waist_circumference' | null
+  >(null);
+  bodyTargetValue = signal<number | null>(null);
+  bodyBaselineChoice = signal<
+    'later' | 'observed' | 'manual'
+  >('later');
+  bodyBaselineValue = signal<number | null>(null);
+  observedWeightBaseline = signal<
+    OptionalMetricInput['baseline']
+  >(null);
+  swimBaseline = signal<number | null>(null);
+  runBaseline = signal<number | null>(null);
+  cyclingBaseline = signal<number | null>(null);
+  activeGoal = signal<Goal | null>(null);
+  latestWeight = signal<WeightEntryResponse | null>(null);
+  loading = signal(true);
+  completing = signal(false);
+  completed = signal(false);
+  error = signal<string | null>(null);
+  optionalWarning = signal<string | null>(null);
 
+  readonly variantOptions = computed(() => {
+    const kind = this.selectedGoal()?.kind;
+    return kind ? GOAL_VARIANT_OPTIONS[kind] ?? [] : [];
+  });
 
-  /* =======================================================
-     BASIC PROFILE
-     ======================================================= */
+  readonly stepSequence = computed(() => {
+    const steps = [1];
+    if (this.variantOptions().length > 0 || this.showsTargetDate()) {
+      steps.push(2);
+    }
+    steps.push(3);
+    if (this.showsMetricStep()) steps.push(4);
+    steps.push(5);
+    return steps;
+  });
 
-  displayName = signal('');
-
-  age = signal<number | null>(
-    null
-  );
-
-  sex = signal('');
-
-  heightCm = signal<number | null>(
-    null
-  );
-
-  weightKg = signal<number | null>(
-    null
-  );
-
-
-  /* =======================================================
-     MOTIVATION
-     ======================================================= */
-
-  readonly motivationOptions:
-    MotivationOption[] = [
-      {
-        value: 'physique',
-        label: 'Mejorar mi físico'
-      },
-      {
-        value: 'muscle',
-        label: 'Ganar músculo'
-      },
-      {
-        value: 'strength',
-        label: 'Ser más fuerte'
-      },
-      {
-        value: 'fat_loss',
-        label: 'Perder grasa'
-      },
-      {
-        value: 'health',
-        label: 'Mejorar mi salud'
-      },
-      {
-        value: 'energy',
-        label: 'Tener más energía'
-      },
-      {
-        value: 'sports_performance',
-        label: 'Mejorar mi rendimiento'
-      },
-      {
-        value: 'consistency',
-        label: 'Ser constante'
-      },
-      {
-        value: 'stress_relief',
-        label: 'Reducir estrés'
-      },
-      {
-        value: 'other',
-        label: 'Otro'
-      }
-    ];
-
-
-  motivations =
-    signal<string[]>([]);
-
-
-  /* =======================================================
-     TRAINING PROFILE
-     ======================================================= */
-
-  primaryGoal = signal(
-    'muscle_gain'
-  );
-
-  experienceLevel = signal(
-    'beginner'
-  );
-
-  weeklyAvailability = signal(
-    3
-  );
-
-  sessionDurationMin = signal(
-    60
-  );
-
-  trainingLocation = signal(
-    'commercial_gym'
-  );
-
-  availableEquipment =
-    signal<string[]>([]);
-
-
-  /* =======================================================
-     LIMITATIONS
-     ======================================================= */
-
-  hasLimitations =
-    signal(false);
-
-
-  readonly painAreaOptions:
-    PainAreaOption[] = [
-      {
-        value: 'shoulder',
-        label: 'Hombro'
-      },
-      {
-        value: 'elbow',
-        label: 'Codo'
-      },
-      {
-        value: 'wrist',
-        label: 'Muñeca'
-      },
-      {
-        value: 'back',
-        label: 'Espalda'
-      },
-      {
-        value: 'hip',
-        label: 'Cadera'
-      },
-      {
-        value: 'knee',
-        label: 'Rodilla'
-      },
-      {
-        value: 'ankle',
-        label: 'Tobillo'
-      },
-      {
-        value: 'other',
-        label: 'Otra zona'
-      }
-    ];
-
-
-  painAreas =
-    signal<string[]>([]);
-
-  limitationNotes =
-    signal('');
-
-  injuries =
-    signal<string[]>([]);
-
-
-  /* =======================================================
-     EXERCISE PREFERENCES
-     ======================================================= */
-
-  exerciseCatalog =
-    signal<ExerciseOption[]>([]);
-
-  exerciseCatalogLoading =
-    signal(false);
-
-  exerciseCatalogError =
-    signal<string | null>(null);
-
-  avoidExerciseSearch =
-    signal('');
-
-  preferredExerciseSearch =
-    signal('');
-
-  avoidedExerciseIds =
-    signal<string[]>([]);
-
-  preferredExerciseIds =
-    signal<string[]>([]);
-
-
-  /* =======================================================
-     UI
-     ======================================================= */
-
-  currentStep =
-    signal(1);
-
-  readonly totalSteps = 4;
-
-  loading =
-    signal(false);
-
-  error =
-    signal<string | null>(null);
-
-  completing =
-    signal(false);
-
-  completeError =
-    signal<string | null>(null);
-
-  proposal =
-    signal<RoutineGenerationResult | null>(
-      null
-    );
-
+  readonly progressLabel = computed(() => {
+    const index = this.stepSequence().indexOf(this.currentStep());
+    return `${Math.max(index, 0) + 1} de ${this.stepSequence().length}`;
+  });
 
   constructor(
-    private http: HttpClient,
-    private auth: AuthService,
-    private router: Router
+    private readonly http: HttpClient,
+    private readonly auth: AuthService,
+    private readonly goals: GoalService,
+    private readonly router: Router
   ) {}
 
-
-  async ngOnInit():
-    Promise<void> {
-
-    await this.loadExerciseCatalog();
-  }
-
-
-  /* =======================================================
-     MOTIVATION
-     ======================================================= */
-
-  toggleMotivation(
-    value: string
-  ): void {
-
-    const current =
-      this.motivations();
-
-    if (
-      current.includes(value)
-    ) {
-      this.motivations.set(
-        current.filter(
-          item => item !== value
-        )
-      );
-
-      return;
-    }
-
-    if (
-      current.length >= 2
-    ) {
-      return;
-    }
-
-    this.motivations.set([
-      ...current,
-      value
+  async ngOnInit(): Promise<void> {
+    const [activeResult] = await Promise.allSettled([
+      this.goals.getActive(),
+      this.loadLatestWeight()
     ]);
-  }
-
-
-  motivationSelected(
-    value: string
-  ): boolean {
-
-    return this
-      .motivations()
-      .includes(value);
-  }
-
-
-  /* =======================================================
-     WIZARD NAVIGATION
-     ======================================================= */
-
-  nextStep(): void {
-
-    const step =
-      this.currentStep();
-
-    if (step === 1) {
-      if (
-        !this.displayName().trim()
-      ) {
-        this.error.set(
-          'Indica tu nombre.'
-        );
-        return;
-      }
-
-      if (
-        this.age() === null ||
-        this.age()! < 14 ||
-        this.age()! > 100
-      ) {
-        this.error.set(
-          'Introduce una edad válida.'
-        );
-        return;
-      }
-
-      if (
-        !this.sex()
-      ) {
-        this.error.set(
-          'Selecciona tu sexo.'
-        );
-        return;
-      }
-
-      if (
-        this.heightCm() === null ||
-        this.heightCm()! < 120 ||
-        this.heightCm()! > 230
-      ) {
-        this.error.set(
-          'Introduce una altura válida.'
-        );
-        return;
-      }
-
-      if (
-        this.weightKg() === null ||
-        this.weightKg()! < 30 ||
-        this.weightKg()! > 300
-      ) {
-        this.error.set(
-          'Introduce un peso válido.'
-        );
-        return;
-      }
-    }
-
-    if (step === 2) {
-      if (
-        this.motivations().length === 0
-      ) {
-        this.error.set(
-          'Selecciona al menos una motivación.'
-        );
-        return;
-      }
-    }
-
-    this.error.set(null);
-
-    if (step < this.totalSteps) {
-      this.currentStep.set(
-        step + 1
+    if (activeResult.status === 'fulfilled' && activeResult.value) {
+      await this.recoverActiveGoal(activeResult.value);
+    } else if (activeResult.status === 'rejected') {
+      this.error.set(
+        'No hemos podido comprobar tu objetivo. Puedes reintentarlo al finalizar.'
       );
-
-      window.scrollTo({
-        top: 0,
-        behavior: 'smooth'
-      });
     }
+    this.loading.set(false);
   }
 
-
-  previousStep(): void {
-
-    const step =
-      this.currentStep();
-
-    if (step > 1) {
-      this.error.set(null);
-
-      this.currentStep.set(
-        step - 1
-      );
-
-      window.scrollTo({
-        top: 0,
-        behavior: 'smooth'
-      });
-    }
+  private async authHeaders(): Promise<HttpHeaders> {
+    const token = await this.auth.getAccessToken();
+    if (!token) throw new Error('Necesitas iniciar sesión.');
+    return new HttpHeaders({ Authorization: `Bearer ${token}` });
   }
 
-
-  goToStep(
-    step: number
-  ): void {
-
-    if (
-      step < 1 ||
-      step > this.totalSteps
-    ) {
-      return;
-    }
-
-    if (
-      step < this.currentStep()
-    ) {
-      this.currentStep.set(step);
-
-      this.error.set(null);
-
-      window.scrollTo({
-        top: 0,
-        behavior: 'smooth'
-      });
-    }
-  }
-
-
-  /* =======================================================
-     LIMITATIONS
-     ======================================================= */
-
-  setHasLimitations(
-    value: boolean
-  ): void {
-
-    this.hasLimitations.set(
-      value
-    );
-
-    if (!value) {
-      this.painAreas.set([]);
-      this.injuries.set([]);
-      this.limitationNotes.set('');
-    }
-  }
-
-
-  togglePainArea(
-    value: string
-  ): void {
-
-    const current =
-      this.painAreas();
-
-    if (
-      current.includes(value)
-    ) {
-      this.painAreas.set(
-        current.filter(
-          item => item !== value
-        )
-      );
-
-      return;
-    }
-
-    this.painAreas.set([
-      ...current,
-      value
-    ]);
-  }
-
-
-  painAreaSelected(
-    value: string
-  ): boolean {
-
-    return this
-      .painAreas()
-      .includes(value);
-  }
-
-
-  /* =======================================================
-     EXERCISE CATALOG
-     ======================================================= */
-
-  private async loadExerciseCatalog():
-    Promise<void> {
-
-    this.exerciseCatalogLoading.set(
-      true
-    );
-
-    this.exerciseCatalogError.set(
-      null
-    );
-
+  private async loadLatestWeight(): Promise<void> {
     try {
-
-      const headers =
-        await this.getAuthHeaders();
-
-      const response =
-        await new Promise<any>(
-          (
-            resolve,
-            reject
-          ) => {
-
-            this.http
-              .get<any>(
-                (
-                  `${this.apiUrl}` +
-                  '/exercises'
-                ),
-                {
-                  headers
-                }
-              )
-              .subscribe({
-                next: resolve,
-                error: reject
-              });
-          }
-        );
-
-
-      let exercises: any[] = [];
-
-      if (
-        Array.isArray(response)
-      ) {
-        exercises = response;
-
-      } else if (
-        Array.isArray(
-          response?.items
+      const entries = await firstValueFrom(
+        this.http.get<WeightEntryResponse[]>(
+          `${environment.apiUrl}/health/weights`,
+          { headers: await this.authHeaders() }
         )
-      ) {
-        exercises =
-          response.items;
-
-      } else if (
-        Array.isArray(
-          response?.exercises
-        )
-      ) {
-        exercises =
-          response.exercises;
-      }
-
-
-      const normalized =
-        exercises
-          .filter(
-            exercise =>
-              exercise?.id &&
-              exercise?.name
-          )
-          .map(
-            exercise => ({
-              id:
-                String(
-                  exercise.id
-                ),
-
-              name:
-                String(
-                  exercise.name
-                ),
-
-              muscle:
-                exercise.muscle
-                  ? String(
-                      exercise.muscle
-                    )
-                  : undefined,
-
-              equipment:
-                exercise.equipment
-                  ? String(
-                      exercise.equipment
-                    )
-                  : undefined,
-
-              category:
-                exercise.category
-                  ? String(
-                      exercise.category
-                    )
-                  : undefined
-            })
-          );
-
-
-      this.exerciseCatalog.set(
-        normalized
       );
-
-
-      if (
-        normalized.length === 0
-      ) {
-        this.exerciseCatalogError.set(
-          'No se pudo cargar el catálogo de ejercicios.'
-        );
-      }
-
+      const valid = entries.filter(
+        entry => Number.isFinite(entry.weightKg) && entry.measurementDate
+      );
+      this.latestWeight.set(valid.sort(
+        (left, right) => right.measurementDate.localeCompare(
+          left.measurementDate
+        )
+      )[0] ?? null);
     } catch {
+      this.latestWeight.set(null);
+    }
+  }
 
-      this.exerciseCatalogError.set(
-        'No se pudo cargar el catálogo de ejercicios.'
-      );
-
-    } finally {
-
-      this.exerciseCatalogLoading.set(
-        false
+  private async recoverActiveGoal(goal: Goal): Promise<void> {
+    this.activeGoal.set(goal);
+    this.selectedGoal.set(goalOption(goal.category, goal.kind) ?? null);
+    this.selectedVariant.set(goal.variant);
+    this.variantChosen.set(true);
+    this.targetDate.set(goal.targetDate ?? '');
+    try {
+      const states = await this.goals.listMetricStates(goal.id);
+      this.recoverMetricState(states);
+    } catch {
+      this.optionalWarning.set(
+        'Tu objetivo se ha recuperado, pero algunos datos opcionales no están disponibles.'
       );
     }
   }
 
-
-  avoidSearchResults():
-    ExerciseOption[] {
-
-    const query =
-      this.avoidExerciseSearch()
-        .trim()
-        .toLocaleLowerCase(
-          'es'
-        );
-
-    if (
-      query.length < 2
-    ) {
-      return [];
-    }
-
-
-    return this
-      .exerciseCatalog()
-      .filter(
-        exercise => {
-
-          if (
-            this
-              .avoidedExerciseIds()
-              .includes(
-                exercise.id
-              )
-          ) {
-            return false;
-          }
-
-          const searchable = [
-            exercise.name,
-            exercise.muscle ?? '',
-            exercise.category ?? '',
-            exercise.equipment ?? ''
-          ]
-            .join(' ')
-            .toLocaleLowerCase(
-              'es'
-            );
-
-          return searchable.includes(
-            query
+  private recoverMetricState(states: GoalMetricState[]): void {
+    for (const state of states) {
+      const key = state.metric.metricKey;
+      if (key === 'body_weight' || key === 'waist_circumference') {
+        this.bodyMetricKey.set(key);
+        this.bodyTargetValue.set(state.target?.value ?? null);
+        if (state.baseline) {
+          this.bodyBaselineValue.set(state.baseline.value);
+          this.bodyBaselineChoice.set(
+            state.baseline.sourceDomain === 'health_weight_entries'
+              ? 'observed'
+              : 'manual'
           );
-        }
-      )
-      .slice(
-        0,
-        8
-      );
-  }
-
-
-  preferredSearchResults():
-    ExerciseOption[] {
-
-    const query =
-      this.preferredExerciseSearch()
-        .trim()
-        .toLocaleLowerCase(
-          'es'
-        );
-
-    if (
-      query.length < 2
-    ) {
-      return [];
-    }
-
-
-    return this
-      .exerciseCatalog()
-      .filter(
-        exercise => {
-
-          if (
-            this
-              .preferredExerciseIds()
-              .includes(
-                exercise.id
-              )
-          ) {
-            return false;
+          if (state.baseline.sourceDomain === 'health_weight_entries') {
+            this.observedWeightBaseline.set({
+              value: state.baseline.value,
+              measuredAt: state.baseline.measuredAt,
+              sourceType: state.baseline.sourceType,
+              sourceDomain: 'health_weight_entries',
+              sourceRecordId: state.baseline.sourceRecordId ?? undefined
+            });
           }
-
-          const searchable = [
-            exercise.name,
-            exercise.muscle ?? '',
-            exercise.category ?? '',
-            exercise.equipment ?? ''
-          ]
-            .join(' ')
-            .toLocaleLowerCase(
-              'es'
-            );
-
-          return searchable.includes(
-            query
-          );
         }
-      )
-      .slice(
-        0,
-        8
-      );
+      } else if (state.baseline) {
+        this.setEnduranceBaseline(
+          key,
+          this.fromCanonical(key, state.baseline.value)
+        );
+      }
+    }
   }
 
+  selectGoal(option: OnboardingGoalOption): void {
+    if (this.selectedGoal()?.kind === option.kind) return;
+    this.selectedGoal.set(option);
+    this.selectedVariant.set(null);
+    this.variantChosen.set(false);
+    this.targetDate.set('');
+    this.bodyMetricKey.set(null);
+    this.bodyTargetValue.set(null);
+    this.bodyBaselineChoice.set('later');
+    this.bodyBaselineValue.set(null);
+    this.observedWeightBaseline.set(null);
+    this.swimBaseline.set(null);
+    this.runBaseline.set(null);
+    this.cyclingBaseline.set(null);
+    this.error.set(null);
+  }
 
-  addAvoidedExercise(
-    exercise: ExerciseOption
+  selectVariant(value: GoalVariant | null): void {
+    this.selectedVariant.set(value);
+    this.variantChosen.set(true);
+    this.error.set(null);
+  }
+
+  selectBodyMetric(
+    value: 'body_weight' | 'waist_circumference' | null
   ): void {
-
-    if (
-      this
-        .avoidedExerciseIds()
-        .includes(
-          exercise.id
-        )
-    ) {
-      return;
-    }
-
-    this.avoidedExerciseIds.set([
-      ...this.avoidedExerciseIds(),
-      exercise.id
-    ]);
-
-
-    this.preferredExerciseIds.set(
-      this
-        .preferredExerciseIds()
-        .filter(
-          id =>
-            id !== exercise.id
-        )
-    );
-
-    this.avoidExerciseSearch.set('');
+    this.bodyMetricKey.set(value);
+    this.bodyTargetValue.set(null);
+    this.bodyBaselineValue.set(null);
+    this.observedWeightBaseline.set(null);
+    this.bodyBaselineChoice.set('later');
   }
 
-
-  removeAvoidedExercise(
-    id: string
-  ): void {
-
-    this.avoidedExerciseIds.set(
-      this
-        .avoidedExerciseIds()
-        .filter(
-          value =>
-            value !== id
-        )
-    );
+  setLimitations(value: boolean): void {
+    this.hasLimitations.set(value);
+    if (!value) this.limitationNotes.set('');
   }
 
-
-  addPreferredExercise(
-    exercise: ExerciseOption
-  ): void {
-
-    if (
-      this
-        .preferredExerciseIds()
-        .includes(
-          exercise.id
-        )
-    ) {
-      return;
-    }
-
-    if (
-      this
-        .preferredExerciseIds()
-        .length >= 5
-    ) {
-      return;
-    }
-
-    this.preferredExerciseIds.set([
-      ...this.preferredExerciseIds(),
-      exercise.id
-    ]);
-
-
-    this.avoidedExerciseIds.set(
-      this
-        .avoidedExerciseIds()
-        .filter(
-          id =>
-            id !== exercise.id
-        )
-    );
-
-    this.preferredExerciseSearch.set('');
+  showsTargetDate(): boolean {
+    return [
+      'running',
+      'swimming',
+      'cycling',
+      'triathlon',
+      'duathlon',
+      'sport_performance'
+    ].includes(this.selectedGoal()?.kind ?? '');
   }
 
-
-  removePreferredExercise(
-    id: string
-  ): void {
-
-    this.preferredExerciseIds.set(
-      this
-        .preferredExerciseIds()
-        .filter(
-          value =>
-            value !== id
-        )
-    );
+  showsMetricStep(): boolean {
+    const category = this.selectedGoal()?.category;
+    return category === 'body_composition' || category === 'endurance';
   }
 
-
-  exerciseName(
-    id: string
-  ): string {
-
-    return (
-      this
-        .exerciseCatalog()
-        .find(
-          exercise =>
-            exercise.id === id
-        )
-        ?.name ??
-      id
-    );
+  isStrength(): boolean {
+    return this.selectedGoal()?.category === 'strength';
   }
 
-
-  focusLabel(
-    focus:
-      string |
-      null |
-      undefined
-  ): string {
-
-    const labels:
-      Record<string, string> = {
-
-        full_body:
-          'Cuerpo completo',
-
-        upper:
-          'Torso',
-
-        lower:
-          'Pierna'
-      };
-
-    if (
-      typeof focus !== 'string'
-    ) {
-      return 'Enfoque general';
+  enduranceMetricKeys(): GoalMetricKey[] {
+    switch (this.selectedGoal()?.kind) {
+      case 'running': return ['continuous_run_distance'];
+      case 'swimming': return ['continuous_swim_distance'];
+      case 'cycling': return ['cycling_distance'];
+      case 'triathlon': return [
+        'continuous_swim_distance',
+        'continuous_run_distance',
+        'cycling_distance'
+      ];
+      case 'duathlon': return [
+        'continuous_run_distance',
+        'cycling_distance'
+      ];
+      default: return [];
     }
-
-    const normalized =
-      focus.trim();
-
-    if (!normalized) {
-      return 'Enfoque general';
-    }
-
-    return (
-      labels[normalized] ??
-      normalized
-        .replaceAll('_', ' ')
-    );
   }
 
-
-  /* =======================================================
-     VALIDATION
-     ======================================================= */
-
-  private validateProfile():
-    string | null {
-
-    if (
-      !this.displayName().trim()
-    ) {
-      return 'Indica tu nombre.';
-    }
-
-    if (
-      this.age() === null
-    ) {
-      return 'Indica tu edad.';
-    }
-
-    if (
-      this.age()! < 14 ||
-      this.age()! > 100
-    ) {
-      return (
-        'Introduce una edad válida.'
-      );
-    }
-
-    if (
-      !this.sex()
-    ) {
-      return 'Selecciona tu sexo.';
-    }
-
-    if (
-      this.heightCm() === null
-    ) {
-      return 'Indica tu altura.';
-    }
-
-    if (
-      this.heightCm()! < 120 ||
-      this.heightCm()! > 230
-    ) {
-      return (
-        'Introduce una altura válida.'
-      );
-    }
-
-    if (
-      this.weightKg() === null
-    ) {
-      return 'Indica tu peso actual.';
-    }
-
-    if (
-      this.weightKg()! < 30 ||
-      this.weightKg()! > 300
-    ) {
-      return (
-        'Introduce un peso válido.'
-      );
-    }
-
-    if (
-      this.motivations().length === 0
-    ) {
-      return (
-        'Selecciona al menos una motivación.'
-      );
-    }
-
+  enduranceBaseline(key: GoalMetricKey): number | null {
+    if (key === 'continuous_swim_distance') return this.swimBaseline();
+    if (key === 'continuous_run_distance') return this.runBaseline();
+    if (key === 'cycling_distance') return this.cyclingBaseline();
     return null;
   }
 
+  setEnduranceBaseline(key: GoalMetricKey, value: number | null): void {
+    if (key === 'continuous_swim_distance') this.swimBaseline.set(value);
+    if (key === 'continuous_run_distance') this.runBaseline.set(value);
+    if (key === 'cycling_distance') this.cyclingBaseline.set(value);
+  }
 
-  /* =======================================================
-     AUTH
-     ======================================================= */
+  updateEnduranceBaseline(key: GoalMetricKey, value: string): void {
+    this.setEnduranceBaseline(key, value === '' ? null : Number(value));
+  }
 
-  private async getAuthHeaders():
-    Promise<HttpHeaders> {
+  private validateDate(): string | null {
+    const value = this.targetDate();
+    if (!value) return null;
+    const parsed = new Date(`${value}T00:00:00Z`);
+    return Number.isNaN(parsed.getTime()) ||
+      parsed.toISOString().slice(0, 10) !== value
+      ? 'Introduce una fecha objetivo válida.'
+      : null;
+  }
 
-    const token =
-      await this.auth.getAccessToken();
+  private metricValueError(
+    key: GoalMetricKey,
+    value: number | null,
+    label: string
+  ): string | null {
+    if (value === null) return null;
+    const metric = ONBOARDING_METRICS[key];
+    return Number.isFinite(value) &&
+      value >= metric.minimum &&
+      value <= metric.maximum
+      ? null
+      : `${label} no tiene un valor válido.`;
+  }
 
-    if (!token) {
-      throw new Error(
-        'Necesitas iniciar sesión.'
-      );
+  validationForStep(step = this.currentStep()): string | null {
+    if (step === 1 && !this.selectedGoal()) {
+      return 'Elige qué quieres conseguir.';
     }
-
-    return new HttpHeaders({
-      Authorization:
-        `Bearer ${token}`
-    });
-  }
-
-
-  /* =======================================================
-     EQUIPMENT
-     ======================================================= */
-
-  private commercialGymEquipment():
-    string[] {
-
-    return [
-      'barbell',
-      'plates',
-      'bench',
-      'squat_rack',
-      'dumbbells',
-      'cable_machine',
-      'lat_pulldown',
-      'seated_row',
-      'chest_press_machine',
-      'shoulder_press_machine',
-      'leg_press',
-      'leg_extension',
-      'seated_leg_curl',
-      'lying_leg_curl',
-      'calf_raise_machine',
-      'mat',
-      'bodyweight'
-    ];
-  }
-
-
-  private resolvedEquipment():
-    string[] {
-
-    if (
-      this.trainingLocation()
-      === 'commercial_gym'
-    ) {
-      return (
-        this.commercialGymEquipment()
-      );
+    if (step === 2) {
+      if (this.variantOptions().length && !this.variantChosen()) {
+        return 'Elige una modalidad o continúa sin una concreta.';
+      }
+      return this.validateDate();
     }
-
-    return this.availableEquipment();
-  }
-
-
-  /* =======================================================
-     PROFILE PAYLOAD
-     ======================================================= */
-
-  private profilePayload() {
-
-    const injuryNotes =
-      this.hasLimitations() &&
-      this.limitationNotes().trim()
-        ? [
-            this
-              .limitationNotes()
-              .trim()
-          ]
-        : [];
-
-
-    return {
-
-      display_name:
-        this.displayName()
-          .trim(),
-
-      age:
-        this.age(),
-
-      sex:
-        this.sex(),
-
-      height_cm:
-        this.heightCm(),
-
-      weight_kg:
-        this.weightKg(),
-
-      motivations:
-        this.motivations(),
-
-      primary_goal:
-        this.primaryGoal(),
-
-      experience_level:
-        this.experienceLevel(),
-
-      weekly_availability:
-        this.weeklyAvailability(),
-
-      session_duration_min:
-        this.sessionDurationMin(),
-
-      training_location:
-        this.trainingLocation(),
-
-      available_equipment:
-        this.resolvedEquipment(),
-
-      injuries:
-        injuryNotes,
-
-      pain_areas:
-        this.hasLimitations()
-          ? this.painAreas()
-          : [],
-
-      avoided_exercise_ids:
-        this.avoidedExerciseIds(),
-
-      preferred_exercise_ids:
-        this.preferredExerciseIds()
-    };
-  }
-
-
-  /* =======================================================
-     GENERATE
-     ======================================================= */
-
-  async generate():
-    Promise<void> {
-
-    const validationError =
-      this.validateProfile();
-
-    if (validationError) {
-      this.error.set(
-        validationError
-      );
-
-      return;
+    if (step === 3) {
+      if (this.isStrength() && !this.strengthExperience()) {
+        return 'Indica tu experiencia para adaptar los próximos pasos.';
+      }
+      if (this.hasLimitations() && !this.limitationNotes().trim()) {
+        return 'Describe brevemente la molestia o limitación.';
+      }
     }
-
-
-    this.loading.set(true);
-
-    this.error.set(null);
-
-    this.completeError.set(null);
-
-    this.proposal.set(null);
-
-
-    try {
-
-      const headers =
-        await this.getAuthHeaders();
-
-
-      const body = {
-        profile:
-          this.profilePayload()
-      };
-
-
-      const result =
-        await new Promise<
-          RoutineGenerationResult
-        >(
-          (
-            resolve,
-            reject
-          ) => {
-
-            this.http
-              .post<
-                RoutineGenerationResult
-              >(
-                (
-                  `${this.apiUrl}` +
-                  '/routines/generate'
-                ),
-                body,
-                {
-                  headers
-                }
-              )
-              .subscribe({
-                next: resolve,
-                error: reject
-              });
-          }
+    if (step === 4) {
+      const bodyKey = this.bodyMetricKey();
+      if (bodyKey) {
+        const targetError = this.metricValueError(
+          bodyKey,
+          this.bodyTargetValue(),
+          'El target'
         );
+        if (targetError) return targetError;
+        if (
+          this.bodyBaselineChoice() === 'observed' &&
+          (
+            bodyKey !== 'body_weight' ||
+            (!this.latestWeight() && !this.observedWeightBaseline())
+          )
+        ) {
+          return 'No hay un peso reciente que podamos reutilizar.';
+        }
+        if (this.bodyBaselineChoice() === 'manual') {
+          const baselineError = this.metricValueError(
+            bodyKey,
+            this.bodyBaselineValue(),
+            'El punto de partida'
+          );
+          if (baselineError) return baselineError;
+          if (this.bodyBaselineValue() === null) {
+            return 'Introduce el punto de partida o elige configurarlo más tarde.';
+          }
+        }
+      }
+      for (const key of this.enduranceMetricKeys()) {
+        const baselineError = this.metricValueError(
+          key,
+          this.enduranceBaseline(key),
+          ONBOARDING_METRICS[key].label
+        );
+        if (baselineError) return baselineError;
+      }
+    }
+    return null;
+  }
 
-
-      this.proposal.set(
-        result
-      );
-
-    } catch (
-      err: any
-    ) {
-
-      this.error.set(
-        err?.error?.detail ??
-        err?.message ??
-        (
-          'No se pudo generar la rutina.'
-        )
-      );
-
-    } finally {
-
-      this.loading.set(
-        false
-      );
+  nextStep(): void {
+    const validation = this.validationForStep();
+    if (validation) {
+      this.error.set(validation);
+      return;
+    }
+    const steps = this.stepSequence();
+    const index = steps.indexOf(this.currentStep());
+    if (index < steps.length - 1) {
+      this.currentStep.set(steps[index + 1]);
+      this.error.set(null);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
     }
   }
 
-
-  /* =======================================================
-     COMPLETE ONBOARDING
-     ======================================================= */
-
-  async completeOnboarding():
-    Promise<void> {
-
-    if (
-      !this.proposal()
-    ) {
-      this.completeError.set(
-        'Primero debes generar tu rutina.'
-      );
-
-      return;
+  previousStep(): void {
+    const steps = this.stepSequence();
+    const index = steps.indexOf(this.currentStep());
+    if (index > 0) {
+      this.currentStep.set(steps[index - 1]);
+      this.error.set(null);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
     }
+  }
 
-
-    if (
-      this.completing()
-    ) {
-      return;
-    }
-
-
-    const validationError =
-      this.validateProfile();
-
-    if (validationError) {
-      this.completeError.set(
-        validationError
-      );
-
-      return;
-    }
-
-
-    this.completing.set(
-      true
+  goalTitle(): string {
+    const goal = this.selectedGoal();
+    if (!goal) return '';
+    const variant = this.variantOptions().find(
+      option => option.value === this.selectedVariant()
     );
+    return variant?.value ? `${goal.label} · ${variant.label}` : goal.label;
+  }
 
-    this.completeError.set(
-      null
-    );
-
-
-    try {
-
-      const headers =
-        await this.getAuthHeaders();
-
-
-      const response =
-        await new Promise<
-          CompleteOnboardingResponse
-        >(
-          (
-            resolve,
-            reject
-          ) => {
-
-            this.http
-              .post<
-                CompleteOnboardingResponse
-              >(
-                (
-                  `${this.apiUrl}` +
-                  '/onboarding/complete'
-                ),
-                {
-                  profile:
-                    this.profilePayload()
-                },
-                {
-                  headers
-                }
-              )
-              .subscribe({
-                next: resolve,
-                error: reject
-              });
-          }
-        );
-
-
-      if (
-        !response
-          .onboarding_completed
-      ) {
-        throw new Error(
-          'No se pudo completar el onboarding.'
+  baselineSummary(): string[] {
+    const rows: string[] = [];
+    const bodyKey = this.bodyMetricKey();
+    if (bodyKey && this.bodyBaselineChoice() !== 'later') {
+      const value = this.bodyBaselineChoice() === 'observed'
+        ? this.observedWeightBaseline()?.value ??
+          this.latestWeight()?.weightKg ?? null
+        : this.bodyBaselineValue();
+      if (value !== null) {
+        rows.push(
+          `${ONBOARDING_METRICS[bodyKey].label}: ${value} ${ONBOARDING_METRICS[bodyKey].displayUnit}`
         );
       }
+    }
+    for (const key of this.enduranceMetricKeys()) {
+      const value = this.enduranceBaseline(key);
+      if (value !== null) {
+        rows.push(
+          `${ONBOARDING_METRICS[key].label}: ${value} ${ONBOARDING_METRICS[key].displayUnit}`
+        );
+      }
+    }
+    return rows;
+  }
 
+  targetSummary(): string | null {
+    const key = this.bodyMetricKey();
+    const value = this.bodyTargetValue();
+    if (!key || value === null) return null;
+    return `${ONBOARDING_METRICS[key].label}: ${value} ${ONBOARDING_METRICS[key].displayUnit}`;
+  }
 
-      await this.router.navigateByUrl(
-        '/entrenar'
-      );
+  private toCanonical(key: GoalMetricKey, value: number): number {
+    return value * ONBOARDING_METRICS[key].canonicalMultiplier;
+  }
 
-    } catch (
-      err: any
+  private fromCanonical(key: GoalMetricKey, value: number): number {
+    return value / ONBOARDING_METRICS[key].canonicalMultiplier;
+  }
+
+  private optionalMetricInputs(): OptionalMetricInput[] {
+    const inputs: OptionalMetricInput[] = [];
+    const bodyKey = this.bodyMetricKey();
+    if (bodyKey) {
+      let baseline: OptionalMetricInput['baseline'] = null;
+      if (this.bodyBaselineChoice() === 'observed') {
+        baseline = this.observedWeightBaseline();
+        if (!baseline && this.latestWeight()) {
+          const weight = this.latestWeight()!;
+          baseline = {
+            value: weight.weightKg,
+            measuredAt: weight.measurementDate,
+            sourceType: weight.source,
+            sourceDomain: 'health_weight_entries',
+            sourceRecordId: weight.id
+          };
+        }
+      } else if (
+        this.bodyBaselineChoice() === 'manual' &&
+        this.bodyBaselineValue() !== null
+      ) {
+        baseline = {
+          value: this.bodyBaselineValue()!,
+          measuredAt: new Date().toISOString().slice(0, 10),
+          sourceType: 'manual'
+        };
+      }
+      inputs.push({
+        key: bodyKey,
+        targetValue: this.bodyTargetValue(),
+        baseline
+      });
+    }
+    for (const key of this.enduranceMetricKeys()) {
+      const value = this.enduranceBaseline(key);
+      if (value !== null) {
+        inputs.push({
+          key,
+          targetValue: null,
+          baseline: {
+            value: this.toCanonical(key, value),
+            measuredAt: new Date().toISOString().slice(0, 10),
+            sourceType: 'manual'
+          }
+        });
+      }
+    }
+    return inputs;
+  }
+
+  private async ensureGoal(): Promise<Goal> {
+    const selected = this.selectedGoal();
+    if (!selected) throw new Error('Elige un objetivo.');
+    const input: GoalCreateInput = {
+      category: selected.category,
+      kind: selected.kind,
+      variant: this.selectedVariant(),
+      targetDate: this.targetDate() || null
+    };
+    const current = this.activeGoal();
+    if (current) {
+      return await this.saveAgainstCurrent(current, input);
+    }
+    try {
+      const created = await this.goals.create(input);
+      this.activeGoal.set(created);
+      return created;
+    } catch (error: any) {
+      if (error?.status === 409) {
+        const recovered = await this.goals.getActive();
+        if (recovered) {
+          return await this.saveAgainstCurrent(recovered, input);
+        }
+      }
+      throw error;
+    }
+  }
+
+  private async saveAgainstCurrent(
+    current: Goal,
+    input: GoalCreateInput
+  ): Promise<Goal> {
+    if (
+      current.category === input.category &&
+      current.kind === input.kind
     ) {
+      const updated = await this.goals.update(current.id, input);
+      this.activeGoal.set(updated);
+      return updated;
+    }
+    await this.goals.changeStatus(current.id, 'abandoned');
+    this.activeGoal.set(null);
+    const created = await this.goals.create(input);
+    this.activeGoal.set(created);
+    return created;
+  }
 
-      this.completeError.set(
-        err?.error?.detail ??
-        err?.message ??
-        (
-          'No se pudo guardar tu rutina. ' +
-          'Inténtalo de nuevo.'
-        )
-      );
-
-    } finally {
-
-      this.completing.set(
-        false
+  private async persistOptionalMetrics(goal: Goal): Promise<void> {
+    const desired = this.optionalMetricInputs();
+    if (!desired.length) return;
+    let metrics = await this.goals.listMetrics(goal.id);
+    const failures: string[] = [];
+    for (const input of desired) {
+      try {
+        let metric = metrics.find(item => item.metricKey === input.key);
+        if (!metric) {
+          metric = await this.goals.createMetric(goal.id, {
+            metricKey: input.key,
+            targetValue: input.targetValue
+          });
+          metrics = [...metrics, metric];
+        } else if (metric.targetValue !== input.targetValue) {
+          metric = await this.goals.updateMetricTarget(
+            goal.id,
+            metric.id,
+            input.targetValue
+          );
+        }
+        if (input.baseline) {
+          await this.goals.putMetricBaseline(
+            goal.id,
+            metric.id,
+            input.baseline
+          );
+        }
+      } catch {
+        failures.push(ONBOARDING_METRICS[input.key].label);
+      }
+    }
+    if (failures.length) {
+      this.optionalWarning.set(
+        `Tu objetivo se guardó. Podrás completar más tarde: ${failures.join(', ')}.`
       );
     }
+  }
+
+  private profilePayload(): Record<string, unknown> {
+    const payload: Record<string, unknown> = {};
+    if (this.isStrength()) {
+      payload['experience_level'] = this.strengthExperience();
+    }
+    if (this.hasLimitations() && this.limitationNotes().trim()) {
+      payload['injuries'] = [this.limitationNotes().trim()];
+    }
+    return payload;
+  }
+
+  private allStepsValid(): string | null {
+    for (const step of this.stepSequence()) {
+      const error = this.validationForStep(step);
+      if (error) return error;
+    }
+    return null;
+  }
+
+  async completeOnboarding(): Promise<void> {
+    if (this.completing()) return;
+    const validation = this.allStepsValid();
+    if (validation) {
+      this.error.set(validation);
+      return;
+    }
+    this.completing.set(true);
+    this.error.set(null);
+    this.optionalWarning.set(null);
+    try {
+      const goal = await this.ensureGoal();
+      try {
+        await this.persistOptionalMetrics(goal);
+      } catch {
+        this.optionalWarning.set(
+          'Tu objetivo se guardó. Los datos opcionales se podrán completar más tarde.'
+        );
+      }
+      const response = await firstValueFrom(
+        this.http.post<OnboardingCompleteResponse>(
+          `${environment.apiUrl}/onboarding/complete`,
+          { goal_id: goal.id, profile: this.profilePayload() },
+          { headers: await this.authHeaders() }
+        )
+      );
+      if (!response.onboarding_completed) {
+        throw new Error('No se pudo completar el onboarding.');
+      }
+      this.completed.set(true);
+    } catch (error: any) {
+      this.error.set(
+        error?.error?.detail ??
+        error?.message ??
+        'No se pudo completar el onboarding. Inténtalo de nuevo.'
+      );
+    } finally {
+      this.completing.set(false);
+    }
+  }
+
+  async goHome(): Promise<void> {
+    try {
+      await this.auth.getMe(true);
+    } catch {
+      // The access guard remains the authority if refresh is unavailable.
+    }
+    await this.router.navigateByUrl('/');
   }
 }

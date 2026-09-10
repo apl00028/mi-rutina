@@ -1,301 +1,233 @@
+/** @vitest-environment jsdom */
 import { signal } from '@angular/core';
-/**
- * @vitest-environment jsdom
- */
-
-import {
-  HttpClient
-} from '@angular/common/http';
-
-import {
-  Router
-} from '@angular/router';
-
-import {
-  TestBed
-} from '@angular/core/testing';
-
-import {
-  beforeEach,
-  describe,
-  expect,
-  it
-} from 'vitest';
-
-import {
-  AuthService
-} from '../../core/auth.service';
-
-import {
-  SettingsService
-} from '../../core/settings.service';
-
-import {
-  Home
-} from './home';
-
-
-describe('Home', () => {
-
-  beforeEach(async () => {
-
-    localStorage.removeItem(
-      'aptus-settings-v1'
-    );
-
-    document.documentElement.className = '';
-
-    await TestBed.configureTestingModule({
-
-      imports: [
-        Home
-      ],
-
-      providers: [
-
-        {
-          provide: AuthService,
-          useValue: {
-            user: signal(null),
-            getAccessToken:
-              async () => null
-          }
-        },
-
-        {
-          provide: HttpClient,
-          useValue: {}
-        },
-
-        {
-          provide: Router,
-          useValue: {
-            navigateByUrl:
-              async () => true
-          }
-        }
-
-      ]
-
-    }).compileComponents();
-  });
-
-
-  it(
-    'renders the mobile home dashboard',
-    async () => {
-
-      TestBed.inject(
-        SettingsService
-      );
-
-      const fixture =
-        TestBed.createComponent(
-          Home
-        );
-
-      fixture.detectChanges();
-
-      await fixture.whenStable();
-
-      fixture.detectChanges();
-
-      const text =
-        (
-          fixture.nativeElement
-            .textContent ?? ''
-        ).replace(/\s+/g, ' ');
-
-      expect(text).toContain(
-        'Tu día en Aptus'
-      );
-
-      expect(text).toContain(
-        'Entrenamiento'
-      );
-
-      expect(text).toContain(
-        'Nutrición'
-      );
-
-      expect(text).toContain(
-        'Salud'
-      );
-
-      expect(
-        document.documentElement
-          .classList
-          .contains(
-            'aptus-theme-system'
-          )
-      ).toBe(true);
-    }
-  );
-});
-
-// Exercise the existing endpoints and the shared calendar together.
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
-import { afterEach, vi } from 'vitest';
-import { environment } from '../../../environments/environment';
-import { WorkoutOutboxService } from '../../core/workout-outbox.service';
-import { PullRefresh } from '../../core/pull-refresh.component';
-import { By } from '@angular/platform-browser';
-import { localDateKey } from '../../features/training/components/activity-calendar/activity-calendar';
+import { Router } from '@angular/router';
+import { TestBed } from '@angular/core/testing';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-describe('Home activity history', () => {
-  const api = environment.apiUrl;
+import { environment } from '../../../environments/environment';
+import { AuthService } from '../../core/auth.service';
+import { GoalMetricState } from '../../core/goal.models';
+import { WorkoutOutboxService } from '../../core/workout-outbox.service';
+import { GoalProgress } from './goal-progress';
+import { Home } from './home';
+
+const api = environment.apiUrl;
+const goalRow = (overrides: Record<string, unknown> = {}) => ({
+  id: 'goal-1', user_id: 'user-1', category: 'endurance', kind: 'triathlon',
+  variant: 'sprint', target_date: '2027-06-21', status: 'active',
+  created_by_user_id: 'user-1', created_at: '2026-01-01T00:00:00Z',
+  updated_at: '2026-01-01T00:00:00Z', ...overrides
+});
+
+function metricState(
+  key: GoalMetricState['metric']['metricKey'],
+  options: { baseline?: number; target?: number; current?: number; reason?: 'no_reliable_resolver' | 'no_measurement' | 'no_measurement_after_baseline' } = {}
+): any {
+  const unit = key === 'body_weight' ? 'kg' : key === 'waist_circumference' ? 'cm' : 'm';
+  return {
+    metric: { id: `metric-${key}`, goal_id: 'goal-1', metric_key: key, unit,
+      target_value: options.target ?? null, created_at: '2026-01-01T00:00:00Z', updated_at: '2026-01-01T00:00:00Z' },
+    baseline: options.baseline === undefined ? null : { id: `baseline-${key}`, goal_metric_id: `metric-${key}`,
+      value: options.baseline, unit, measured_at: '2026-01-01T00:00:00Z', source_type: 'manual',
+      source_domain: null, source_record_id: null, created_at: '2026-01-01T00:00:00Z', updated_at: '2026-01-01T00:00:00Z' },
+    target: options.target === undefined ? null : { value: options.target, unit },
+    current: options.current === undefined
+      ? { metric_key: key, value: null, unit, measured_at: null, source: null,
+          available: false, reason: options.reason ?? 'no_reliable_resolver' }
+      : { metric_key: key, value: options.current, unit, measured_at: '2026-02-01T00:00:00Z',
+          source: { source_type: 'scale', source_domain: 'health_weight_entries', source_record_id: 'weight-1' },
+          available: true, reason: null }
+  };
+}
+
+describe('Home V2', () => {
   let http: HttpTestingController;
-  let fixture: ReturnType<typeof TestBed.createComponent<Home>>;
-  const today = new Date();
-  const key = localDateKey(today);
-  const timestamp = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 10).toISOString();
-  const earlier = new Date(today.getFullYear(), today.getMonth() - 1, 3, 10);
-  const oldKey = localDateKey(earlier);
-  let snapshots: any[];
-  function workout(id: string, routineId: string, at = timestamp) {
-    return { workoutId: id, routineId, sessionId: 's', status: 'finished', finishedAt: at,
-      startedAt: new Date(Date.parse(at) - 600000).toISOString(),
-      sets: [{ setId: `${id}-set`, exerciseId: 'plank', setIndex: 0, durationSeconds: 75, rpe: 8, rir: 2, completedAt: at }] };
-  }
-  const routines = [
-    { routineId: 'strength', discipline: 'strength', sessions: [{ sessionId: 's', name: 'Estabilidad', exercises: [{ exerciseId: 'plank', name: 'Plancha', recordTypes: ['duration'] }] }] },
-    { routineId: 'bike', discipline: 'cycling', sessions: [{ sessionId: 's', name: 'Bicicleta suave', exercises: [] }] },
-  ];
+  let navigateByUrl: ReturnType<typeof vi.fn>;
+
   beforeEach(async () => {
-    snapshots = [];
+    navigateByUrl = vi.fn(async () => true);
     await TestBed.configureTestingModule({ imports: [Home], providers: [
       provideHttpClient(), provideHttpClientTesting(),
-      { provide: AuthService, useValue: { user: signal({ id: 'own' }), getAccessToken: async () => 'token' } },
-      { provide: Router, useValue: { navigateByUrl: async () => true } },
-      { provide: WorkoutOutboxService, useValue: { reconciledSnapshots: () => snapshots } },
+      { provide: AuthService, useValue: { user: signal({ id: 'user-1' }), getAccessToken: async () => 'token' } },
+      { provide: WorkoutOutboxService, useValue: { reconciledSnapshots: () => [] } },
+      { provide: Router, useValue: { navigateByUrl } }
     ] }).compileComponents();
     http = TestBed.inject(HttpTestingController);
   });
+
   afterEach(() => http.verify());
-  async function settle() {
-    for (let index = 0; index < 25; index++) await Promise.resolve();
-    fixture.detectChanges();
+  async function settle(): Promise<void> { for (let index = 0; index < 30; index++) await Promise.resolve(); }
+
+  async function render(
+    goal: Record<string, unknown> | null = goalRow(),
+    states: Record<string, unknown>[] = [],
+    options: { goalError?: boolean; historyError?: boolean; activeRoutine?: boolean; workouts?: unknown[]; nutrition?: unknown[] } = {}
+  ) {
+    const fixture = TestBed.createComponent(Home);
+    fixture.detectChanges(); await settle();
+    const goalRequest = http.expectOne(`${api}/goals/active`);
+    options.goalError ? goalRequest.flush({}, { status: 503, statusText: 'Unavailable' }) : goalRequest.flush(goal);
+    const activeRoutine = http.expectOne(`${api}/routines/active`);
+    options.activeRoutine === false
+      ? activeRoutine.flush({}, { status: 404, statusText: 'Not found' })
+      : activeRoutine.flush({ routineId: 'routine-1', sessions: [] });
+    http.expectOne(`${api}/nutrition/plans`).flush(options.nutrition ?? []);
+    const workouts = http.expectOne(`${api}/workouts`);
+    options.historyError
+      ? workouts.flush({}, { status: 503, statusText: 'Unavailable' })
+      : workouts.flush(options.workouts ?? []);
+    http.expectOne(`${api}/routines`).flush([]);
+    http.expectOne(`${api}/running/sessions`).flush([]);
+    http.expectOne(`${api}/swimming/sessions`).flush([]);
+    if (goal && !options.goalError) {
+      await settle();
+      http.expectOne(`${api}/goals/goal-1/metric-states`).flush(states);
+    }
+    await settle(); fixture.detectChanges();
+    return fixture;
   }
-  function text() { return fixture.nativeElement.textContent.replace(/\s+/g, ' '); }
-  async function respond(failSwimming = false, name = 'Estabilidad', failRoutines = false) {
+
+  const text = (fixture: ReturnType<typeof TestBed.createComponent<Home>>) =>
+    (fixture.nativeElement.textContent ?? '').replace(/\s+/g, ' ');
+
+  it('shows the active Goal, variant and optional target date first', async () => {
+    const fixture = await render();
+    expect(text(fixture)).toContain('Triatlón · Sprint');
+    expect(text(fixture)).toContain('21 de junio de 2027');
+    const sections = [...fixture.nativeElement.querySelectorAll('.goal-section, .today-section, app-goal-progress, .activity-section')];
+    expect(sections.map((node: Element) => node.className || node.tagName.toLowerCase()))
+      .toEqual(['goal-section', 'today-section', 'app-goal-progress', 'activity-section']);
+    expect(text(fixture)).not.toContain('goal-1');
+  });
+
+  it('supports an active Goal without a target date or metrics', async () => {
+    const fixture = await render(goalRow({ category: 'health', kind: 'more_active', variant: null, target_date: null }));
+    expect(text(fixture)).toContain('Estar más activo');
+    expect(text(fixture)).toContain('Todavía no has definido una métrica de seguimiento');
+  });
+
+  it('treats no Goal as valid and creates one with the focused mini-flow', async () => {
+    const fixture = await render(null);
+    expect(text(fixture)).toContain('Define tu objetivo para que Aptus pueda contextualizar tu progreso');
+    const cta = fixture.nativeElement.querySelector('.goal-cta') as HTMLButtonElement;
+    expect(cta.textContent).toContain('Definir objetivo');
+    cta.click(); fixture.detectChanges();
+    const select = fixture.nativeElement.querySelector('#home-goal-kind') as HTMLSelectElement;
+    select.value = 'health:general_health'; select.dispatchEvent(new Event('change')); fixture.detectChanges();
+    (fixture.nativeElement.querySelector('.goal-form') as HTMLFormElement).dispatchEvent(new Event('submit'));
     await settle();
-    http.expectOne(`${api}/nutrition/plans`).flush([]);
-    http.expectOne(`${api}/health/weight-summary`).flush({});
-    http.expectOne(`${api}/workouts`).flush([
-      workout('strength-1', 'strength'), workout('bike-1', 'bike'), workout('old', 'strength', earlier.toISOString()),
-      { ...workout('pending', 'strength'), status: 'in_progress' },
+    const request = http.expectOne(`${api}/goals`);
+    expect(request.request.body).toEqual({ category: 'health', kind: 'general_health', variant: null, target_date: null });
+    request.flush(goalRow({ category: 'health', kind: 'general_health', variant: null, target_date: null }));
+    await settle();
+    http.expectOne(`${api}/goals/goal-1/metric-states`).flush([]);
+    await settle(); fixture.detectChanges();
+    expect(text(fixture)).toContain('Mejorar mi salud');
+    expect(text(fixture)).not.toContain('lesiones');
+  });
+
+  it('shows factual training states without claiming a scheduled session', async () => {
+    const fixture = await render(goalRow(), [], { activeRoutine: false });
+    expect(text(fixture)).toContain('Sin rutina activa');
+    expect(text(fixture)).not.toContain('planificada para hoy');
+  });
+
+  it('shows an in-progress workout as the primary continuation action', async () => {
+    const fixture = await render(goalRow(), [], { workouts: [{ workoutId: 'w', routineId: 'r', sessionId: 's', status: 'in_progress', sets: [] }] });
+    expect(text(fixture)).toContain('Continuar entrenamiento');
+    (fixture.nativeElement.querySelector('.training-card') as HTMLButtonElement).click();
+    expect(navigateByUrl).toHaveBeenCalledWith('/entrenar');
+  });
+
+  it('keeps Goal visible when activity history partially fails', async () => {
+    const fixture = await render(goalRow(), [], { historyError: true });
+    expect(text(fixture)).toContain('Triatlón · Sprint');
+    expect(text(fixture)).toContain('No se pudo cargar entrenamientos');
+    expect(text(fixture)).toContain('Todavía no hay actividades registradas');
+  });
+
+  it('distinguishes a Goal request error from no Goal', async () => {
+    const fixture = await render(null, [], { goalError: true });
+    expect(text(fixture)).toContain('No se pudo cargar tu objetivo');
+    expect(text(fixture)).not.toContain('Define tu objetivo para que Aptus');
+    expect(text(fixture)).toContain('Tu siguiente acción');
+  });
+
+  it('exposes understandable independent loading states', async () => {
+    const fixture = TestBed.createComponent(Home);
+    fixture.detectChanges();
+    expect(text(fixture)).toContain('Cargando tu objetivo');
+    expect(text(fixture)).toContain('Comprobando tu entrenamiento');
+    expect(text(fixture)).toContain('Actualizando actividades');
+    await settle();
+    http.match(() => true).forEach(request => request.flush(null));
+    await settle();
+  });
+});
+
+describe('GoalProgress', () => {
+  beforeEach(async () => {
+    await TestBed.configureTestingModule({ imports: [GoalProgress] }).compileComponents();
+  });
+
+  async function renderStates(rows: any[]) {
+    const fixture = TestBed.createComponent(GoalProgress);
+    fixture.componentRef.setInput('states', rows.map(state => ({
+      metric: { ...state.metric, goalId: state.metric.goal_id, metricKey: state.metric.metric_key,
+        targetValue: state.metric.target_value, createdAt: state.metric.created_at, updatedAt: state.metric.updated_at },
+      baseline: state.baseline && { ...state.baseline, goalMetricId: state.baseline.goal_metric_id,
+        measuredAt: state.baseline.measured_at, sourceType: state.baseline.source_type,
+        sourceDomain: state.baseline.source_domain, sourceRecordId: state.baseline.source_record_id,
+        createdAt: state.baseline.created_at, updatedAt: state.baseline.updated_at },
+      target: state.target,
+      current: { ...state.current, metricKey: state.current.metric_key, measuredAt: state.current.measured_at }
+    } as GoalMetricState)));
+    fixture.detectChanges();
+    return (fixture.nativeElement.textContent ?? '').replace(/\s+/g, ' ');
+  }
+
+  it('renders baseline-only without manufacturing Current', async () => {
+    const value = await renderStates([metricState('waist_circumference', { baseline: 91 })]);
+    expect(value).toContain('Inicio91 cm');
+    expect(value).not.toContain('Objetivo');
+    expect(value).toContain('medida fiable');
+  });
+
+  it('renders target-only without manufacturing a baseline', async () => {
+    const value = await renderStates([metricState('waist_circumference', { target: 84 })]);
+    expect(value).toContain('Objetivo84 cm');
+    expect(value).not.toContain('Inicio');
+  });
+
+  it('renders baseline and target while Current unavailable remains normal', async () => {
+    const value = await renderStates([metricState('continuous_swim_distance', { baseline: 200, target: 750 })]);
+    expect(value).toContain('Inicio200 m');
+    expect(value).toContain('Objetivo750 m');
+    expect(value).toContain('medida fiable de tu estado actual');
+    expect(value).not.toContain('%');
+  });
+
+  it('renders body-weight Current and a factual absolute difference', async () => {
+    const value = await renderStates([metricState('body_weight', { baseline: 91, current: 87, target: 84 })]);
+    expect(value).toContain('Inicio91 kg');
+    expect(value).toContain('Actual87 kg');
+    expect(value).toContain('Objetivo84 kg');
+    expect(value).toContain('4 kg menos desde el inicio');
+    expect(value).not.toContain('%');
+  });
+
+  it('renders every configured triathlon dimension without an aggregate score', async () => {
+    const value = await renderStates([
+      metricState('continuous_swim_distance', { baseline: 200, target: 750 }),
+      metricState('continuous_run_distance', { baseline: 2000, target: 5000 }),
+      metricState('cycling_distance', { target: 20000 })
     ]);
-    const routineRequest = http.expectOne(`${api}/routines`);
-    if (failRoutines) routineRequest.flush({}, { status: 503, statusText: 'Unavailable' });
-    else routineRequest.flush(routines.map(row => row.discipline === 'strength'
-      ? { ...row, sessions: [{ ...row.sessions[0], name }] } : row));
-    http.expectOne(`${api}/running/sessions`).flush([{ id: 'run', source: 'health_connect', source_package: 'garmin', source_record_id: 'run',
-      started_at: timestamp, ended_at: new Date(Date.parse(timestamp) + 600000).toISOString(),
-      data: { schema_version: 1, exercise_type: 33, distance_meters: 2000, speed_average_meters_per_second: 3, heart_rate_average_bpm: 140 } }]);
-    const swimming = http.expectOne(`${api}/swimming/sessions`);
-    if (failSwimming) swimming.flush({}, { status: 503, statusText: 'Unavailable' });
-    else swimming.flush([{ start_time: timestamp, total_timer_time_seconds: 600, distance_meters: 500, average_pace_seconds_per_100m: 120,
-      lengths: [{ distance_meters: 25, duration_seconds: 30, total_strokes: 12 }] }]);
-    await settle();
-  }
-  async function start(failSwimming = false) {
-    fixture = TestBed.createComponent(Home);
-    fixture.detectChanges();
-    await respond(failSwimming);
-  }
-  function day(date: string) {
-    const component = fixture.componentInstance;
-    component.selectDay({ dateKey: date, dayNumber: Number(date.slice(-2)), inMonth: true, events: [], selected: false });
-    fixture.detectChanges();
-  }
-  function open(title: string) {
-    const button = (Array.from(fixture.nativeElement.querySelectorAll('.activity-row')) as HTMLButtonElement[])
-      .find(button => button.textContent?.includes(title))!;
-    expect(button).toBeTruthy();
-    button.click(); fixture.detectChanges();
-  }
-  function back() { fixture.nativeElement.querySelector('.activity-back').click(); fixture.detectChanges(); }
-
-  it('selects today and renders all four disciplines before the training card', async () => {
-    await start();
-    expect(fixture.componentInstance.selectedDate()).toBe(key);
-    expect(fixture.nativeElement.querySelectorAll('.activity-row')).toHaveLength(4);
-    expect(fixture.nativeElement.querySelectorAll('.calendar-day.selected .calendar-marks span')).toHaveLength(4);
-    const order = Array.from(fixture.nativeElement.querySelectorAll('.home-header, .activity-section, .training-card, .home-grid')) as HTMLElement[];
-    expect(order.map(item => item.className)).toEqual(['home-header', 'activity-section', 'home-card training-card', 'home-grid']);
-    expect(text()).not.toContain('pending');
+    expect(value).toContain('Natación continua');
+    expect(value).toContain('Carrera continua');
+    expect(value).toContain('Bicicleta continua');
+    expect(value).not.toContain('Preparación global');
+    expect(value).not.toContain('%');
   });
-  it('opens actual force, running, swimming and cycling details without extra requests or invented metrics', async () => {
-    await start();
-    open('Estabilidad');
-    expect(text()).toContain('Plancha');
-    expect(text()).toContain('1:15 · RPE 8');
-    expect(fixture.nativeElement.querySelector('.activity-detail').textContent).not.toContain('RIR 2');
-    back(); open('Carrera');
-    expect(text()).toContain('2000 m');
-    expect(text()).toContain('5:33/km');
-    expect(text()).toContain('140 ppm');
-    back(); open('Natación');
-    expect(text()).toContain('500 m');
-    expect(text()).toContain('2:00/100 m');
-    expect(text()).toContain('Largo 1');
-    back(); open('Bicicleta suave');
-    const detail = fixture.nativeElement.querySelector('.activity-detail').textContent;
-    expect(detail).toContain('Ciclismo');
-    expect(detail).toContain('Tiempo transcurrido');
-    expect(detail).not.toContain('Distancia');
-    http.expectNone(() => true);
-  });
-  it('changes days and months from cached history without fetching again', async () => {
-    await start();
-    const other = `${key.slice(0, 8)}${today.getDate() === 1 ? '02' : '01'}`;
-    day(other);
-    expect(text()).toContain('No hay actividades disponibles para este día');
-    fixture.nativeElement.querySelector('[aria-label="Mes anterior"]').click(); fixture.detectChanges();
-    expect(fixture.componentInstance.calendarMonth()).toBe(oldKey.slice(0, 7));
-    const third = (Array.from(fixture.nativeElement.querySelectorAll('.calendar-day:not(.outside-month)')) as HTMLButtonElement[])
-      .find(button => button.querySelector('span')?.textContent?.trim() === '3')!;
-    third.click(); fixture.detectChanges();
-    expect(fixture.nativeElement.querySelectorAll('.activity-row')).toHaveLength(1);
-    fixture.nativeElement.querySelector('[aria-label="Mes siguiente"]').click(); fixture.detectChanges();
-    expect(fixture.componentInstance.selectedDate()).toBe(key);
-    await fixture.componentInstance.history.load();
-    http.expectNone(() => true);
-  });
-  it('keeps other disciplines visible on partial failure and refreshes the selected month through pull-to-refresh', async () => {
-    await start(true);
-    expect(text()).toContain('No se pudo cargar natación');
-    expect(fixture.nativeElement.querySelectorAll('.activity-row')).toHaveLength(3);
-    day(oldKey); open('Estabilidad');
-    const refresh = fixture.debugElement.query(By.directive(PullRefresh)).componentInstance as PullRefresh;
-    const pending = refresh.refresh();
-    await respond(false, 'Estabilidad actualizada');
-    await pending;
-    expect(fixture.componentInstance.calendarMonth()).toBe(oldKey.slice(0, 7));
-    expect(fixture.componentInstance.selectedDate()).toBe(oldKey);
-    expect(text()).toContain('Estabilidad actualizada');
-    expect(text()).not.toContain('No se pudo cargar natación');
-    day(key);
-    expect(fixture.nativeElement.querySelectorAll('.activity-row')).toHaveLength(4);
-  });
-  it('lets a local finished snapshot override stale remote state without duplicating it', async () => {
-    snapshots = [workout('pending', 'strength')];
-    await start();
-    expect(fixture.componentInstance.hasActiveWorkout()).toBe(false);
-    expect(fixture.nativeElement.querySelectorAll('.activity-row')).toHaveLength(5);
-    expect(fixture.componentInstance.history.workouts().filter(row => row.workoutId === 'pending')).toHaveLength(1);
-  });
-  it('retains workouts and other sources when routine metadata fails without inventing a discipline', async () => {
-    fixture = TestBed.createComponent(Home);
-    fixture.detectChanges();
-    await respond(false, 'unused', true);
-    expect(text()).toContain('No se pudo cargar nombres y disciplinas');
-    expect(fixture.componentInstance.dayActivities().filter(row => row.discipline === 'unknown')).toHaveLength(2);
-    expect(fixture.nativeElement.querySelectorAll('.activity-row')).toHaveLength(4);
-    open('Sesión registrada');
-    expect(text()).toContain('Sin disciplina disponible');
-    expect(text()).toContain('1:15 · RPE 8');
-  });
-
 });

@@ -251,6 +251,22 @@ export const routes: Routes = [
     ]
   },
   {
+    path: 'ajustes/perfil-deportivo',
+    loadComponent: () =>
+      import('./pages/settings/athlete-profile').then(
+        module => module.SettingsAthleteProfile
+      ),
+    canActivate: [accessGuard]
+  },
+  {
+    path: 'ajustes/objetivo',
+    loadComponent: () =>
+      import('./pages/settings/goals').then(
+        module => module.SettingsGoals
+      ),
+    canActivate: [accessGuard]
+  },
+  {
     path: 'ajustes/entrenamiento',
     loadComponent: () =>
       import(

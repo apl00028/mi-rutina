@@ -1,10 +1,3 @@
-import re
-import uuid
-from datetime import (
-    datetime,
-    timezone,
-)
-
 import httpx
 
 from fastapi import (
@@ -14,26 +7,32 @@ from fastapi import (
     status,
 )
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict, Field
+from uuid import UUID
 
 from app.core.auth import (
     AuthenticatedUser,
     require_user,
 )
 
-from app.domains.routines.models import Routine
-
-from app.domains.routines.profile_models import (
-    TrainingProfileInput,
+from app.core.http_client import (
+    get_supabase_http_client,
 )
+
+from app.domains.routines.models import Routine
+from app.domains.routines.profile_models import (
+    ExperienceLevel,
+    Motivation,
+    PrimaryGoal,
+    Sex,
+    TrainingLocation,
+)
+from app.domains.goals.models import Goal
+from app.domains.goals import service as goal_service
 
 from app.domains.exercises.custom_repository import (
     SupabaseConfigError,
     _supabase_config,
-)
-
-from app.domains.routines.generator import (
-    generate_routine,
 )
 
 
@@ -42,431 +41,74 @@ router = APIRouter(
 )
 
 
-class OnboardingCompleteRequest(
-    BaseModel
-):
-    profile: TrainingProfileInput
+class OnboardingProfileInput(BaseModel):
+    """Short V2 profile plus optional legacy compatibility fields."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    display_name: str | None = Field(
+        default=None,
+        min_length=1,
+        max_length=50,
+    )
+    experience_level: ExperienceLevel | None = None
+    weekly_availability: int | None = Field(
+        default=None,
+        ge=2,
+        le=6,
+    )
+    session_duration_min: int | None = Field(
+        default=None,
+        ge=25,
+        le=180,
+    )
+    injuries: list[str] = Field(
+        default_factory=list,
+        max_length=10,
+    )
+    pain_areas: list[str] = Field(
+        default_factory=list,
+        max_length=10,
+    )
+
+    # Accepted during the transition for older clients. V2 does not ask for
+    # these fields and never trusts primary_goal as its Goal source.
+    age: int | None = Field(default=None, ge=14, le=100)
+    sex: Sex | None = None
+    height_cm: int | None = Field(default=None, ge=120, le=230)
+    weight_kg: float | None = Field(default=None, ge=30, le=300)
+    motivations: list[Motivation] = Field(
+        default_factory=list,
+        max_length=2,
+    )
+    primary_goal: PrimaryGoal | None = None
+    training_location: TrainingLocation | None = None
+    available_equipment: list[str] = Field(default_factory=list)
+    avoided_exercise_ids: list[str] = Field(default_factory=list)
+    preferred_exercise_ids: list[str] = Field(default_factory=list)
+
+
+class OnboardingCompleteRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    goal_id: UUID | None = None
+    profile: OnboardingProfileInput = Field(
+        default_factory=OnboardingProfileInput
+    )
 
 
 class OnboardingCompleteResponse(
     BaseModel
 ):
     onboarding_completed: bool
-    routine: Routine
+    routine: Routine | None = None
 
 
-def _number_range(
-    value: str | None,
-) -> tuple[int, int]:
-
-    if not value:
-        return (
-            1,
-            1,
-        )
-
-    numbers = [
-        int(item)
-        for item in re.findall(
-            r"\d+",
-            value,
-        )
-    ]
-
-    if not numbers:
-        return (
-            1,
-            1,
-        )
-
-    if len(numbers) == 1:
-        return (
-            numbers[0],
-            numbers[0],
-        )
-
-    return (
-        numbers[0],
-        numbers[1],
-    )
-
-
-def _rir_range(
-    value: str | None,
-) -> dict | None:
-
-    if not value:
-        return None
-
-    minimum, maximum = (
-        _number_range(value)
-    )
-
-    return {
-        "min": minimum,
-        "max": maximum,
-    }
-
-
-def _canonical_routine(
-    profile: TrainingProfileInput,
-) -> Routine:
-
-    generated = generate_routine(
-        profile
-    )
-
-    now = datetime.now(
-        timezone.utc
-    ).isoformat()
-
-    routine_id = (
-        "routine-onboarding-"
-        f"{uuid.uuid4()}"
-    )
-
-    sessions: list[dict] = []
-
-    for (
-        session_index,
-        session,
-    ) in enumerate(
-        generated.sessions
-    ):
-
-        exercises: list[dict] = []
-
-        for (
-            exercise_index,
-            exercise,
-        ) in enumerate(
-            session.exercises
-        ):
-
-            target_min, target_max = (
-                _number_range(
-                    exercise.target
-                )
-            )
-
-            target_type = (
-                "duration"
-                if exercise.record_type
-                == "duration"
-                else "repetitions"
-            )
-
-            target_rir = (
-                _rir_range(
-                    exercise.target_rir
-                )
-            )
-
-            prescription = {
-                "sets":
-                    exercise.sets,
-
-                "target": {
-                    "min":
-                        target_min,
-
-                    "max":
-                        target_max,
-
-                    "type":
-                        target_type,
-                },
-
-                "recordType":
-                    exercise.record_type,
-
-                "restSeconds":
-                    exercise.rest_seconds,
-            }
-
-            if target_rir is not None:
-                prescription[
-                    "targetRir"
-                ] = target_rir
-
-
-            exercise_payload = {
-                "exerciseId":
-                    exercise.exercise_id,
-
-                "id":
-                    exercise.exercise_id,
-
-                "name":
-                    exercise.name,
-
-                "order":
-                    exercise_index + 1,
-
-                "role":
-                    exercise.role,
-
-                "movementPattern":
-                    exercise.movement_pattern,
-
-                "sets":
-                    exercise.sets,
-
-                "target":
-                    exercise.target,
-
-                "recordType":
-                    exercise.record_type,
-
-                "restSeconds":
-                    exercise.rest_seconds,
-
-                "weight":
-                    None,
-
-                "prescription":
-                    prescription,
-            }
-
-            if target_rir is not None:
-                exercise_payload[
-                    "targetRir"
-                ] = target_rir
-
-            exercises.append(
-                exercise_payload
-            )
-
-
-        sessions.append({
-            "sessionId":
-                session.session_id,
-
-            "order":
-                session_index + 1,
-
-            "label":
-                session.name,
-
-            "name":
-                session.name,
-
-            "focus":
-                session.focus,
-
-            "estimatedDurationMinutes":
-                profile
-                .session_duration_min,
-
-            "exercises":
-                exercises,
-        })
-
-
-    return Routine(
-        routineId=routine_id,
-        schemaVersion="4.2",
-        revision=1,
-
-        name=(
-            "Rutina inicial · "
-            f"{generated.structure_label}"
-        ),
-
-        createdAt=now,
-        updatedAt=now,
-
-        structureId=(
-            generated.structure_id
-        ),
-
-        rationale=(
-            generated.rationale
-        ),
-
-        warnings=(
-            generated.warnings
-        ),
-
-        sessions=sessions,
-    )
-
-
-def _ensure_usable_routine(
-    routine: Routine,
-) -> None:
-
-    if not routine.sessions:
-        raise HTTPException(
-            status_code=(
-                status.HTTP_422_UNPROCESSABLE_ENTITY
-            ),
-            detail=(
-                "Could not generate "
-                "a valid routine"
-            ),
-        )
-
-    for index, session in enumerate(
-        routine.sessions
-    ):
-        exercises = session.get(
-            "exercises"
-        )
-
-        if (
-            not isinstance(
-                exercises,
-                list,
-            )
-            or not exercises
-        ):
-            raise HTTPException(
-                status_code=(
-                    status.HTTP_422_UNPROCESSABLE_ENTITY
-                ),
-                detail=(
-                    "Could not generate "
-                    "a usable routine"
-                ),
-            )
-
-        for exercise_index, exercise in enumerate(
-            exercises
-        ):
-            if not isinstance(
-                exercise,
-                dict,
-            ):
-                raise HTTPException(
-                    status_code=(
-                        status
-                        .HTTP_422_UNPROCESSABLE_ENTITY
-                    ),
-                    detail=(
-                        "Could not generate "
-                        "a usable routine"
-                    ),
-                )
-
-            exercise_id = exercise.get(
-                "exerciseId"
-            )
-
-            if (
-                not isinstance(
-                    exercise_id,
-                    str,
-                )
-                or not exercise_id.strip()
-            ):
-                raise HTTPException(
-                    status_code=(
-                        status
-                        .HTTP_422_UNPROCESSABLE_ENTITY
-                    ),
-                    detail=(
-                        "Could not generate "
-                        "a usable routine"
-                    ),
-                )
-
-            legacy_id = exercise.get(
-                "id"
-            )
-
-            if (
-                legacy_id is not None
-                and (
-                    not isinstance(
-                        legacy_id,
-                        str,
-                    )
-                    or not legacy_id.strip()
-                    or legacy_id.strip()
-                    != exercise_id.strip()
-                )
-            ):
-                raise HTTPException(
-                    status_code=(
-                        status
-                        .HTTP_422_UNPROCESSABLE_ENTITY
-                    ),
-                    detail=(
-                        "Could not generate "
-                        "a usable routine"
-                    ),
-                )
-
-            if (
-                not isinstance(
-                    exercise.get("name"),
-                    str,
-                )
-                or not exercise["name"].strip()
-            ):
-                raise HTTPException(
-                    status_code=(
-                        status
-                        .HTTP_422_UNPROCESSABLE_ENTITY
-                    ),
-                    detail=(
-                        "Could not generate "
-                        "a usable routine"
-                    ),
-                )
-
-            sets = exercise.get("sets")
-            rest_seconds = exercise.get(
-                "restSeconds"
-            )
-
-            if (
-                not isinstance(sets, int)
-                or sets < 1
-                or sets > 10
-                or not isinstance(
-                    rest_seconds,
-                    int,
-                )
-                or rest_seconds < 0
-                or rest_seconds > 600
-            ):
-                raise HTTPException(
-                    status_code=(
-                        status
-                        .HTTP_422_UNPROCESSABLE_ENTITY
-                    ),
-                    detail=(
-                        "Could not generate "
-                        "a usable routine"
-                    ),
-                )
-
-            target = exercise.get("target")
-
-            if (
-                not isinstance(target, str)
-                or not target.strip()
-            ):
-                raise HTTPException(
-                    status_code=(
-                        status
-                        .HTTP_422_UNPROCESSABLE_ENTITY
-                    ),
-                    detail=(
-                        "Could not generate "
-                        "a usable routine"
-                    ),
-                )
-
-
-async def _persist_onboarding(
+async def _persist_onboarding_profile(
     user: AuthenticatedUser,
-    profile: TrainingProfileInput,
-    routine: Routine,
+    profile: OnboardingProfileInput,
+    goal: Goal,
 ) -> None:
-
     if not user.access_token:
         raise HTTPException(
             status_code=(
@@ -491,46 +133,61 @@ async def _persist_onboarding(
             ),
         ) from exc
 
-
     headers = {
         "Authorization":
             f"Bearer {user.access_token}",
-
         "apikey":
             key,
-
         "Content-Type":
             "application/json",
+        "Prefer": (
+            "resolution=merge-duplicates,"
+            "return=minimal"
+        ),
     }
 
+    legacy_goal_by_kind: dict[str, PrimaryGoal] = {
+        "muscle_gain": "muscle_gain",
+        "strength_gain": "strength_gain",
+        "return_to_training": "return_to_training",
+        "general_health": "general_health",
+        "fat_loss": "fat_loss",
+    }
+    profile_payload = profile.model_dump(
+        mode="json",
+        exclude_none=True,
+        exclude_unset=True,
+        exclude={"primary_goal"},
+    )
+    legacy_goal = legacy_goal_by_kind.get(goal.kind)
+    if legacy_goal is not None:
+        profile_payload["primary_goal"] = legacy_goal
 
     payload = {
-        "p_profile":
-            profile.model_dump(),
-
-        "p_routine":
-            routine.model_dump(
-                exclude_none=True
-            ),
+        **profile_payload,
+        "user_id": user.id,
+        "onboarding_completed": True,
     }
 
-
     try:
-        async with httpx.AsyncClient(
-            timeout=15.0
-        ) as client:
+        client = get_supabase_http_client()
+        response = await client.post(
+            (
+                f"{url}/rest/v1/"
+                "training_profiles"
+            ),
+            headers=headers,
+            params={
+                "on_conflict": "user_id",
+            },
+            json=payload,
+        )
 
-            response = await client.post(
-                (
-                    f"{url}"
-                    "/rest/v1/rpc/"
-                    "complete_gymos_onboarding"
-                ),
-                headers=headers,
-                json=payload,
-            )
-
-    except httpx.HTTPError as exc:
+    except (
+        httpx.HTTPError,
+        RuntimeError,
+        SupabaseConfigError,
+    ) as exc:
         raise HTTPException(
             status_code=(
                 status.HTTP_503_SERVICE_UNAVAILABLE
@@ -540,7 +197,6 @@ async def _persist_onboarding(
                 "is unavailable"
             ),
         ) from exc
-
 
     if response.status_code not in {
         200,
@@ -573,24 +229,40 @@ async def complete_onboarding(
             require_user
         ),
 ) -> OnboardingCompleteResponse:
+    if user.role not in {"user", "admin"}:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Onboarding is not available for this role",
+        )
 
-    routine = _canonical_routine(
-        request.profile
+    try:
+        goal = await goal_service.get_user_active_goal(user)
+    except (
+        httpx.HTTPError,
+        RuntimeError,
+        SupabaseConfigError,
+    ) as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Goal service is unavailable",
+        ) from exc
+
+    if goal is None or (
+        request.goal_id is not None
+        and goal.id != request.goal_id
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="An active Goal is required",
+        )
+
+    await _persist_onboarding_profile(
+        user,
+        request.profile,
+        goal,
     )
-
-    _ensure_usable_routine(
-        routine
-    )
-
-
-    await _persist_onboarding(
-        user=user,
-        profile=request.profile,
-        routine=routine,
-    )
-
 
     return OnboardingCompleteResponse(
         onboarding_completed=True,
-        routine=routine,
+        routine=None,
     )

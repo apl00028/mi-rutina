@@ -1,10 +1,12 @@
-/**
- * @vitest-environment jsdom
- */
+/** @vitest-environment jsdom */
 
+import { provideHttpClient } from '@angular/common/http';
 import {
-  TestBed
-} from '@angular/core/testing';
+  HttpTestingController,
+  provideHttpClientTesting
+} from '@angular/common/http/testing';
+import { TestBed } from '@angular/core/testing';
+import { Router, provideRouter } from '@angular/router';
 import {
   afterEach,
   beforeEach,
@@ -13,605 +15,477 @@ import {
   it,
   vi
 } from 'vitest';
-import {
-  provideHttpClient
-} from '@angular/common/http';
-import {
-  HttpTestingController,
-  provideHttpClientTesting
-} from '@angular/common/http/testing';
-import {
-  provideRouter
-} from '@angular/router';
-import {
-  Router
-} from '@angular/router';
 
-import {
-  environment
-} from '../../../environments/environment';
-import {
-  AuthService
-} from '../../core/auth.service';
-import {
-  Onboarding
-} from './onboarding';
+import { environment } from '../../../environments/environment';
+import { AuthService } from '../../core/auth.service';
+import { Goal, GoalKind } from '../../core/goal.models';
+import { ONBOARDING_GOALS } from './onboarding.config';
+import { Onboarding } from './onboarding';
 
 
-describe('Onboarding focus labels', () => {
-  let http:
-    HttpTestingController;
+const goalId = '11111111-1111-4111-8111-111111111111';
+const userId = '22222222-2222-4222-8222-222222222222';
+const api = environment.apiUrl;
+
+function goalRow(overrides: Record<string, unknown> = {}) {
+  return {
+    id: goalId,
+    user_id: userId,
+    category: 'health',
+    kind: 'more_active',
+    variant: null,
+    target_date: null,
+    status: 'active',
+    created_by_user_id: userId,
+    created_at: '2026-09-10T08:00:00Z',
+    updated_at: '2026-09-10T08:00:00Z',
+    ...overrides
+  };
+}
+
+function parsedGoal(overrides: Partial<Goal> = {}): Goal {
+  return {
+    id: goalId,
+    userId,
+    category: 'health',
+    kind: 'more_active',
+    variant: null,
+    targetDate: null,
+    status: 'active',
+    createdByUserId: userId,
+    createdAt: '2026-09-10T08:00:00Z',
+    updatedAt: '2026-09-10T08:00:00Z',
+    ...overrides
+  };
+}
+
+describe('Onboarding V2', () => {
+  let http: HttpTestingController;
+  let router: Router;
+  const getAccessToken = vi.fn();
+  const getMe = vi.fn();
 
   beforeEach(async () => {
+    getAccessToken.mockReset().mockResolvedValue('access-token');
+    getMe.mockReset().mockResolvedValue({
+      access_status: 'active',
+      role: 'user',
+      onboarding_completed: true
+    });
     await TestBed.configureTestingModule({
-      imports: [
-        Onboarding
-      ],
+      imports: [Onboarding],
       providers: [
         provideHttpClient(),
         provideHttpClientTesting(),
         provideRouter([]),
         {
           provide: AuthService,
-          useValue: {
-            getAccessToken:
-              vi.fn()
-                .mockResolvedValue(
-                  'access-token'
-                )
-          }
+          useValue: { getAccessToken, getMe }
         }
       ]
     }).compileComponents();
-
-    http =
-      TestBed.inject(
-        HttpTestingController
-      );
+    http = TestBed.inject(HttpTestingController);
+    router = TestBed.inject(Router);
+    vi.spyOn(window, 'scrollTo').mockImplementation(() => undefined);
   });
-
 
   afterEach(() => {
     http.verify();
+    vi.restoreAllMocks();
   });
 
+  async function tick(): Promise<void> {
+    await Promise.resolve();
+    await Promise.resolve();
+    await new Promise(resolve => setTimeout(resolve, 0));
+  }
 
-  async function createComponent() {
-    const fixture =
-      TestBed.createComponent(
-        Onboarding
-      );
-
+  async function create(
+    active: Record<string, unknown> | null = null,
+    weights: unknown[] = []
+  ) {
+    const fixture = TestBed.createComponent(Onboarding);
     fixture.detectChanges();
-
-    await fixture.whenStable();
-    await new Promise(
-      resolve =>
-        setTimeout(resolve, 0)
-    );
-
-    http
-      .expectOne(
-        `${environment.apiUrl}/exercises`
-      )
-      .flush([]);
-
+    await tick();
+    http.expectOne(`${api}/goals/active`).flush(active);
+    http.expectOne(`${api}/health/weights`).flush(weights);
+    await tick();
+    if (active) {
+      http.expectOne(`${api}/goals/${goalId}/metric-states`).flush([]);
+      await tick();
+    }
+    fixture.detectChanges();
     return fixture;
   }
 
-
-  it('maps every current session focus value to a user-facing label', async () => {
-    const fixture =
-      await createComponent();
-
-    const component =
-      fixture.componentInstance;
-
-    expect(
-      component.focusLabel(
-        'full_body'
-      )
-    ).toBe('Cuerpo completo');
-
-    expect(
-      component.focusLabel('upper')
-    ).toBe('Torso');
-
-    expect(
-      component.focusLabel('lower')
-    ).toBe('Pierna');
-  });
-
-
-  it('uses conservative labels for missing or unknown focus values', async () => {
-    const fixture =
-      await createComponent();
-
-    const component =
-      fixture.componentInstance;
-
-    expect(
-      component.focusLabel(null)
-    ).toBe('Enfoque general');
-
-    expect(
-      component.focusLabel(undefined)
-    ).toBe('Enfoque general');
-
-    expect(
-      component.focusLabel('')
-    ).toBe('Enfoque general');
-
-    expect(
-      component.focusLabel(
-        'push_pull'
-      )
-    ).toBe('push pull');
-
-    expect(
-      component.focusLabel(
-        'Empuje y tirón'
-      )
-    ).toBe('Empuje y tirón');
-  });
-
-
-  it('renders the final summary with labels instead of internal focus ids', async () => {
-    const fixture =
-      await createComponent();
-
-    fixture
-      .componentInstance
-      .proposal
-      .set({
-        structure_id:
-          'upper_lower_full',
-        structure_label:
-          'Torso / Pierna / Full body',
-        sessions: [
-          {
-            session_id:
-              'session-1',
-            name:
-              'Sesión 1',
-            focus:
-              'upper',
-            exercises: []
-          },
-          {
-            session_id:
-              'session-2',
-            name:
-              'Sesión 2',
-            focus:
-              'full_body',
-            exercises: []
-          },
-          {
-            session_id:
-              'session-3',
-            name:
-              'Sesión 3',
-            focus:
-              null as unknown as string,
-            exercises: []
-          }
-        ],
-        warnings: [],
-        rationale: []
-      });
-
-    fixture.detectChanges();
-
-    const text =
-      (
-        fixture.nativeElement as HTMLElement
-      ).textContent ?? '';
-
-    expect(text).toContain('Torso');
-    expect(text).toContain(
-      'Cuerpo completo'
-    );
-    expect(text).toContain(
-      'Enfoque general'
-    );
-    expect(text).not.toContain('upper');
-    expect(text).not.toContain(
-      'full_body'
-    );
-    expect(text).not.toContain(
-      'undefined'
-    );
-    expect(text).not.toContain(
-      '[object Object]'
-    );
-  });
-});
-
-
-describe('Onboarding completion flow', () => {
-  let http:
-    HttpTestingController;
-
-  beforeEach(async () => {
-    await TestBed.configureTestingModule({
-      imports: [
-        Onboarding
-      ],
-      providers: [
-        provideHttpClient(),
-        provideHttpClientTesting(),
-        provideRouter([]),
-        {
-          provide: AuthService,
-          useValue: {
-            getAccessToken:
-              vi.fn()
-                .mockResolvedValue(
-                  'access-token'
-                )
-          }
-        }
-      ]
-    }).compileComponents();
-
-    http =
-      TestBed.inject(
-        HttpTestingController
-      );
-  });
-
-
-  afterEach(() => {
-    http.verify();
-  });
-
-
-  async function createReadyComponent() {
-    const fixture =
-      TestBed.createComponent(
-        Onboarding
-      );
-
-    const component =
-      fixture.componentInstance;
-
-    component.displayName.set('Adrián');
-    component.age.set(35);
-    component.sex.set('male');
-    component.heightCm.set(178);
-    component.weightKg.set(78);
-    component.motivations.set([
-      'strength'
-    ]);
-    component.primaryGoal.set(
-      'strength_gain'
-    );
-    component.experienceLevel.set(
-      'intermediate'
-    );
-    component.weeklyAvailability.set(4);
-    component.sessionDurationMin.set(60);
-    component.trainingLocation.set(
-      'commercial_gym'
-    );
-    component.proposal.set({
-      structure_id:
-        'upper_lower_four',
-      structure_label:
-        'Torso / Pierna',
-      sessions: [
-        {
-          session_id:
-            'session-1',
-          name:
-            'Sesión 1',
-          focus:
-            'upper',
-          exercises: [
-            {
-              exercise_id:
-                'dumbbell-bench-press',
-              name:
-                'Press banca con mancuernas',
-              movement_pattern:
-                'horizontal_push',
-              role:
-                'main',
-              record_type:
-                'weight_reps',
-              sets: 3,
-              target:
-                '4-6',
-              target_rir:
-                '2',
-              rest_seconds:
-                180
-            }
-          ]
-        }
-      ],
-      warnings: [],
-      rationale: []
-    });
-
-    fixture.detectChanges();
-
-    await fixture.whenStable();
-    await new Promise(
-      resolve =>
-        setTimeout(resolve, 0)
-    );
-
-    http
-      .expectOne(
-        `${environment.apiUrl}/exercises`
-      )
-      .flush([]);
-
-    return fixture;
-  }
-
-
-  async function waitForHttpTick() {
-    await new Promise(
-      resolve =>
-        setTimeout(resolve, 0)
+  function choose(component: Onboarding, kind: GoalKind): void {
+    component.selectGoal(
+      ONBOARDING_GOALS.find(option => option.kind === kind)!
     );
   }
 
-
-  it('persists onboarding once and navigates to training on success', async () => {
-    const fixture =
-      await createReadyComponent();
-
-    const router =
-      TestBed.inject(Router);
-
-    const navigate =
-      vi.spyOn(
-        router,
-        'navigateByUrl'
-      ).mockResolvedValue(true);
-
-    const promise =
-      fixture
-        .componentInstance
-        .completeOnboarding();
-
-    await waitForHttpTick();
-
-    const request =
-      http.expectOne(
-        `${environment.apiUrl}/onboarding/complete`
-      );
-
-    expect(request.request.method)
-      .toBe('POST');
-    expect(
-      request.request.headers.get(
-        'Authorization'
-      )
-    ).toBe('Bearer access-token');
-
-    expect(
-      request.request.body.profile
-        .primary_goal
-    ).toBe('strength_gain');
-
-    request.flush({
-      onboarding_completed: true,
-      routine: {
-        routineId:
-          'routine-onboarding-1',
-        schemaVersion:
-          '4.2',
-        revision: 1,
-        sessions: [
-          {
-            sessionId:
-              'session-1',
-            exercises: [
-              {
-                exerciseId:
-                  'dumbbell-bench-press',
-                name:
-                  'Press banca con mancuernas',
-                sets: 3,
-                target:
-                  '4-6',
-                restSeconds:
-                  180
-              }
-            ]
-          }
-        ]
-      }
-    });
-
-    await promise;
-
-    expect(navigate)
-      .toHaveBeenCalledWith(
-        '/entrenar'
-      );
-  });
-
-
-  it('blocks a second completion submit while the first one is pending', async () => {
-    const fixture =
-      await createReadyComponent();
-
-    const router =
-      TestBed.inject(Router);
-
-    vi.spyOn(
-      router,
-      'navigateByUrl'
-    ).mockResolvedValue(true);
-
-    const component =
-      fixture.componentInstance;
-
-    const first =
-      component.completeOnboarding();
-
-    const second =
-      component.completeOnboarding();
-
-    await waitForHttpTick();
-
-    const request =
-      http.expectOne(
-        `${environment.apiUrl}/onboarding/complete`
-      );
-
-    http.expectNone(
-      `${environment.apiUrl}/onboarding/complete`
-    );
-
-    request.flush({
-      onboarding_completed: true,
-      routine: {
-        routineId:
-          'routine-onboarding-1',
-        schemaVersion:
-          '4.2',
-        revision: 1,
-        sessions: [
-          {
-            sessionId:
-              'session-1',
-            exercises: [
-              {
-                exerciseId:
-                  'dumbbell-bench-press',
-                name:
-                  'Press banca con mancuernas',
-                sets: 3,
-                target:
-                  '4-6',
-                restSeconds:
-                  180
-              }
-            ]
-          }
-        ]
-      }
-    });
-
-    await Promise.all([
-      first,
-      second
+  it('maps every visible option explicitly to the Goal taxonomy', () => {
+    expect(ONBOARDING_GOALS.map(option => [
+      option.category,
+      option.kind
+    ])).toEqual([
+      ['health', 'more_active'],
+      ['health', 'general_health'],
+      ['body_composition', 'fat_loss'],
+      ['body_composition', 'recomposition'],
+      ['strength', 'muscle_gain'],
+      ['strength', 'strength_gain'],
+      ['strength', 'return_to_training'],
+      ['endurance', 'running'],
+      ['endurance', 'swimming'],
+      ['endurance', 'cycling'],
+      ['endurance', 'triathlon'],
+      ['endurance', 'duathlon'],
+      ['sport_performance', 'sport_performance']
     ]);
   });
 
+  it('health keeps the flow minimal', async () => {
+    const fixture = await create();
+    choose(fixture.componentInstance, 'more_active');
+    expect(fixture.componentInstance.stepSequence()).toEqual([1, 3, 5]);
+    fixture.componentInstance.currentStep.set(3);
+    fixture.detectChanges();
+    const text = fixture.nativeElement.textContent;
+    expect(text).toContain('lesión o molestia');
+    expect(text).not.toContain('experiencia entrenando fuerza');
+  });
 
-  it('keeps answers and allows retry when completion fails', async () => {
-    const fixture =
-      await createReadyComponent();
+  it('running shows only its real variants', async () => {
+    const fixture = await create();
+    choose(fixture.componentInstance, 'running');
+    expect(fixture.componentInstance.variantOptions()).toEqual([
+      { value: '5k', label: '5K' },
+      { value: '10k', label: '10K' },
+      { value: 'half_marathon', label: 'Media maratón' },
+      { value: null, label: 'Sin distancia concreta' }
+    ]);
+  });
 
-    const router =
-      TestBed.inject(Router);
+  it('triathlon exposes Sprint, Olympic and no variant', async () => {
+    const fixture = await create();
+    choose(fixture.componentInstance, 'triathlon');
+    expect(fixture.componentInstance.variantOptions().map(
+      item => item.value
+    )).toEqual(['sprint', 'olympic', null]);
+  });
 
-    const navigate =
-      vi.spyOn(
-        router,
-        'navigateByUrl'
-      ).mockResolvedValue(true);
+  it('strength never shows endurance metrics', async () => {
+    const fixture = await create();
+    choose(fixture.componentInstance, 'strength_gain');
+    expect(fixture.componentInstance.enduranceMetricKeys()).toEqual([]);
+    expect(fixture.componentInstance.showsMetricStep()).toBe(false);
+  });
 
-    const failed =
-      fixture
-        .componentInstance
-        .completeOnboarding();
+  it('running omits GymOS weight and exercise questions', async () => {
+    const fixture = await create();
+    choose(fixture.componentInstance, 'running');
+    fixture.componentInstance.currentStep.set(3);
+    fixture.detectChanges();
+    const text = fixture.nativeElement.textContent;
+    expect(text).not.toContain('ejercicios favoritos');
+    expect(text).not.toContain('equipamiento disponible');
+    expect(text).not.toContain('peso actual');
+  });
 
-    await waitForHttpTick();
+  it('baseline and target remain optional', async () => {
+    const fixture = await create();
+    const component = fixture.componentInstance;
+    choose(component, 'fat_loss');
+    component.selectBodyMetric('body_weight');
+    component.bodyBaselineChoice.set('later');
+    expect(component.validationForStep(4)).toBeNull();
+    expect(component.bodyTargetValue()).toBeNull();
+  });
 
-    const failedRequest =
-      http.expectOne(
-        `${environment.apiUrl}/onboarding/complete`
-      );
+  it('includes an explicit target in the summary when present', async () => {
+    const fixture = await create();
+    const component = fixture.componentInstance;
+    choose(component, 'fat_loss');
+    component.selectBodyMetric('waist_circumference');
+    component.bodyTargetValue.set(84);
+    component.currentStep.set(5);
+    fixture.detectChanges();
+    expect(fixture.nativeElement.textContent)
+      .toContain('Cifra objetivo: Cintura: 84 cm');
+  });
 
-    failedRequest.flush(
-      {
-        detail:
-          'Could not complete Aptus onboarding'
-      },
-      {
-        status: 502,
-        statusText: 'Bad Gateway'
-      }
-    );
+  it('offers a real recent weight for reuse', async () => {
+    const fixture = await create(null, [{
+      id: 'weight-1',
+      measurementDate: '2026-09-09',
+      weightKg: 77.1,
+      source: 'scale'
+    }]);
+    const component = fixture.componentInstance;
+    choose(component, 'fat_loss');
+    component.selectBodyMetric('body_weight');
+    component.currentStep.set(4);
+    fixture.detectChanges();
+    expect(fixture.nativeElement.textContent).toContain('Usar 77.1 kg');
+  });
 
-    await failed;
+  it('can continue without an existing weight', async () => {
+    const fixture = await create();
+    const component = fixture.componentInstance;
+    choose(component, 'fat_loss');
+    component.selectBodyMetric('body_weight');
+    component.bodyBaselineChoice.set('later');
+    expect(component.validationForStep(4)).toBeNull();
+  });
 
-    expect(navigate)
-      .not.toHaveBeenCalled();
-    expect(
-      fixture
-        .componentInstance
-        .completeError()
-    ).toBe(
-      'Could not complete Aptus onboarding'
-    );
-    expect(
-      fixture
-        .componentInstance
-        .displayName()
-    ).toBe('Adrián');
-    expect(
-      fixture
-        .componentInstance
-        .completing()
-    ).toBe(false);
+  it('invalid target blocks advancement', async () => {
+    const fixture = await create();
+    const component = fixture.componentInstance;
+    choose(component, 'fat_loss');
+    component.selectBodyMetric('body_weight');
+    component.bodyTargetValue.set(500);
+    component.currentStep.set(4);
+    component.nextStep();
+    expect(component.currentStep()).toBe(4);
+    expect(component.error()).toContain('target');
+  });
 
-    const retry =
-      fixture
-        .componentInstance
-        .completeOnboarding();
+  it('invalid baseline blocks only that optional datum', async () => {
+    const fixture = await create();
+    const component = fixture.componentInstance;
+    choose(component, 'running');
+    component.selectVariant(null);
+    component.runBaseline.set(-1);
+    expect(component.validationForStep(4)).toContain('Carrera');
+    component.runBaseline.set(null);
+    expect(component.validationForStep(4)).toBeNull();
+  });
 
-    await waitForHttpTick();
+  it('back navigation keeps local answers', async () => {
+    const fixture = await create();
+    const component = fixture.componentInstance;
+    choose(component, 'triathlon');
+    component.selectVariant('sprint');
+    component.currentStep.set(4);
+    component.swimBaseline.set(200);
+    component.previousStep();
+    expect(component.swimBaseline()).toBe(200);
+  });
 
-    const retryRequest =
-      http.expectOne(
-        `${environment.apiUrl}/onboarding/complete`
-      );
-
-    retryRequest.flush({
-      onboarding_completed: true,
-      routine: {
-        routineId:
-          'routine-onboarding-1',
-        schemaVersion:
-          '4.2',
-        revision: 1,
-        sessions: [
-          {
-            sessionId:
-              'session-1',
-            exercises: [
-              {
-                exerciseId:
-                  'dumbbell-bench-press',
-                name:
-                  'Press banca con mancuernas',
-                sets: 3,
-                target:
-                  '4-6',
-                restSeconds:
-                  180
-              }
-            ]
-          }
-        ]
-      }
+  it('creates the selected Goal before completion', async () => {
+    const fixture = await create();
+    const component = fixture.componentInstance;
+    choose(component, 'more_active');
+    component.currentStep.set(5);
+    const completion = component.completeOnboarding();
+    await tick();
+    const goalRequest = http.expectOne(`${api}/goals`);
+    expect(goalRequest.request.body).toEqual({
+      category: 'health',
+      kind: 'more_active',
+      variant: null,
+      target_date: null
     });
+    goalRequest.flush(goalRow());
+    await tick();
+    const onboarding = http.expectOne(`${api}/onboarding/complete`);
+    expect(onboarding.request.body).toEqual({
+      goal_id: goalId,
+      profile: {}
+    });
+    onboarding.flush({ onboarding_completed: true, routine: null });
+    await completion;
+    expect(component.completed()).toBe(true);
+  });
 
+  it('retry reuses the Goal created by a partial attempt', async () => {
+    const fixture = await create();
+    const component = fixture.componentInstance;
+    choose(component, 'more_active');
+    component.currentStep.set(5);
+    const first = component.completeOnboarding();
+    await tick();
+    http.expectOne(`${api}/goals`).flush(goalRow());
+    await tick();
+    http.expectOne(`${api}/onboarding/complete`).flush(
+      { detail: 'Temporary failure' },
+      { status: 502, statusText: 'Bad Gateway' }
+    );
+    await first;
+
+    const retry = component.completeOnboarding();
+    await tick();
+    const reused = http.expectOne(`${api}/goals/${goalId}`);
+    expect(reused.request.method).toBe('PATCH');
+    reused.flush(goalRow());
+    await tick();
+    http.expectOne(`${api}/onboarding/complete`).flush({
+      onboarding_completed: true,
+      routine: null
+    });
     await retry;
+    http.expectNone(request =>
+      request.url === `${api}/goals` && request.method === 'POST'
+    );
+  });
 
-    expect(navigate)
-      .toHaveBeenCalledWith(
-        '/entrenar'
-      );
+  it('recovers an active Goal instead of creating another', async () => {
+    const fixture = await create(goalRow({
+      category: 'endurance',
+      kind: 'running',
+      variant: '10k'
+    }));
+    expect(fixture.componentInstance.selectedGoal()?.kind).toBe('running');
+    expect(fixture.componentInstance.selectedVariant()).toBe('10k');
+  });
+
+  it('a required Goal failure never calls completion', async () => {
+    const fixture = await create();
+    const component = fixture.componentInstance;
+    choose(component, 'more_active');
+    component.currentStep.set(5);
+    const completion = component.completeOnboarding();
+    await tick();
+    http.expectOne(`${api}/goals`).flush(
+      { detail: 'Goal unavailable' },
+      { status: 503, statusText: 'Unavailable' }
+    );
+    await completion;
+    http.expectNone(`${api}/onboarding/complete`);
+    expect(component.completed()).toBe(false);
+  });
+
+  it('optional metric failure is recoverable', async () => {
+    const fixture = await create();
+    const component = fixture.componentInstance;
+    choose(component, 'fat_loss');
+    component.selectBodyMetric('body_weight');
+    component.bodyTargetValue.set(80);
+    component.currentStep.set(5);
+    const completion = component.completeOnboarding();
+    await tick();
+    http.expectOne(`${api}/goals`).flush(goalRow({
+      category: 'body_composition',
+      kind: 'fat_loss'
+    }));
+    await tick();
+    http.expectOne(`${api}/goals/${goalId}/metrics`).flush(
+      { detail: 'Metrics unavailable' },
+      { status: 502, statusText: 'Bad Gateway' }
+    );
+    await tick();
+    http.expectOne(`${api}/onboarding/complete`).flush({
+      onboarding_completed: true,
+      routine: null
+    });
+    await completion;
+    expect(component.completed()).toBe(true);
+    expect(component.optionalWarning()).toContain('opcionales');
+  });
+
+  it('preserves observed weight provenance in the baseline', async () => {
+    const fixture = await create(null, [{
+      id: 'weight-1',
+      measurementDate: '2026-09-09',
+      weightKg: 77.1,
+      source: 'scale'
+    }]);
+    const component = fixture.componentInstance;
+    choose(component, 'fat_loss');
+    component.selectBodyMetric('body_weight');
+    component.bodyBaselineChoice.set('observed');
+    component.currentStep.set(5);
+    const completion = component.completeOnboarding();
+    await tick();
+    http.expectOne(`${api}/goals`).flush(goalRow({
+      category: 'body_composition', kind: 'fat_loss'
+    }));
+    await tick();
+    http.expectOne(`${api}/goals/${goalId}/metrics`).flush([]);
+    await tick();
+    http.expectOne(`${api}/goals/${goalId}/metrics`).flush({
+      id: 'metric-1',
+      goal_id: goalId,
+      metric_key: 'body_weight',
+      unit: 'kg',
+      target_value: null,
+      created_at: '2026-09-10T08:00:00Z',
+      updated_at: '2026-09-10T08:00:00Z'
+    });
+    await tick();
+    const baseline = http.expectOne(
+      `${api}/goals/${goalId}/metrics/metric-1/baseline`
+    );
+    expect(baseline.request.body).toMatchObject({
+      value: 77.1,
+      measured_at: '2026-09-09',
+      source_type: 'scale',
+      source_domain: 'health_weight_entries',
+      source_record_id: 'weight-1'
+    });
+    baseline.flush({
+      id: 'baseline-1',
+      goal_metric_id: 'metric-1',
+      value: 77.1,
+      unit: 'kg',
+      measured_at: '2026-09-09',
+      source_type: 'scale',
+      source_domain: 'health_weight_entries',
+      source_record_id: 'weight-1',
+      created_at: '2026-09-10T08:00:00Z',
+      updated_at: '2026-09-10T08:00:00Z'
+    });
+    await tick();
+    http.expectOne(`${api}/onboarding/complete`).flush({
+      onboarding_completed: true,
+      routine: null
+    });
+    await completion;
+  });
+
+  it('renders a compact final summary without progress claims', async () => {
+    const fixture = await create();
+    const component = fixture.componentInstance;
+    choose(component, 'triathlon');
+    component.selectVariant('sprint');
+    component.targetDate.set('2027-06-21');
+    component.swimBaseline.set(200);
+    component.runBaseline.set(5);
+    component.currentStep.set(5);
+    fixture.detectChanges();
+    const text = fixture.nativeElement.textContent;
+    expect(text).toContain('Triatlón · Sprint');
+    expect(text).toContain('2027-06-21');
+    expect(text).toContain('Natación continua: 200 m');
+    expect(text).toContain('Carrera continua: 5 km');
+    expect(text).not.toContain('%');
+    expect(text).not.toContain('readiness');
+  });
+
+  it('the final CTA refreshes access and redirects home', async () => {
+    const fixture = await create();
+    const navigate = vi.spyOn(router, 'navigateByUrl')
+      .mockResolvedValue(true);
+    await fixture.componentInstance.goHome();
+    expect(getMe).toHaveBeenCalledWith(true);
+    expect(navigate).toHaveBeenCalledWith('/');
+  });
+
+  it('completion never requests routine generation', async () => {
+    const fixture = await create();
+    const component = fixture.componentInstance;
+    choose(component, 'more_active');
+    component.currentStep.set(5);
+    const completion = component.completeOnboarding();
+    await tick();
+    http.expectOne(`${api}/goals`).flush(goalRow());
+    await tick();
+    http.expectOne(`${api}/onboarding/complete`).flush({
+      onboarding_completed: true,
+      routine: null
+    });
+    await completion;
+    http.expectNone(`${api}/routines/generate`);
   });
 });

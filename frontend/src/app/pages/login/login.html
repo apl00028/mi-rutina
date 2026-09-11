@@ -59,11 +59,28 @@
       </span>
 
       <h2>
-        {{
-          language() === 'es'
-            ? 'Bienvenido de nuevo'
-            : 'Welcome back'
-        }}
+        @if (requestedAccessRole() === 'trainer') {
+          {{
+            language() === 'es'
+              ? 'Bienvenido de nuevo'
+              : 'Welcome back'
+          }}
+        } @else {
+          @switch (authView()) {
+            @case ('create') {
+              {{ language() === 'es' ? 'Crear tu cuenta' : 'Create your account' }}
+            }
+            @case ('login') {
+              {{ language() === 'es' ? 'Iniciar sesión' : 'Sign in' }}
+            }
+            @case ('verification') {
+              {{ language() === 'es' ? 'Revisa tu correo' : 'Check your email' }}
+            }
+            @default {
+              {{ language() === 'es' ? 'Empieza en Aptus' : 'Get started with Aptus' }}
+            }
+          }
+        }
       </h2>
 
       <div
@@ -107,11 +124,11 @@
               ? 'Accede a tus deportistas, revisa su entrenamiento y gestiona sus rutinas.'
               : 'Access your athletes, review their training and manage their routines.'
           }}
-        } @else {
+        } @else if (authView() === 'choice') {
           {{
             language() === 'es'
-              ? 'Accede a tus rutinas, historial de entrenamiento y progreso.'
-              : 'Sign in to access your routines, training history and progress.'
+              ? 'Crea una cuenta nueva o accede con tu email.'
+              : 'Create a new account or sign in with your email.'
           }}
         }
       </p>
@@ -203,6 +220,153 @@
         }}
       </button>
     </form>
+    } @else {
+    @if (requestedAccessRole() === 'athlete') {
+      @switch (authView()) {
+        @case ('choice') {
+          <div class="auth-choice">
+            <button
+              type="button"
+              class="primary-button create-account-button"
+              (click)="openCreateAccount()"
+            >
+              {{ language() === 'es' ? 'Crear cuenta' : 'Create account' }}
+            </button>
+
+            <button
+              type="button"
+              class="google-button email-login-button"
+              (click)="openEmailLogin()"
+            >
+              {{ language() === 'es' ? 'Iniciar sesión' : 'Sign in' }}
+            </button>
+          </div>
+        }
+
+        @case ('create') {
+          <form
+            class="email-form email-link-form"
+            (submit)="submitCreateAccount($event)"
+          >
+            <label>Email</label>
+
+            <input
+              type="email"
+              autocomplete="email"
+              placeholder="nombre@correo.com"
+              required
+              [value]="email()"
+              (input)="email.set($any($event.target).value)"
+            />
+
+            <button
+              class="primary-button"
+              type="submit"
+              [disabled]="loading()"
+            >
+              {{
+                loading()
+                  ? (language() === 'es' ? 'Enviando...' : 'Sending...')
+                  : (language() === 'es' ? 'Enviar enlace de verificación' : 'Send verification link')
+              }}
+            </button>
+
+            <p class="auth-switch">
+              {{ language() === 'es' ? '¿Ya tienes cuenta?' : 'Already have an account?' }}
+              <button type="button" (click)="openEmailLogin()">
+                {{ language() === 'es' ? 'Iniciar sesión' : 'Sign in' }}
+              </button>
+            </p>
+          </form>
+        }
+
+        @case ('login') {
+          <form
+            class="email-form email-link-form"
+            (submit)="submitEmailLogin($event)"
+          >
+            <label>Email</label>
+
+            <input
+              type="email"
+              autocomplete="email"
+              placeholder="nombre@correo.com"
+              required
+              [value]="email()"
+              (input)="email.set($any($event.target).value)"
+            />
+
+            <button
+              class="primary-button"
+              type="submit"
+              [disabled]="loading()"
+            >
+              {{
+                loading()
+                  ? (language() === 'es' ? 'Enviando...' : 'Sending...')
+                  : (language() === 'es' ? 'Enviar enlace de acceso' : 'Send sign-in link')
+              }}
+            </button>
+
+            <p class="auth-switch">
+              {{ language() === 'es' ? '¿No tienes cuenta?' : 'No account yet?' }}
+              <button type="button" (click)="openCreateAccount()">
+                {{ language() === 'es' ? 'Crear cuenta' : 'Create account' }}
+              </button>
+            </p>
+          </form>
+        }
+
+        @case ('verification') {
+          <div class="verification-sent">
+            <p>
+              {{ language() === 'es' ? 'Te hemos enviado un enlace a:' : 'We sent a link to:' }}
+            </p>
+
+            <strong>{{ verificationEmail() }}</strong>
+
+            <p>
+              {{
+                language() === 'es'
+                  ? (
+                      verificationIntent() === 'create'
+                        ? 'Abre el enlace para verificar tu correo y continuar en Aptus.'
+                        : 'Abre el enlace para iniciar sesión y continuar en Aptus.'
+                    )
+                  : (
+                      verificationIntent() === 'create'
+                        ? 'Open the link to verify your email and continue in Aptus.'
+                        : 'Open the link to sign in and continue in Aptus.'
+                    )
+              }}
+            </p>
+
+            <div class="verification-actions">
+              <button
+                type="button"
+                class="primary-button resend-email-button"
+                [disabled]="loading()"
+                (click)="resendEmail()"
+              >
+                {{
+                  loading()
+                    ? (language() === 'es' ? 'Enviando...' : 'Sending...')
+                    : (language() === 'es' ? 'Reenviar correo' : 'Resend email')
+                }}
+              </button>
+
+              <button
+                type="button"
+                class="request-access-button change-email-button"
+                [disabled]="loading()"
+                (click)="changeEmail()"
+              >
+                {{ language() === 'es' ? 'Cambiar email' : 'Change email' }}
+              </button>
+            </div>
+          </div>
+        }
+      }
     } @else {
     <div
       class="login-methods"
@@ -350,6 +514,7 @@
       </button>
     </form>
     }
+    }
 
     @if (message()) {
       <div
@@ -369,7 +534,10 @@
       </div>
     }
 
-    @if (!recoveryMode()) {
+    @if (
+      !recoveryMode() &&
+      requestedAccessRole() === 'trainer'
+    ) {
     <footer
       class="access-note"
       [hidden]="recoveryMode()"
@@ -378,14 +546,10 @@
         {{
           language() === 'es'
             ? (
-                requestedAccessRole() === 'trainer'
-                  ? '¿Eres nuevo en Aptus como entrenador?'
-                  : '¿Eres nuevo en Aptus?'
+                '¿Eres nuevo en Aptus como entrenador?'
               )
             : (
-                requestedAccessRole() === 'trainer'
-                  ? 'New to Aptus as a trainer?'
-                  : 'New to Aptus?'
+                'New to Aptus as a trainer?'
               )
         }}
       </span>
@@ -393,37 +557,12 @@
       <button
         type="button"
         class="request-access-button"
-        (click)="startRegistration()"
-        [disabled]="loading()"
+        (click)="requestTrainerAccess()"
       >
         {{
-          loading()
-            ? (
-                language() === 'es'
-                  ? (
-                      requestedAccessRole() === 'trainer'
-                        ? 'Solicitando...'
-                        : 'Enviando...'
-                    )
-                  : (
-                      requestedAccessRole() === 'trainer'
-                        ? 'Requesting...'
-                        : 'Sending...'
-                    )
-              )
-            : (
-                language() === 'es'
-                  ? (
-                      requestedAccessRole() === 'trainer'
-                        ? 'Solicitar acceso'
-                        : 'Crear cuenta'
-                    )
-                  : (
-                      requestedAccessRole() === 'trainer'
-                        ? 'Request access'
-                        : 'Create account'
-                    )
-              )
+          language() === 'es'
+            ? 'Solicitar acceso'
+            : 'Request access'
         }}
       </button>
     </footer>

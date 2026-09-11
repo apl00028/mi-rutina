@@ -27,6 +27,17 @@ import {
 } from '../../core/language.service';
 
 
+type AuthView =
+  | 'choice'
+  | 'create'
+  | 'login'
+  | 'verification';
+
+type EmailAuthIntent =
+  | 'create'
+  | 'login';
+
+
 @Component({
   selector: 'app-login',
   standalone: true,
@@ -90,6 +101,15 @@ export class Login {
     signal<'athlete' | 'trainer'>(
       'athlete'
     );
+
+  readonly authView =
+    signal<AuthView>('choice');
+
+  readonly verificationEmail =
+    signal('');
+
+  readonly verificationIntent =
+    signal<EmailAuthIntent>('create');
 
 
   constructor(
@@ -530,46 +550,129 @@ export class Login {
   }
 
 
-  async sendMagicLink(
-    event?: Event
+  openCreateAccount(): void {
+    this.authView.set('create');
+    this.message.set(null);
+    this.error.set(null);
+  }
+
+
+  openEmailLogin(): void {
+    this.authView.set('login');
+    this.message.set(null);
+    this.error.set(null);
+  }
+
+
+  async submitCreateAccount(
+    event: Event
   ): Promise<void> {
-    event?.preventDefault();
+    event.preventDefault();
+
+    await this.submitEmailLink(
+      'create'
+    );
+  }
+
+
+  async submitEmailLogin(
+    event: Event
+  ): Promise<void> {
+    event.preventDefault();
+
+    await this.submitEmailLink(
+      'login'
+    );
+  }
+
+
+  private isValidEmail(
+    email: string
+  ): boolean {
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(
+      email
+    );
+  }
+
+
+  private async submitEmailLink(
+    intent: EmailAuthIntent,
+    resend = false
+  ): Promise<void> {
+    if (this.loading()) {
+      return;
+    }
 
     const email =
       this.email().trim();
 
-    if (!email) {
+    this.message.set(null);
+    this.error.set(null);
+
+    if (!this.isValidEmail(email)) {
+      this.error.set(
+        this.language() === 'es'
+          ? 'Introduce un email válido.'
+          : 'Enter a valid email address.'
+      );
       return;
     }
 
     this.loading.set(true);
-    this.message.set(null);
-    this.error.set(null);
 
     try {
-      await this.auth.signInWithMagicLink(
-        email
-      );
+      if (intent === 'create') {
+        await this.auth.signUpWithMagicLink(
+          email
+        );
+      } else {
+        await this.auth.signInWithMagicLink(
+          email
+        );
+      }
 
-      this.message.set(
-        this.language() === 'es'
-          ? 'Te hemos enviado un enlace de acceso. Revisa tu correo.'
-          : 'We sent you a sign-in link. Check your email.'
-      );
+      this.verificationEmail.set(email);
+      this.verificationIntent.set(intent);
+      this.authView.set('verification');
+
+      if (resend) {
+        this.message.set(
+          this.language() === 'es'
+            ? 'Correo reenviado.'
+            : 'Email sent again.'
+        );
+      }
 
     } catch (err: unknown) {
       this.error.set(
-        this.authErrorMessage(
-          err,
-          this.language() === 'es'
-            ? 'No se pudo enviar el enlace de acceso.'
-            : 'The sign-in link could not be sent.'
-        )
+        this.language() === 'es'
+          ? 'No se pudo enviar el correo. Inténtalo de nuevo.'
+          : 'The email could not be sent. Please try again.'
       );
 
     } finally {
       this.loading.set(false);
     }
+  }
+
+
+  async resendEmail():
+    Promise<void> {
+    await this.submitEmailLink(
+      this.verificationIntent(),
+      true
+    );
+  }
+
+
+  changeEmail(): void {
+    this.authView.set(
+      this.verificationIntent() === 'create'
+        ? 'create'
+        : 'login'
+    );
+    this.message.set(null);
+    this.error.set(null);
   }
 
 
@@ -606,40 +709,13 @@ export class Login {
   }
 
 
-  async startRegistration():
-    Promise<void> {
-    const role =
-      this.requestedAccessRole();
-
-    if (role === 'trainer') {
-      this.message.set(
-        this.language() === 'es'
-          ? 'Las cuentas de entrenador se activan actualmente mediante invitación.'
-          : 'Trainer accounts are currently activated by invitation.'
-      );
-      this.error.set(null);
-      return;
-    }
-
-    if (!this.email().trim()) {
-      this.message.set(null);
-      this.error.set(
-        this.language() === 'es'
-          ? 'Introduce tu email para crear tu cuenta.'
-          : 'Enter your email to create your account.'
-      );
-      return;
-    }
-
-    await this.sendMagicLink();
-
-    if (this.message()) {
-      this.message.set(
-        this.language() === 'es'
-          ? 'Te hemos enviado un enlace para crear tu cuenta. Ábrelo para verificar tu email y continuar.'
-          : 'We sent you a link to create your account. Open it to verify your email and continue.'
-      );
-    }
+  requestTrainerAccess(): void {
+    this.message.set(
+      this.language() === 'es'
+        ? 'Las cuentas de entrenador se activan actualmente mediante invitación.'
+        : 'Trainer accounts are currently activated by invitation.'
+    );
+    this.error.set(null);
   }
 
 
@@ -648,6 +724,12 @@ export class Login {
   ): void {
     this.requestedAccessRole.set(
       role
+    );
+
+    this.authView.set(
+      role === 'trainer'
+        ? 'login'
+        : 'choice'
     );
 
     this.message.set(null);

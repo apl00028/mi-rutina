@@ -722,8 +722,9 @@ export class AuthService {
   }
 
 
-  async signInWithMagicLink(
-    email: string
+  private async sendMagicLink(
+    email: string,
+    shouldCreateUser: boolean
   ): Promise<void> {
     const redirectTo =
       this.loginRedirect('email');
@@ -736,13 +737,33 @@ export class AuthService {
 
         options: {
           emailRedirectTo: redirectTo,
-          shouldCreateUser: true
+          shouldCreateUser
         }
       });
 
     if (error) {
       throw error;
     }
+  }
+
+
+  async signUpWithMagicLink(
+    email: string
+  ): Promise<void> {
+    await this.sendMagicLink(
+      email,
+      true
+    );
+  }
+
+
+  async signInWithMagicLink(
+    email: string
+  ): Promise<void> {
+    await this.sendMagicLink(
+      email,
+      false
+    );
   }
 
 

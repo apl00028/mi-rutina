@@ -83,6 +83,9 @@ describe(
       signInWithMagicLink:
         vi.fn(),
 
+      signUpWithMagicLink:
+        vi.fn(),
+
       signInWithGoogle:
         vi.fn()
     };
@@ -240,6 +243,12 @@ describe(
           onboarding_completed:
             true
         });
+
+      authMock.signInWithMagicLink
+        .mockResolvedValue(undefined);
+
+      authMock.signUpWithMagicLink
+        .mockResolvedValue(undefined);
 
       routerMock.navigateByUrl
         .mockResolvedValue(
@@ -907,6 +916,9 @@ describe(
             Login
           );
 
+        fixture.componentInstance
+          .selectAccessRole('trainer');
+
         fixture.detectChanges();
 
         await fixture.whenStable();
@@ -976,6 +988,9 @@ describe(
           TestBed.createComponent(
             Login
           );
+
+        fixture.componentInstance
+          .selectAccessRole('trainer');
 
         fixture.detectChanges();
 
@@ -1071,7 +1086,7 @@ describe(
           'Accede a tus deportistas'
         );
 
-        await component.startRegistration();
+        component.requestTrainerAccess();
 
         expect(
           component.message()
@@ -1087,7 +1102,7 @@ describe(
 
 
     it(
-      'starts self-service athlete registration',
+      'opens account creation without sending email',
       async () => {
         const fixture =
           TestBed.createComponent(
@@ -1097,47 +1112,27 @@ describe(
         fixture.detectChanges();
         await fixture.whenStable();
 
-        const component =
-          fixture.componentInstance;
-
-        fixture.detectChanges();
-
-        const registrationButton =
+        const createButton =
           fixture.nativeElement.querySelector(
-            '.request-access-button'
+            '.create-account-button'
           ) as HTMLButtonElement;
 
-        expect(
-          registrationButton.textContent
-        ).toContain('Crear cuenta');
+        createButton.click();
+        fixture.detectChanges();
 
         expect(
-          registrationButton.textContent
-        ).not.toContain('Solicitar acceso');
-
-        component.email.set(
-          ' new@example.com '
-        );
-
-        await component.startRegistration();
+          fixture.componentInstance.authView()
+        ).toBe('create');
 
         expect(
-          authMock.signInWithMagicLink
-        ).toHaveBeenCalledWith(
-          'new@example.com'
-        );
-
-        expect(
-          component.message()
-        ).toContain(
-          'verificar tu email y continuar'
-        );
+          authMock.signUpWithMagicLink
+        ).not.toHaveBeenCalled();
       }
     );
 
 
     it(
-      'requires an email before creating an athlete account',
+      'sends a registration link and shows verification state',
       async () => {
         const fixture =
           TestBed.createComponent(
@@ -1150,17 +1145,150 @@ describe(
         const component =
           fixture.componentInstance;
 
-        await component.startRegistration();
+        component.openCreateAccount();
+        component.email.set(
+          ' new@example.com '
+        );
 
+        await component.submitCreateAccount(
+          new Event('submit')
+        );
+
+        expect(
+          authMock.signUpWithMagicLink
+        ).toHaveBeenCalledWith(
+          'new@example.com'
+        );
+
+        expect(
+          component.authView()
+        ).toBe('verification');
+
+        expect(
+          component.verificationEmail()
+        ).toBe('new@example.com');
+      }
+    );
+
+
+    it(
+      'rejects an invalid registration email',
+      async () => {
+        const fixture =
+          TestBed.createComponent(Login);
+        const component =
+          fixture.componentInstance;
+
+        component.openCreateAccount();
+        component.email.set('not-an-email');
+
+        await component.submitCreateAccount(
+          new Event('submit')
+        );
+
+        expect(
+          authMock.signUpWithMagicLink
+        ).not.toHaveBeenCalled();
+        expect(component.error())
+          .toContain('email válido');
+      }
+    );
+
+
+    it(
+      'prevents duplicate registration submissions while sending',
+      async () => {
+        const sending = deferred<void>();
+
+        authMock.signUpWithMagicLink
+          .mockReturnValue(sending.promise);
+
+        const fixture =
+          TestBed.createComponent(Login);
+        const component =
+          fixture.componentInstance;
+
+        component.openCreateAccount();
+        component.email.set('new@example.com');
+
+        const first =
+          component.submitCreateAccount(
+            new Event('submit')
+          );
+        const duplicate =
+          component.submitCreateAccount(
+            new Event('submit')
+          );
+
+        expect(component.loading()).toBe(true);
+        expect(
+          authMock.signUpWithMagicLink
+        ).toHaveBeenCalledOnce();
+
+        sending.resolve();
+        await Promise.all([first, duplicate]);
+      }
+    );
+
+
+    it(
+      'uses existing-account mode for email login',
+      async () => {
+        const fixture =
+          TestBed.createComponent(Login);
+        const component =
+          fixture.componentInstance;
+
+        component.openEmailLogin();
+        component.email.set('existing@example.com');
+
+        await component.submitEmailLogin(
+          new Event('submit')
+        );
+
+        expect(
+          authMock.signInWithMagicLink
+        ).toHaveBeenCalledWith(
+          'existing@example.com'
+        );
+        expect(
+          authMock.signUpWithMagicLink
+        ).not.toHaveBeenCalled();
+      }
+    );
+
+
+    it(
+      'resends registration with the same intent and changes email',
+      async () => {
+        const fixture =
+          TestBed.createComponent(Login);
+        const component =
+          fixture.componentInstance;
+
+        component.openCreateAccount();
+        component.email.set('new@example.com');
+        await component.submitCreateAccount(
+          new Event('submit')
+        );
+
+        authMock.signUpWithMagicLink.mockClear();
+        await component.resendEmail();
+
+        expect(
+          authMock.signUpWithMagicLink
+        ).toHaveBeenCalledWith(
+          'new@example.com'
+        );
         expect(
           authMock.signInWithMagicLink
         ).not.toHaveBeenCalled();
 
-        expect(
-          component.error()
-        ).toContain(
-          'Introduce tu email'
-        );
+        component.changeEmail();
+        expect(component.authView())
+          .toBe('create');
+        expect(component.email())
+          .toBe('new@example.com');
       }
     );
 

@@ -118,7 +118,9 @@ describe(
       `${environment.apiUrl}/me`;
 
 
-    async function expectMeRequest() {
+    async function expectMeRequest(
+      url = meUrl
+    ) {
       let lastError:
         unknown;
 
@@ -136,7 +138,7 @@ describe(
 
         try {
           return http.expectOne(
-            meUrl
+            url
           );
         } catch (error) {
           lastError =
@@ -177,6 +179,15 @@ describe(
         .mockResolvedValue({
           error:
             null
+        });
+
+      supabaseMock.auth.signInWithOtp
+        .mockResolvedValue({
+          data: {
+            user: null,
+            session: null
+          },
+          error: null
         });
 
       supabaseMock.auth.exchangeCodeForSession
@@ -240,6 +251,17 @@ describe(
           AuthService
         );
 
+      Object.defineProperty(
+        service,
+        'client',
+        {
+          value: {
+            auth:
+              supabaseMock.auth
+          }
+        }
+      );
+
       http =
         TestBed.inject(
           HttpTestingController
@@ -252,6 +274,70 @@ describe(
 
       vi.clearAllMocks();
     });
+
+
+    it(
+      'allows account creation only for registration links',
+      async () => {
+        await service.signUpWithMagicLink(
+          'new@example.com'
+        );
+
+        expect(
+          supabaseMock.auth.signInWithOtp
+        ).toHaveBeenCalledWith({
+          email: 'new@example.com',
+          options: {
+            emailRedirectTo:
+              `${window.location.origin}/login`,
+            shouldCreateUser: true
+          }
+        });
+      }
+    );
+
+
+    it(
+      'prevents existing-account login links from creating users',
+      async () => {
+        await service.signInWithMagicLink(
+          'existing@example.com'
+        );
+
+        expect(
+          supabaseMock.auth.signInWithOtp
+        ).toHaveBeenCalledWith({
+          email: 'existing@example.com',
+          options: {
+            emailRedirectTo:
+              `${window.location.origin}/login`,
+            shouldCreateUser: false
+          }
+        });
+      }
+    );
+
+
+    it(
+      'restores a native login callback session from its PKCE code',
+      async () => {
+        await (
+          service as unknown as {
+            handleNativeAuthUrl:
+              (url: string) => Promise<void>;
+          }
+        ).handleNativeAuthUrl(
+          'com.adrianpelaez.aptus://login?code=abc'
+        );
+
+        expect(
+          supabaseMock.auth.exchangeCodeForSession
+        ).toHaveBeenCalledWith('abc');
+        expect(
+          service.nativeLoginCompleted()
+        ).toBe(1);
+      }
+    );
 
 
     it(
@@ -747,6 +833,55 @@ describe(
         http.expectNone(
           meUrl
         );
+      }
+    );
+
+
+    it(
+      'bootstraps a verified identity without Aptus access',
+      async () => {
+        const access =
+          service.resolveAccess();
+
+        const meRequest =
+          await expectMeRequest();
+
+        meRequest.flush({
+          user_id: 'user-123',
+          email: 'new@example.com',
+          access_status: 'unregistered',
+          plan: null,
+          role: null,
+          expires_at: null,
+          onboarding_completed: false
+        });
+
+        const bootstrapRequest =
+          await expectMeRequest(
+            `${environment.apiUrl}/me/bootstrap`
+          );
+
+        expect(
+          bootstrapRequest.request.method
+        ).toBe('POST');
+
+        bootstrapRequest.flush({
+          user_id: 'user-123',
+          email: 'new@example.com',
+          access_status: 'active',
+          plan: 'free',
+          role: 'user',
+          expires_at: null,
+          onboarding_completed: false
+        });
+
+        await expect(access)
+          .resolves.toMatchObject({
+            access_status: 'active',
+            plan: 'free',
+            role: 'user',
+            onboarding_completed: false
+          });
       }
     );
 

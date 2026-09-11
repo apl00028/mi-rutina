@@ -393,20 +393,36 @@
       <button
         type="button"
         class="request-access-button"
-        (click)="requestAccess()"
+        (click)="startRegistration()"
         [disabled]="loading()"
       >
         {{
           loading()
             ? (
                 language() === 'es'
-                  ? 'Solicitando...'
-                  : 'Requesting...'
+                  ? (
+                      requestedAccessRole() === 'trainer'
+                        ? 'Solicitando...'
+                        : 'Enviando...'
+                    )
+                  : (
+                      requestedAccessRole() === 'trainer'
+                        ? 'Requesting...'
+                        : 'Sending...'
+                    )
               )
             : (
                 language() === 'es'
-                  ? 'Solicitar acceso'
-                  : 'Request access'
+                  ? (
+                      requestedAccessRole() === 'trainer'
+                        ? 'Solicitar acceso'
+                        : 'Crear cuenta'
+                    )
+                  : (
+                      requestedAccessRole() === 'trainer'
+                        ? 'Request access'
+                        : 'Create account'
+                    )
               )
         }}
       </button>

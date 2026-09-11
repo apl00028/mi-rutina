@@ -229,7 +229,7 @@ describe(
             'active',
 
           plan:
-            'trial',
+            'free',
 
           role:
             'user',
@@ -1071,7 +1071,7 @@ describe(
           'Accede a tus deportistas'
         );
 
-        await component.requestAccess();
+        await component.startRegistration();
 
         expect(
           component.message()
@@ -1087,7 +1087,7 @@ describe(
 
 
     it(
-      'starts athlete registration from the request access action',
+      'starts self-service athlete registration',
       async () => {
         const fixture =
           TestBed.createComponent(
@@ -1100,11 +1100,26 @@ describe(
         const component =
           fixture.componentInstance;
 
+        fixture.detectChanges();
+
+        const registrationButton =
+          fixture.nativeElement.querySelector(
+            '.request-access-button'
+          ) as HTMLButtonElement;
+
+        expect(
+          registrationButton.textContent
+        ).toContain('Crear cuenta');
+
+        expect(
+          registrationButton.textContent
+        ).not.toContain('Solicitar acceso');
+
         component.email.set(
           ' new@example.com '
         );
 
-        await component.requestAccess();
+        await component.startRegistration();
 
         expect(
           authMock.signInWithMagicLink
@@ -1115,14 +1130,14 @@ describe(
         expect(
           component.message()
         ).toContain(
-          'registrar tu solicitud pendiente'
+          'verificar tu email y continuar'
         );
       }
     );
 
 
     it(
-      'requires an email before requesting athlete access',
+      'requires an email before creating an athlete account',
       async () => {
         const fixture =
           TestBed.createComponent(
@@ -1135,7 +1150,7 @@ describe(
         const component =
           fixture.componentInstance;
 
-        await component.requestAccess();
+        await component.startRegistration();
 
         expect(
           authMock.signInWithMagicLink

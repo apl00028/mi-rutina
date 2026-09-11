@@ -44,7 +44,7 @@ describe('accessGuard', () => {
     user_id: 'user-1',
     email: 'user@example.com',
     access_status: 'active',
-    plan: 'trial',
+    plan: 'free',
     role: 'user',
     expires_at: null,
     onboarding_completed: true,

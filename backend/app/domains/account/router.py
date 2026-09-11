@@ -163,64 +163,6 @@ async def _get_onboarding_completed(
     )
 
 
-async def _ensure_training_profile(
-    user: AuthenticatedUser,
-) -> None:
-    supabase_url, _ = (
-        _supabase_config()
-    )
-
-    headers = _headers(user)
-
-    headers["Prefer"] = (
-        "resolution=ignore-duplicates,"
-        "return=minimal"
-    )
-
-    try:
-        async with httpx.AsyncClient(
-            timeout=10.0
-        ) as client:
-            response = await client.post(
-                (
-                    f"{supabase_url}"
-                    "/rest/v1/training_profiles"
-                ),
-                headers=headers,
-                json={
-                    "user_id": user.id,
-                    "onboarding_completed":
-                        False,
-                },
-            )
-
-    except httpx.HTTPError as exc:
-        raise HTTPException(
-            status_code=(
-                status.HTTP_503_SERVICE_UNAVAILABLE
-            ),
-            detail=(
-                "Training profile service "
-                "is unavailable"
-            ),
-        ) from exc
-
-    if response.status_code not in {
-        200,
-        201,
-        204,
-    }:
-        raise HTTPException(
-            status_code=(
-                status.HTTP_502_BAD_GATEWAY
-            ),
-            detail=(
-                "Could not create "
-                "training profile"
-            ),
-        )
-
-
 def _me_response(
     user: AuthenticatedUser,
     access,
@@ -290,10 +232,6 @@ async def bootstrap_me(
     )
 
     if existing is not None:
-        await _ensure_training_profile(
-            user
-        )
-
         onboarding_completed = (
             await _get_onboarding_completed(
                 user
@@ -313,14 +251,15 @@ async def bootstrap_me(
     headers = _headers(user)
 
     headers["Prefer"] = (
+        "resolution=ignore-duplicates,"
         "return=representation"
     )
 
     payload = {
         "user_id": user.id,
         "email": user.email,
-        "status": "pending",
-        "plan": "trial",
+        "status": "active",
+        "plan": "free",
         "role": "user",
     }
 
@@ -334,6 +273,9 @@ async def bootstrap_me(
                     "/rest/v1/gymos_users"
                 ),
                 headers=headers,
+                params={
+                    "on_conflict": "user_id",
+                },
                 json=payload,
             )
 
@@ -358,51 +300,36 @@ async def bootstrap_me(
             ),
             detail=(
                 "Could not create "
-                "Aptus access request"
+                "Aptus account"
             ),
         )
 
-    rows = response.json()
-
-    row = (
-        rows[0]
-        if isinstance(
-            rows,
-            list,
-        )
-        and rows
-        else payload
-    )
-
-    await _ensure_training_profile(
+    access = await get_gymos_access(
         user
     )
 
-    return {
-        "user_id": user.id,
-        "email": user.email,
-        "access_status":
-            row.get(
-                "status",
-                "pending",
+    if access is None:
+        raise HTTPException(
+            status_code=(
+                status.HTTP_502_BAD_GATEWAY
             ),
-        "plan":
-            row.get(
-                "plan",
-                "trial",
+            detail=(
+                "Could not load created "
+                "Aptus account"
             ),
-        "role":
-            row.get(
-                "role",
-                "user",
-            ),
-        "expires_at":
-            row.get(
-                "expires_at"
-            ),
-        "onboarding_completed":
-            False,
-    }
+        )
+
+    onboarding_completed = (
+        await _get_onboarding_completed(
+            user
+        )
+    )
+
+    return _me_response(
+        user,
+        access,
+        onboarding_completed,
+    )
 
 
 @router.delete(

@@ -606,7 +606,7 @@ export class Login {
   }
 
 
-  async requestAccess():
+  async startRegistration():
     Promise<void> {
     const role =
       this.requestedAccessRole();
@@ -625,8 +625,8 @@ export class Login {
       this.message.set(null);
       this.error.set(
         this.language() === 'es'
-          ? 'Introduce tu email para solicitar acceso.'
-          : 'Enter your email to request access.'
+          ? 'Introduce tu email para crear tu cuenta.'
+          : 'Enter your email to create your account.'
       );
       return;
     }
@@ -636,8 +636,8 @@ export class Login {
     if (this.message()) {
       this.message.set(
         this.language() === 'es'
-          ? 'Te hemos enviado un enlace de acceso. Ábrelo para autenticarte y registrar tu solicitud pendiente.'
-          : 'We sent you a sign-in link. Open it to authenticate and register your pending request.'
+          ? 'Te hemos enviado un enlace para crear tu cuenta. Ábrelo para verificar tu email y continuar.'
+          : 'We sent you a link to create your account. Open it to verify your email and continue.'
       );
     }
   }

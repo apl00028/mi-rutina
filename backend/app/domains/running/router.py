@@ -2,6 +2,7 @@ import httpx
 from fastapi import APIRouter, Depends, HTTPException
 
 from app.core.auth import AuthenticatedUser, require_user
+from app.domains.integrations.service import require_health_connect_enabled
 from app.domains.running.models import RunningSession, RunningSyncRequest, RunningSyncResult
 from app.domains.running.service import (
     list_user_running_sessions, running_service_error, sync_user_running_health_connect,
@@ -16,6 +17,7 @@ router = APIRouter(tags=["Running"])
 async def sync_running_health_connect(
     request: RunningSyncRequest, user: AuthenticatedUser = Depends(require_user),
 ) -> RunningSyncResult:
+    await require_health_connect_enabled(user)
     return await sync_user_running_health_connect(user, request)
 
 

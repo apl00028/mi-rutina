@@ -57,6 +57,8 @@ import {
   Capacitor
 } from '@capacitor/core';
 
+import { HealthConnectAccountControl } from '../../features/health-connect/health-connect-account-control';
+
 
 const settingsSections = [
   {
@@ -1457,6 +1459,7 @@ export class SettingsAppearance {
   selector: 'app-settings-data',
   standalone: true,
   imports: [
+    HealthConnectAccountControl,
     RouterLink,
     LucideChevronLeft,
     LucideDownload
@@ -1517,6 +1520,8 @@ export class SettingsAppearance {
 
       <section class="settings-panel">
         <div class="settings-field">
+          <app-health-connect-account-control />
+
           <span>
             Datos de salud
           </span>
@@ -1528,8 +1533,8 @@ export class SettingsAppearance {
           <small>
             Aptus puede leer los datos que Garmin Connect
             comparte con Health Connect.
-            Esta prueba es solo de lectura y todavía
-            no guarda estos datos en Aptus.
+            La sincronización solo se realiza cuando
+            esta cuenta de Aptus está conectada.
           </small>
 
           @if (

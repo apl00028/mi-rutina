@@ -10,6 +10,7 @@ import {
 } from '../../features/running/domain/running-session';
 import {
   Component,
+  inject,
   Inject,
   InjectionToken,
   OnInit,
@@ -48,6 +49,10 @@ import {
 import {
   AuthService
 } from '../../core/auth.service';
+
+import {
+  HealthConnectAccountService
+} from '../../core/health-connect-account.service';
 
 import {
   environment
@@ -232,7 +237,48 @@ export const ENDURANCE_HEALTH_CONNECT =
     'ENDURANCE_HEALTH_CONNECT',
     {
       providedIn: 'root',
-      factory: () => HealthConnect
+      factory: () => {
+        const account =
+          inject(
+            HealthConnectAccountService
+          );
+
+        return {
+          async readGarminSwimmingMetrics() {
+            if (
+              !await account.enabled()
+            ) {
+              return {
+                sourcePackage:
+                  'com.garmin.android.apps.connectmobile',
+                lookbackDays: 30,
+                count: 0,
+                sessions: []
+              };
+            }
+
+            return HealthConnect
+              .readGarminSwimmingMetrics();
+          },
+
+          async readGarminRunningMetrics() {
+            if (
+              !await account.enabled()
+            ) {
+              return {
+                sourcePackage:
+                  'com.garmin.android.apps.connectmobile',
+                lookbackDays: 30,
+                count: 0,
+                sessions: []
+              };
+            }
+
+            return HealthConnect
+              .readGarminRunningMetrics();
+          }
+        };
+      }
     }
   );
 

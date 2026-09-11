@@ -1,4 +1,5 @@
 import { RunningHealthConnectSyncService } from './core/running-health-connect-sync.service';
+import { SwimmingHealthConnectSyncService } from './core/swimming-health-connect-sync.service';
 import {
   Component,
   signal,
@@ -99,6 +100,7 @@ class TrainerStub {}
 
 describe('App', () => {
   const runningSync = { start: vi.fn(), stop: vi.fn() };
+  const swimmingSync = { start: vi.fn(), stop: vi.fn() };
   let authUser:
     WritableSignal<any>;
 
@@ -131,6 +133,7 @@ describe('App', () => {
       imports: [App],
       providers: [
         { provide: RunningHealthConnectSyncService, useValue: runningSync },
+        { provide: SwimmingHealthConnectSyncService, useValue: swimmingSync },
         provideRouter([
           {
             path:

@@ -12,6 +12,7 @@ from app.api.v1.router import router as api_router
 from app.core.auth import AuthenticatedUser, require_user
 from app.domains.exercises.custom_repository import SupabaseConfigError
 from app.domains.running import repository
+from app.domains.running import router as running_api
 from app.domains.running.models import RunningHealthConnectSession
 from app.domains.running.service import running_to_rpc_payload
 
@@ -31,6 +32,16 @@ def native(**changes):
 def api(monkeypatch):
     app = FastAPI()
     app.include_router(api_router)
+
+    async def allow_health_connect(_user):
+        return None
+
+    monkeypatch.setattr(
+        running_api,
+        "require_health_connect_enabled",
+        allow_health_connect,
+    )
+
     active = {"user": "A"}
     calls, rows = [], {}
     failures = {}

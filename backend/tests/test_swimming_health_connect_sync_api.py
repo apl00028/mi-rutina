@@ -65,6 +65,15 @@ def test_health_connect_sync_endpoint_uses_authenticated_user(
 ):
     from app.domains.swimming import router as swimming_api
 
+    async def allow_health_connect(_user):
+        return None
+
+    monkeypatch.setattr(
+        swimming_api,
+        "require_health_connect_enabled",
+        allow_health_connect,
+    )
+
     async def fake_sync(user, request):
         assert user.id == "user-123"
         assert len(request.sessions) == 1

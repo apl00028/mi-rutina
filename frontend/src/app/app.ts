@@ -1,5 +1,6 @@
 import { WorkoutOutboxService } from './core/workout-outbox.service';
 import { RunningHealthConnectSyncService } from './core/running-health-connect-sync.service';
+import { SwimmingHealthConnectSyncService } from './core/swimming-health-connect-sync.service';
 import { aptusEntryRoute } from './core/access-routing';
 import {
   Component,
@@ -153,9 +154,11 @@ export class App implements OnDestroy {
     private telemetry:
       TelemetryService,
     private outbox: WorkoutOutboxService,
-    private runningSync: RunningHealthConnectSyncService
+    private runningSync: RunningHealthConnectSyncService,
+    private swimmingSync: SwimmingHealthConnectSyncService
   ) {
     this.runningSync.start();
+    this.swimmingSync.start();
     this.outbox.start();
     this.syncRouteState();
 
@@ -194,6 +197,7 @@ export class App implements OnDestroy {
 
   ngOnDestroy(): void {
     this.runningSync.stop();
+    this.swimmingSync.stop();
     this.outbox.stop();
     this.clearInitializationTimers();
   }

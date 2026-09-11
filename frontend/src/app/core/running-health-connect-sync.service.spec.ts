@@ -4,6 +4,7 @@ import { Capacitor } from '@capacitor/core';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AuthService } from './auth.service';
 import { RunningService } from './running.service';
+import { HealthConnectAccountService } from './health-connect-account.service';
 import { RunningHealthConnectSyncService, RUNNING_HEALTH_CONNECT } from './running-health-connect-sync.service';
 
 const lifecycle = vi.hoisted(() => ({ addListener: vi.fn(), getState: vi.fn() }));
@@ -23,6 +24,10 @@ describe('Running Health Connect synchronization', () => {
   const user = signal<{ id: string } | null>(null);
   const native = { permissionStatus: vi.fn(), readGarminRunningMetrics: vi.fn(), openPermissions: vi.fn() };
   const api = { syncSessions: vi.fn() };
+  const connection = {
+    revision: signal(0),
+    enabled: vi.fn()
+  };
   const remove = vi.fn();
   let state: (state: { isActive: boolean }) => void;
   let service: RunningHealthConnectSyncService;
@@ -49,6 +54,7 @@ describe('Running Health Connect synchronization', () => {
       state = callback; return { remove };
     });
     lifecycle.getState.mockResolvedValue({ isActive: true });
+    connection.enabled.mockResolvedValue(true);
     native.permissionStatus.mockResolvedValue({ exercise: true, distance: true, speed: true, heartRate: true });
     native.readGarminRunningMetrics.mockResolvedValue({ sessions: [session] });
     api.syncSessions.mockImplementation(async (sessions) => ({ synced: sessions.length,
@@ -56,6 +62,7 @@ describe('Running Health Connect synchronization', () => {
     TestBed.configureTestingModule({ providers: [
       { provide: AuthService, useValue: { user } },
       { provide: RunningService, useValue: api },
+      { provide: HealthConnectAccountService, useValue: connection },
       { provide: RUNNING_HEALTH_CONNECT, useValue: native },
     ] });
     service = TestBed.inject(RunningHealthConnectSyncService);
@@ -214,6 +221,96 @@ describe('Running Health Connect synchronization', () => {
     expect(api.syncSessions).toHaveBeenCalledTimes(2);
     expect(native.openPermissions).not.toHaveBeenCalled();
   });
+
+
+  it('does not read Health Connect when the current Aptus account is disconnected', async () => {
+    connection.enabled.mockResolvedValue(false);
+
+    service.start();
+    await settle();
+
+    expect(
+      connection.enabled
+    ).toHaveBeenCalled();
+
+    expect(
+      native.permissionStatus
+    ).not.toHaveBeenCalled();
+
+    expect(
+      native.readGarminRunningMetrics
+    ).not.toHaveBeenCalled();
+
+    expect(
+      api.syncSessions
+    ).not.toHaveBeenCalled();
+  });
+
+
+  it('does not inherit account A Health Connect connection after switching to account B', async () => {
+    connection.enabled.mockImplementation(
+      async () =>
+        user()?.id === 'athlete-a'
+    );
+
+    service.start();
+    await settle();
+
+    expect(
+      api.syncSessions
+    ).toHaveBeenCalledWith(
+      [session],
+      'athlete-a'
+    );
+
+    native.permissionStatus.mockClear();
+    native.readGarminRunningMetrics.mockClear();
+    api.syncSessions.mockClear();
+
+    user.set({
+      id: 'athlete-b'
+    });
+
+    await settle();
+
+    expect(
+      connection.enabled
+    ).toHaveBeenCalled();
+
+    expect(
+      native.permissionStatus
+    ).not.toHaveBeenCalled();
+
+    expect(
+      native.readGarminRunningMetrics
+    ).not.toHaveBeenCalled();
+
+    expect(
+      api.syncSessions
+    ).not.toHaveBeenCalled();
+
+    connection.enabled.mockResolvedValue(
+      true
+    );
+
+    connection.revision.set(
+      connection.revision() + 1
+    );
+
+    await settle();
+
+    expect(
+      native.readGarminRunningMetrics
+    ).toHaveBeenCalledTimes(1);
+
+    expect(
+      api.syncSessions
+    ).toHaveBeenCalledWith(
+      [session],
+      'athlete-b'
+    );
+  });
+
 
   it('never uses native APIs on web', async () => {
     vi.mocked(Capacitor.isNativePlatform).mockReturnValue(false);

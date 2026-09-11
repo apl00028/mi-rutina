@@ -14,6 +14,9 @@ from app.core.auth import (
     AuthenticatedUser,
     require_user,
 )
+from app.domains.integrations.service import (
+    require_health_connect_enabled,
+)
 from app.domains.swimming.models import (
     SwimmingHealthConnectSyncRequest,
     SwimmingHealthConnectSyncResult,
@@ -126,6 +129,8 @@ async def sync_swimming_health_connect(
     request: SwimmingHealthConnectSyncRequest,
     user: AuthenticatedUser = Depends(require_user),
 ) -> SwimmingHealthConnectSyncResult:
+    await require_health_connect_enabled(user)
+
     try:
         return await sync_user_swimming_health_connect(
             user,

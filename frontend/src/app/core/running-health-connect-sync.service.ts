@@ -4,6 +4,7 @@ import { Capacitor, PluginListenerHandle } from '@capacitor/core';
 import { AuthService } from './auth.service';
 import { HealthConnect, HealthConnectRunningMetricSession } from './health-connect.plugin';
 import { PersistedRunningSession, RunningService } from './running.service';
+import { HealthConnectAccountService } from './health-connect-account.service';
 
 type RunningNative = Pick<typeof HealthConnect, 'permissionStatus' | 'readGarminRunningMetrics'>;
 
@@ -37,6 +38,7 @@ export class RunningHealthConnectSyncService implements OnDestroy {
   constructor(
     private auth: AuthService,
     private api: RunningService,
+    private connection: HealthConnectAccountService,
     private injector: Injector,
     @Inject(RUNNING_HEALTH_CONNECT) private native: RunningNative,
   ) {}
@@ -52,6 +54,7 @@ export class RunningHealthConnectSyncService implements OnDestroy {
     this.authEffect = effect(() => {
       const userId = authenticatedUserId();
       const active = this.foreground();
+      this.connection.revision();
       const generation = ++this.generation;
       this.cancelTimer();
       if (!userId || !active) return;
@@ -146,6 +149,13 @@ export class RunningHealthConnectSyncService implements OnDestroy {
     const current = () => this.auth.user()?.id === userId && generation === this.generation;
     const publish = () => { if (current()) observers.forEach(observer => observer(progress)); };
     try {
+      const connected =
+        await this.connection.enabled();
+
+      if (!current() || !connected) {
+        return;
+      }
+
       if (automatic) {
         const permissions = await this.native.permissionStatus();
         if (!current()) return;

@@ -32,6 +32,10 @@ import {
 import {
   AuthService
 } from '../../core/auth.service';
+
+import {
+  HealthConnectAccountService
+} from '../../core/health-connect-account.service';
 import type {
   HealthConnectRunningMetricSession
 } from '../../core/health-connect.plugin';
@@ -612,6 +616,15 @@ describe('Endurance running session', () => {
           provide: ENDURANCE_HEALTH_CONNECT,
           useValue: healthConnect
         },
+        {
+          provide: HealthConnectAccountService,
+          useValue: {
+            revision: () => 0,
+            enabled: vi.fn(
+              async () => true
+            )
+          }
+        },
         { provide: RUNNING_HEALTH_CONNECT, useValue: healthConnect },
         { provide: RunningService, useValue: runningApi }
       ]
@@ -909,7 +922,18 @@ describe('Endurance running session', () => {
     const loading = fixture.componentInstance.loadRunning();
     await Promise.resolve();
     await fixture.componentInstance.loadRunning();
-    expect(fixture.componentInstance.runningSessions()).toHaveLength(2);
+
+    // Account-scoped Health Connect adds an asynchronous
+    // connection check before the native read. The important
+    // contract is that local sessions appear while the
+    // persisted GET is still pending, not within one exact
+    // microtask.
+    await vi.waitFor(() =>
+      expect(
+        fixture.componentInstance.runningSessions()
+      ).toHaveLength(2)
+    );
+
     fixture.componentInstance.selectRunningSession('1');
     expect(runningApi.listSessions).toHaveBeenCalledOnce();
     expect(healthConnect.readGarminRunningMetrics).toHaveBeenCalledOnce();

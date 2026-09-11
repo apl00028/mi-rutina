@@ -49,6 +49,12 @@ const supabaseMock =
         signInWithOtp:
           vi.fn(),
 
+        signUp:
+          vi.fn(),
+
+        resend:
+          vi.fn(),
+
         signInWithOAuth:
           vi.fn(),
 
@@ -193,6 +199,23 @@ describe(
           error: null
         });
 
+      supabaseMock.auth.signUp
+        .mockResolvedValue({
+          data: {
+            user: {
+              id: 'new-user'
+            },
+            session: null
+          },
+          error: null
+        });
+
+      supabaseMock.auth.resend
+        .mockResolvedValue({
+          data: {},
+          error: null
+        });
+
       supabaseMock.auth.exchangeCodeForSession
         .mockResolvedValue({
           data: {
@@ -281,21 +304,26 @@ describe(
 
 
     it(
-      'allows account creation only for registration links',
+      'creates accounts with email and password and keeps the requested role',
       async () => {
-        await service.signUpWithMagicLink(
+        await service.signUpWithPassword(
           'new@example.com',
+          'secret-password',
           'trainer'
         );
 
         expect(
-          supabaseMock.auth.signInWithOtp
+          supabaseMock.auth.signUp
         ).toHaveBeenCalledWith({
-          email: 'new@example.com',
+          email:
+            'new@example.com',
+
+          password:
+            'secret-password',
+
           options: {
             emailRedirectTo:
-              `${window.location.origin}/login`,
-            shouldCreateUser: true
+              `${window.location.origin}/login?verification=1`
           }
         });
 
@@ -303,7 +331,39 @@ describe(
           localStorage.getItem(
             'aptus-signup-intent-v1'
           )
-        ).toContain('"role":"trainer"');
+        ).toContain(
+          '"role":"trainer"'
+        );
+      }
+    );
+
+
+    it(
+      'resends signup confirmation without creating another account',
+      async () => {
+        await service
+          .resendSignupConfirmation(
+            'new@example.com'
+          );
+
+        expect(
+          supabaseMock.auth.resend
+        ).toHaveBeenCalledWith({
+          type:
+            'signup',
+
+          email:
+            'new@example.com',
+
+          options: {
+            emailRedirectTo:
+              `${window.location.origin}/login?verification=1`
+          }
+        });
+
+        expect(
+          supabaseMock.auth.signUp
+        ).not.toHaveBeenCalled();
       }
     );
 
@@ -851,8 +911,9 @@ describe(
     it(
       'bootstraps a verified identity without Aptus access',
       async () => {
-        await service.signUpWithMagicLink(
+        await service.signUpWithPassword(
           'test@example.com',
+          'secret-password',
           'trainer'
         );
 

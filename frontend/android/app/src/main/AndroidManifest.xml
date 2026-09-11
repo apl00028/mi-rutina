@@ -43,6 +43,10 @@
                 <data
                     android:scheme="@string/custom_url_scheme"
                     android:host="reset-password" />
+
+                <data
+                    android:scheme="@string/custom_url_scheme"
+                    android:host="verify-email" />
             </intent-filter>
 
         </activity>

@@ -333,6 +333,49 @@ export class AuthService {
   }
 
 
+  async exchangeEmailVerificationCode(
+    code: string
+  ): Promise<Session> {
+    const authCode =
+      code.trim();
+
+    if (!authCode) {
+      throw new Error(
+        'El enlace de verificación no es válido.'
+      );
+    }
+
+    const {
+      data,
+      error
+    } =
+      await this.client.auth
+        .exchangeCodeForSession(
+          authCode
+        );
+
+    if (error) {
+      throw error;
+    }
+
+    if (!data.session) {
+      throw new Error(
+        'No se recibió una sesión de verificación.'
+      );
+    }
+
+    this.applySession(
+      data.session
+    );
+
+    this.finishAuthInitialization(
+      data.session
+    );
+
+    return data.session;
+  }
+
+
   async exchangePasswordRecoveryCode(
     code: string
   ): Promise<Session> {
@@ -460,10 +503,14 @@ export class AuthService {
 
 
   private loginRedirect(
-    method: 'google' | 'email'
+    method: 'google' | 'email' | 'verification'
   ): string {
     if (this.isNativeApp()) {
-      return 'com.adrianpelaez.aptus://login';
+      return (
+        method === 'verification'
+          ? 'com.adrianpelaez.aptus://verify-email'
+          : 'com.adrianpelaez.aptus://login'
+      );
     }
 
     return (
@@ -471,7 +518,11 @@ export class AuthService {
       (
         method === 'google'
           ? '?oauth=google'
-          : ''
+          : (
+              method === 'verification'
+                ? '?verification=1'
+                : ''
+            )
       )
     );
   }
@@ -512,15 +563,24 @@ export class AuthService {
     const recoveryUrl =
       'com.adrianpelaez.aptus://reset-password';
 
+    const verificationUrl =
+      'com.adrianpelaez.aptus://verify-email';
+
     const isLogin =
       url.startsWith(loginUrl);
 
     const isRecovery =
       url.startsWith(recoveryUrl);
 
+    const isVerification =
+      url.startsWith(
+        verificationUrl
+      );
+
     if (
       !isLogin &&
-      !isRecovery
+      !isRecovery &&
+      !isVerification
     ) {
       return;
     }
@@ -627,6 +687,22 @@ export class AuthService {
 
         window.location.replace(
           '/login?recovery=1'
+        );
+
+        return;
+      }
+
+      if (isVerification) {
+        if (!recoverySession) {
+          throw new Error(
+            'No se recibió una sesión de verificación.'
+          );
+        }
+
+        await this.signOut();
+
+        window.location.replace(
+          '/login?verified=1'
         );
 
         return;
@@ -759,8 +835,9 @@ export class AuthService {
   }
 
 
-  async signUpWithMagicLink(
+  async signUpWithPassword(
     email: string,
+    password: string,
     role: SignupRole
   ): Promise<void> {
     this.storeSignupIntent(
@@ -768,13 +845,55 @@ export class AuthService {
       role
     );
 
+    const redirectTo =
+      this.loginRedirect('verification');
+
     try {
-      await this.sendMagicLink(
-        email,
-        true
-      );
+      const {
+        error
+      } =
+        await this.client.auth.signUp({
+          email,
+          password,
+
+          options: {
+            emailRedirectTo:
+              redirectTo
+          }
+        });
+
+      if (error) {
+        throw error;
+      }
     } catch (error) {
       this.clearSignupIntent();
+      throw error;
+    }
+  }
+
+
+  async resendSignupConfirmation(
+    email: string
+  ): Promise<void> {
+    const redirectTo =
+      this.loginRedirect('verification');
+
+    const {
+      error
+    } =
+      await this.client.auth.resend({
+        type:
+          'signup',
+
+        email,
+
+        options: {
+          emailRedirectTo:
+            redirectTo
+        }
+      });
+
+    if (error) {
       throw error;
     }
   }

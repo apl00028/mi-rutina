@@ -71,9 +71,101 @@
         <h2>
           @switch (authView()) {
             @case ('create') {
-              {{ language() === 'es' ? 'Crear tu cuenta' : 'Create your account' }}
-            }
-            @case ('login') {
+          <form
+            class="email-form email-link-form"
+            (submit)="submitCreateAccount($event)"
+          >
+            <label>Email</label>
+
+            <input
+              type="email"
+              autocomplete="email"
+              placeholder="nombre@correo.com"
+              required
+              [value]="email()"
+              (input)="email.set($any($event.target).value)"
+            />
+
+            <label>
+              {{ language() === 'es' ? 'Contraseña' : 'Password' }}
+            </label>
+
+            <input
+              type="password"
+              autocomplete="new-password"
+              required
+              minlength="8"
+              [value]="registrationPassword()"
+              (input)="
+                registrationPassword.set(
+                  $any($event.target).value
+                )
+              "
+            />
+
+            <label>
+              {{
+                language() === 'es'
+                  ? 'Repetir contraseña'
+                  : 'Confirm password'
+              }}
+            </label>
+
+            <input
+              type="password"
+              autocomplete="new-password"
+              required
+              minlength="8"
+              [value]="registrationConfirmPassword()"
+              (input)="
+                registrationConfirmPassword.set(
+                  $any($event.target).value
+                )
+              "
+            />
+
+            <button
+              class="primary-button"
+              type="submit"
+              [disabled]="loading()"
+            >
+              {{
+                loading()
+                  ? (
+                      language() === 'es'
+                        ? 'Creando...'
+                        : 'Creating...'
+                    )
+                  : (
+                      language() === 'es'
+                        ? 'Crear cuenta'
+                        : 'Create account'
+                    )
+              }}
+            </button>
+
+            <p class="auth-switch">
+              {{
+                language() === 'es'
+                  ? '¿Ya tienes cuenta?'
+                  : 'Already have an account?'
+              }}
+
+              <button
+                type="button"
+                (click)="openEmailLogin()"
+              >
+                {{
+                  language() === 'es'
+                    ? 'Iniciar sesión'
+                    : 'Sign in'
+                }}
+              </button>
+            </p>
+          </form>
+        }
+
+        @case ('login') {
               {{ language() === 'es' ? 'Iniciar sesión' : 'Sign in' }}
             }
             @case ('verification') {
@@ -400,8 +492,8 @@
             <p>
               {{
                 language() === 'es'
-                  ? 'Abre el enlace para verificar tu correo y continuar en Aptus.'
-                  : 'Open the link to verify your email and continue in Aptus.'
+                  ? 'Abre el enlace para verificar tu correo. Después inicia sesión con tu email y contraseña.'
+                  : 'Open the link to verify your email. Then sign in with your email and password.'
               }}
             </p>
 

@@ -56,6 +56,12 @@ export class Login {
   password =
     signal('');
 
+  registrationPassword =
+    signal('');
+
+  registrationConfirmPassword =
+    signal('');
+
   passwordLoading =
     signal(false);
 
@@ -146,12 +152,24 @@ export class Login {
       params.get('oauth') ===
       'google';
 
+    const verificationCallbackReturn =
+      params.get('verification') ===
+      '1';
+
+    const verificationCompleted =
+      params.get('verified') ===
+      '1';
+
     const recoveryCallbackReturn =
       params.get('recovery') === '1' ||
       params.get('type') === 'recovery' ||
       hash.get('type') === 'recovery';
 
     const recoveryCode =
+      params.get('code') ??
+      hash.get('code');
+
+    const verificationCode =
       params.get('code') ??
       hash.get('code');
 
@@ -172,6 +190,26 @@ export class Login {
       this.error.set(
         nativeError
       );
+    }
+
+    if (verificationCompleted) {
+      this.authView.set(
+        'login'
+      );
+
+      this.message.set(
+        this.language() === 'es'
+          ? 'Correo verificado. Ya puedes iniciar sesión con tu email y contraseña.'
+          : 'Email verified. You can now sign in with your email and password.'
+      );
+
+      window.history.replaceState(
+        {},
+        document.title,
+        '/login'
+      );
+
+      return;
     }
 
     const session =
@@ -251,6 +289,72 @@ export class Login {
 
       return;
     }
+
+    if (verificationCallbackReturn) {
+      let verificationSession =
+        session;
+
+      if (
+        !verificationSession &&
+        !authReturnError &&
+        verificationCode
+      ) {
+        try {
+          verificationSession =
+            await this.auth
+              .exchangeEmailVerificationCode(
+                verificationCode
+              );
+        } catch {
+          verificationSession =
+            null;
+        }
+      }
+
+      if (!verificationSession) {
+        this.authView.set(
+          'login'
+        );
+
+        this.error.set(
+          authReturnError ??
+          (
+            this.language() === 'es'
+              ? 'El enlace de verificación no es válido o ha caducado.'
+              : 'The verification link is invalid or has expired.'
+          )
+        );
+
+        window.history.replaceState(
+          {},
+          document.title,
+          '/login'
+        );
+
+        return;
+      }
+
+      await this.auth.signOut();
+
+      this.authView.set(
+        'login'
+      );
+
+      this.message.set(
+        this.language() === 'es'
+          ? 'Correo verificado. Ya puedes iniciar sesión con tu email y contraseña.'
+          : 'Email verified. You can now sign in with your email and password.'
+      );
+
+      window.history.replaceState(
+        {},
+        document.title,
+        '/login'
+      );
+
+      return;
+    }
+
 
     if (!session) {
       if (
@@ -609,15 +713,20 @@ export class Login {
   }
 
 
-  private async submitRegistration(
-    resend = false
-  ): Promise<void> {
+  private async submitRegistration():
+    Promise<void> {
     if (this.loading()) {
       return;
     }
 
     const email =
       this.email().trim();
+
+    const password =
+      this.registrationPassword();
+
+    const confirmation =
+      this.registrationConfirmPassword();
 
     this.message.set(null);
     this.error.set(null);
@@ -628,40 +737,60 @@ export class Login {
           ? 'Introduce un email válido.'
           : 'Enter a valid email address.'
       );
+
+      return;
+    }
+
+    if (password.length < 8) {
+      this.error.set(
+        this.language() === 'es'
+          ? 'La contraseña debe tener al menos 8 caracteres.'
+          : 'The password must contain at least 8 characters.'
+      );
+
+      return;
+    }
+
+    if (password !== confirmation) {
+      this.error.set(
+        this.language() === 'es'
+          ? 'Las contraseñas no coinciden.'
+          : 'The passwords do not match.'
+      );
+
       return;
     }
 
     this.loading.set(true);
 
     try {
-      await this.auth.signUpWithMagicLink(
+      await this.auth.signUpWithPassword(
         email,
+        password,
         this.requestedAccessRole() === 'trainer'
           ? 'trainer'
           : 'user'
       );
 
-      this.verificationEmail.set(email);
+      this.verificationEmail.set(
+        email
+      );
 
-      if (!resend) {
-        this.showAuthView(
-          'verification'
-        );
-      }
+      this.registrationPassword.set('');
+      this.registrationConfirmPassword.set('');
 
-      if (resend) {
-        this.message.set(
-          this.language() === 'es'
-            ? 'Correo reenviado.'
-            : 'Email sent again.'
-        );
-      }
+      this.showAuthView(
+        'verification'
+      );
 
     } catch (err: unknown) {
       this.error.set(
-        this.language() === 'es'
-          ? 'No se pudo enviar el correo. Inténtalo de nuevo.'
-          : 'The email could not be sent. Please try again.'
+        this.authErrorMessage(
+          err,
+          this.language() === 'es'
+            ? 'No se pudo crear la cuenta. Inténtalo de nuevo.'
+            : 'The account could not be created. Please try again.'
+        )
       );
 
     } finally {
@@ -672,9 +801,54 @@ export class Login {
 
   async resendEmail():
     Promise<void> {
-    await this.submitRegistration(
-      true
-    );
+    if (this.loading()) {
+      return;
+    }
+
+    const email =
+      this.verificationEmail()
+        .trim();
+
+    this.message.set(null);
+    this.error.set(null);
+
+    if (!this.isValidEmail(email)) {
+      this.error.set(
+        this.language() === 'es'
+          ? 'El email de verificación no es válido.'
+          : 'The verification email is invalid.'
+      );
+
+      return;
+    }
+
+    this.loading.set(true);
+
+    try {
+      await this.auth
+        .resendSignupConfirmation(
+          email
+        );
+
+      this.message.set(
+        this.language() === 'es'
+          ? 'Correo reenviado.'
+          : 'Email sent again.'
+      );
+
+    } catch (err: unknown) {
+      this.error.set(
+        this.authErrorMessage(
+          err,
+          this.language() === 'es'
+            ? 'No se pudo reenviar el correo.'
+            : 'The email could not be resent.'
+        )
+      );
+
+    } finally {
+      this.loading.set(false);
+    }
   }
 
 

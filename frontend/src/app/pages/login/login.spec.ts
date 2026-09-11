@@ -59,6 +59,9 @@ describe(
       exchangePasswordRecoveryCode:
         vi.fn(),
 
+      exchangeEmailVerificationCode:
+        vi.fn(),
+
       consumeNativeAuthError:
         vi.fn(),
 
@@ -83,7 +86,10 @@ describe(
       signInWithMagicLink:
         vi.fn(),
 
-      signUpWithMagicLink:
+      signUpWithPassword:
+        vi.fn(),
+
+      resendSignupConfirmation:
         vi.fn(),
 
       clearSignupIntent:
@@ -177,6 +183,19 @@ describe(
           null
         );
 
+      authMock.exchangeEmailVerificationCode
+        .mockImplementation(
+          async code => ({
+            access_token:
+              `verification-${code}`,
+
+            user: {
+              email:
+                'new@example.com'
+            }
+          })
+        );
+
       authMock.exchangePasswordRecoveryCode
         .mockImplementation(
           async code => {
@@ -250,7 +269,10 @@ describe(
       authMock.signInWithMagicLink
         .mockResolvedValue(undefined);
 
-      authMock.signUpWithMagicLink
+      authMock.signUpWithPassword
+        .mockResolvedValue(undefined);
+
+      authMock.resendSignupConfirmation
         .mockResolvedValue(undefined);
 
       routerMock.navigateByUrl
@@ -350,6 +372,136 @@ describe(
 
         expect(routerMock.navigateByUrl)
           .toHaveBeenCalledWith(expected);
+      }
+    );
+
+
+    it(
+      'signs out after web email verification and requires password login',
+      async () => {
+        authMock.waitForSession
+          .mockResolvedValue({
+            access_token:
+              'verified-session',
+
+            user: {
+              email:
+                'new@example.com'
+            }
+          });
+
+        setLoginSearch(
+          '?verification=1&code=abc'
+        );
+
+        const fixture =
+          TestBed.createComponent(
+            Login
+          );
+
+        fixture.detectChanges();
+        await fixture.whenStable();
+        await flushPromises();
+        fixture.detectChanges();
+
+        expect(
+          authMock.signOut
+        ).toHaveBeenCalledOnce();
+
+        expect(
+          authMock.resolveAccess
+        ).not.toHaveBeenCalled();
+
+        expect(
+          fixture.componentInstance
+            .authView()
+        ).toBe('login');
+
+        expect(
+          fixture.componentInstance
+            .message()
+        ).toContain(
+          'Correo verificado'
+        );
+
+        expect(
+          window.location.search
+        ).toBe('');
+      }
+    );
+
+
+    it(
+      'exchanges a verification code when the initial web session is absent',
+      async () => {
+        authMock.waitForSession
+          .mockResolvedValue(
+            null
+          );
+
+        setLoginSearch(
+          '?verification=1&code=abc'
+        );
+
+        const fixture =
+          TestBed.createComponent(
+            Login
+          );
+
+        fixture.detectChanges();
+        await fixture.whenStable();
+        await flushPromises();
+        fixture.detectChanges();
+
+        expect(
+          authMock.exchangeEmailVerificationCode
+        ).toHaveBeenCalledWith(
+          'abc'
+        );
+
+        expect(
+          authMock.signOut
+        ).toHaveBeenCalledOnce();
+
+        expect(
+          authMock.resolveAccess
+        ).not.toHaveBeenCalled();
+      }
+    );
+
+
+    it(
+      'shows verified state after the native callback has already signed out',
+      async () => {
+        setLoginSearch(
+          '?verified=1'
+        );
+
+        const fixture =
+          TestBed.createComponent(
+            Login
+          );
+
+        fixture.detectChanges();
+        await fixture.whenStable();
+        await flushPromises();
+        fixture.detectChanges();
+
+        expect(
+          fixture.componentInstance
+            .authView()
+        ).toBe('login');
+
+        expect(
+          fixture.componentInstance
+            .message()
+        ).toContain(
+          'Correo verificado'
+        );
+
+        expect(
+          authMock.resolveAccess
+        ).not.toHaveBeenCalled();
       }
     );
 
@@ -1149,14 +1301,14 @@ describe(
         ).toBe('create');
 
         expect(
-          authMock.signUpWithMagicLink
+          authMock.signUpWithPassword
         ).not.toHaveBeenCalled();
       }
     );
 
 
     it(
-      'sends a registration link and shows verification state',
+      'creates an account with email and password and shows verification state',
       async () => {
         const fixture =
           TestBed.createComponent(
@@ -1170,8 +1322,17 @@ describe(
           fixture.componentInstance;
 
         component.openCreateAccount();
+
         component.email.set(
           ' new@example.com '
+        );
+
+        component.registrationPassword.set(
+          'secret-password'
+        );
+
+        component.registrationConfirmPassword.set(
+          'secret-password'
         );
 
         await component.submitCreateAccount(
@@ -1179,19 +1340,24 @@ describe(
         );
 
         expect(
-          authMock.signUpWithMagicLink
+          authMock.signUpWithPassword
         ).toHaveBeenCalledWith(
           'new@example.com',
+          'secret-password',
           'user'
         );
 
         expect(
           component.authView()
-        ).toBe('verification');
+        ).toBe(
+          'verification'
+        );
 
         expect(
           component.verificationEmail()
-        ).toBe('new@example.com');
+        ).toBe(
+          'new@example.com'
+        );
       }
     );
 
@@ -1212,7 +1378,7 @@ describe(
         );
 
         expect(
-          authMock.signUpWithMagicLink
+          authMock.signUpWithPassword
         ).not.toHaveBeenCalled();
         expect(component.error())
           .toContain('email válido');
@@ -1221,37 +1387,140 @@ describe(
 
 
     it(
-      'prevents duplicate registration submissions while sending',
+      'rejects a short registration password',
       async () => {
-        const sending = deferred<void>();
-
-        authMock.signUpWithMagicLink
-          .mockReturnValue(sending.promise);
-
         const fixture =
-          TestBed.createComponent(Login);
+          TestBed.createComponent(
+            Login
+          );
+
         const component =
           fixture.componentInstance;
 
         component.openCreateAccount();
-        component.email.set('new@example.com');
+        component.email.set(
+          'new@example.com'
+        );
+        component.registrationPassword.set(
+          'short'
+        );
+        component.registrationConfirmPassword.set(
+          'short'
+        );
+
+        await component.submitCreateAccount(
+          new Event('submit')
+        );
+
+        expect(
+          authMock.signUpWithPassword
+        ).not.toHaveBeenCalled();
+
+        expect(
+          component.error()
+        ).toContain(
+          'al menos 8 caracteres'
+        );
+      }
+    );
+
+
+    it(
+      'rejects mismatched registration passwords',
+      async () => {
+        const fixture =
+          TestBed.createComponent(
+            Login
+          );
+
+        const component =
+          fixture.componentInstance;
+
+        component.openCreateAccount();
+        component.email.set(
+          'new@example.com'
+        );
+        component.registrationPassword.set(
+          'secret-password'
+        );
+        component.registrationConfirmPassword.set(
+          'different-password'
+        );
+
+        await component.submitCreateAccount(
+          new Event('submit')
+        );
+
+        expect(
+          authMock.signUpWithPassword
+        ).not.toHaveBeenCalled();
+
+        expect(
+          component.error()
+        ).toContain(
+          'no coinciden'
+        );
+      }
+    );
+
+
+    it(
+      'prevents duplicate registration submissions while creating the account',
+      async () => {
+        const sending =
+          deferred<void>();
+
+        authMock.signUpWithPassword
+          .mockReturnValue(
+            sending.promise
+          );
+
+        const fixture =
+          TestBed.createComponent(
+            Login
+          );
+
+        const component =
+          fixture.componentInstance;
+
+        component.openCreateAccount();
+
+        component.email.set(
+          'new@example.com'
+        );
+
+        component.registrationPassword.set(
+          'secret-password'
+        );
+
+        component.registrationConfirmPassword.set(
+          'secret-password'
+        );
 
         const first =
           component.submitCreateAccount(
             new Event('submit')
           );
+
         const duplicate =
           component.submitCreateAccount(
             new Event('submit')
           );
 
-        expect(component.loading()).toBe(true);
         expect(
-          authMock.signUpWithMagicLink
+          component.loading()
+        ).toBe(true);
+
+        expect(
+          authMock.signUpWithPassword
         ).toHaveBeenCalledOnce();
 
         sending.resolve();
-        await Promise.all([first, duplicate]);
+
+        await Promise.all([
+          first,
+          duplicate
+        ]);
       }
     );
 
@@ -1276,38 +1545,63 @@ describe(
 
 
     it(
-      'resends registration with the same intent and changes email',
+      'resends signup verification without creating another account',
       async () => {
         const fixture =
-          TestBed.createComponent(Login);
+          TestBed.createComponent(
+            Login
+          );
+
         const component =
           fixture.componentInstance;
 
         component.openCreateAccount();
-        component.selectAccessRole('trainer');
-        component.email.set('new@example.com');
+        component.selectAccessRole(
+          'trainer'
+        );
+
+        component.email.set(
+          'new@example.com'
+        );
+
+        component.registrationPassword.set(
+          'secret-password'
+        );
+
+        component.registrationConfirmPassword.set(
+          'secret-password'
+        );
+
         await component.submitCreateAccount(
           new Event('submit')
         );
 
-        authMock.signUpWithMagicLink.mockClear();
+        authMock.signUpWithPassword
+          .mockClear();
+
         await component.resendEmail();
 
         expect(
-          authMock.signUpWithMagicLink
+          authMock.resendSignupConfirmation
         ).toHaveBeenCalledWith(
-          'new@example.com',
-          'trainer'
+          'new@example.com'
         );
+
         expect(
-          authMock.signInWithMagicLink
+          authMock.signUpWithPassword
         ).not.toHaveBeenCalled();
 
         component.changeEmail();
-        expect(component.authView())
-          .toBe('create');
-        expect(component.email())
-          .toBe('new@example.com');
+
+        expect(
+          component.authView()
+        ).toBe('create');
+
+        expect(
+          component.email()
+        ).toBe(
+          'new@example.com'
+        );
       }
     );
 
@@ -1315,16 +1609,37 @@ describe(
     it(
       'returns from verification to account creation',
       async () => {
-        const fixture = TestBed.createComponent(Login);
-        const component = fixture.componentInstance;
+        const fixture =
+          TestBed.createComponent(
+            Login
+          );
+
+        const component =
+          fixture.componentInstance;
 
         component.openCreateAccount();
-        component.email.set('new@example.com');
-        await component.submitCreateAccount(new Event('submit'));
+
+        component.email.set(
+          'new@example.com'
+        );
+
+        component.registrationPassword.set(
+          'secret-password'
+        );
+
+        component.registrationConfirmPassword.set(
+          'secret-password'
+        );
+
+        await component.submitCreateAccount(
+          new Event('submit')
+        );
 
         component.back();
 
-        expect(component.authView()).toBe('create');
+        expect(
+          component.authView()
+        ).toBe('create');
       }
     );
 

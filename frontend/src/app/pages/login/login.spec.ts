@@ -86,6 +86,9 @@ describe(
       signUpWithMagicLink:
         vi.fn(),
 
+      clearSignupIntent:
+        vi.fn(),
+
       signInWithGoogle:
         vi.fn()
     };
@@ -917,7 +920,7 @@ describe(
           );
 
         fixture.componentInstance
-          .selectAccessRole('trainer');
+          .openEmailLogin();
 
         fixture.detectChanges();
 
@@ -990,7 +993,7 @@ describe(
           );
 
         fixture.componentInstance
-          .selectAccessRole('trainer');
+          .openEmailLogin();
 
         fixture.detectChanges();
 
@@ -1044,7 +1047,7 @@ describe(
 
 
     it(
-      'switches between athlete and trainer access modes',
+      'shows the two root authentication choices without a role selector',
       async () => {
         const fixture =
           TestBed.createComponent(
@@ -1055,48 +1058,69 @@ describe(
         await fixture.whenStable();
         fixture.detectChanges();
 
-        const component =
-          fixture.componentInstance;
-
-        expect(
-          component.requestedAccessRole()
-        ).toBe('athlete');
-
         expect(
           fixture.nativeElement
-            .querySelectorAll(
-              '.access-role-toggle button'
-            ).length
-        ).toBe(2);
+            .querySelector('.create-account-button')
+        ).not.toBeNull();
+        expect(
+          fixture.nativeElement
+            .querySelector('.email-login-button')
+        ).not.toBeNull();
+        expect(
+          fixture.nativeElement
+            .querySelector('.access-role-toggle')
+        ).toBeNull();
+      }
+    );
 
-        component.selectAccessRole(
-          'trainer'
-        );
 
+    it(
+      'offers athlete and trainer roles on account creation',
+      async () => {
+        const fixture = TestBed.createComponent(Login);
+        const component = fixture.componentInstance;
+
+        component.openCreateAccount();
         fixture.detectChanges();
 
         expect(
-          component.requestedAccessRole()
-        ).toBe('trainer');
+          fixture.nativeElement.querySelectorAll(
+            '.access-role-toggle button'
+          ).length
+        ).toBe(2);
+
+        component.selectAccessRole('trainer');
+        expect(component.requestedAccessRole())
+          .toBe('trainer');
+      }
+    );
+
+
+    it.each([
+      'athlete',
+      'trainer'
+    ] as const)(
+      'shows the same full login methods for %s',
+      async role => {
+        const fixture = TestBed.createComponent(Login);
+        const component = fixture.componentInstance;
+
+        component.openEmailLogin();
+        component.selectAccessRole(role);
+        fixture.detectChanges();
 
         expect(
-          fixture.nativeElement
-            .textContent
-        ).toContain(
-          'Accede a tus deportistas'
-        );
-
-        component.requestTrainerAccess();
-
+          fixture.nativeElement.querySelector('.passkey-button')
+        ).not.toBeNull();
         expect(
-          component.message()
-        ).toContain(
-          'entrenador'
-        );
-
+          fixture.nativeElement.querySelector('.google-button')
+        ).not.toBeNull();
         expect(
-          authMock.signInWithMagicLink
-        ).not.toHaveBeenCalled();
+          fixture.nativeElement.querySelector('input[type="email"]')
+        ).not.toBeNull();
+        expect(
+          fixture.nativeElement.querySelector('input[type="password"]')
+        ).not.toBeNull();
       }
     );
 
@@ -1157,7 +1181,8 @@ describe(
         expect(
           authMock.signUpWithMagicLink
         ).toHaveBeenCalledWith(
-          'new@example.com'
+          'new@example.com',
+          'user'
         );
 
         expect(
@@ -1232,7 +1257,7 @@ describe(
 
 
     it(
-      'uses existing-account mode for email login',
+      'returns from login to the auth choice',
       async () => {
         const fixture =
           TestBed.createComponent(Login);
@@ -1240,20 +1265,12 @@ describe(
           fixture.componentInstance;
 
         component.openEmailLogin();
-        component.email.set('existing@example.com');
+        expect(component.authView()).toBe('login');
 
-        await component.submitEmailLogin(
-          new Event('submit')
-        );
-
-        expect(
-          authMock.signInWithMagicLink
-        ).toHaveBeenCalledWith(
-          'existing@example.com'
-        );
-        expect(
-          authMock.signUpWithMagicLink
-        ).not.toHaveBeenCalled();
+        component.back();
+        expect(component.authView()).toBe('choice');
+        expect(authMock.clearSignupIntent)
+          .toHaveBeenCalledOnce();
       }
     );
 
@@ -1267,6 +1284,7 @@ describe(
           fixture.componentInstance;
 
         component.openCreateAccount();
+        component.selectAccessRole('trainer');
         component.email.set('new@example.com');
         await component.submitCreateAccount(
           new Event('submit')
@@ -1278,7 +1296,8 @@ describe(
         expect(
           authMock.signUpWithMagicLink
         ).toHaveBeenCalledWith(
-          'new@example.com'
+          'new@example.com',
+          'trainer'
         );
         expect(
           authMock.signInWithMagicLink
@@ -1289,6 +1308,39 @@ describe(
           .toBe('create');
         expect(component.email())
           .toBe('new@example.com');
+      }
+    );
+
+
+    it(
+      'returns from verification to account creation',
+      async () => {
+        const fixture = TestBed.createComponent(Login);
+        const component = fixture.componentInstance;
+
+        component.openCreateAccount();
+        component.email.set('new@example.com');
+        await component.submitCreateAccount(new Event('submit'));
+
+        component.back();
+
+        expect(component.authView()).toBe('create');
+      }
+    );
+
+
+    it(
+      'restores the auth choice on system back',
+      () => {
+        const fixture = TestBed.createComponent(Login);
+        const component = fixture.componentInstance;
+
+        component.openEmailLogin();
+        component.handleSystemBack(
+          new PopStateEvent('popstate', { state: null })
+        );
+
+        expect(component.authView()).toBe('choice');
       }
     );
 

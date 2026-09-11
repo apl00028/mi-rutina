@@ -163,6 +163,9 @@ describe(
 
     beforeEach(async () => {
       setAuthUrl('');
+      localStorage.removeItem(
+        'aptus-signup-intent-v1'
+      );
 
       supabaseMock.auth.getSession
         .mockResolvedValue({
@@ -236,6 +239,7 @@ describe(
         });
 
       // Load after registering the SDK mock, including when esbuild shares chunks.
+      vi.resetModules();
       ({ AuthService } = await import('./auth.service'));
 
       TestBed.configureTestingModule({
@@ -280,7 +284,8 @@ describe(
       'allows account creation only for registration links',
       async () => {
         await service.signUpWithMagicLink(
-          'new@example.com'
+          'new@example.com',
+          'trainer'
         );
 
         expect(
@@ -293,6 +298,12 @@ describe(
             shouldCreateUser: true
           }
         });
+
+        expect(
+          localStorage.getItem(
+            'aptus-signup-intent-v1'
+          )
+        ).toContain('"role":"trainer"');
       }
     );
 
@@ -840,6 +851,11 @@ describe(
     it(
       'bootstraps a verified identity without Aptus access',
       async () => {
+        await service.signUpWithMagicLink(
+          'test@example.com',
+          'trainer'
+        );
+
         const access =
           service.resolveAccess();
 
@@ -864,13 +880,18 @@ describe(
         expect(
           bootstrapRequest.request.method
         ).toBe('POST');
+        expect(
+          bootstrapRequest.request.body
+        ).toEqual({
+          role: 'trainer'
+        });
 
         bootstrapRequest.flush({
           user_id: 'user-123',
           email: 'new@example.com',
           access_status: 'active',
           plan: 'free',
-          role: 'user',
+          role: 'trainer',
           expires_at: null,
           onboarding_completed: false
         });
@@ -879,9 +900,67 @@ describe(
           .resolves.toMatchObject({
             access_status: 'active',
             plan: 'free',
-            role: 'user',
+            role: 'trainer',
             onboarding_completed: false
           });
+
+        expect(
+          localStorage.getItem(
+            'aptus-signup-intent-v1'
+          )
+        ).toBeNull();
+      }
+    );
+
+
+    it(
+      'defaults manipulated signup roles to athlete access',
+      async () => {
+        localStorage.setItem(
+          'aptus-signup-intent-v1',
+          JSON.stringify({
+            email: 'test@example.com',
+            role: 'admin'
+          })
+        );
+
+        const access =
+          service.resolveAccess();
+        const meRequest =
+          await expectMeRequest();
+
+        meRequest.flush({
+          user_id: 'user-123',
+          email: 'test@example.com',
+          access_status: 'unregistered',
+          plan: null,
+          role: null,
+          expires_at: null,
+          onboarding_completed: false
+        });
+
+        const bootstrapRequest =
+          await expectMeRequest(
+            `${environment.apiUrl}/me/bootstrap`
+          );
+
+        expect(
+          bootstrapRequest.request.body
+        ).toEqual({
+          role: 'user'
+        });
+
+        bootstrapRequest.flush({
+          user_id: 'user-123',
+          email: 'test@example.com',
+          access_status: 'active',
+          plan: 'free',
+          role: 'user',
+          expires_at: null,
+          onboarding_completed: false
+        });
+
+        await access;
       }
     );
 

@@ -171,6 +171,26 @@
   margin-bottom: 26px;
 }
 
+.auth-back {
+  margin: 0 0 18px;
+  padding: 0;
+
+  border: 0;
+
+  background: transparent;
+  color: var(--aptus-text-muted);
+
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+
+  cursor: pointer;
+}
+
+.auth-back:hover {
+  color: var(--aptus-text);
+}
+
 .eyebrow {
   display: block;
 
@@ -245,6 +265,11 @@
 .primary-button:focus-visible,
 .email-form input:focus-visible,
 .language-switch button:focus-visible {
+  outline: 3px solid var(--aptus-focus-ring);
+  outline-offset: 2px;
+}
+
+.auth-back:focus-visible {
   outline: 3px solid var(--aptus-focus-ring);
   outline-offset: 2px;
 }

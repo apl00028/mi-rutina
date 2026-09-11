@@ -1,13 +1,19 @@
 import asyncio
 import logging
 import os
+from typing import Literal
 
 import httpx
 from fastapi import (
     APIRouter,
+    Body,
     Depends,
     HTTPException,
     status,
+)
+from pydantic import (
+    BaseModel,
+    ConfigDict,
 )
 
 from app.core.http_client import (
@@ -33,6 +39,17 @@ logger = logging.getLogger(
 router = APIRouter(
     tags=["Account"]
 )
+
+
+class BootstrapRequest(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid"
+    )
+
+    role: Literal[
+        "user",
+        "trainer",
+    ] = "user"
 
 
 def _supabase_config() -> tuple[str, str]:
@@ -226,6 +243,9 @@ async def bootstrap_me(
     user: AuthenticatedUser = Depends(
         authenticate_user
     ),
+    request: BootstrapRequest | None = Body(
+        default=None
+    ),
 ) -> dict:
     existing = await get_gymos_access(
         user
@@ -260,7 +280,14 @@ async def bootstrap_me(
         "email": user.email,
         "status": "active",
         "plan": "free",
-        "role": "user",
+        "role": (
+            request.role
+            if isinstance(
+                request,
+                BootstrapRequest,
+            )
+            else "user"
+        ),
     }
 
     try:

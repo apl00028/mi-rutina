@@ -1,6 +1,7 @@
 import {
   Component,
   effect,
+  HostListener,
   inject,
   signal
 } from '@angular/core';
@@ -32,11 +33,6 @@ type AuthView =
   | 'create'
   | 'login'
   | 'verification';
-
-type EmailAuthIntent =
-  | 'create'
-  | 'login';
-
 
 @Component({
   selector: 'app-login',
@@ -107,10 +103,6 @@ export class Login {
 
   readonly verificationEmail =
     signal('');
-
-  readonly verificationIntent =
-    signal<EmailAuthIntent>('create');
-
 
   constructor(
     public auth: AuthService,
@@ -551,16 +543,51 @@ export class Login {
 
 
   openCreateAccount(): void {
-    this.authView.set('create');
-    this.message.set(null);
-    this.error.set(null);
+    this.showAuthView('create');
   }
 
 
   openEmailLogin(): void {
-    this.authView.set('login');
+    this.auth.clearSignupIntent();
+    this.showAuthView('login');
+  }
+
+
+  private showAuthView(
+    view: AuthView,
+    pushHistory = true
+  ): void {
+    const currentView =
+      this.authView();
+
+    this.authView.set(view);
     this.message.set(null);
     this.error.set(null);
+
+    if (pushHistory) {
+      const replaceCurrentForm =
+        (
+          currentView === 'create' ||
+          currentView === 'login'
+        ) &&
+        (
+          view === 'create' ||
+          view === 'login'
+        );
+
+      window.history[
+        replaceCurrentForm
+          ? 'replaceState'
+          : 'pushState'
+      ](
+        {
+          ...window.history.state,
+          aptusAuthView: view
+        },
+        document.title,
+        window.location.href
+      );
+    }
   }
 
 
@@ -569,20 +596,7 @@ export class Login {
   ): Promise<void> {
     event.preventDefault();
 
-    await this.submitEmailLink(
-      'create'
-    );
-  }
-
-
-  async submitEmailLogin(
-    event: Event
-  ): Promise<void> {
-    event.preventDefault();
-
-    await this.submitEmailLink(
-      'login'
-    );
+    await this.submitRegistration();
   }
 
 
@@ -595,8 +609,7 @@ export class Login {
   }
 
 
-  private async submitEmailLink(
-    intent: EmailAuthIntent,
+  private async submitRegistration(
     resend = false
   ): Promise<void> {
     if (this.loading()) {
@@ -621,19 +634,20 @@ export class Login {
     this.loading.set(true);
 
     try {
-      if (intent === 'create') {
-        await this.auth.signUpWithMagicLink(
-          email
-        );
-      } else {
-        await this.auth.signInWithMagicLink(
-          email
-        );
-      }
+      await this.auth.signUpWithMagicLink(
+        email,
+        this.requestedAccessRole() === 'trainer'
+          ? 'trainer'
+          : 'user'
+      );
 
       this.verificationEmail.set(email);
-      this.verificationIntent.set(intent);
-      this.authView.set('verification');
+
+      if (!resend) {
+        this.showAuthView(
+          'verification'
+        );
+      }
 
       if (resend) {
         this.message.set(
@@ -658,21 +672,89 @@ export class Login {
 
   async resendEmail():
     Promise<void> {
-    await this.submitEmailLink(
-      this.verificationIntent(),
+    await this.submitRegistration(
       true
     );
   }
 
 
   changeEmail(): void {
-    this.authView.set(
-      this.verificationIntent() === 'create'
+    this.backTo('create');
+  }
+
+
+  back(): void {
+    this.backTo(
+      this.authView() === 'verification'
         ? 'create'
-        : 'login'
+        : 'choice'
     );
+  }
+
+
+  private backTo(
+    view: AuthView
+  ): void {
+    this.authView.set(view);
     this.message.set(null);
     this.error.set(null);
+
+    if (
+      window.history.state
+        ?.aptusAuthView
+    ) {
+      window.history.back();
+    }
+  }
+
+
+  @HostListener(
+    'window:popstate',
+    ['$event']
+  )
+  handleSystemBack(
+    event: PopStateEvent
+  ): void {
+    if (this.recoveryMode()) {
+      void this.backFromRecovery();
+      return;
+    }
+
+    const view =
+      event.state?.aptusAuthView;
+
+    this.authView.set(
+      view === 'create' ||
+      view === 'login' ||
+      view === 'verification'
+        ? view
+        : 'choice'
+    );
+
+    this.message.set(null);
+    this.error.set(null);
+  }
+
+
+  async backFromRecovery():
+    Promise<void> {
+    await this.auth.signOut();
+
+    this.recoveryMode.set(false);
+    this.recoveryPassword.set('');
+    this.recoveryConfirmPassword.set('');
+    this.authView.set('login');
+    this.message.set(null);
+    this.error.set(null);
+
+    window.history.replaceState(
+      {
+        ...window.history.state,
+        aptusAuthView: 'login'
+      },
+      document.title,
+      '/login'
+    );
   }
 
 
@@ -709,27 +791,11 @@ export class Login {
   }
 
 
-  requestTrainerAccess(): void {
-    this.message.set(
-      this.language() === 'es'
-        ? 'Las cuentas de entrenador se activan actualmente mediante invitación.'
-        : 'Trainer accounts are currently activated by invitation.'
-    );
-    this.error.set(null);
-  }
-
-
   selectAccessRole(
     role: 'athlete' | 'trainer'
   ): void {
     this.requestedAccessRole.set(
       role
-    );
-
-    this.authView.set(
-      role === 'trainer'
-        ? 'login'
-        : 'choice'
     );
 
     this.message.set(null);

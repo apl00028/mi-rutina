@@ -8,11 +8,17 @@ from uuid import uuid4
 import pytest
 
 
-SQL_FILE = (
+ATHLETE_SQL_FILE = (
     Path(__file__).resolve().parents[2]
     / "database"
     / "supabase"
     / "self-service-athlete-signup.sql"
+)
+TRAINER_SQL_FILE = (
+    Path(__file__).resolve().parents[2]
+    / "database"
+    / "supabase"
+    / "self-service-trainer-signup.sql"
 )
 A = "00000000-0000-4000-8000-000000000001"
 B = "00000000-0000-4000-8000-000000000002"
@@ -128,7 +134,8 @@ def database():
               );
             insert into auth.users values ('{A}'), ('{B}');
         """)
-        execute(SQL_FILE.read_text(encoding="utf-8"))
+        execute(ATHLETE_SQL_FILE.read_text(encoding="utf-8"))
+        execute(TRAINER_SQL_FILE.read_text(encoding="utf-8"))
         yield execute
     finally:
         execute(
@@ -153,6 +160,37 @@ def test_signup_rls_plan_and_conflict_preservation(database):
         role="authenticated",
         user=A,
     ) == "user:active:free"
+
+    db(
+        "delete from public.gymos_users "
+        f"where user_id = '{A}';"
+    )
+    db(
+        "insert into public.gymos_users "
+        "(user_id, email, role, status, plan) values "
+        f"('{A}', 'trainer@example.com', 'trainer', 'active', 'free');",
+        role="authenticated",
+        user=A,
+    )
+    assert db(
+        "select role || ':' || status || ':' || plan "
+        "from public.gymos_users;",
+        role="authenticated",
+        user=A,
+    ) == "trainer:active:free"
+
+    db(
+        "delete from public.gymos_users "
+        f"where user_id = '{A}';"
+    )
+    db(
+        "insert into public.gymos_users "
+        "(user_id, email, role, status, plan) values "
+        f"('{A}', 'admin@example.com', 'admin', 'active', 'free');",
+        role="authenticated",
+        user=A,
+        error="42501",
+    )
 
     db(
         "insert into public.gymos_users "

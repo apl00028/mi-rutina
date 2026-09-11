@@ -40,8 +40,13 @@ def access_from(row: dict | None) -> AptusAccess | None:
     )
 
 
-def test_unknown_athlete_bootstrap_is_active_and_idempotent(
+@pytest.mark.parametrize(
+    "signup_role",
+    ["user", "trainer"],
+)
+def test_unknown_account_bootstrap_is_active_and_idempotent(
     monkeypatch,
+    signup_role,
 ):
     monkeypatch.setenv(
         "SUPABASE_URL",
@@ -93,7 +98,7 @@ def test_unknown_athlete_bootstrap_is_active_and_idempotent(
                 "email": "new@example.com",
                 "status": "active",
                 "plan": "free",
-                "role": "user",
+                "role": signup_role,
             }
             posts.append(json)
             access_rows.setdefault(ATHLETE_ID, dict(json))
@@ -121,8 +126,14 @@ def test_unknown_athlete_bootstrap_is_active_and_idempotent(
             transport=httpx.ASGITransport(app=test_app),
             base_url="http://testserver",
         ) as client:
-            created = await client.post("/api/v1/me/bootstrap")
-            repeated = await client.post("/api/v1/me/bootstrap")
+            created = await client.post(
+                "/api/v1/me/bootstrap",
+                json={"role": signup_role},
+            )
+            repeated = await client.post(
+                "/api/v1/me/bootstrap",
+                json={"role": signup_role},
+            )
 
         assert created.status_code == 200
         assert created.json() == {
@@ -130,13 +141,54 @@ def test_unknown_athlete_bootstrap_is_active_and_idempotent(
             "email": "new@example.com",
             "access_status": "active",
             "plan": "free",
-            "role": "user",
+            "role": signup_role,
             "expires_at": None,
             "onboarding_completed": False,
         }
         assert repeated.json() == created.json()
         assert len(access_rows) == 1
         assert len(posts) == 1
+
+    asyncio.run(scenario())
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {"role": "admin"},
+        {"role": "coach"},
+        {"role": "trainer", "user_id": "another-user"},
+        {"role": "trainer", "status": "active"},
+        {"role": "trainer", "plan": "free"},
+    ],
+)
+def test_bootstrap_rejects_unsafe_signup_fields(
+    monkeypatch,
+    payload,
+):
+    test_app = FastAPI()
+    test_app.include_router(account_api.router, prefix="/api/v1")
+
+    async def identity():
+        return AuthenticatedUser(
+            id=ATHLETE_ID,
+            email="new@example.com",
+            access_token="token",
+        )
+
+    test_app.dependency_overrides[authenticate_user] = identity
+
+    async def scenario():
+        async with ASGIAsyncClient(
+            transport=httpx.ASGITransport(app=test_app),
+            base_url="http://testserver",
+        ) as client:
+            response = await client.post(
+                "/api/v1/me/bootstrap",
+                json=payload,
+            )
+
+        assert response.status_code == 422
 
     asyncio.run(scenario())
 

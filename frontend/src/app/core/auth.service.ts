@@ -55,6 +55,18 @@ export interface AptusMe {
   onboarding_completed: boolean;
 }
 
+export type SignupRole =
+  | 'user'
+  | 'trainer';
+
+interface SignupIntent {
+  email: string;
+  role: SignupRole;
+}
+
+const SIGNUP_INTENT_STORAGE_KEY =
+  'aptus-signup-intent-v1';
+
 
 @Injectable({
   providedIn: 'root'
@@ -748,12 +760,23 @@ export class AuthService {
 
 
   async signUpWithMagicLink(
-    email: string
+    email: string,
+    role: SignupRole
   ): Promise<void> {
-    await this.sendMagicLink(
+    this.storeSignupIntent(
       email,
-      true
+      role
     );
+
+    try {
+      await this.sendMagicLink(
+        email,
+        true
+      );
+    } catch (error) {
+      this.clearSignupIntent();
+      throw error;
+    }
   }
 
 
@@ -764,6 +787,80 @@ export class AuthService {
       email,
       false
     );
+  }
+
+
+  clearSignupIntent(): void {
+    localStorage.removeItem(
+      SIGNUP_INTENT_STORAGE_KEY
+    );
+  }
+
+
+  private storeSignupIntent(
+    email: string,
+    role: SignupRole
+  ): void {
+    if (
+      role !== 'user' &&
+      role !== 'trainer'
+    ) {
+      throw new Error(
+        'Invalid signup role'
+      );
+    }
+
+    const intent: SignupIntent = {
+      email:
+        email.trim().toLowerCase(),
+      role
+    };
+
+    localStorage.setItem(
+      SIGNUP_INTENT_STORAGE_KEY,
+      JSON.stringify(intent)
+    );
+  }
+
+
+  private signupRoleForCurrentUser():
+    SignupRole {
+    const authenticatedEmail =
+      this.user()?.email
+        ?.trim()
+        .toLowerCase();
+
+    if (!authenticatedEmail) {
+      return 'user';
+    }
+
+    try {
+      const stored =
+        localStorage.getItem(
+          SIGNUP_INTENT_STORAGE_KEY
+        );
+
+      if (!stored) {
+        return 'user';
+      }
+
+      const intent =
+        JSON.parse(stored) as Partial<SignupIntent>;
+
+      if (
+        intent.email !== authenticatedEmail ||
+        (
+          intent.role !== 'user' &&
+          intent.role !== 'trainer'
+        )
+      ) {
+        return 'user';
+      }
+
+      return intent.role;
+    } catch {
+      return 'user';
+    }
   }
 
 
@@ -1335,7 +1432,9 @@ export class AuthService {
   }
 
 
-  async bootstrapMe():
+  async bootstrapMe(
+    role: SignupRole = 'user'
+  ):
     Promise<AptusMe> {
     const me =
       await this.requestWithAuth(
@@ -1343,7 +1442,7 @@ export class AuthService {
           await firstValueFrom(
             this.http.post<AptusMe>(
               `${this.apiUrl}/me/bootstrap`,
-              {},
+              { role },
               {
                 headers
               }
@@ -1402,8 +1501,17 @@ export class AuthService {
       me.access_status ===
       'unregistered'
     ) {
-      return await this.bootstrapMe();
+      const bootstrapped =
+        await this.bootstrapMe(
+          this.signupRoleForCurrentUser()
+        );
+
+      this.clearSignupIntent();
+
+      return bootstrapped;
     }
+
+    this.clearSignupIntent();
 
     return me;
   }

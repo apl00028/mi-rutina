@@ -1,6 +1,5 @@
 <main class="login-page">
   <section class="login-card">
-
     <div
       class="language-switch"
       [hidden]="recoveryMode()"
@@ -45,27 +44,31 @@
       </div>
     </header>
 
-    @if (!recoveryMode()) {
-    <div
-      class="login-intro"
-      [hidden]="recoveryMode()"
-    >
-      <span class="eyebrow">
-        {{
-          language() === 'es'
-            ? 'ACCESO'
-            : 'ACCESS'
-        }}
-      </span>
+    @if (recoveryMode()) {
+      <button
+        type="button"
+        class="auth-back"
+        (click)="backFromRecovery()"
+      >
+        {{ language() === 'es' ? '← Atrás' : '← Back' }}
+      </button>
+    } @else if (authView() !== 'choice') {
+      <button
+        type="button"
+        class="auth-back"
+        (click)="back()"
+      >
+        {{ language() === 'es' ? '← Atrás' : '← Back' }}
+      </button>
+    }
 
-      <h2>
-        @if (requestedAccessRole() === 'trainer') {
-          {{
-            language() === 'es'
-              ? 'Bienvenido de nuevo'
-              : 'Welcome back'
-          }}
-        } @else {
+    @if (!recoveryMode()) {
+      <div class="login-intro">
+        <span class="eyebrow">
+          {{ language() === 'es' ? 'ACCESO' : 'ACCESS' }}
+        </span>
+
+        <h2>
           @switch (authView()) {
             @case ('create') {
               {{ language() === 'es' ? 'Crear tu cuenta' : 'Create your account' }}
@@ -80,148 +83,125 @@
               {{ language() === 'es' ? 'Empieza en Aptus' : 'Get started with Aptus' }}
             }
           }
+        </h2>
+
+        @if (
+          authView() === 'create' ||
+          authView() === 'login'
+        ) {
+          <div
+            class="access-role-toggle"
+            role="group"
+            [attr.aria-label]="
+              language() === 'es'
+                ? 'Tipo de cuenta'
+                : 'Account type'
+            "
+          >
+            <button
+              type="button"
+              [class.active]="requestedAccessRole() === 'athlete'"
+              (click)="selectAccessRole('athlete')"
+            >
+              {{ language() === 'es' ? 'Deportista' : 'Athlete' }}
+            </button>
+
+            <button
+              type="button"
+              [class.active]="requestedAccessRole() === 'trainer'"
+              (click)="selectAccessRole('trainer')"
+            >
+              {{ language() === 'es' ? 'Entrenador' : 'Trainer' }}
+            </button>
+          </div>
         }
-      </h2>
 
-      <div
-        class="access-role-toggle"
-        role="group"
-        [attr.aria-label]="
-          language() === 'es'
-            ? 'Tipo de acceso'
-            : 'Access type'
-        "
-      >
-        <button
-          type="button"
-          [class.active]="requestedAccessRole() === 'athlete'"
-          (click)="selectAccessRole('athlete')"
-        >
-          {{
-            language() === 'es'
-              ? 'Deportista'
-              : 'Athlete'
-          }}
-        </button>
-
-        <button
-          type="button"
-          [class.active]="requestedAccessRole() === 'trainer'"
-          (click)="selectAccessRole('trainer')"
-        >
-          {{
-            language() === 'es'
-              ? 'Entrenador'
-              : 'Trainer'
-          }}
-        </button>
+        @if (authView() === 'choice') {
+          <p>
+            {{
+              language() === 'es'
+                ? 'Crea una cuenta nueva o inicia sesión.'
+                : 'Create a new account or sign in.'
+            }}
+          </p>
+        }
       </div>
-
-      <p>
-        @if (requestedAccessRole() === 'trainer') {
-          {{
-            language() === 'es'
-              ? 'Accede a tus deportistas, revisa su entrenamiento y gestiona sus rutinas.'
-              : 'Access your athletes, review their training and manage their routines.'
-          }}
-        } @else if (authView() === 'choice') {
-          {{
-            language() === 'es'
-              ? 'Crea una cuenta nueva o accede con tu email.'
-              : 'Create a new account or sign in with your email.'
-          }}
-        }
-      </p>
-    </div>
     }
 
     @if (recoveryMode()) {
-    <form
-      class="email-form recovery-form"
-      (submit)="completePasswordRecovery($event)"
-    >
-      <div class="recovery-copy">
-        <strong>
-          {{
-            language() === 'es'
-              ? 'Crea una nueva contraseña'
-              : 'Create a new password'
-          }}
-        </strong>
-
-        <small>
-          {{
-            language() === 'es'
-              ? 'Introduce la nueva contraseña que quieres usar en Aptus.'
-              : 'Enter the new password you want to use in Aptus.'
-          }}
-        </small>
-      </div>
-
-      <label>
-        {{
-          language() === 'es'
-            ? 'Nueva contraseña'
-            : 'New password'
-        }}
-      </label>
-
-      <input
-        type="password"
-        autocomplete="new-password"
-        required
-        minlength="8"
-        [value]="recoveryPassword()"
-        (input)="
-          recoveryPassword.set(
-            $any($event.target).value
-          )
-        "
-      />
-
-      <label>
-        {{
-          language() === 'es'
-            ? 'Repetir contraseña'
-            : 'Confirm password'
-        }}
-      </label>
-
-      <input
-        type="password"
-        autocomplete="new-password"
-        required
-        minlength="8"
-        [value]="recoveryConfirmPassword()"
-        (input)="
-          recoveryConfirmPassword.set(
-            $any($event.target).value
-          )
-        "
-      />
-
-      <button
-        class="primary-button"
-        type="submit"
-        [disabled]="recoveryLoading()"
+      <form
+        class="email-form recovery-form"
+        (submit)="completePasswordRecovery($event)"
       >
-        {{
-          recoveryLoading()
-            ? (
-                language() === 'es'
-                  ? 'Guardando...'
-                  : 'Saving...'
-              )
-            : (
-                language() === 'es'
-                  ? 'Guardar nueva contraseña'
-                  : 'Save new password'
-              )
-        }}
-      </button>
-    </form>
+        <div class="recovery-copy">
+          <strong>
+            {{
+              language() === 'es'
+                ? 'Crea una nueva contraseña'
+                : 'Create a new password'
+            }}
+          </strong>
+
+          <small>
+            {{
+              language() === 'es'
+                ? 'Introduce la nueva contraseña que quieres usar en Aptus.'
+                : 'Enter the new password you want to use in Aptus.'
+            }}
+          </small>
+        </div>
+
+        <label>
+          {{ language() === 'es' ? 'Nueva contraseña' : 'New password' }}
+        </label>
+
+        <input
+          type="password"
+          autocomplete="new-password"
+          required
+          minlength="8"
+          [value]="recoveryPassword()"
+          (input)="
+            recoveryPassword.set(
+              $any($event.target).value
+            )
+          "
+        />
+
+        <label>
+          {{ language() === 'es' ? 'Repetir contraseña' : 'Confirm password' }}
+        </label>
+
+        <input
+          type="password"
+          autocomplete="new-password"
+          required
+          minlength="8"
+          [value]="recoveryConfirmPassword()"
+          (input)="
+            recoveryConfirmPassword.set(
+              $any($event.target).value
+            )
+          "
+        />
+
+        <button
+          class="primary-button"
+          type="submit"
+          [disabled]="recoveryLoading()"
+        >
+          {{
+            recoveryLoading()
+              ? (language() === 'es' ? 'Guardando...' : 'Saving...')
+              : (
+                  language() === 'es'
+                    ? 'Guardar nueva contraseña'
+                    : 'Save new password'
+                )
+          }}
+        </button>
+      </form>
     } @else {
-    @if (requestedAccessRole() === 'athlete') {
       @switch (authView()) {
         @case ('choice') {
           <div class="auth-choice">
@@ -267,13 +247,21 @@
               {{
                 loading()
                   ? (language() === 'es' ? 'Enviando...' : 'Sending...')
-                  : (language() === 'es' ? 'Enviar enlace de verificación' : 'Send verification link')
+                  : (
+                      language() === 'es'
+                        ? 'Enviar enlace de verificación'
+                        : 'Send verification link'
+                    )
               }}
             </button>
 
             <p class="auth-switch">
               {{ language() === 'es' ? '¿Ya tienes cuenta?' : 'Already have an account?' }}
-              <button type="button" (click)="openEmailLogin()">
+
+              <button
+                type="button"
+                (click)="openEmailLogin()"
+              >
                 {{ language() === 'es' ? 'Iniciar sesión' : 'Sign in' }}
               </button>
             </p>
@@ -281,9 +269,60 @@
         }
 
         @case ('login') {
+          <div class="login-methods">
+            @if (passkeySupported()) {
+              <button
+                class="passkey-button"
+                type="button"
+                (click)="signInWithPasskey()"
+                [disabled]="passkeyLoading()"
+              >
+                <svg
+                  lucideKeyRound
+                  [size]="18"
+                  [strokeWidth]="2"
+                  aria-hidden="true"
+                ></svg>
+
+                {{
+                  passkeyLoading()
+                    ? (language() === 'es' ? 'Comprobando...' : 'Checking...')
+                    : (
+                        language() === 'es'
+                          ? 'Continuar con passkey'
+                          : 'Continue with passkey'
+                      )
+                }}
+              </button>
+            }
+
+            <button
+              class="google-button"
+              type="button"
+              (click)="signInWithGoogle()"
+              [disabled]="googleLoading()"
+            >
+              {{
+                googleLoading()
+                  ? (language() === 'es' ? 'Conectando...' : 'Connecting...')
+                  : (
+                      language() === 'es'
+                        ? 'Continuar con Google'
+                        : 'Continue with Google'
+                    )
+              }}
+            </button>
+          </div>
+
+          <div class="divider">
+            <span></span>
+            <small>{{ language() === 'es' ? 'o' : 'or' }}</small>
+            <span></span>
+          </div>
+
           <form
-            class="email-form email-link-form"
-            (submit)="submitEmailLogin($event)"
+            class="email-form"
+            (submit)="signInWithPassword($event)"
           >
             <label>Email</label>
 
@@ -296,25 +335,58 @@
               (input)="email.set($any($event.target).value)"
             />
 
+            <label>
+              {{ language() === 'es' ? 'Contraseña' : 'Password' }}
+            </label>
+
+            <input
+              type="password"
+              autocomplete="current-password"
+              required
+              [value]="password()"
+              (input)="password.set($any($event.target).value)"
+            />
+
             <button
               class="primary-button"
               type="submit"
-              [disabled]="loading()"
+              [disabled]="passwordLoading()"
             >
               {{
-                loading()
-                  ? (language() === 'es' ? 'Enviando...' : 'Sending...')
-                  : (language() === 'es' ? 'Enviar enlace de acceso' : 'Send sign-in link')
+                passwordLoading()
+                  ? (language() === 'es' ? 'Entrando...' : 'Signing in...')
+                  : (language() === 'es' ? 'Iniciar sesión' : 'Sign in')
               }}
             </button>
 
-            <p class="auth-switch">
-              {{ language() === 'es' ? '¿No tienes cuenta?' : 'No account yet?' }}
-              <button type="button" (click)="openCreateAccount()">
-                {{ language() === 'es' ? 'Crear cuenta' : 'Create account' }}
-              </button>
-            </p>
+            <button
+              type="button"
+              class="forgot-password-button"
+              [disabled]="resetLoading()"
+              (click)="sendPasswordReset($event)"
+            >
+              {{
+                resetLoading()
+                  ? (language() === 'es' ? 'Enviando...' : 'Sending...')
+                  : (
+                      language() === 'es'
+                        ? '¿Has olvidado tu contraseña?'
+                        : 'Forgot your password?'
+                    )
+              }}
+            </button>
           </form>
+
+          <p class="auth-switch">
+            {{ language() === 'es' ? '¿No tienes cuenta?' : 'No account yet?' }}
+
+            <button
+              type="button"
+              (click)="openCreateAccount()"
+            >
+              {{ language() === 'es' ? 'Crear cuenta' : 'Create account' }}
+            </button>
+          </p>
         }
 
         @case ('verification') {
@@ -328,16 +400,8 @@
             <p>
               {{
                 language() === 'es'
-                  ? (
-                      verificationIntent() === 'create'
-                        ? 'Abre el enlace para verificar tu correo y continuar en Aptus.'
-                        : 'Abre el enlace para iniciar sesión y continuar en Aptus.'
-                    )
-                  : (
-                      verificationIntent() === 'create'
-                        ? 'Open the link to verify your email and continue in Aptus.'
-                        : 'Open the link to sign in and continue in Aptus.'
-                    )
+                  ? 'Abre el enlace para verificar tu correo y continuar en Aptus.'
+                  : 'Open the link to verify your email and continue in Aptus.'
               }}
             </p>
 
@@ -367,153 +431,6 @@
           </div>
         }
       }
-    } @else {
-    <div
-      class="login-methods"
-    >
-      @if (passkeySupported()) {
-      <button
-        class="passkey-button"
-        type="button"
-        (click)="signInWithPasskey()"
-        [disabled]="passkeyLoading()"
-      >
-        <svg
-          lucideKeyRound
-          [size]="18"
-          [strokeWidth]="2"
-          aria-hidden="true"
-        ></svg>
-
-        {{
-          passkeyLoading()
-            ? (
-                language() === 'es'
-                  ? 'Comprobando...'
-                  : 'Checking...'
-              )
-            : (
-                language() === 'es'
-                  ? 'Continuar con passkey'
-                  : 'Continue with passkey'
-              )
-        }}
-      </button>
-      }
-
-      <button
-        class="google-button"
-        type="button"
-        (click)="signInWithGoogle()"
-        [disabled]="googleLoading()"
-      >
-        {{
-          googleLoading()
-            ? (
-                language() === 'es'
-                  ? 'Conectando...'
-                  : 'Connecting...'
-              )
-            : (
-                language() === 'es'
-                  ? 'Continuar con Google'
-                  : 'Continue with Google'
-              )
-        }}
-      </button>
-    </div>
-
-    <div
-      class="divider"
-    >
-      <span></span>
-
-      <small>
-        {{
-          language() === 'es'
-            ? 'o'
-            : 'or'
-        }}
-      </small>
-
-      <span></span>
-    </div>
-
-    <form
-      class="email-form"
-      (submit)="signInWithPassword($event)"
-    >
-      <label>Email</label>
-
-      <input
-        type="email"
-        autocomplete="email"
-        placeholder="you@example.com"
-        required
-        [value]="email()"
-        (input)="email.set($any($event.target).value)"
-      />
-
-      <label>
-        {{
-          language() === 'es'
-            ? 'Contraseña'
-            : 'Password'
-        }}
-      </label>
-
-      <input
-        type="password"
-        autocomplete="current-password"
-        required
-        [value]="password()"
-        (input)="password.set($any($event.target).value)"
-      />
-
-      <button
-        class="primary-button"
-        type="submit"
-        [disabled]="passwordLoading()"
-      >
-        {{
-          passwordLoading()
-            ? (
-                language() === 'es'
-                  ? 'Entrando...'
-                  : 'Signing in...'
-              )
-            : (
-                language() === 'es'
-                  ? 'Iniciar sesión'
-                  : 'Sign in'
-              )
-        }}
-      </button>
-
-
-
-      <button
-        type="button"
-        class="forgot-password-button"
-        [disabled]="resetLoading()"
-        (click)="sendPasswordReset($event)"
-      >
-        {{
-          resetLoading()
-            ? (
-                language() === 'es'
-                  ? 'Enviando...'
-                  : 'Sending...'
-              )
-            : (
-                language() === 'es'
-                  ? '¿Has olvidado tu contraseña?'
-                  : 'Forgot your password?'
-              )
-        }}
-      </button>
-    </form>
-    }
     }
 
     @if (message()) {
@@ -532,40 +449,6 @@
       >
         {{ error() }}
       </div>
-    }
-
-    @if (
-      !recoveryMode() &&
-      requestedAccessRole() === 'trainer'
-    ) {
-    <footer
-      class="access-note"
-      [hidden]="recoveryMode()"
-    >
-      <span>
-        {{
-          language() === 'es'
-            ? (
-                '¿Eres nuevo en Aptus como entrenador?'
-              )
-            : (
-                'New to Aptus as a trainer?'
-              )
-        }}
-      </span>
-
-      <button
-        type="button"
-        class="request-access-button"
-        (click)="requestTrainerAccess()"
-      >
-        {{
-          language() === 'es'
-            ? 'Solicitar acceso'
-            : 'Request access'
-        }}
-      </button>
-    </footer>
     }
   </section>
 </main>
